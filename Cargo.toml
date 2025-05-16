@@ -1,0 +1,8 @@
+[package]
+name = "AssEmb"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+iced-x86 = "=1.21.0"
+object = { version = "=0.36.7", features = ["write_core"] }
