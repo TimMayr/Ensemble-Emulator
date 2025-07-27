@@ -1,3 +1,5 @@
+use crate::opcode::OPCODES_MAP;
+
 const MEMORY_SIZE: u16 = 0xFFFF;
 const STACK_START: u8 = 0xFF;
 
@@ -18,6 +20,12 @@ pub enum AddressingMode {
     IndirectY,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum MathematicalOperation {
+    Add,
+    Sub,
+}
+
 #[derive(Debug, Copy, Clone)]
 pub struct Cpu {
     pub program_counter: u16,
@@ -26,7 +34,7 @@ pub struct Cpu {
     pub index_register_x: u8,
     pub index_register_y: u8,
     pub processor_status: u8,
-    memory: [u8; MEMORY_SIZE as usize],
+    pub memory: [u8; MEMORY_SIZE as usize],
 }
 
 impl Default for Cpu {
@@ -116,7 +124,99 @@ impl Cpu {
         self.processor_status &= 0b1011_1111;
     }
 
-    fn update_carry_and_overflow_flags(&mut self) -> ! {
-        unimplemented!()
+    fn update_carry_and_overflow_flags(&mut self, result: Option<u8>, op: MathematicalOperation) {
+        match result {
+            Some(_e) => {
+                self.clear_overflow_flag();
+                if op == MathematicalOperation::Sub {
+                    self.set_carry_flag();
+                } else {
+                    self.clear_carry_flag();
+                }
+            }
+            None => {
+                self.set_overflow_flag();
+                if op == MathematicalOperation::Sub {
+                    self.clear_carry_flag();
+                } else {
+                    self.set_carry_flag();
+                }
+            }
+        }
+    }
+
+    pub fn logical_and(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_val = self.mem_read(target);
+        self.accumulator = target_val & self.accumulator;
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
+
+    fn get_operand_address(&self, addressing_mode: &AddressingMode) -> u16 {
+        match addressing_mode {
+            AddressingMode::Immediate => self.program_counter,
+            AddressingMode::ZeroPage => self.read_next_byte() as u16,
+            AddressingMode::ZeroPageX => {
+                let pos = self.read_next_byte();
+                pos.wrapping_add(self.index_register_x) as u16
+            }
+            AddressingMode::ZeroPageY => {
+                let pos = self.read_next_byte();
+                pos.wrapping_add(self.index_register_y) as u16
+            }
+            AddressingMode::Relative => self.program_counter,
+            AddressingMode::Absolute => self.read_next_two_bytes(),
+            AddressingMode::AbsoluteX => {
+                let pos = self.read_next_two_bytes();
+                pos + self.index_register_x as u16
+            }
+            AddressingMode::AbsoluteY => {
+                let pos = self.read_next_two_bytes();
+                pos + self.index_register_y as u16
+            }
+            AddressingMode::IndirectX => {
+                let base = self.read_next_byte();
+                let lookup_addr = base.wrapping_add(self.index_register_x);
+                self.get_indirect_lookup(lookup_addr as u16)
+            }
+            AddressingMode::IndirectY => {
+                let lookup_addr = self.read_next_byte();
+                let addr = self.get_indirect_lookup(lookup_addr as u16);
+                addr.wrapping_add(self.index_register_y as u16)
+            }
+            _ => panic!("Invalid addressing mode"),
+        }
+    }
+
+    fn read_next_byte(&self) -> u8 {
+        self.mem_read(self.program_counter)
+    }
+
+    fn read_next_two_bytes(&self) -> u16 {
+        self.mem_read_u16(self.program_counter)
+    }
+
+    fn get_indirect_lookup(&self, addr: u16) -> u16 {
+        let lsb = self.mem_read(addr);
+        let hsb = self.mem_read(addr.wrapping_add(1));
+
+        (hsb as u16) << 8 | (lsb as u16)
+    }
+
+    pub fn step(&mut self) {
+        let opcode = self.mem_read(self.program_counter);
+        let op = OPCODES_MAP
+            .get(&opcode)
+            .unwrap_or_else(|| panic!("Opcode doesn't exist"));
+        self.program_counter += 1u16;
+
+        match op.opcode {
+            0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => {
+                self.logical_and(&op.addressing_mode);
+            }
+            _ => todo!(),
+        }
+
+        self.program_counter += (op.bytes - 1) as u16
     }
 }

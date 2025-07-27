@@ -5,11 +5,11 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct OpCode {
-    opcode: u8,
-    name: &'static str,
-    bytes: u8,
-    cycles: u8,
-    addressing_mode: AddressingMode,
+    pub opcode: u8,
+    pub name: &'static str,
+    pub bytes: u8,
+    pub cycles: u8,
+    pub addressing_mode: AddressingMode,
 }
 
 impl OpCode {
