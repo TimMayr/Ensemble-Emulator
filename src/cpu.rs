@@ -233,6 +233,11 @@ impl Cpu {
         let mut cycles = 0u16;
         loop {
             let current_cycles = self.step();
+
+            if current_cycles == 0xFF {
+                return;
+            }
+
             cycles += current_cycles as u16;
 
             if cycles > 29780 {
@@ -266,7 +271,7 @@ impl Cpu {
             }
             _ => {
                 println!("No instruction at address 0x{:x}", self.program_counter - 1);
-                panic!()
+                return 0xFF;
             }
         }
 

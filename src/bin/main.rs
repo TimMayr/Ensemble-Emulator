@@ -125,5 +125,6 @@ fn main() {
     //prt
     cpu.mem_write(0x34, 0xFF);
 
-    cpu.run()
+    cpu.run();
+    println!("{:x?}", cpu.memory)
 }
