@@ -6,7 +6,7 @@
 - 64kb of addressable memory -> 16-Bit address bus
 	- More with cartridge mapper
 - Little endian
-- Addresses least significant byte first
+  - Addresses least significant byte first
 - First page (256 Bytes; \$0000-\$00FF) is called Zero Page
 	- Relevant for special addressing modes
 		- Shorter and quicker instructions

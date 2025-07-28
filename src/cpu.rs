@@ -1,4 +1,8 @@
-use crate::opcode::OPCODES_MAP;
+use crate::cpu::AddressingMode::Immediate;
+use crate::opcode;
+use crate::opcode::{OpCode, OPCODES_MAP};
+use std::thread::sleep;
+use std::time::Duration;
 
 const MEMORY_SIZE: u16 = 0xFFFF;
 const STACK_START: u8 = 0xFF;
@@ -31,8 +35,8 @@ pub struct Cpu {
     pub program_counter: u16,
     pub stack_pointer: u8,
     pub accumulator: u8,
-    pub index_register_x: u8,
-    pub index_register_y: u8,
+    pub x_register: u8,
+    pub y_register: u8,
     pub processor_status: u8,
     pub memory: [u8; MEMORY_SIZE as usize],
 }
@@ -44,8 +48,8 @@ impl Default for Cpu {
             program_counter: 0,
             processor_status: 0,
             accumulator: 0,
-            index_register_x: 0,
-            index_register_y: 0,
+            x_register: 0,
+            y_register: 0,
             memory,
             stack_pointer: STACK_START,
         }
@@ -54,6 +58,11 @@ impl Default for Cpu {
 
 impl Cpu {
     pub fn new() -> Self {
+        match OPCODES_MAP.get() {
+            None => opcode::init(),
+            Some(_) => {}
+        }
+
         Self::default()
     }
 
@@ -73,7 +82,7 @@ impl Cpu {
     }
 
     pub fn mem_write_u16(&mut self, addr: u16, data: u16) {
-        let least_significant_bits = (data & 0xFF) as u8;
+        let least_significant_bits = (data & 0x00FF) as u8;
         let highest_significant_bits = (data >> 8) as u8;
         self.mem_write(addr, least_significant_bits);
         self.mem_write(addr + 1, highest_significant_bits)
@@ -145,7 +154,7 @@ impl Cpu {
         }
     }
 
-    pub fn logical_and(&mut self, mode: &AddressingMode) {
+    pub fn and(&mut self, mode: &AddressingMode) {
         let target = self.get_operand_address(mode);
         let target_val = self.mem_read(target);
         self.accumulator = target_val & self.accumulator;
@@ -158,31 +167,31 @@ impl Cpu {
             AddressingMode::ZeroPage => self.read_next_byte() as u16,
             AddressingMode::ZeroPageX => {
                 let pos = self.read_next_byte();
-                pos.wrapping_add(self.index_register_x) as u16
+                pos.wrapping_add(self.x_register) as u16
             }
             AddressingMode::ZeroPageY => {
                 let pos = self.read_next_byte();
-                pos.wrapping_add(self.index_register_y) as u16
+                pos.wrapping_add(self.y_register) as u16
             }
             AddressingMode::Relative => self.program_counter,
             AddressingMode::Absolute => self.read_next_two_bytes(),
             AddressingMode::AbsoluteX => {
                 let pos = self.read_next_two_bytes();
-                pos + self.index_register_x as u16
+                pos + self.x_register as u16
             }
             AddressingMode::AbsoluteY => {
                 let pos = self.read_next_two_bytes();
-                pos + self.index_register_y as u16
+                pos + self.y_register as u16
             }
             AddressingMode::IndirectX => {
                 let base = self.read_next_byte();
-                let lookup_addr = base.wrapping_add(self.index_register_x);
+                let lookup_addr = base.wrapping_add(self.x_register);
                 self.get_indirect_lookup(lookup_addr as u16)
             }
             AddressingMode::IndirectY => {
                 let lookup_addr = self.read_next_byte();
                 let addr = self.get_indirect_lookup(lookup_addr as u16);
-                addr.wrapping_add(self.index_register_y as u16)
+                addr.wrapping_add(self.y_register as u16)
             }
             _ => panic!("Invalid addressing mode"),
         }
@@ -203,20 +212,66 @@ impl Cpu {
         (hsb as u16) << 8 | (lsb as u16)
     }
 
-    pub fn step(&mut self) {
+    pub fn run(&mut self) {
+        let mut cycles = 0u16;
+        loop {
+            let current_cycles = self.step();
+            cycles += current_cycles as u16;
+
+            if cycles > 29780 {
+                cycles = 0;
+                sleep(Duration::from_nanos(16_666_666))
+            }
+        }
+    }
+
+    pub fn step(&mut self) -> u8 {
         let opcode = self.mem_read(self.program_counter);
-        let op = OPCODES_MAP
-            .get(&opcode)
-            .unwrap_or_else(|| panic!("Opcode doesn't exist"));
+        let prnt = &OpCode::new(0xFF, "PRT", 1, 0, Immediate);
+        let op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&prnt);
         self.program_counter += 1u16;
 
         match op.opcode {
             0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => {
-                self.logical_and(&op.addressing_mode);
+                self.and(&op.addressing_mode);
+            }
+            0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
+                self.lda(&op.addressing_mode);
+            }
+            0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => {
+                self.ldx(&op.addressing_mode);
+            }
+            0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => {
+                self.ldy(&op.addressing_mode)
+            }
+            0xFF => {
+                println!("{}", self.accumulator)
             }
             _ => todo!(),
         }
 
-        self.program_counter += (op.bytes - 1) as u16
+        self.program_counter += (op.bytes - 1) as u16;
+        op.cycles
+    }
+
+    fn lda(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_val = self.mem_read(target);
+        self.accumulator = target_val;
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
+
+    fn ldx(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_val = self.mem_read(target);
+        self.x_register = target_val;
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
+
+    fn ldy(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_val = self.mem_read(target);
+        self.y_register = target_val;
+        self.update_negative_and_zero_flags(self.accumulator);
     }
 }

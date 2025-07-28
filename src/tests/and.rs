@@ -22,7 +22,7 @@ mod and {
 
         cpu.mem_write(0x4, 0x35);
         cpu.mem_write(0x5, 0x0035);
-        cpu.index_register_x = 0x0010;
+        cpu.x_register = 0x0010;
         cpu.mem_write(0x0045, 0b01100110);
 
         cpu.accumulator = 0b11000011;
@@ -39,7 +39,7 @@ mod and {
 
         cpu.mem_write(0x9, 0x3D);
         cpu.mem_write_u16(0xA, 0x3D3D);
-        cpu.index_register_x = 0x0010;
+        cpu.x_register = 0x0010;
         cpu.mem_write(0x3D4D, 0b01100110);
 
         cpu.accumulator = 0b11000011;
@@ -48,7 +48,7 @@ mod and {
 
         cpu.mem_write(0xC, 0x39);
         cpu.mem_write_u16(0xD, 0x3939);
-        cpu.index_register_y = 0x0010;
+        cpu.y_register = 0x0010;
         cpu.mem_write(0x3949, 0b01100110);
 
         cpu.accumulator = 0b11000011;
@@ -57,7 +57,7 @@ mod and {
 
         cpu.mem_write(0xF, 0x21);
         cpu.mem_write(0x10, 0x0021);
-        cpu.index_register_x = 0x0010;
+        cpu.x_register = 0x0010;
         cpu.mem_write_u16(0x31, 0x2121);
         cpu.mem_write(0x2121, 0b01100110);
 
@@ -68,7 +68,7 @@ mod and {
         cpu.mem_write(0x11, 0x31);
         cpu.mem_write(0x12, 0x0031);
         cpu.mem_write_u16(0x0031, 0x3131);
-        cpu.index_register_y = 0x0010;
+        cpu.y_register = 0x0010;
         cpu.mem_write(0x3141, 0b01100110);
 
         cpu.accumulator = 0b11000011;
@@ -104,7 +104,7 @@ mod and {
         let mut cpu = Cpu::new();
         cpu.mem_write(0x0, 0x35);
         cpu.mem_write(0x1, 0x0035);
-        cpu.index_register_x = 0x0010;
+        cpu.x_register = 0x0010;
         cpu.mem_write(0x0045, 0b01100110);
 
         cpu.accumulator = 0b11000011;
@@ -129,7 +129,7 @@ mod and {
         let mut cpu = Cpu::new();
         cpu.mem_write(0x0, 0x3D);
         cpu.mem_write_u16(0x1, 0x3D3D);
-        cpu.index_register_x = 0x0010;
+        cpu.x_register = 0x0010;
         cpu.mem_write(0x3D4D, 0b01100110);
 
         cpu.accumulator = 0b11000011;
@@ -142,7 +142,7 @@ mod and {
         let mut cpu = Cpu::new();
         cpu.mem_write(0x0, 0x39);
         cpu.mem_write_u16(0x1, 0x3939);
-        cpu.index_register_y = 0x0010;
+        cpu.y_register = 0x0010;
         cpu.mem_write(0x3949, 0b01100110);
 
         cpu.accumulator = 0b11000011;
@@ -155,7 +155,7 @@ mod and {
         let mut cpu = Cpu::new();
         cpu.mem_write(0x0, 0x21);
         cpu.mem_write(0x1, 0x0021);
-        cpu.index_register_x = 0x0010;
+        cpu.x_register = 0x0010;
         cpu.mem_write_u16(0x31, 0x2121);
         cpu.mem_write(0x2121, 0b01100110);
 
@@ -170,7 +170,7 @@ mod and {
         cpu.mem_write(0x0, 0x31);
         cpu.mem_write(0x1, 0x0031);
         cpu.mem_write_u16(0x0031, 0x3131);
-        cpu.index_register_y = 0x0010;
+        cpu.y_register = 0x0010;
         cpu.mem_write(0x3141, 0b01100110);
 
         cpu.accumulator = 0b11000011;
