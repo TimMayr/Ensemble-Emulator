@@ -74,6 +74,36 @@ mod and {
         cpu.accumulator = 0b11000011;
         cpu.step();
         assert_eq!(cpu.accumulator, 66);
+
+        cpu.mem_write(0x13, 0x29);
+        cpu.mem_write(0x14, 0b01111111);
+        cpu.accumulator = 0b01111111;
+
+        cpu.step();
+
+        assert_eq!(cpu.accumulator, 127);
+        assert_eq!(cpu.get_zero_flag(), false);
+        assert_eq!(cpu.get_negative_flag(), false);
+
+        cpu.mem_write(0x15, 0x29);
+        cpu.mem_write(0x16, 0b00000000);
+        cpu.accumulator = 0b11000011;
+
+        cpu.step();
+
+        assert_eq!(cpu.accumulator, 0);
+        assert_eq!(cpu.get_zero_flag(), true);
+        assert_eq!(cpu.get_negative_flag(), false);
+
+        cpu.mem_write(0x17, 0x29);
+        cpu.mem_write(0x18, 0b11000000);
+        cpu.accumulator = 0b11000000;
+
+        cpu.step();
+
+        assert_eq!(cpu.accumulator, 0xC0);
+        assert_eq!(cpu.get_negative_flag(), true);
+        assert_eq!(cpu.get_zero_flag(), false);
     }
 
     #[test]
@@ -179,7 +209,7 @@ mod and {
     }
 
     #[test]
-    fn test_and_flags() {
+    fn test_and_flags_none_when_none() {
         let mut cpu = Cpu::new();
         cpu.mem_write(0x0, 0x29);
         cpu.mem_write(0x1, 0b0111111);
@@ -189,18 +219,26 @@ mod and {
 
         assert_eq!(cpu.get_zero_flag(), false);
         assert_eq!(cpu.get_negative_flag(), false);
+    }
 
-        cpu.mem_write(0x2, 0x29);
-        cpu.mem_write(0x3, 0b00000000);
+    #[test]
+    fn test_and_flags_only_zero_when_zero() {
+        let mut cpu = Cpu::new();
+        cpu.mem_write(0x0, 0x29);
+        cpu.mem_write(0x1, 0b00000000);
         cpu.accumulator = 0b11000011;
 
         cpu.step();
 
         assert_eq!(cpu.get_zero_flag(), true);
         assert_eq!(cpu.get_negative_flag(), false);
+    }
 
-        cpu.mem_write(0x4, 0x29);
-        cpu.mem_write(0x5, 0b11000000);
+    #[test]
+    fn test_and_flags_only_negative_when_negative() {
+        let mut cpu = Cpu::new();
+        cpu.mem_write(0x0, 0x29);
+        cpu.mem_write(0x1, 0b11000000);
         cpu.accumulator = 0b11000000;
 
         cpu.step();

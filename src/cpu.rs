@@ -137,6 +137,10 @@ impl Cpu {
         (self.processor_status & 0b1000_0000) == 0b1000_0000
     }
 
+    fn get_carry_flag(&self) -> bool {
+        (self.processor_status & 0b0000_0001) == 0b0000_0001
+    }
+
     fn update_carry_and_overflow_flags(&mut self, result: Option<u8>, op: MathematicalOperation) {
         match result {
             Some(_e) => {
@@ -237,6 +241,41 @@ impl Cpu {
         self.update_negative_and_zero_flags(self.y_register);
     }
 
+    fn sta(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        self.mem_write(target, self.accumulator);
+    }
+
+    fn stx(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        self.mem_write(target, self.x_register);
+    }
+
+    fn sty(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        self.mem_write(target, self.y_register);
+    }
+
+    fn tax(&mut self) {
+        self.x_register = self.accumulator;
+        self.update_negative_and_zero_flags(self.x_register);
+    }
+
+    fn tay(&mut self) {
+        self.y_register = self.accumulator;
+        self.update_negative_and_zero_flags(self.y_register);
+    }
+
+    fn txa(&mut self) {
+        self.accumulator = self.x_register;
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
+
+    fn tya(&mut self) {
+        self.accumulator = self.y_register;
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
+
     pub fn run(&mut self) {
         let mut cycles = 0u16;
         loop {
@@ -262,19 +301,18 @@ impl Cpu {
         self.program_counter += 1u16;
 
         match op.opcode {
-            0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => {
-                self.and(&op.addressing_mode);
-            }
-            0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
-                self.lda(&op.addressing_mode);
-            }
-            0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => {
-                self.ldx(&op.addressing_mode);
-            }
+            0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(&op.addressing_mode),
+            0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(&op.addressing_mode),
+            0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => self.ldx(&op.addressing_mode),
             0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => self.ldy(&op.addressing_mode),
-            0xFF => {
-                println!("{}", self.accumulator)
-            }
+            0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => self.sta(&op.addressing_mode),
+            0x86 | 0x96 | 0x8E => self.stx(&op.addressing_mode),
+            0x84 | 0x94 | 0x8C => self.sty(&op.addressing_mode),
+            0xAA => self.tax(),
+            0xA8 => self.tay(),
+            0x8A => self.txa(),
+            0x98 => self.tya(),
+            0xFF => println!("{}", self.accumulator),
             _ => {
                 println!("No instruction at address 0x{:x}", self.program_counter - 1);
                 return 0xFF;

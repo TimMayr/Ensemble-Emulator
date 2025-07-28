@@ -210,9 +210,9 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             OpCode::new(0x96, "STX", 2, 4, ZeroPageY),
             OpCode::new(0x8E, "STX", 3, 4, Absolute),
             //STY
-            OpCode::new(0x84, "STX", 2, 3, ZeroPage),
-            OpCode::new(0x94, "STX", 2, 4, ZeroPageX),
-            OpCode::new(0x8C, "STX", 3, 4, Absolute),
+            OpCode::new(0x84, "STY", 2, 3, ZeroPage),
+            OpCode::new(0x94, "STY", 2, 4, ZeroPageX),
+            OpCode::new(0x8C, "STY", 3, 4, Absolute),
             //TAX
             OpCode::new(0xAA, "TAX", 1, 2, Implied),
             //TAY
