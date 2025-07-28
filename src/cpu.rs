@@ -113,7 +113,6 @@ impl Cpu {
         self.update_zero_flag(result);
     }
 
-
     fn set_carry_flag(&mut self) {
         self.processor_status |= 0b0000_0001;
     }
@@ -228,14 +227,14 @@ impl Cpu {
         let target = self.get_operand_address(mode);
         let target_val = self.mem_read(target);
         self.x_register = target_val;
-        self.update_negative_and_zero_flags(self.accumulator);
+        self.update_negative_and_zero_flags(self.x_register);
     }
 
     fn ldy(&mut self, mode: &AddressingMode) {
         let target = self.get_operand_address(mode);
         let target_val = self.mem_read(target);
         self.y_register = target_val;
-        self.update_negative_and_zero_flags(self.accumulator);
+        self.update_negative_and_zero_flags(self.y_register);
     }
 
     pub fn run(&mut self) {
@@ -272,9 +271,7 @@ impl Cpu {
             0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => {
                 self.ldx(&op.addressing_mode);
             }
-            0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => {
-                self.ldy(&op.addressing_mode)
-            }
+            0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => self.ldy(&op.addressing_mode),
             0xFF => {
                 println!("{}", self.accumulator)
             }
