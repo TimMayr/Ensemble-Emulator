@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod and {
     use crate::cpu::Cpu;
-    
+
     #[test]
     fn test_and_complete() {
         let mut cpu = Cpu::new();
@@ -176,5 +176,23 @@ mod and {
         cpu.accumulator = 0b11000011;
         cpu.step();
         assert_eq!(cpu.accumulator, 66);
+    }
+
+    #[test]
+    fn test_and_flags() {
+        let mut cpu = Cpu::new();
+        cpu.mem_write(0x0, 0x29);
+        cpu.mem_write(0x1, 0b00000000);
+
+        cpu.accumulator = 0b11000011;
+        cpu.step();
+        assert_eq!(cpu.get_zero_flag(), true);
+
+        cpu.mem_write(0x2, 0x29);
+        cpu.mem_write(0x3, 0b11000000);
+
+        cpu.accumulator = 0b11000000;
+        cpu.step();
+        assert_eq!(cpu.get_negative_flag(), true);
     }
 }

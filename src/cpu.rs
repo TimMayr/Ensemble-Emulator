@@ -113,6 +113,7 @@ impl Cpu {
         self.update_zero_flag(result);
     }
 
+
     fn set_carry_flag(&mut self) {
         self.processor_status |= 0b0000_0001;
     }
@@ -127,6 +128,14 @@ impl Cpu {
 
     fn clear_overflow_flag(&mut self) {
         self.processor_status &= 0b1011_1111;
+    }
+
+    pub fn get_zero_flag(self) -> bool {
+        (self.processor_status & 0b0000_0010) == 0b0000_0010
+    }
+
+    pub fn get_negative_flag(self) -> bool {
+        (self.processor_status & 0b1000_0000) == 0b1000_0000
     }
 
     fn update_carry_and_overflow_flags(&mut self, result: Option<u8>, op: MathematicalOperation) {
