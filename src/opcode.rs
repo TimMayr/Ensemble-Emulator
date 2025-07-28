@@ -15,7 +15,7 @@ pub struct OpCode {
     pub addressing_mode: AddressingMode,
 }
 
-pub fn init() {
+pub fn init() -> HashMap<u8, &'static OpCode> {
     OPCODES.set(vec![
         //ADC
         OpCode::new(0x69, "ADC", 2, 2, Immediate),
@@ -232,7 +232,7 @@ pub fn init() {
         map.insert(opcode.opcode, opcode);
     }
 
-    OPCODES_MAP.set(map).unwrap()
+    map
 }
 
 impl OpCode {

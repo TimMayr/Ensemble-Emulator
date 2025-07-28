@@ -58,11 +58,7 @@ impl Default for Cpu {
 
 impl Cpu {
     pub fn new() -> Self {
-        match OPCODES_MAP.get() {
-            None => opcode::init(),
-            Some(_) => {}
-        }
-
+        OPCODES_MAP.get_or_init(|| opcode::init());
         Self::default()
     }
 
@@ -154,13 +150,6 @@ impl Cpu {
         }
     }
 
-    pub fn and(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_val = self.mem_read(target);
-        self.accumulator = target_val & self.accumulator;
-        self.update_negative_and_zero_flags(self.accumulator);
-    }
-
     fn get_operand_address(&self, addressing_mode: &AddressingMode) -> u16 {
         match addressing_mode {
             AddressingMode::Immediate => self.program_counter,
@@ -212,6 +201,34 @@ impl Cpu {
         (hsb as u16) << 8 | (lsb as u16)
     }
 
+    pub fn and(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_val = self.mem_read(target);
+        self.accumulator = target_val & self.accumulator;
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
+
+    fn lda(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_val = self.mem_read(target);
+        self.accumulator = target_val;
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
+
+    fn ldx(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_val = self.mem_read(target);
+        self.x_register = target_val;
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
+
+    fn ldy(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_val = self.mem_read(target);
+        self.y_register = target_val;
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
+
     pub fn run(&mut self) {
         let mut cycles = 0u16;
         loop {
@@ -247,31 +264,13 @@ impl Cpu {
             0xFF => {
                 println!("{}", self.accumulator)
             }
-            _ => todo!(),
+            _ => {
+                println!("No instruction at address 0x{:x}", self.program_counter - 1);
+                panic!()
+            }
         }
 
         self.program_counter += (op.bytes - 1) as u16;
         op.cycles
-    }
-
-    fn lda(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_val = self.mem_read(target);
-        self.accumulator = target_val;
-        self.update_negative_and_zero_flags(self.accumulator);
-    }
-
-    fn ldx(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_val = self.mem_read(target);
-        self.x_register = target_val;
-        self.update_negative_and_zero_flags(self.accumulator);
-    }
-
-    fn ldy(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_val = self.mem_read(target);
-        self.y_register = target_val;
-        self.update_negative_and_zero_flags(self.accumulator);
     }
 }

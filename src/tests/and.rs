@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod and {
     use crate::cpu::Cpu;
-
+    
     #[test]
     fn test_and_complete() {
         let mut cpu = Cpu::new();
