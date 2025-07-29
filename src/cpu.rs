@@ -61,7 +61,7 @@ impl Default for Cpu {
 
 impl Cpu {
     pub fn new() -> Self {
-        OPCODES_MAP.get_or_init(|| opcode::init());
+        OPCODES_MAP.get_or_init(opcode::init);
         Self::default()
     }
 
@@ -219,7 +219,7 @@ impl Cpu {
     pub fn and(&mut self, mode: &AddressingMode) {
         let target = self.get_operand_address(mode);
         let target_val = self.mem_read(target);
-        self.accumulator = target_val & self.accumulator;
+        self.accumulator &= target_val;
         self.update_negative_and_zero_flags(self.accumulator);
     }
 

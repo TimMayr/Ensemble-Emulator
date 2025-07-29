@@ -11,8 +11,8 @@ mod tsx {
         cpu.step();
 
         assert_eq!(0x66, cpu.x_register);
-        assert_eq!(cpu.get_zero_flag(), false);
-        assert_eq!(cpu.get_negative_flag(), false);
+        assert!(!cpu.get_zero_flag());
+        assert!(!cpu.get_negative_flag());
     }
 
     #[test]
@@ -24,8 +24,8 @@ mod tsx {
         cpu.step();
 
         assert_eq!(0x66, cpu.x_register);
-        assert_eq!(cpu.get_zero_flag(), false);
-        assert_eq!(cpu.get_negative_flag(), false);
+        assert!(!cpu.get_zero_flag());
+        assert!(!cpu.get_negative_flag());
 
         cpu.stack_pointer = 0x00;
 
@@ -33,8 +33,8 @@ mod tsx {
         cpu.step();
 
         assert_eq!(0x00, cpu.x_register);
-        assert_eq!(cpu.get_zero_flag(), true);
-        assert_eq!(cpu.get_negative_flag(), false);
+        assert!(cpu.get_zero_flag());
+        assert!(!cpu.get_negative_flag());
 
         cpu.stack_pointer = 0x80;
 
@@ -42,8 +42,8 @@ mod tsx {
         cpu.step();
 
         assert_eq!(0x80, cpu.x_register);
-        assert_eq!(cpu.get_zero_flag(), false);
-        assert_eq!(cpu.get_negative_flag(), true);
+        assert!(!cpu.get_zero_flag());
+        assert!(cpu.get_negative_flag());
 
         //Increment stack counter by reading from stack
         cpu.mem_write(0x3, 0x28);
@@ -54,7 +54,7 @@ mod tsx {
 
         //Validate that incremented stack counter is loaded correctly
         assert_eq!(0x81, cpu.x_register);
-        assert_eq!(cpu.get_zero_flag(), false);
-        assert_eq!(cpu.get_negative_flag(), true);
+        assert!(!cpu.get_zero_flag());
+        assert!(cpu.get_negative_flag());
     }
 }

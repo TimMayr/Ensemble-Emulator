@@ -11,8 +11,8 @@ mod tax {
 
         cpu.step();
         assert_eq!(cpu.x_register, 0x66);
-        assert_eq!(cpu.get_zero_flag(), false);
-        assert_eq!(cpu.get_negative_flag(), false);
+        assert!(!cpu.get_zero_flag());
+        assert!(!cpu.get_negative_flag());
 
         cpu.accumulator = 0x0;
 
@@ -20,8 +20,8 @@ mod tax {
 
         cpu.step();
         assert_eq!(cpu.x_register, 0x0);
-        assert_eq!(cpu.get_zero_flag(), true);
-        assert_eq!(cpu.get_negative_flag(), false);
+        assert!(cpu.get_zero_flag());
+        assert!(!cpu.get_negative_flag());
 
         cpu.accumulator = 0x80;
 
@@ -29,8 +29,8 @@ mod tax {
 
         cpu.step();
         assert_eq!(cpu.x_register, 0x80);
-        assert_eq!(cpu.get_zero_flag(), false);
-        assert_eq!(cpu.get_negative_flag(), true);
+        assert!(!cpu.get_zero_flag());
+        assert!(cpu.get_negative_flag());
     }
 
     #[test]
@@ -53,8 +53,8 @@ mod tax {
 
         cpu.step();
         assert_eq!(cpu.x_register, 0x66);
-        assert_eq!(cpu.get_zero_flag(), false);
-        assert_eq!(cpu.get_negative_flag(), false);
+        assert!(!cpu.get_zero_flag());
+        assert!(!cpu.get_negative_flag());
     }
 
     #[test]
@@ -67,8 +67,8 @@ mod tax {
 
         cpu.step();
         assert_eq!(cpu.x_register, 0x0);
-        assert_eq!(cpu.get_zero_flag(), true);
-        assert_eq!(cpu.get_negative_flag(), false);
+        assert!(cpu.get_zero_flag());
+        assert!(!cpu.get_negative_flag());
     }
 
     #[test]
@@ -80,7 +80,7 @@ mod tax {
 
         cpu.step();
         assert_eq!(cpu.x_register, 0x80);
-        assert_eq!(cpu.get_zero_flag(), false);
-        assert_eq!(cpu.get_negative_flag(), true);
+        assert!(!cpu.get_zero_flag());
+        assert!(cpu.get_negative_flag());
     }
 }

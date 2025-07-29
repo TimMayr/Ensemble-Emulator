@@ -2,7 +2,11 @@ use std::fs::{File, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
 
 pub fn write_at_offset(path: &str, value: u8, offset: u16) -> std::io::Result<()> {
-    let mut file = OpenOptions::new().write(true).create(true).open(path)?;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)?;
 
     // Seek to 0xFFFC (65532 bytes)
     file.seek(SeekFrom::Start(offset as u64))?;

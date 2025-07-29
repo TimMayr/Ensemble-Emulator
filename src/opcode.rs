@@ -230,7 +230,7 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
 
     let mut map = HashMap::new();
 
-    for opcode in &*OPCODES.get().unwrap() {
+    for opcode in OPCODES.get().unwrap() {
         map.insert(opcode.opcode, opcode);
     }
 
