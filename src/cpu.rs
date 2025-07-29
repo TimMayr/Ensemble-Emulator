@@ -1,6 +1,6 @@
 use crate::cpu::AddressingMode::Immediate;
 use crate::opcode;
-use crate::opcode::{OpCode, OPCODES_MAP};
+use crate::opcode::{OPCODES_MAP, OpCode};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
