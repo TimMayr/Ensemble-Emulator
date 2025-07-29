@@ -44,7 +44,6 @@ mod tya {
         assert_eq!(cpu.accumulator, 0x66)
     }
 
-
     #[test]
     fn test_tya_flags_none_when_none() {
         let mut cpu = Cpu::new();
@@ -71,7 +70,6 @@ mod tya {
         assert_eq!(cpu.get_zero_flag(), true);
         assert_eq!(cpu.get_negative_flag(), false);
     }
-
 
     #[test]
     fn test_tya_flags_only_negative_when_negative() {

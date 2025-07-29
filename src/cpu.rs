@@ -1,6 +1,9 @@
 use crate::cpu::AddressingMode::Immediate;
 use crate::opcode;
 use crate::opcode::{OpCode, OPCODES_MAP};
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -276,6 +279,40 @@ impl Cpu {
         self.update_negative_and_zero_flags(self.accumulator);
     }
 
+    fn pha(&mut self) {
+        self.mem_write(0x0100u16 + self.stack_pointer as u16, self.accumulator);
+        self.stack_pointer -= 1;
+    }
+
+    fn php(&mut self) {
+        self.mem_write(0x0100u16 + self.stack_pointer as u16, self.processor_status);
+        self.stack_pointer -= 1;
+    }
+
+    fn pla(&mut self) {
+        self.stack_pointer += 1;
+        self.accumulator = self.mem_read(0x0100u16 + self.stack_pointer as u16);
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
+
+    fn plp(&mut self) {
+        self.stack_pointer += 1;
+        self.processor_status = self.mem_read(0x0100u16 + self.stack_pointer as u16);
+    }
+
+    fn tsx(&mut self) {
+        self.x_register = self.stack_pointer;
+        self.update_negative_and_zero_flags(self.x_register)
+    }
+
+    fn txs(&mut self) {
+        self.stack_pointer = self.x_register;
+    }
+
+    pub fn init(&mut self) {
+        self.program_counter = self.mem_read_u16(0xFFFC);
+    }
+
     pub fn run(&mut self) {
         let mut cycles = 0u16;
         loop {
@@ -312,6 +349,12 @@ impl Cpu {
             0xA8 => self.tay(),
             0x8A => self.txa(),
             0x98 => self.tya(),
+            0x48 => self.pha(),
+            0x08 => self.php(),
+            0x68 => self.pla(),
+            0x28 => self.plp(),
+            0xBA => self.tsx(),
+            0x9A => self.txs(),
             0xFF => println!("{}", self.accumulator),
             _ => {
                 println!("No instruction at address 0x{:x}", self.program_counter - 1);
@@ -321,5 +364,18 @@ impl Cpu {
 
         self.program_counter += (op.bytes - 1) as u16;
         op.cycles
+    }
+
+    pub fn load(&mut self, path: String) {
+        let path = Path::new(&path);
+        let mut file = match File::open(path) {
+            Ok(file) => file,
+            Err(e) => panic!("Couldn't read file {}: {}", path.display(), e),
+        };
+
+        let mut read: Vec<u8> = Vec::new();
+        file.read_to_end(&mut read).expect("Couldn't read file");
+        let len = read.len().min(MEMORY_SIZE as usize);
+        self.memory[..len].copy_from_slice(&read[..len])
     }
 }
