@@ -59,6 +59,7 @@ impl Default for Cpu {
     }
 }
 
+#[allow(dead_code)]
 impl Cpu {
     pub fn new() -> Self {
         OPCODES_MAP.get_or_init(opcode::init);
