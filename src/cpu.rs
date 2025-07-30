@@ -307,33 +307,53 @@ impl Cpu {
         self.stack_pointer = self.x_register;
     }
 
-    pub fn and(&mut self, mode: &AddressingMode) {
+    fn and(&mut self, mode: &AddressingMode) {
         let target = self.get_operand_address(mode);
         let target_val = self.mem_read(target);
         self.accumulator &= target_val;
         self.update_negative_and_zero_flags(self.accumulator);
     }
 
-    pub fn eor(&mut self, mode: &AddressingMode) {
+    fn eor(&mut self, mode: &AddressingMode) {
         let target = self.get_operand_address(mode);
         let target_val = self.mem_read(target);
         self.accumulator ^= target_val;
         self.update_negative_and_zero_flags(self.accumulator);
     }
 
-    pub fn ora(&mut self, mode: &AddressingMode) {
+    fn ora(&mut self, mode: &AddressingMode) {
         let target = self.get_operand_address(mode);
         let target_val = self.mem_read(target);
         self.accumulator |= target_val;
         self.update_negative_and_zero_flags(self.accumulator);
     }
 
-    pub fn bit(&mut self, mode: &AddressingMode) {
+    fn bit(&mut self, mode: &AddressingMode) {
         let target = self.get_operand_address(mode);
         let target_val = self.mem_read(target);
         let res = self.accumulator & target_val;
         self.update_zero_flag(res);
         self.processor_status |= target_val & 0b11000000
+    }
+
+    fn inc(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_value = self.mem_read(target);
+        let (mod_value, _) = target_value.overflowing_add(1);
+        self.mem_write(target, mod_value);
+        self.update_negative_and_zero_flags(mod_value);
+    }
+
+    fn inx(&mut self) {
+        let (mod_value, _) = self.x_register.overflowing_add(1);
+        self.x_register = mod_value;
+        self.update_negative_and_zero_flags(self.x_register);
+    }
+
+    fn iny(&mut self) {
+        let (mod_value, _) = self.y_register.overflowing_add(1);
+        self.y_register = mod_value;
+        self.update_negative_and_zero_flags(self.y_register);
     }
 
     pub fn init(&mut self) {
@@ -385,6 +405,9 @@ impl Cpu {
             0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(&op.addressing_mode),
             0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(&op.addressing_mode),
             0x24 | 0x2C => self.bit(&op.addressing_mode),
+            0xE6 | 0xF6 | 0xEE | 0xFE => self.inc(&op.addressing_mode),
+            0xE8 => self.inx(),
+            0xC8 => self.iny(),
             0xFF => println!("{}", self.accumulator),
             _ => {
                 println!("No instruction at address 0x{:x}", self.program_counter - 1);

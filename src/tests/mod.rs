@@ -5,6 +5,8 @@ mod ldx;
 #[cfg(test)]
 mod ldy;
 #[cfg(test)]
+mod ora;
+#[cfg(test)]
 mod pha;
 #[cfg(test)]
 mod php;
@@ -35,6 +37,10 @@ mod and;
 #[cfg(test)]
 mod eor;
 #[cfg(test)]
-mod ora;
-#[cfg(test)]
 mod bit;
+#[cfg(test)]
+mod inc;
+#[cfg(test)]
+mod inx;
+#[cfg(test)]
+mod iny;
