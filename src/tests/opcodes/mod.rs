@@ -5,6 +5,8 @@ mod asl;
 #[cfg(test)]
 mod bit;
 #[cfg(test)]
+mod brk;
+#[cfg(test)]
 mod dec;
 #[cfg(test)]
 mod dex;
@@ -27,6 +29,8 @@ mod ldy;
 #[cfg(test)]
 mod lsr;
 #[cfg(test)]
+mod nop;
+#[cfg(test)]
 mod ora;
 #[cfg(test)]
 mod pha;
@@ -40,6 +44,8 @@ mod plp;
 mod rol;
 #[cfg(test)]
 mod ror;
+#[cfg(test)]
+mod rti;
 #[cfg(test)]
 mod set_flags;
 #[cfg(test)]

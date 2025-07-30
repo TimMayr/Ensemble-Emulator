@@ -40,12 +40,12 @@ pub struct Cpu {
     pub x_register: u8,
     pub y_register: u8,
     pub processor_status: u8,
-    pub memory: [u8; MEMORY_SIZE as usize],
+    pub memory: [u8; MEMORY_SIZE as usize + 1],
 }
 
 impl Default for Cpu {
     fn default() -> Self {
-        let memory: [u8; MEMORY_SIZE as usize] = [0; MEMORY_SIZE as usize];
+        let memory: [u8; MEMORY_SIZE as usize + 1] = [0; MEMORY_SIZE as usize + 1];
         Self {
             program_counter: 0,
             processor_status: 0b00000000,
@@ -525,11 +525,28 @@ impl Cpu {
     }
 
     fn brk(&mut self) {
-        self.php()
+        self.mem_write_u16(
+            0x0100u16 + self.stack_pointer as u16 - 1,
+            self.program_counter + 1,
+        );
+        self.stack_pointer -= 2;
+        self.php();
+
+        self.program_counter = self.mem_read_u16(0xFFFE) - 1;
+    }
+
+    fn nop(&mut self) {}
+
+    fn rti(&mut self) {
+        self.plp();
+        self.program_counter = self.mem_read_u16(0x0100u16 + self.stack_pointer as u16 + 1);
+        self.stack_pointer += 2;
     }
 
     pub fn init(&mut self) {
         self.program_counter = self.mem_read_u16(0xFFFC);
+        self.mem_write_u16(0xFFFE, 0xFF00);
+        self.mem_write(0xFF00, 0xB3);
     }
 
     pub fn run(&mut self) {
@@ -552,8 +569,8 @@ impl Cpu {
 
     pub fn step(&mut self) -> u8 {
         let opcode = self.mem_read(self.program_counter);
-        let prnt = &OpCode::default();
-        let op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&prnt);
+        let pnc = &OpCode::default();
+        let op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
         self.program_counter += 1u16;
 
         match op.opcode {
@@ -598,6 +615,9 @@ impl Cpu {
             0xF8 => self.sed(),
             0x78 => self.sei(),
             0x00 => self.brk(),
+            0xEA => self.nop(),
+            0x40 => self.rti(),
+            0xB3 => panic!("Interrupt requests are not yet implemented"),
             0xFF => println!("{}", self.accumulator),
             _ => {
                 println!("No instruction at address 0x{:x}", self.program_counter - 1);
