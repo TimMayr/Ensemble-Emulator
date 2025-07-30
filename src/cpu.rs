@@ -1,6 +1,6 @@
 use crate::cpu::AddressingMode::Immediate;
 use crate::opcode;
-use crate::opcode::{OPCODES_MAP, OpCode};
+use crate::opcode::{OpCode, OPCODES_MAP};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -49,7 +49,7 @@ impl Default for Cpu {
         let memory: [u8; MEMORY_SIZE as usize] = [0; MEMORY_SIZE as usize];
         Self {
             program_counter: 0,
-            processor_status: 0,
+            processor_status: 0b00100000,
             accumulator: 0,
             x_register: 0,
             y_register: 0,
@@ -145,6 +145,10 @@ impl Cpu {
         (self.processor_status & 0b0000_0001) == 0b0000_0001
     }
 
+    pub fn get_overflow_flag(&self) -> bool {
+        (self.processor_status & 0b0100_0000) == 0b0100_0000
+    }
+
     fn update_carry_and_overflow_flags(&mut self, result: Option<u8>, op: MathematicalOperation) {
         match result {
             Some(_e) => {
@@ -215,13 +219,6 @@ impl Cpu {
         let hsb = self.mem_read(addr.wrapping_add(1));
 
         (hsb as u16) << 8 | (lsb as u16)
-    }
-
-    pub fn and(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_val = self.mem_read(target);
-        self.accumulator &= target_val;
-        self.update_negative_and_zero_flags(self.accumulator);
     }
 
     fn lda(&mut self, mode: &AddressingMode) {
@@ -310,6 +307,35 @@ impl Cpu {
         self.stack_pointer = self.x_register;
     }
 
+    pub fn and(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_val = self.mem_read(target);
+        self.accumulator &= target_val;
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
+
+    pub fn eor(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_val = self.mem_read(target);
+        self.accumulator ^= target_val;
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
+
+    pub fn ora(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_val = self.mem_read(target);
+        self.accumulator |= target_val;
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
+
+    pub fn bit(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_val = self.mem_read(target);
+        let res = self.accumulator & target_val;
+        self.update_zero_flag(res);
+        self.processor_status |= target_val & 0b11000000
+    }
+
     pub fn init(&mut self) {
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
@@ -339,7 +365,6 @@ impl Cpu {
         self.program_counter += 1u16;
 
         match op.opcode {
-            0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(&op.addressing_mode),
             0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(&op.addressing_mode),
             0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => self.ldx(&op.addressing_mode),
             0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => self.ldy(&op.addressing_mode),
@@ -356,6 +381,10 @@ impl Cpu {
             0x28 => self.plp(),
             0xBA => self.tsx(),
             0x9A => self.txs(),
+            0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(&op.addressing_mode),
+            0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(&op.addressing_mode),
+            0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(&op.addressing_mode),
+            0x24 | 0x2C => self.bit(&op.addressing_mode),
             0xFF => println!("{}", self.accumulator),
             _ => {
                 println!("No instruction at address 0x{:x}", self.program_counter - 1);

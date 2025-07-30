@@ -1,6 +1,4 @@
 #[cfg(test)]
-mod and;
-#[cfg(test)]
 mod lda;
 #[cfg(test)]
 mod ldx;
@@ -32,3 +30,11 @@ mod txa;
 mod txs;
 #[cfg(test)]
 mod tya;
+#[cfg(test)]
+mod and;
+#[cfg(test)]
+mod eor;
+#[cfg(test)]
+mod ora;
+#[cfg(test)]
+mod bit;
