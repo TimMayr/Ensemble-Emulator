@@ -13,24 +13,27 @@ fn test_dex_complete() {
 
     cpu.mem_write(0x1, 0xCA);
     cpu.x_register = 0x2;
+    cpu.step();
+
+    assert_eq!(cpu.x_register, 0x1);
+    assert!(!cpu.get_zero_flag());
+    assert!(!cpu.get_negative_flag());
+
+    cpu.mem_write(0x2, 0xCA);
+    cpu.x_register = 0x1;
 
     cpu.step();
-    
-    assert_eq!(cpu.x_register, 0x1);
+
+    assert_eq!(cpu.x_register, 0x00);
+    assert!(cpu.get_zero_flag());
+    assert!(!cpu.get_negative_flag());
+
+    cpu.mem_write(0x3, 0xCA);
     cpu.x_register = 0xFF;
 
     cpu.step();
 
-    assert_eq!(cpu.x_register, 0x0);
-    assert!(cpu.get_zero_flag());
-    assert!(!cpu.get_negative_flag());
-
-    cpu.mem_write(0x2, 0xE8);
-    cpu.x_register = 0x7F;
-
-    cpu.step();
-
-    assert_eq!(cpu.x_register, 0x80);
+    assert_eq!(cpu.x_register, 0xFE);
     assert!(!cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
 }
