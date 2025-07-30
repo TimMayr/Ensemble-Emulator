@@ -254,3 +254,15 @@ impl OpCode {
         }
     }
 }
+
+impl Default for OpCode {
+    fn default() -> Self {
+        Self {
+            opcode: 0xFF,
+            name: "PRT",
+            bytes: 1,
+            cycles: 0,
+            addressing_mode: Immediate,
+        }
+    }
+}

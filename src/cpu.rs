@@ -1,4 +1,3 @@
-use crate::cpu::AddressingMode::Immediate;
 use crate::opcode;
 use crate::opcode::{OPCODES_MAP, OpCode};
 use std::fs::File;
@@ -141,7 +140,7 @@ impl Cpu {
         (self.processor_status & 0b1000_0000) == 0b1000_0000
     }
 
-    fn get_carry_flag(&self) -> bool {
+    pub fn get_carry_flag(&self) -> bool {
         (self.processor_status & 0b0000_0001) == 0b0000_0001
     }
 
@@ -219,6 +218,64 @@ impl Cpu {
         let hsb = self.mem_read(addr.wrapping_add(1));
 
         (hsb as u16) << 8 | (lsb as u16)
+    }
+
+    fn shift_left(&mut self, data: u8) -> u8 {
+        let res = data << 1;
+
+        if data & 0b10000000 != 0 {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        self.update_negative_and_zero_flags(res);
+        res
+    }
+
+    fn shift_right(&mut self, data: u8) -> u8 {
+        let res = data >> 1;
+
+        if data & 0b00000001 != 0 {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        self.update_negative_and_zero_flags(res);
+        res
+    }
+
+    fn rotate_left(&mut self, data: u8) -> u8 {
+        let mut res = data << 1;
+
+        res |= self.processor_status & 0b00000001;
+
+        if data & 0b10000000 != 0 {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        self.update_negative_and_zero_flags(res);
+        res
+    }
+
+    fn rotate_right(&mut self, data: u8) -> u8 {
+        let mut res = data >> 1;
+
+        if self.get_carry_flag() {
+            res |= 0b10000000;
+        }
+
+        if data & 0b00000001 != 0 {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        self.update_negative_and_zero_flags(res);
+        res
     }
 
     fn lda(&mut self, mode: &AddressingMode) {
@@ -376,6 +433,50 @@ impl Cpu {
         self.update_negative_and_zero_flags(self.y_register);
     }
 
+    fn asl(&mut self, mode: &AddressingMode) {
+        if mode != &AddressingMode::Accumulator {
+            let target = self.get_operand_address(mode);
+            let target_value = self.mem_read(target);
+            let res = self.shift_left(target_value);
+            self.mem_write(target, res);
+        } else {
+            self.accumulator = self.shift_left(self.accumulator);
+        }
+    }
+
+    fn lsr(&mut self, mode: &AddressingMode) {
+        if mode != &AddressingMode::Accumulator {
+            let target = self.get_operand_address(mode);
+            let target_value = self.mem_read(target);
+            let res = self.shift_right(target_value);
+            self.mem_write(target, res);
+        } else {
+            self.accumulator = self.shift_right(self.accumulator);
+        }
+    }
+
+    fn rol(&mut self, mode: &AddressingMode) {
+        if mode != &AddressingMode::Accumulator {
+            let target = self.get_operand_address(mode);
+            let target_value = self.mem_read(target);
+            let res = self.rotate_left(target_value);
+            self.mem_write(target, res);
+        } else {
+            self.accumulator = self.rotate_left(self.accumulator);
+        }
+    }
+
+    fn ror(&mut self, mode: &AddressingMode) {
+        if mode != &AddressingMode::Accumulator {
+            let target = self.get_operand_address(mode);
+            let target_value = self.mem_read(target);
+            let res = self.rotate_right(target_value);
+            self.mem_write(target, res);
+        } else {
+            self.accumulator = self.rotate_right(self.accumulator);
+        }
+    }
+
     pub fn init(&mut self) {
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
@@ -400,7 +501,7 @@ impl Cpu {
 
     pub fn step(&mut self) -> u8 {
         let opcode = self.mem_read(self.program_counter);
-        let prnt = &OpCode::new(0xFF, "PRT", 1, 0, Immediate);
+        let prnt = &OpCode::default();
         let op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&prnt);
         self.program_counter += 1u16;
 
@@ -431,6 +532,10 @@ impl Cpu {
             0xC6 | 0xD6 | 0xCE | 0xDE => self.dec(&op.addressing_mode),
             0xCA => self.dex(),
             0x88 => self.dey(),
+            0x0A | 0x06 | 0x16 | 0x0E | 0x1E => self.asl(&op.addressing_mode),
+            0x4A | 0x46 | 0x56 | 0x4E | 0x5E => self.lsr(&op.addressing_mode),
+            0x2A | 0x26 | 0x36 | 0x2E | 0x3E => self.rol(&op.addressing_mode),
+            0x6A | 0x66 | 0x76 | 0x6E | 0x7E => self.ror(&op.addressing_mode),
             0xFF => println!("{}", self.accumulator),
             _ => {
                 println!("No instruction at address 0x{:x}", self.program_counter - 1);

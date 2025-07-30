@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod and;
 #[cfg(test)]
+mod asl;
+#[cfg(test)]
 mod bit;
 #[cfg(test)]
 mod dec;
@@ -23,6 +25,8 @@ mod ldx;
 #[cfg(test)]
 mod ldy;
 #[cfg(test)]
+mod lsr;
+#[cfg(test)]
 mod ora;
 #[cfg(test)]
 mod pha;
@@ -32,6 +36,10 @@ mod php;
 mod pla;
 #[cfg(test)]
 mod plp;
+#[cfg(test)]
+mod rol;
+#[cfg(test)]
+mod ror;
 #[cfg(test)]
 mod sta;
 #[cfg(test)]
