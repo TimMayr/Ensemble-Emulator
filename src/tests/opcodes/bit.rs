@@ -14,7 +14,7 @@ fn test_bit_complete() {
     assert!(cpu.get_negative_flag());
     assert!(cpu.get_overflow_flag());
 
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.mem_write(0x2, 0x2C);
     cpu.mem_write_u16(0x3, 0x2020);
@@ -26,7 +26,7 @@ fn test_bit_complete() {
     assert!(cpu.get_negative_flag());
     assert!(cpu.get_overflow_flag());
 
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.accumulator = 0b00000001;
     cpu.mem_write(0x5, 0x24);
@@ -39,7 +39,7 @@ fn test_bit_complete() {
     assert!(!cpu.get_negative_flag());
     assert!(!cpu.get_overflow_flag());
 
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.accumulator = 0b00000000;
     cpu.mem_write(0x7, 0x24);
@@ -52,7 +52,7 @@ fn test_bit_complete() {
     assert!(!cpu.get_negative_flag());
     assert!(!cpu.get_overflow_flag());
 
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.accumulator = 0b01000001;
     cpu.mem_write(0x9, 0x24);
@@ -65,7 +65,7 @@ fn test_bit_complete() {
     assert!(!cpu.get_negative_flag());
     assert!(cpu.get_overflow_flag());
 
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.accumulator = 0b01000000;
     cpu.mem_write(0xB, 0x24);
@@ -78,7 +78,7 @@ fn test_bit_complete() {
     assert!(cpu.get_negative_flag());
     assert!(cpu.get_overflow_flag());
 
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.accumulator = 0b00000000;
     cpu.mem_write(0xD, 0x24);
@@ -91,7 +91,7 @@ fn test_bit_complete() {
     assert!(!cpu.get_negative_flag());
     assert!(cpu.get_overflow_flag());
 
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.accumulator = 0b00000000;
     cpu.mem_write(0xF, 0x24);
@@ -104,7 +104,7 @@ fn test_bit_complete() {
     assert!(cpu.get_negative_flag());
     assert!(!cpu.get_overflow_flag());
 
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.accumulator = 0b00000000;
     cpu.mem_write(0x11, 0x24);

@@ -13,7 +13,7 @@ fn test_ror_complete() {
     assert!(!cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.mem_write(0x1, 0x66);
     cpu.mem_write(0x2, 0x20);
@@ -25,7 +25,7 @@ fn test_ror_complete() {
     assert!(!cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.accumulator = 0b0100_0000;
     cpu.processor_status |= 0b00000001;
@@ -38,7 +38,7 @@ fn test_ror_complete() {
     assert!(!cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.processor_status |= 0b00000001;
 
@@ -52,7 +52,7 @@ fn test_ror_complete() {
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.x_register = 0x01;
 
@@ -66,7 +66,7 @@ fn test_ror_complete() {
     assert!(!cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.mem_write(0x8, 0x6E);
     cpu.mem_write_u16(0x9, 0x1234);
@@ -78,7 +78,7 @@ fn test_ror_complete() {
     assert!(!cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.x_register = 0x01;
 
@@ -92,7 +92,7 @@ fn test_ror_complete() {
     assert!(cpu.get_carry_flag());
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.accumulator = 0b00011110;
 
@@ -103,7 +103,7 @@ fn test_ror_complete() {
     assert!(!cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.accumulator = 0b00000000;
 
@@ -114,7 +114,7 @@ fn test_ror_complete() {
     assert!(!cpu.get_carry_flag());
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.accumulator = 0b00001111;
 
@@ -125,7 +125,7 @@ fn test_ror_complete() {
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_negative_flag());
     assert!(!cpu.get_zero_flag());
-    cpu.processor_status = 0b00100000;
+    cpu.processor_status = 0b00000000;
 
     cpu.accumulator = 0b00000001;
 

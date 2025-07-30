@@ -48,7 +48,7 @@ impl Default for Cpu {
         let memory: [u8; MEMORY_SIZE as usize] = [0; MEMORY_SIZE as usize];
         Self {
             program_counter: 0,
-            processor_status: 0b00100000,
+            processor_status: 0b00000000,
             accumulator: 0,
             x_register: 0,
             y_register: 0,
@@ -130,6 +130,22 @@ impl Cpu {
 
     fn clear_overflow_flag(&mut self) {
         self.processor_status &= 0b1011_1111;
+    }
+
+    fn set_interrupt_disable(&mut self) {
+        self.processor_status |= 0b00000100;
+    }
+
+    fn set_decimal_flag(&mut self) {
+        self.processor_status |= 0b00001000;
+    }
+
+    fn clear_interrupt_disable(&mut self) {
+        self.processor_status &= 0b1011_1011;
+    }
+
+    fn clear_decimal_flag(&mut self) {
+        self.processor_status &= 0b1111_0111;
     }
 
     pub fn get_zero_flag(self) -> bool {
@@ -340,7 +356,10 @@ impl Cpu {
     }
 
     fn php(&mut self) {
-        self.mem_write(0x0100u16 + self.stack_pointer as u16, self.processor_status);
+        self.mem_write(
+            0x0100u16 + self.stack_pointer as u16,
+            self.processor_status | 0b00110000,
+        );
         self.stack_pointer -= 1;
     }
 
@@ -352,7 +371,7 @@ impl Cpu {
 
     fn plp(&mut self) {
         self.stack_pointer += 1;
-        self.processor_status = self.mem_read(0x0100u16 + self.stack_pointer as u16);
+        self.processor_status = self.mem_read(0x0100u16 + self.stack_pointer as u16) & 0b11001111;
     }
 
     fn tsx(&mut self) {
@@ -477,6 +496,38 @@ impl Cpu {
         }
     }
 
+    fn clc(&mut self) {
+        self.clear_carry_flag();
+    }
+
+    fn cld(&mut self) {
+        self.clear_decimal_flag();
+    }
+
+    fn cli(&mut self) {
+        self.clear_interrupt_disable();
+    }
+
+    fn clv(&mut self) {
+        self.clear_overflow_flag();
+    }
+
+    fn sec(&mut self) {
+        self.set_carry_flag();
+    }
+
+    fn sed(&mut self) {
+        self.set_decimal_flag();
+    }
+
+    fn sei(&mut self) {
+        self.set_interrupt_disable();
+    }
+
+    fn brk(&mut self) {
+        self.php()
+    }
+
     pub fn init(&mut self) {
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
@@ -526,6 +577,7 @@ impl Cpu {
             0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(&op.addressing_mode),
             0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(&op.addressing_mode),
             0x24 | 0x2C => self.bit(&op.addressing_mode),
+            // ARITHMETIC HERE
             0xE6 | 0xF6 | 0xEE | 0xFE => self.inc(&op.addressing_mode),
             0xE8 => self.inx(),
             0xC8 => self.iny(),
@@ -536,6 +588,16 @@ impl Cpu {
             0x4A | 0x46 | 0x56 | 0x4E | 0x5E => self.lsr(&op.addressing_mode),
             0x2A | 0x26 | 0x36 | 0x2E | 0x3E => self.rol(&op.addressing_mode),
             0x6A | 0x66 | 0x76 | 0x6E | 0x7E => self.ror(&op.addressing_mode),
+            // JUMPS & CALLS
+            // BRANCHES
+            0x18 => self.clc(),
+            0xD8 => self.cld(),
+            0x58 => self.cli(),
+            0xB8 => self.clv(),
+            0x38 => self.sec(),
+            0xF8 => self.sed(),
+            0x78 => self.sei(),
+            0x00 => self.brk(),
             0xFF => println!("{}", self.accumulator),
             _ => {
                 println!("No instruction at address 0x{:x}", self.program_counter - 1);

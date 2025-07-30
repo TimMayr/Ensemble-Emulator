@@ -58,7 +58,7 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             //BPL
             OpCode::new(0x10, "BPL", 2, 2, Relative),
             //BRK
-            OpCode::new(0x00, "BRK", 1, 7, Implied),
+            OpCode::new(0x00, "BRK", 2, 7, Implied),
             //BVC
             OpCode::new(0x50, "BVC", 2, 2, Relative),
             //BVS

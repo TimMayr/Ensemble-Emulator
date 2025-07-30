@@ -41,6 +41,8 @@ mod rol;
 #[cfg(test)]
 mod ror;
 #[cfg(test)]
+mod set_flags;
+#[cfg(test)]
 mod sta;
 #[cfg(test)]
 mod stx;

@@ -19,14 +19,14 @@ fn test_plp_implied_simple() {
     cpu.step();
 
     //Validate that Zero flag was reset
-    assert_eq!(cpu.processor_status, 0b00100000);
+    assert_eq!(cpu.processor_status, 0b00000000);
 
     //Load saved Processor Status from Stack
     cpu.mem_write(0x5, 0x28);
     cpu.step();
 
     //Validate that Processor Status was loaded correctly
-    assert_eq!(cpu.processor_status, 0b00100010);
+    assert_eq!(cpu.processor_status, 0b00000010);
     //Validate that Stack Point is correct
     assert_eq!(cpu.stack_pointer, 0xFF)
 }
@@ -70,20 +70,20 @@ fn test_plp_implied_complicated() {
     cpu.step();
 
     //Validate that loaded Processor Status doesn't have flags set
-    assert_eq!(cpu.processor_status, 0b00100000);
+    assert_eq!(cpu.processor_status, 0b00000000);
 
     //Load Processor Status from Stack
     cpu.mem_write(0xA, 0x28);
     cpu.step();
 
     //Validate that loaded Processor Status has Negative flag set
-    assert_eq!(cpu.processor_status, 0b10100000);
+    assert_eq!(cpu.processor_status, 0b10000000);
 
     cpu.mem_write(0xB, 0x28);
     cpu.step();
 
     //Validate that loaded Processor Status has Zero flag set
-    assert_eq!(cpu.processor_status, 0b00100010);
+    assert_eq!(cpu.processor_status, 0b00000010);
     //Validate that Stack pointer is correct
     assert_eq!(cpu.stack_pointer, 0xFF)
 }
