@@ -356,6 +356,26 @@ impl Cpu {
         self.update_negative_and_zero_flags(self.y_register);
     }
 
+    fn dec(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_value = self.mem_read(target);
+        let (mod_value, _) = target_value.overflowing_sub(1);
+        self.mem_write(target, mod_value);
+        self.update_negative_and_zero_flags(mod_value);
+    }
+
+    fn dex(&mut self) {
+        let (mod_value, _) = self.x_register.overflowing_sub(1);
+        self.x_register = mod_value;
+        self.update_negative_and_zero_flags(self.x_register);
+    }
+
+    fn dey(&mut self) {
+        let (mod_value, _) = self.y_register.overflowing_sub(1);
+        self.y_register = mod_value;
+        self.update_negative_and_zero_flags(self.y_register);
+    }
+
     pub fn init(&mut self) {
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
@@ -408,6 +428,9 @@ impl Cpu {
             0xE6 | 0xF6 | 0xEE | 0xFE => self.inc(&op.addressing_mode),
             0xE8 => self.inx(),
             0xC8 => self.iny(),
+            0xC6 | 0xD6 | 0xCE | 0xDE => self.dec(&op.addressing_mode),
+            0xCA => self.dex(),
+            0x88 => self.dey(),
             0xFF => println!("{}", self.accumulator),
             _ => {
                 println!("No instruction at address 0x{:x}", self.program_counter - 1);

@@ -44,3 +44,9 @@ mod inc;
 mod inx;
 #[cfg(test)]
 mod iny;
+#[cfg(test)]
+mod dec;
+#[cfg(test)]
+mod dex;
+#[cfg(test)]
+mod dey;
