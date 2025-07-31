@@ -556,8 +556,6 @@ impl Cpu {
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
             self.program_counter += target_value as u16;
-        } else {
-            return;
         }
     }
 
@@ -566,8 +564,6 @@ impl Cpu {
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
             self.program_counter += target_value as u16;
-        } else {
-            return;
         }
     }
 
@@ -576,8 +572,6 @@ impl Cpu {
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
             self.program_counter += target_value as u16;
-        } else {
-            return;
         }
     }
 
@@ -586,8 +580,6 @@ impl Cpu {
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
             self.program_counter += target_value as u16;
-        } else {
-            return;
         }
     }
 
@@ -596,8 +588,6 @@ impl Cpu {
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
             self.program_counter += target_value as u16;
-        } else {
-            return;
         }
     }
 
@@ -606,8 +596,6 @@ impl Cpu {
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
             self.program_counter += target_value as u16;
-        } else {
-            return;
         }
     }
 
@@ -616,8 +604,6 @@ impl Cpu {
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
             self.program_counter += target_value as u16;
-        } else {
-            return;
         }
     }
 
@@ -626,8 +612,6 @@ impl Cpu {
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
             self.program_counter += target_value as u16;
-        } else {
-            return;
         }
     }
 
@@ -704,7 +688,7 @@ impl Cpu {
             self.clear_carry_flag();
         }
 
-        if self.accumulator - target_value & 0b10000000 != 0 {
+        if (self.accumulator - target_value) & 0b10000000 != 0 {
             self.set_negative_flag();
         } else {
             self.clear_negative_flag();
@@ -727,7 +711,7 @@ impl Cpu {
             self.clear_carry_flag();
         }
 
-        if self.x_register - target_value & 0b10000000 != 0 {
+        if (self.x_register - target_value) & 0b10000000 != 0 {
             self.set_negative_flag();
         } else {
             self.clear_negative_flag();
@@ -750,7 +734,7 @@ impl Cpu {
             self.clear_carry_flag();
         }
 
-        if self.y_register - target_value & 0b10000000 != 0 {
+        if (self.y_register - target_value) & 0b10000000 != 0 {
             self.set_negative_flag();
         } else {
             self.clear_negative_flag();
