@@ -32,6 +32,10 @@ mod cli;
 mod clv;
 mod cmp;
 #[cfg(test)]
+mod cpx;
+#[cfg(test)]
+mod cpy;
+#[cfg(test)]
 mod dec;
 #[cfg(test)]
 mod dex;
