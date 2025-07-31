@@ -192,7 +192,7 @@ impl Cpu {
         (self.processor_status & 0b0100_0000) == 0b0100_0000
     }
 
-    fn get_operand_address(&self, addressing_mode: &AddressingMode) -> u16 {
+    fn get_operand_address(&mut self, addressing_mode: &AddressingMode) -> u16 {
         match addressing_mode {
             AddressingMode::Immediate => self.program_counter,
             AddressingMode::ZeroPage => self.read_next_byte() as u16,
@@ -207,12 +207,24 @@ impl Cpu {
             AddressingMode::Relative => self.program_counter,
             AddressingMode::Absolute => self.read_next_two_bytes(),
             AddressingMode::AbsoluteX => {
-                let pos = self.read_next_two_bytes();
-                pos + self.x_register as u16
+                let base = self.read_next_two_bytes();
+                let pos = base + self.x_register as u16;
+
+                if Cpu::crosses_page_boundary(base, self.x_register) {
+                    self.additional_cycles += 1;
+                }
+
+                pos
             }
             AddressingMode::AbsoluteY => {
-                let pos = self.read_next_two_bytes();
-                pos + self.y_register as u16
+                let base = self.read_next_two_bytes();
+                let pos = base + self.y_register as u16;
+
+                if Cpu::crosses_page_boundary(base, self.y_register) {
+                    self.additional_cycles += 1;
+                }
+
+                pos
             }
             AddressingMode::Indirect => {
                 let base = self.read_next_two_bytes();
@@ -226,10 +238,19 @@ impl Cpu {
             AddressingMode::IndirectY => {
                 let lookup_addr = self.read_next_byte();
                 let addr = self.mem_read_u16(lookup_addr as u16);
+
+                if Self::crosses_page_boundary(addr, self.y_register) {
+                    self.additional_cycles += 1;
+                }
+
                 addr.wrapping_add(self.y_register as u16)
             }
             _ => panic!("Invalid addressing mode"),
         }
+    }
+
+    fn crosses_page_boundary(base: u16, offset: u8) -> bool {
+        (base & 0xFF00) != ((base + offset as u16) & 0xFF00)
     }
 
     fn read_next_byte(&self) -> u8 {
@@ -553,64 +574,120 @@ impl Cpu {
 
     fn bcc(&mut self, mode: &AddressingMode) {
         if !self.get_carry_flag() {
+            self.additional_cycles += 1;
+
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
+
+            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+                self.additional_cycles += 1;
+            }
+
             self.program_counter += target_value as u16;
         }
     }
 
     fn bcs(&mut self, mode: &AddressingMode) {
         if self.get_carry_flag() {
+            self.additional_cycles += 1;
+
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
+
+            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+                self.additional_cycles += 1;
+            }
+
             self.program_counter += target_value as u16;
         }
     }
 
     fn beq(&mut self, mode: &AddressingMode) {
         if self.get_zero_flag() {
+            self.additional_cycles += 1;
+
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
+
+            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+                self.additional_cycles += 1;
+            }
+
             self.program_counter += target_value as u16;
         }
     }
 
     fn bne(&mut self, mode: &AddressingMode) {
         if !self.get_zero_flag() {
+            self.additional_cycles += 1;
+
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
+
+            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+                self.additional_cycles += 1;
+            }
+
             self.program_counter += target_value as u16;
         }
     }
 
     fn bmi(&mut self, mode: &AddressingMode) {
         if self.get_negative_flag() {
+            self.additional_cycles += 1;
+
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
+
+            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+                self.additional_cycles += 1;
+            }
+
             self.program_counter += target_value as u16;
         }
     }
 
     fn bpl(&mut self, mode: &AddressingMode) {
         if !self.get_negative_flag() {
+            self.additional_cycles += 1;
+
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
+
+            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+                self.additional_cycles += 1;
+            }
+
             self.program_counter += target_value as u16;
         }
     }
 
     fn bvs(&mut self, mode: &AddressingMode) {
         if self.get_overflow_flag() {
+            self.additional_cycles += 1;
+
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
+
+            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+                self.additional_cycles += 1;
+            }
+
             self.program_counter += target_value as u16;
         }
     }
 
     fn bvc(&mut self, mode: &AddressingMode) {
         if !self.get_overflow_flag() {
+            self.additional_cycles += 1;
+
             let target = self.get_operand_address(mode);
             let target_value = self.mem_read(target);
+
+            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+                self.additional_cycles += 1;
+            }
+
             self.program_counter += target_value as u16;
         }
     }
