@@ -9,6 +9,10 @@ use std::time::{Duration, Instant};
 const MEMORY_SIZE: u16 = 0xFFFF;
 const STACK_START: u8 = 0xFF;
 
+const CYCLES_PER_FRAME: u16 = 29780;
+const FRAME_DURATION: Duration = Duration::from_nanos(16_666_667);
+const STACK_START_ADDRESS: u16 = 0x0100;
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum AddressingMode {
     Implied,
@@ -58,9 +62,6 @@ impl Default for Cpu {
     }
 }
 
-const CYCLES_PER_FRAME: u16 = 29780;
-const FRAME_DURATION: Duration = Duration::from_nanos(16_666_667);
-
 #[allow(dead_code)]
 impl Cpu {
     pub fn new() -> Self {
@@ -88,6 +89,26 @@ impl Cpu {
         let highest_significant_bits = (data >> 8) as u8;
         self.mem_write(addr, least_significant_bits);
         self.mem_write(addr + 1, highest_significant_bits)
+    }
+
+    pub fn stack_pop(&mut self) -> u8 {
+        self.stack_pointer += 1;
+        self.mem_read(STACK_START_ADDRESS + self.stack_pointer as u16)
+    }
+
+    pub fn stack_push(&mut self, data: u8) {
+        self.mem_write(STACK_START_ADDRESS + self.stack_pointer as u16, data);
+        self.stack_pointer -= 1;
+    }
+
+    pub fn stack_pop_u16(&mut self) -> u16 {
+        self.stack_pointer += 2;
+        self.mem_read_u16(STACK_START_ADDRESS + self.stack_pointer as u16 - 1)
+    }
+
+    pub fn stack_push_u16(&mut self, data: u16) {
+        self.mem_write_u16(STACK_START_ADDRESS + self.stack_pointer as u16 - 1, data);
+        self.stack_pointer -= 2;
     }
 
     fn set_zero_flag(&mut self) {
@@ -210,14 +231,18 @@ impl Cpu {
                 let pos = self.read_next_two_bytes();
                 pos + self.y_register as u16
             }
+            AddressingMode::Indirect => {
+                let base = self.read_next_two_bytes();
+                self.mem_read_u16(base)
+            }
             AddressingMode::IndirectX => {
                 let base = self.read_next_byte();
                 let lookup_addr = base.wrapping_add(self.x_register);
-                self.get_indirect_lookup(lookup_addr as u16)
+                self.mem_read_u16(lookup_addr as u16)
             }
             AddressingMode::IndirectY => {
                 let lookup_addr = self.read_next_byte();
-                let addr = self.get_indirect_lookup(lookup_addr as u16);
+                let addr = self.mem_read_u16(lookup_addr as u16);
                 addr.wrapping_add(self.y_register as u16)
             }
             _ => panic!("Invalid addressing mode"),
@@ -230,13 +255,6 @@ impl Cpu {
 
     fn read_next_two_bytes(&self) -> u16 {
         self.mem_read_u16(self.program_counter)
-    }
-
-    fn get_indirect_lookup(&self, addr: u16) -> u16 {
-        let lsb = self.mem_read(addr);
-        let hsb = self.mem_read(addr.wrapping_add(1));
-
-        (hsb as u16) << 8 | (lsb as u16)
     }
 
     fn shift_left(&mut self, data: u8) -> u8 {
@@ -354,27 +372,20 @@ impl Cpu {
     }
 
     fn pha(&mut self) {
-        self.mem_write(0x0100u16 + self.stack_pointer as u16, self.accumulator);
-        self.stack_pointer -= 1;
+        self.stack_push(self.accumulator);
     }
 
     fn php(&mut self) {
-        self.mem_write(
-            0x0100u16 + self.stack_pointer as u16,
-            self.processor_status | 0b00110000,
-        );
-        self.stack_pointer -= 1;
+        self.stack_push(self.processor_status | 0b00110000);
     }
 
     fn pla(&mut self) {
-        self.stack_pointer += 1;
-        self.accumulator = self.mem_read(0x0100u16 + self.stack_pointer as u16);
+        self.accumulator = self.stack_pop();
         self.update_negative_and_zero_flags(self.accumulator);
     }
 
     fn plp(&mut self) {
-        self.stack_pointer += 1;
-        self.processor_status = self.mem_read(0x0100u16 + self.stack_pointer as u16) & 0b11001111;
+        self.processor_status = self.stack_pop() & 0b11001111;
     }
 
     fn tsx(&mut self) {
@@ -528,22 +539,33 @@ impl Cpu {
     }
 
     fn brk(&mut self) {
-        self.mem_write_u16(
-            0x0100u16 + self.stack_pointer as u16 - 1,
-            self.program_counter + 1,
-        );
-        self.stack_pointer -= 2;
+        self.stack_push_u16(self.program_counter + 1);
         self.php();
 
-        self.program_counter = self.mem_read_u16(0xFFFE) - 1;
+        self.program_counter = self.mem_read_u16(0xFFFE);
     }
 
     fn nop(&mut self) {}
 
     fn rti(&mut self) {
         self.plp();
-        self.program_counter = self.mem_read_u16(0x0100u16 + self.stack_pointer as u16 + 1);
-        self.stack_pointer += 2;
+        self.program_counter = self.stack_pop_u16();
+    }
+
+    fn jmp(&mut self, mode: &AddressingMode) {
+        let target_address = self.get_operand_address(mode);
+        self.program_counter = target_address;
+    }
+
+    fn jsr(&mut self, mode: &AddressingMode) {
+        let target_address = self.get_operand_address(mode);
+        self.stack_push_u16(self.program_counter + 1);
+        self.program_counter = target_address;
+    }
+
+    fn rts(&mut self) {
+        let pc = self.stack_pop_u16() + 1;
+        self.program_counter = pc;
     }
 
     pub fn init(&mut self) {
@@ -579,6 +601,7 @@ impl Cpu {
         let pnc = &OpCode::default();
         let op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
         self.program_counter += 1u16;
+        let pc_check = self.program_counter;
 
         match op.opcode {
             0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(&op.addressing_mode),
@@ -612,7 +635,9 @@ impl Cpu {
             0x4A | 0x46 | 0x56 | 0x4E | 0x5E => self.lsr(&op.addressing_mode),
             0x2A | 0x26 | 0x36 | 0x2E | 0x3E => self.rol(&op.addressing_mode),
             0x6A | 0x66 | 0x76 | 0x6E | 0x7E => self.ror(&op.addressing_mode),
-            // JUMPS & CALLS
+            0x4C | 0x6C => self.jmp(&op.addressing_mode),
+            0x20 => self.jsr(&op.addressing_mode),
+            0x60 => self.rts(),
             // BRANCHES
             0x18 => self.clc(),
             0xD8 => self.cld(),
@@ -632,7 +657,10 @@ impl Cpu {
             }
         }
 
-        self.program_counter += (op.bytes - 1) as u16;
+        if self.program_counter == pc_check {
+            self.program_counter += op.bytes as u16 - 1;
+        }
+
         op.cycles
     }
 

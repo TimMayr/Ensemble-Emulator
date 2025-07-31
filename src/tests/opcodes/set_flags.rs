@@ -1,7 +1,7 @@
 use crate::cpu::Cpu;
 
 #[test]
-fn clc_clears_carry_flag() {
+fn test_clc() {
     let mut cpu = Cpu::new();
     cpu.processor_status |= 0b0000_0001;
     cpu.mem_write(0x0, 0x18);
@@ -10,7 +10,7 @@ fn clc_clears_carry_flag() {
 }
 
 #[test]
-fn cld_clears_decimal_flag() {
+fn test_cld() {
     let mut cpu = Cpu::new();
     cpu.processor_status |= 0b0000_1000;
     cpu.mem_write(0x0, 0xD8);
@@ -19,7 +19,7 @@ fn cld_clears_decimal_flag() {
 }
 
 #[test]
-fn cli_clears_interrupt_disable_flag() {
+fn test_cli() {
     let mut cpu = Cpu::new();
     cpu.processor_status |= 0b0000_0100;
     cpu.mem_write(0x0, 0x58);
@@ -28,7 +28,7 @@ fn cli_clears_interrupt_disable_flag() {
 }
 
 #[test]
-fn clv_clears_overflow_flag() {
+fn test_clv() {
     let mut cpu = Cpu::new();
     cpu.processor_status |= 0b0100_0000;
     cpu.mem_write(0x0, 0xB8);
@@ -37,7 +37,7 @@ fn clv_clears_overflow_flag() {
 }
 
 #[test]
-fn sec_sets_carry_flag() {
+fn test_sec() {
     let mut cpu = Cpu::new();
     cpu.processor_status &= !0b0000_0001;
     cpu.mem_write(0x0, 0x38);
@@ -46,7 +46,7 @@ fn sec_sets_carry_flag() {
 }
 
 #[test]
-fn sed_sets_decimal_flag() {
+fn test_sed() {
     let mut cpu = Cpu::new();
     cpu.processor_status &= !0b0000_1000;
     cpu.mem_write(0x0, 0xF8);
@@ -55,7 +55,7 @@ fn sed_sets_decimal_flag() {
 }
 
 #[test]
-fn sei_sets_interrupt_disable_flag() {
+fn test_sei() {
     let mut cpu = Cpu::new();
     cpu.processor_status &= !0b0000_0100;
     cpu.mem_write(0x0, 0x78);

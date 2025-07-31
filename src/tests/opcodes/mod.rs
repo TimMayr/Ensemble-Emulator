@@ -21,6 +21,10 @@ mod inx;
 #[cfg(test)]
 mod iny;
 #[cfg(test)]
+mod jmp;
+#[cfg(test)]
+mod jsr;
+#[cfg(test)]
 mod lda;
 #[cfg(test)]
 mod ldx;
@@ -46,6 +50,8 @@ mod rol;
 mod ror;
 #[cfg(test)]
 mod rti;
+#[cfg(test)]
+mod rts;
 #[cfg(test)]
 mod set_flags;
 #[cfg(test)]
