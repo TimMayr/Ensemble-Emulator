@@ -30,12 +30,6 @@ pub enum AddressingMode {
     IndirectY,
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum MathematicalOperation {
-    Add,
-    Sub,
-}
-
 #[derive(Debug, Copy, Clone)]
 pub struct Cpu {
     pub program_counter: u16,
@@ -45,6 +39,7 @@ pub struct Cpu {
     pub y_register: u8,
     pub processor_status: u8,
     pub memory: [u8; MEMORY_SIZE as usize + 1],
+    additional_cycles: u8,
 }
 
 impl Default for Cpu {
@@ -58,6 +53,7 @@ impl Default for Cpu {
             y_register: 0,
             memory,
             stack_pointer: STACK_START,
+            additional_cycles: 0,
         }
     }
 }
@@ -117,6 +113,14 @@ impl Cpu {
 
     fn clear_zero_flag(&mut self) {
         self.processor_status &= 0b1111_1101;
+    }
+
+    fn clear_negative_flag(&mut self) {
+        self.processor_status &= 0b01111111
+    }
+
+    fn set_negative_flag(&mut self) {
+        self.processor_status |= 0b10000000
     }
 
     fn update_zero_flag(&mut self, result: u8) {
@@ -186,27 +190,6 @@ impl Cpu {
 
     pub fn get_overflow_flag(&self) -> bool {
         (self.processor_status & 0b0100_0000) == 0b0100_0000
-    }
-
-    fn update_carry_and_overflow_flags(&mut self, result: Option<u8>, op: MathematicalOperation) {
-        match result {
-            Some(_e) => {
-                self.clear_overflow_flag();
-                if op == MathematicalOperation::Sub {
-                    self.set_carry_flag();
-                } else {
-                    self.clear_carry_flag();
-                }
-            }
-            None => {
-                self.set_overflow_flag();
-                if op == MathematicalOperation::Sub {
-                    self.clear_carry_flag();
-                } else {
-                    self.set_carry_flag();
-                }
-            }
-        }
     }
 
     fn get_operand_address(&self, addressing_mode: &AddressingMode) -> u16 {
@@ -568,6 +551,212 @@ impl Cpu {
         self.program_counter = pc;
     }
 
+    fn bcc(&mut self, mode: &AddressingMode) {
+        if !self.get_carry_flag() {
+            let target = self.get_operand_address(mode);
+            let target_value = self.mem_read(target);
+            self.program_counter += target_value as u16;
+        } else {
+            return;
+        }
+    }
+
+    fn bcs(&mut self, mode: &AddressingMode) {
+        if self.get_carry_flag() {
+            let target = self.get_operand_address(mode);
+            let target_value = self.mem_read(target);
+            self.program_counter += target_value as u16;
+        } else {
+            return;
+        }
+    }
+
+    fn beq(&mut self, mode: &AddressingMode) {
+        if self.get_zero_flag() {
+            let target = self.get_operand_address(mode);
+            let target_value = self.mem_read(target);
+            self.program_counter += target_value as u16;
+        } else {
+            return;
+        }
+    }
+
+    fn bne(&mut self, mode: &AddressingMode) {
+        if !self.get_zero_flag() {
+            let target = self.get_operand_address(mode);
+            let target_value = self.mem_read(target);
+            self.program_counter += target_value as u16;
+        } else {
+            return;
+        }
+    }
+
+    fn bmi(&mut self, mode: &AddressingMode) {
+        if self.get_negative_flag() {
+            let target = self.get_operand_address(mode);
+            let target_value = self.mem_read(target);
+            self.program_counter += target_value as u16;
+        } else {
+            return;
+        }
+    }
+
+    fn bpl(&mut self, mode: &AddressingMode) {
+        if !self.get_negative_flag() {
+            let target = self.get_operand_address(mode);
+            let target_value = self.mem_read(target);
+            self.program_counter += target_value as u16;
+        } else {
+            return;
+        }
+    }
+
+    fn bvs(&mut self, mode: &AddressingMode) {
+        if self.get_overflow_flag() {
+            let target = self.get_operand_address(mode);
+            let target_value = self.mem_read(target);
+            self.program_counter += target_value as u16;
+        } else {
+            return;
+        }
+    }
+
+    fn bvc(&mut self, mode: &AddressingMode) {
+        if !self.get_overflow_flag() {
+            let target = self.get_operand_address(mode);
+            let target_value = self.mem_read(target);
+            self.program_counter += target_value as u16;
+        } else {
+            return;
+        }
+    }
+
+    fn adc(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_value = self.mem_read(target);
+        let carry_in = self.processor_status & 0b00000001;
+
+        let acc_check = self.accumulator;
+
+        let sum = self.accumulator as u16 + target_value as u16 + carry_in as u16;
+        let result = sum as u8;
+
+        self.accumulator = result;
+
+        // Carry Flag
+        if sum > 0xFF {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        // Overflow Flag
+        if (!(acc_check ^ target_value) & (acc_check ^ result)) & 0x80 != 0 {
+            self.set_overflow_flag();
+        } else {
+            self.clear_overflow_flag();
+        }
+
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
+
+    fn sbc(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_value = self.mem_read(target);
+        let carry_in = self.processor_status & 0b00000001;
+
+        let acc_check = self.accumulator;
+
+        let value = target_value ^ 0xFF;
+        let sum = self.accumulator as u16 + value as u16 + carry_in as u16;
+        let result = sum as u8;
+
+        self.accumulator = result;
+
+        if sum > 0xFF {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        if ((acc_check ^ result) & (value ^ result) & 0x80) != 0 {
+            self.set_overflow_flag();
+        } else {
+            self.clear_overflow_flag();
+        }
+
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
+
+    fn cmp(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_value = self.mem_read(target);
+
+        if target_value == self.accumulator {
+            self.set_zero_flag();
+        } else {
+            self.clear_zero_flag();
+        }
+
+        if self.accumulator >= target_value {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        if self.accumulator - target_value & 0b10000000 != 0 {
+            self.set_negative_flag();
+        } else {
+            self.clear_negative_flag();
+        }
+    }
+
+    fn cpx(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_value = self.mem_read(target);
+
+        if target_value == self.x_register {
+            self.set_zero_flag();
+        } else {
+            self.clear_zero_flag();
+        }
+
+        if self.x_register >= target_value {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        if self.x_register - target_value & 0b10000000 != 0 {
+            self.set_negative_flag();
+        } else {
+            self.clear_negative_flag();
+        }
+    }
+
+    fn cpy(&mut self, mode: &AddressingMode) {
+        let target = self.get_operand_address(mode);
+        let target_value = self.mem_read(target);
+
+        if target_value == self.y_register {
+            self.set_zero_flag();
+        } else {
+            self.clear_zero_flag();
+        }
+
+        if self.y_register >= target_value {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        if self.y_register - target_value & 0b10000000 != 0 {
+            self.set_negative_flag();
+        } else {
+            self.clear_negative_flag();
+        }
+    }
+
     pub fn init(&mut self) {
         self.program_counter = self.mem_read_u16(0xFFFC);
         self.mem_write_u16(0xFFFE, 0xFF00);
@@ -597,9 +786,12 @@ impl Cpu {
     }
 
     pub fn step(&mut self) -> u8 {
+        self.additional_cycles = 0;
+
         let opcode = self.mem_read(self.program_counter);
         let pnc = &OpCode::default();
         let op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
+
         self.program_counter += 1u16;
         let pc_check = self.program_counter;
 
@@ -624,7 +816,11 @@ impl Cpu {
             0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(&op.addressing_mode),
             0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(&op.addressing_mode),
             0x24 | 0x2C => self.bit(&op.addressing_mode),
-            // ARITHMETIC HERE
+            0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => self.adc(&op.addressing_mode),
+            0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => self.sbc(&op.addressing_mode),
+            0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => self.cmp(&op.addressing_mode),
+            0xE0 | 0xE4 | 0xEC => self.cpx(&op.addressing_mode),
+            0xC0 | 0xC4 | 0xCC => self.cpy(&op.addressing_mode),
             0xE6 | 0xF6 | 0xEE | 0xFE => self.inc(&op.addressing_mode),
             0xE8 => self.inx(),
             0xC8 => self.iny(),
@@ -638,7 +834,14 @@ impl Cpu {
             0x4C | 0x6C => self.jmp(&op.addressing_mode),
             0x20 => self.jsr(&op.addressing_mode),
             0x60 => self.rts(),
-            // BRANCHES
+            0x90 => self.bcc(&op.addressing_mode),
+            0xB0 => self.bcs(&op.addressing_mode),
+            0xF0 => self.beq(&op.addressing_mode),
+            0xD0 => self.bne(&op.addressing_mode),
+            0x30 => self.bmi(&op.addressing_mode),
+            0x10 => self.bpl(&op.addressing_mode),
+            0x50 => self.bvc(&op.addressing_mode),
+            0x70 => self.bvs(&op.addressing_mode),
             0x18 => self.clc(),
             0xD8 => self.cld(),
             0x58 => self.cli(),
@@ -658,7 +861,7 @@ impl Cpu {
         }
 
         if self.program_counter == pc_check {
-            self.program_counter += op.bytes as u16 - 1;
+            self.program_counter += op.bytes as u16 - 1 + self.additional_cycles as u16;
         }
 
         op.cycles

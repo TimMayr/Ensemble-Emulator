@@ -1,11 +1,36 @@
 #[cfg(test)]
+mod adc;
+#[cfg(test)]
 mod and;
 #[cfg(test)]
 mod asl;
 #[cfg(test)]
+mod bcc;
+#[cfg(test)]
+mod bcs;
+#[cfg(test)]
+mod beq;
+#[cfg(test)]
 mod bit;
 #[cfg(test)]
+mod bmi;
+#[cfg(test)]
+mod bpl;
+#[cfg(test)]
 mod brk;
+#[cfg(test)]
+mod bvc;
+#[cfg(test)]
+mod bvs;
+#[cfg(test)]
+mod clc;
+#[cfg(test)]
+mod cld;
+#[cfg(test)]
+mod cli;
+#[cfg(test)]
+mod clv;
+mod cmp;
 #[cfg(test)]
 mod dec;
 #[cfg(test)]
@@ -53,7 +78,13 @@ mod rti;
 #[cfg(test)]
 mod rts;
 #[cfg(test)]
-mod set_flags;
+mod sbc;
+#[cfg(test)]
+mod sec;
+#[cfg(test)]
+mod sed;
+#[cfg(test)]
+mod sei;
 #[cfg(test)]
 mod sta;
 #[cfg(test)]
