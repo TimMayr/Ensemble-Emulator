@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const MEMORY_SIZE: u16 = 0xFFFF;
 const STACK_START: u8 = 0xFF;
@@ -57,6 +57,9 @@ impl Default for Cpu {
         }
     }
 }
+
+const CYCLES_PER_FRAME: u16 = 29780;
+const FRAME_DURATION: Duration = Duration::from_nanos(16_666_667);
 
 #[allow(dead_code)]
 impl Cpu {
@@ -550,19 +553,23 @@ impl Cpu {
     }
 
     pub fn run(&mut self) {
-        let mut cycles = 0u16;
         loop {
-            let current_cycles = self.step();
+            let frame_start = Instant::now();
+            let mut cycles = 0;
 
-            if current_cycles == 0xFF {
-                return;
+            while cycles < CYCLES_PER_FRAME {
+                let current_cycles = self.step();
+                if current_cycles == 0xFF {
+                    return;
+                }
+
+                cycles += current_cycles as u16;
             }
 
-            cycles += current_cycles as u16;
+            let frame_time = frame_start.elapsed();
 
-            if cycles > 29780 {
-                cycles = 0;
-                sleep(Duration::from_nanos(16_666_666))
+            if frame_time < FRAME_DURATION {
+                sleep(FRAME_DURATION - frame_time);
             }
         }
     }
