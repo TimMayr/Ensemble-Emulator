@@ -3,3 +3,4 @@ pub mod opcode;
 #[cfg(test)]
 mod tests;
 pub mod util;
+mod rom;

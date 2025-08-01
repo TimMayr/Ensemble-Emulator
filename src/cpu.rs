@@ -940,4 +940,8 @@ impl Cpu {
         let len = read.len().min(MEMORY_SIZE as usize);
         self.memory[..len].copy_from_slice(&read[..len])
     }
+
+    pub fn load_rom(&mut self, ) {
+        todo!()
+    }
 }
