@@ -941,7 +941,7 @@ impl Cpu {
         self.memory[..len].copy_from_slice(&read[..len])
     }
 
-    pub fn load_rom(&mut self, ) {
+    pub fn load_rom(&mut self) {
         todo!()
     }
 }

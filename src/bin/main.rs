@@ -1,9 +1,9 @@
-use nesamabob::cpu::Cpu;
+use nesamabob::rom::rom::Rom;
 
 fn main() {
-    let mut cpu = Cpu::new();
-    cpu.init();
-    cpu.load_rom();
+    let rom = Rom::load(String::from(
+        "D:\\Stuff\\Dev\\EmulatorThingimabob\\tests\\1.Branch_Basics.nes",
+    ));
 
-    cpu.run()
+    println!("{rom:?}")
 }

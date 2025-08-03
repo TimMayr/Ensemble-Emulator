@@ -107,3 +107,5 @@ mod txa;
 mod txs;
 #[cfg(test)]
 mod tya;
+#[cfg(test)]
+mod bne;
