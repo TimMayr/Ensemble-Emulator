@@ -2,8 +2,8 @@ mod formats;
 
 use crate::rom::formats::archaic_ines::ArchaicInes;
 use crate::rom::formats::ines::Ines;
-use crate::rom::formats::ines2::Ines2;
 use crate::rom::formats::ines_07::Ines07;
+use crate::rom::formats::ines2::Ines2;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
