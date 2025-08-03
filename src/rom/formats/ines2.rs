@@ -1,4 +1,4 @@
-use crate::rom::rom::{ParseError, Rom, RomParser};
+use crate::rom::{ParseError, Rom, RomBuilder, RomParser};
 
 #[derive(Debug)]
 pub struct Ines2;
@@ -17,10 +17,11 @@ impl RomParser for Ines2 {
 
         let mapper_number =
             (rom[6] >> 4) as u16 | (rom[7] & 0xF0) as u16 | ((rom[8] & 0xF) as u16) << 8;
+
         let submapper_number = (rom[8] & 0xF0) >> 4;
         let alternative_nametables = rom[6] & 0b00001000 != 0;
         let trainer_present = rom[6] & 0b00000100 != 0;
-        let battery_and_stuff_present = rom[6] & 0b00000010 != 0;
+        let battery_backed = rom[6] & 0b00000010 != 0;
         let hard_wired_nametable_layout = rom[6] & 0b0000001 != 0;
 
         let console_type = rom[7] & 0b00000011;
@@ -73,57 +74,54 @@ impl RomParser for Ines2 {
             None
         };
 
-        let no_misc_roms = rom[14] & 0x3;
+        let misc_rom_count = rom[14] & 0x3;
         let default_expansion_device = rom[15] & 0b00111111;
 
         if prg_rom_size as usize + chr_rom_size as usize > rom.len() {
             return Err(ParseError::SizeBiggerThanFile);
         }
 
-        Ok(Rom::new(
-            prg_rom_size,
-            chr_rom_size,
-            mapper_number,
-            submapper_number,
-            alternative_nametables,
-            trainer_present,
-            battery_and_stuff_present,
-            hard_wired_nametable_layout,
-            console_type,
-            prg_ram_size,
-            prg_nvram_size,
-            chr_ram_size,
-            chr_nvram_size,
-            cpu_ppu_timing,
-            vs_system_ppu_type,
-            vs_system_hardware_type,
-            extended_console_type,
-            no_misc_roms,
-            default_expansion_device,
-        ))
+        Ok(RomBuilder::default()
+            .prg_rom_size(prg_rom_size)
+            .prg_ram_size(prg_ram_size)
+            .prg_nvram_size(prg_nvram_size)
+            .chr_rom_size(chr_rom_size)
+            .chr_ram_size(chr_ram_size)
+            .chr_nvram_size(chr_nvram_size)
+            .mapper_number(mapper_number)
+            .submapper_number(submapper_number)
+            .alternative_nametables(alternative_nametables)
+            .trainer_present(trainer_present)
+            .battery_backed(battery_backed)
+            .hardwired_nametable_layout(hard_wired_nametable_layout)
+            .cpu_ppu_timing(cpu_ppu_timing)
+            .vs_system_ppu_type(vs_system_ppu_type)
+            .vs_system_hardware_type(vs_system_hardware_type)
+            .extended_console_type(extended_console_type)
+            .misc_rom_count(misc_rom_count)
+            .default_expansion_device(default_expansion_device)
+            .build())
     }
 }
 
 impl Ines2 {
     pub fn get_prg_rom_size(prg_rom_size_lsb: u16, prg_rom_size_msb: u16) -> u32 {
-        let prg_rom_size = if prg_rom_size_msb <= 0xE {
+        if prg_rom_size_msb <= 0xE {
             (((prg_rom_size_msb << 8) | prg_rom_size_lsb) as u32) * 16 * 1024
         } else {
             let exponent = (prg_rom_size_lsb >> 2) as u32;
             let mult = ((prg_rom_size_lsb & 0b11) as u32 * 2) + 1;
             (1 << exponent) * mult
-        };
-        prg_rom_size
+        }
     }
 
     pub fn get_chr_rom_size(chr_rom_size_lsb: u16, chr_rom_size_msb: u16) -> u32 {
-        let chr_rom_size = if chr_rom_size_msb <= 0xE {
+        if chr_rom_size_msb <= 0xE {
             (((chr_rom_size_msb << 8) | chr_rom_size_lsb) as u32) * 8 * 1024
         } else {
             let exponent = (chr_rom_size_lsb >> 2) as u32;
             let mult = ((chr_rom_size_lsb & 0b11) as u32 * 2) + 1;
             (1 << exponent) * mult
-        };
-        chr_rom_size
+        }
     }
 }

@@ -1,4 +1,4 @@
-use crate::rom::rom::{ParseError, Rom, RomParser};
+use crate::rom::{ParseError, Rom, RomBuilder, RomParser};
 
 #[derive(Debug)]
 pub struct ArchaicInes;
@@ -10,31 +10,19 @@ impl RomParser for ArchaicInes {
 
         let alternative_nametables = rom[6] & 0b00001000 != 0;
         let trainer_present = rom[6] & 0b00000100 != 0;
-        let battery_and_stuff_present = rom[6] & 0b00000010 != 0;
+        let is_battery_backed = rom[6] & 0b00000010 != 0;
         let hard_wired_nametable_layout = rom[6] & 0b0000001 != 0;
 
         let mapper_number = (rom[6] >> 4) as u16;
 
-        Ok(Rom::new(
-            prg_rom_size,
-            chr_rom_size,
-            mapper_number,
-            0,
-            alternative_nametables,
-            trainer_present,
-            battery_and_stuff_present,
-            hard_wired_nametable_layout,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            None,
-            None,
-            None,
-            0,
-            0,
-        ))
+        Ok(RomBuilder::default()
+            .prg_rom_size(prg_rom_size)
+            .chr_rom_size(chr_rom_size)
+            .mapper_number(mapper_number)
+            .alternative_nametables(alternative_nametables)
+            .trainer_present(trainer_present)
+            .battery_backed(is_battery_backed)
+            .hardwired_nametable_layout(hard_wired_nametable_layout)
+            .build())
     }
 }

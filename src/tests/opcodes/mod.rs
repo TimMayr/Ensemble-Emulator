@@ -15,6 +15,8 @@ mod bit;
 #[cfg(test)]
 mod bmi;
 #[cfg(test)]
+mod bne;
+#[cfg(test)]
 mod bpl;
 #[cfg(test)]
 mod brk;
@@ -107,5 +109,3 @@ mod txa;
 mod txs;
 #[cfg(test)]
 mod tya;
-#[cfg(test)]
-mod bne;

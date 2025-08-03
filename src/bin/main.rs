@@ -1,4 +1,4 @@
-use nesamabob::rom::rom::Rom;
+use nesamabob::rom::Rom;
 
 fn main() {
     let rom = Rom::load(String::from(
