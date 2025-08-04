@@ -1,10 +1,10 @@
-use crate::rom::{ParseError, Rom, RomBuilder, RomParser};
+use crate::rom::{ParseError, RomBuilder, RomFile, RomParser};
 
 #[derive(Debug)]
 pub struct Ines2;
 
 impl RomParser for Ines2 {
-    fn parse(&self, rom: &[u8]) -> Result<Rom, ParseError> {
+    fn parse(&self, rom: &[u8]) -> Result<RomFile, ParseError> {
         let prg_rom_size_lsb = rom[4] as u16;
         let prg_rom_size_msb = (rom[9] & 0xF) as u16;
 

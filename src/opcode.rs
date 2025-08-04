@@ -225,7 +225,6 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             OpCode::new(0x9A, "TXS", 1, 2, Implied),
             //TYA
             OpCode::new(0x98, "TYA", 1, 2, Implied),
-            OpCode::new(0xFF, "PRN", 1, 0, Immediate),
         ])
         .ok();
 

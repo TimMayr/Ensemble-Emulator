@@ -41,3 +41,20 @@ fn bcc_success() {
 
     assert_eq!(cpu.accumulator, 0x66);
 }
+
+#[test]
+fn bcc_success_neg() {
+    let mut cpu = Cpu::new();
+    cpu.mem_write(0x0, 0xEA);
+    cpu.mem_write(0x1, 0xEA);
+    cpu.mem_write(0x2, 0xEA);
+    cpu.mem_write(0x3, 0x90);
+    cpu.mem_write(0x4, 0xFE);
+
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+
+    assert_eq!(cpu.program_counter, 0x2);
+}

@@ -1,5 +1,6 @@
 mod formats;
 
+use crate::mem::{Memory, Ram, Rom};
 use crate::rom::formats::archaic_ines::ArchaicInes;
 use crate::rom::formats::ines::Ines;
 use crate::rom::formats::ines_07::Ines07;
@@ -31,35 +32,36 @@ impl Display for ParseError {
 impl Error for ParseError {}
 
 pub trait RomParser: Debug {
-    fn parse(&self, rom: &[u8]) -> Result<Rom, ParseError>;
+    fn parse(&self, rom: &[u8]) -> Result<RomFile, ParseError>;
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct RomFile {
+    pub prg_memory: PrgMemory,
+    pub chr_memory: ChrMemory,
+    pub mapper_number: u16,
+    pub default_expansion_device: u8,
+    pub misc_rom_count: u8,
+    pub extended_console_type: Option<u8>,
+    pub vs_system_hardware_type: Option<u8>,
+    pub vs_system_ppu_type: Option<u8>,
+    pub cpu_ppu_timing: u8,
+    pub console_type: u8,
+    pub hardwired_nametable_layout: bool,
+    pub is_battery_backed: bool,
+    pub trainer_present: bool,
+    pub alternative_nametables: bool,
+    pub submapper_number: u8,
+    data: Vec<u8>,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
-pub struct Rom {
-    prg_memory: PrgMemory,
-    chr_memory: ChrMemory,
-    mapper_number: u16,
-    default_expansion_device: u8,
-    misc_rom_count: u8,
-    extended_console_type: Option<u8>,
-    vs_system_hardware_type: Option<u8>,
-    vs_system_ppu_type: Option<u8>,
-    cpu_ppu_timing: u8,
-    console_type: u8,
-    hardwired_nametable_layout: bool,
-    is_battery_backed: bool,
-    trainer_present: bool,
-    alternative_nametables: bool,
-    submapper_number: u8,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Copy, Clone)]
-struct PrgMemory {
-    prg_rom_size: u32,
-    prg_ram_size: u32,
-    prg_nvram_size: u32,
+pub struct PrgMemory {
+    pub prg_rom_size: u32,
+    pub prg_ram_size: u32,
+    pub prg_nvram_size: u32,
 }
 
 impl PrgMemory {
@@ -74,10 +76,10 @@ impl PrgMemory {
 
 #[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
-struct ChrMemory {
-    chr_rom_size: u32,
-    chr_ram_size: u32,
-    chr_nvram_size: u32,
+pub struct ChrMemory {
+    pub chr_rom_size: u32,
+    pub chr_ram_size: u32,
+    pub chr_nvram_size: u32,
 }
 
 impl ChrMemory {
@@ -90,7 +92,7 @@ impl ChrMemory {
     }
 }
 
-impl Rom {
+impl RomFile {
     fn range_all_zeros(arr: &[u8], start: usize, end: usize) -> bool {
         if start > end || end > arr.len() {
             return false;
@@ -130,7 +132,7 @@ impl Rom {
         panic!("Romtype not yet implemented")
     }
 
-    pub fn load(path: String) -> Rom {
+    pub fn load(path: &String) -> RomFile {
         let path = Path::new(&path);
         let mut file = match File::open(path) {
             Ok(file) => file,
@@ -140,9 +142,65 @@ impl Rom {
         let mut rom: Vec<u8> = Vec::new();
         file.read_to_end(&mut rom).expect("Couldn't read file");
 
-        let rom_type = Rom::get_rom_type(&rom);
+        let rom_type = RomFile::get_rom_type(&rom);
         println!("Rom Type: {rom_type:?}");
-        rom_type.parse(&rom).expect("Error loading Rom")
+        let mut rom_file = rom_type.parse(&rom).expect("Error loading Rom");
+        rom_file.data = rom;
+        rom_file
+    }
+
+    pub fn get_prg_rom(&self) -> Box<dyn Memory> {
+        let mut rom = Rom::new(self.prg_memory.prg_rom_size as usize);
+
+        let mut start = 16usize;
+
+        if self.trainer_present {
+            start += 512;
+        }
+
+        rom.load(
+            self.data[start..start + self.prg_memory.prg_rom_size as usize]
+                .to_vec()
+                .into_boxed_slice(),
+        );
+        Box::new(rom)
+    }
+
+    pub fn get_chr_rom(&self) -> Box<dyn Memory> {
+        let mut rom = Rom::new(self.chr_memory.chr_rom_size as usize);
+
+        let mut start = 16usize;
+
+        if self.trainer_present {
+            start += 512;
+        }
+
+        rom.load(
+            self.data[start + self.prg_memory.prg_rom_size as usize
+                ..start
+                    + self.prg_memory.prg_rom_size as usize
+                    + self.chr_memory.chr_rom_size as usize]
+                .to_vec()
+                .into_boxed_slice(),
+        );
+        Box::new(rom)
+    }
+
+    pub fn get_prg_ram(&self) -> Box<dyn Memory> {
+        let mut ram = Ram::new(self.prg_memory.prg_ram_size as usize);
+
+        let mut start = 16usize;
+
+        if self.trainer_present {
+            start += 512;
+        }
+
+        ram.load(
+            self.data[start..start + self.prg_memory.prg_rom_size as usize]
+                .to_vec()
+                .into_boxed_slice(),
+        );
+        Box::new(ram)
     }
 }
 
@@ -294,8 +352,8 @@ impl RomBuilder {
         self
     }
 
-    pub fn build(self) -> Rom {
-        Rom {
+    pub fn build(self) -> RomFile {
+        RomFile {
             prg_memory: PrgMemory::new(self.prg_rom_size, self.prg_ram_size, self.prg_nvram_size),
             chr_memory: ChrMemory::new(self.chr_rom_size, self.chr_ram_size, self.chr_nvram_size),
             mapper_number: self.mapper_number,
@@ -311,6 +369,7 @@ impl RomBuilder {
             trainer_present: self.trainer_present,
             alternative_nametables: self.alternative_nametables,
             submapper_number: self.submapper_number,
+            data: Vec::new(),
         }
     }
 }

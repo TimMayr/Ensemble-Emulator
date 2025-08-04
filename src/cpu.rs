@@ -1,12 +1,13 @@
+use crate::mem::memory_map::MemoryMap;
+use crate::mem::mirror_memory::MirrorMemory;
+use crate::mem::{Memory, Ram};
 use crate::opcode;
 use crate::opcode::{OPCODES_MAP, OpCode};
-use std::fs::File;
-use std::io::Read;
-use std::path::Path;
+use crate::rom::RomFile;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-const MEMORY_SIZE: u16 = 0xFFFF;
+const INTERNAL_RAM_SIZE: u16 = 0x800;
 const STACK_START: u8 = 0xFF;
 
 const CYCLES_PER_FRAME: u16 = 29780;
@@ -30,7 +31,6 @@ pub enum AddressingMode {
     IndirectY,
 }
 
-#[derive(Debug, Copy, Clone)]
 pub struct Cpu {
     pub program_counter: u16,
     pub stack_pointer: u8,
@@ -38,20 +38,34 @@ pub struct Cpu {
     pub x_register: u8,
     pub y_register: u8,
     pub processor_status: u8,
-    pub memory: [u8; MEMORY_SIZE as usize + 1],
+    pub memory: Box<MemoryMap>,
     additional_cycles: u8,
 }
 
 impl Default for Cpu {
     fn default() -> Self {
-        let memory: [u8; MEMORY_SIZE as usize + 1] = [0; MEMORY_SIZE as usize + 1];
+        let mut mem = MemoryMap::default();
+        mem.add_memory(
+            0x0..=0x1FFF,
+            Box::new(MirrorMemory::new(
+                Box::new(Ram::new(INTERNAL_RAM_SIZE as usize)),
+                0x07FF,
+            )),
+        );
+        mem.add_memory(
+            0x2000..=0x3FFF,
+            Box::new(MirrorMemory::new(Box::new(Ram::new(0x8)), 0x0007)),
+        );
+        mem.add_memory(0x4000..=0x4017, Box::new(Ram::new(0x18)));
+        mem.add_memory(0x4018..=0x401F, Box::new(Ram::new(0x8)));
+
         Self {
             program_counter: 0,
             processor_status: 0b00000000,
             accumulator: 0,
             x_register: 0,
             y_register: 0,
-            memory,
+            memory: Box::new(mem),
             stack_pointer: STACK_START,
             additional_cycles: 0,
         }
@@ -66,25 +80,19 @@ impl Cpu {
     }
 
     pub fn mem_read(&self, addr: u16) -> u8 {
-        self.memory[addr as usize]
+        self.memory.mem_read(addr)
     }
 
     pub fn mem_write(&mut self, addr: u16, data: u8) {
-        self.memory[addr as usize] = data;
+        self.memory.mem_write(addr, data);
     }
 
     pub fn mem_read_u16(&self, addr: u16) -> u16 {
-        let least_significant_bits = self.mem_read(addr) as u16;
-        let highest_significant_bits = self.mem_read(addr + 1) as u16;
-
-        (highest_significant_bits << 8) | (least_significant_bits)
+        self.memory.mem_read_u16(addr)
     }
 
     pub fn mem_write_u16(&mut self, addr: u16, data: u16) {
-        let least_significant_bits = (data & 0x00FF) as u8;
-        let highest_significant_bits = (data >> 8) as u8;
-        self.mem_write(addr, least_significant_bits);
-        self.mem_write(addr + 1, highest_significant_bits)
+        self.memory.mem_write_u16(addr, data);
     }
 
     pub fn stack_pop(&mut self) -> u8 {
@@ -176,11 +184,11 @@ impl Cpu {
         self.processor_status &= 0b1111_0111;
     }
 
-    pub fn get_zero_flag(self) -> bool {
+    pub fn get_zero_flag(&mut self) -> bool {
         (self.processor_status & 0b0000_0010) == 0b0000_0010
     }
 
-    pub fn get_negative_flag(self) -> bool {
+    pub fn get_negative_flag(&mut self) -> bool {
         (self.processor_status & 0b1000_0000) == 0b1000_0000
     }
 
@@ -210,7 +218,7 @@ impl Cpu {
                 let base = self.read_next_two_bytes();
                 let pos = base + self.x_register as u16;
 
-                if Cpu::crosses_page_boundary(base, self.x_register) {
+                if Cpu::crosses_page_boundary_u8(base, self.x_register) {
                     self.additional_cycles += 1;
                 }
 
@@ -220,7 +228,7 @@ impl Cpu {
                 let base = self.read_next_two_bytes();
                 let pos = base + self.y_register as u16;
 
-                if Cpu::crosses_page_boundary(base, self.y_register) {
+                if Cpu::crosses_page_boundary_u8(base, self.y_register) {
                     self.additional_cycles += 1;
                 }
 
@@ -239,7 +247,7 @@ impl Cpu {
                 let lookup_addr = self.read_next_byte();
                 let addr = self.mem_read_u16(lookup_addr as u16);
 
-                if Self::crosses_page_boundary(addr, self.y_register) {
+                if Self::crosses_page_boundary_u8(addr, self.y_register) {
                     self.additional_cycles += 1;
                 }
 
@@ -249,8 +257,13 @@ impl Cpu {
         }
     }
 
-    fn crosses_page_boundary(base: u16, offset: u8) -> bool {
+    fn crosses_page_boundary_u8(base: u16, offset: u8) -> bool {
         (base & 0xFF00) != ((base + offset as u16) & 0xFF00)
+    }
+
+    fn crosses_page_boundary_i8(base: u16, offset: i8) -> bool {
+        let target = base.wrapping_add(offset as i16 as u16);
+        (base & 0xFF00) != (target & 0xFF00)
     }
 
     fn read_next_byte(&self) -> u8 {
@@ -577,13 +590,15 @@ impl Cpu {
             self.additional_cycles += 1;
 
             let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target);
+            let target_value = self.mem_read(target) as i8;
 
-            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
                 self.additional_cycles += 1;
             }
 
-            self.program_counter += target_value as u16;
+            self.program_counter = self
+                .program_counter
+                .wrapping_add(target_value as i16 as u16);
         }
     }
 
@@ -592,13 +607,15 @@ impl Cpu {
             self.additional_cycles += 1;
 
             let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target);
+            let target_value = self.mem_read(target) as i8;
 
-            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
                 self.additional_cycles += 1;
             }
 
-            self.program_counter += target_value as u16;
+            self.program_counter = self
+                .program_counter
+                .wrapping_add(target_value as i16 as u16);
         }
     }
 
@@ -607,13 +624,15 @@ impl Cpu {
             self.additional_cycles += 1;
 
             let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target);
+            let target_value = self.mem_read(target) as i8;
 
-            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
                 self.additional_cycles += 1;
             }
 
-            self.program_counter += target_value as u16;
+            self.program_counter = self
+                .program_counter
+                .wrapping_add(target_value as i16 as u16);
         }
     }
 
@@ -622,13 +641,15 @@ impl Cpu {
             self.additional_cycles += 1;
 
             let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target);
+            let target_value = self.mem_read(target) as i8;
 
-            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
                 self.additional_cycles += 1;
             }
 
-            self.program_counter += target_value as u16;
+            self.program_counter = self
+                .program_counter
+                .wrapping_add(target_value as i16 as u16);
         }
     }
 
@@ -637,13 +658,15 @@ impl Cpu {
             self.additional_cycles += 1;
 
             let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target);
+            let target_value = self.mem_read(target) as i8;
 
-            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
                 self.additional_cycles += 1;
             }
 
-            self.program_counter += target_value as u16;
+            self.program_counter = self
+                .program_counter
+                .wrapping_add(target_value as i16 as u16);
         }
     }
 
@@ -652,13 +675,15 @@ impl Cpu {
             self.additional_cycles += 1;
 
             let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target);
+            let target_value = self.mem_read(target) as i8;
 
-            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
                 self.additional_cycles += 1;
             }
 
-            self.program_counter += target_value as u16;
+            self.program_counter = self
+                .program_counter
+                .wrapping_add(target_value as i16 as u16);
         }
     }
 
@@ -667,13 +692,15 @@ impl Cpu {
             self.additional_cycles += 1;
 
             let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target);
+            let target_value = self.mem_read(target) as i8;
 
-            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
                 self.additional_cycles += 1;
             }
 
-            self.program_counter += target_value as u16;
+            self.program_counter = self
+                .program_counter
+                .wrapping_add(target_value as i16 as u16);
         }
     }
 
@@ -682,13 +709,15 @@ impl Cpu {
             self.additional_cycles += 1;
 
             let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target);
+            let target_value = self.mem_read(target) as i8;
 
-            if Cpu::crosses_page_boundary(self.program_counter, target_value) {
+            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
                 self.additional_cycles += 1;
             }
 
-            self.program_counter += target_value as u16;
+            self.program_counter = self
+                .program_counter
+                .wrapping_add(target_value as i16 as u16);
         }
     }
 
@@ -818,10 +847,8 @@ impl Cpu {
         }
     }
 
-    pub fn init(&mut self) {
+    pub fn reset(&mut self) {
         self.program_counter = self.mem_read_u16(0xFFFC);
-        self.mem_write_u16(0xFFFE, 0xFF00);
-        self.mem_write(0xFF00, 0xB3);
     }
 
     pub fn run(&mut self) {
@@ -913,10 +940,11 @@ impl Cpu {
             0x00 => self.brk(),
             0xEA => self.nop(),
             0x40 => self.rti(),
-            0xB3 => panic!("Interrupt requests are not yet implemented"),
-            0xFF => println!("{}", self.accumulator),
             _ => {
-                println!("No instruction at address 0x{:x}", self.program_counter - 1);
+                println!(
+                    "Instruction \"{opcode}\" at address 0x{:X} isn't valid",
+                    self.program_counter - 1
+                );
                 return 0xFF;
             }
         }
@@ -925,23 +953,50 @@ impl Cpu {
             self.program_counter += op.bytes as u16 - 1 + self.additional_cycles as u16;
         }
 
+        let opcode = self.mem_read(self.program_counter);
+        let op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
+
+        if op.opcode == pnc.opcode {
+            println!("Execution resulted in invalid pc")
+        }
+
         op.cycles
     }
 
-    pub fn load(&mut self, path: String) {
-        let path = Path::new(&path);
-        let mut file = match File::open(path) {
-            Ok(file) => file,
-            Err(e) => panic!("Couldn't read file {}: {}", path.display(), e),
-        };
+    pub fn load_rom(&mut self, path: &String) {
+        let rom_file = RomFile::load(path);
+        let prg_rom = rom_file.get_prg_rom();
 
-        let mut read: Vec<u8> = Vec::new();
-        file.read_to_end(&mut read).expect("Couldn't read file");
-        let len = read.len().min(MEMORY_SIZE as usize);
-        self.memory[..len].copy_from_slice(&read[..len])
-    }
+        if rom_file.prg_memory.prg_rom_size > (16 * 1024) {
+            self.memory.add_memory(0x8000..=0xFFFF, prg_rom)
+        } else {
+            self.memory.add_memory(
+                0x8000..=0xFFFF,
+                Box::new(MirrorMemory::new(prg_rom, 0x3FFF)),
+            )
+        }
 
-    pub fn load_rom(&mut self) {
-        todo!()
+        match rom_file.prg_memory.prg_ram_size {
+            0 => {}
+            2048 => self.memory.add_memory(
+                0x6000..=0x7FFF,
+                Box::new(MirrorMemory::new(
+                    Box::new(Ram::new(rom_file.prg_memory.prg_ram_size as usize)),
+                    0x7FF,
+                )),
+            ),
+            4096 => self.memory.add_memory(
+                0x6000..=0x7FFF,
+                Box::new(MirrorMemory::new(
+                    Box::new(Ram::new(rom_file.prg_memory.prg_ram_size as usize)),
+                    0xFFF,
+                )),
+            ),
+            8192 => self.memory.add_memory(
+                0x6000..=0x7FFF,
+                Box::new(Ram::new(rom_file.prg_memory.prg_ram_size as usize)),
+            ),
+            _ => {}
+        }
     }
 }
