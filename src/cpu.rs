@@ -887,8 +887,8 @@ impl Cpu {
 
         #[cfg(debug_assertions)]
         let _memory = self.memory.get_memory(RangeInclusive::new(
-            self.program_counter - 10,
-            self.program_counter + 10,
+            self.program_counter.overflowing_sub(10).0,
+            self.program_counter.overflowing_add(10).0,
         ));
 
         self.program_counter += 1u16;
