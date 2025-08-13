@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn bcc_fail() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.processor_status |= 0b00000001;
     cpu.mem_write(0x0, 0xEA);
     cpu.mem_write(0x1, 0xEA);
@@ -20,7 +20,7 @@ fn bcc_fail() {
 
 #[test]
 fn bcc_success() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xEA);
     cpu.mem_write(0x1, 0xEA);
     cpu.mem_write(0x2, 0xEA);
@@ -44,7 +44,7 @@ fn bcc_success() {
 
 #[test]
 fn bcc_success_neg() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xEA);
     cpu.mem_write(0x1, 0xEA);
     cpu.mem_write(0x2, 0xEA);

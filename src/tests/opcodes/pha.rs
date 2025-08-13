@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_pha_implied_simple() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     //Init acc
     cpu.accumulator = 0x66;
     //Write acc to stack
@@ -18,7 +18,7 @@ fn test_pha_implied_simple() {
 
 #[test]
 fn test_pha_implied_complicated() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     //Init acc
     cpu.accumulator = 0x66;
     //Write acc to stack

@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_txa_complete() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.x_register = 0x66;
 
     cpu.mem_write(0x0, 0x8A);
@@ -33,7 +33,7 @@ fn test_txa_complete() {
 
 #[test]
 fn test_txa_implied() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.x_register = 0x66;
 
     cpu.mem_write(0x0, 0x8A);
@@ -44,7 +44,7 @@ fn test_txa_implied() {
 
 #[test]
 fn test_txa_flags_none_when_none() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.x_register = 0x66;
 
     cpu.mem_write(0x0, 0x8A);
@@ -57,7 +57,7 @@ fn test_txa_flags_none_when_none() {
 
 #[test]
 fn test_txa_flags_only_zero_when_zero() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x66;
     cpu.x_register = 0x0;
 
@@ -71,7 +71,7 @@ fn test_txa_flags_only_zero_when_zero() {
 
 #[test]
 fn test_txa_flags_only_negative_when_negative() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.x_register = 0x80;
 
     cpu.mem_write(0x0, 0x8A);

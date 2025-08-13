@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_asl_complete() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x0A);
 
     cpu.accumulator = 0b1000_0001;
@@ -115,7 +115,7 @@ fn test_asl_complete() {
 
 #[test]
 fn test_asl_accumulator() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x0A);
 
     cpu.accumulator = 0b1000_0001;
@@ -129,7 +129,7 @@ fn test_asl_accumulator() {
 
 #[test]
 fn test_asl_zero_page() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x06);
     cpu.mem_write(0x1, 0x10);
     cpu.mem_write(0x10, 0b0100_0000);
@@ -144,7 +144,7 @@ fn test_asl_zero_page() {
 
 #[test]
 fn test_asl_zero_page_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x16);
     cpu.mem_write(0x1, 0x20);
     cpu.mem_write(0x21, 0b1111_1111);
@@ -160,7 +160,7 @@ fn test_asl_zero_page_x() {
 
 #[test]
 fn test_asl_absolute() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x0E);
     cpu.mem_write_u16(0x1, 0x1234);
     cpu.mem_write(0x1234, 0b0000_0001);
@@ -175,7 +175,7 @@ fn test_asl_absolute() {
 
 #[test]
 fn test_asl_absolute_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x1E);
     cpu.mem_write_u16(0x1, 0x2000);
     cpu.mem_write(0x2001, 0b1000_0000);
@@ -190,7 +190,7 @@ fn test_asl_absolute_x() {
 
 #[test]
 fn test_asl_flags_none_when_none() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x0A);
     cpu.accumulator = 0b0011_1111;
 
@@ -203,7 +203,7 @@ fn test_asl_flags_none_when_none() {
 
 #[test]
 fn test_asl_flags_only_carry_when_carry() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x0A);
     cpu.accumulator = 0b1000_0010;
 
@@ -216,7 +216,7 @@ fn test_asl_flags_only_carry_when_carry() {
 
 #[test]
 fn test_asl_flags_only_zero_when_zero() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x0A);
     cpu.accumulator = 0b0000_0000;
 
@@ -229,7 +229,7 @@ fn test_asl_flags_only_zero_when_zero() {
 
 #[test]
 fn test_asl_flags_only_negative_when_negative() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x0A);
     cpu.accumulator = 0b0100_0010;
 
@@ -242,7 +242,7 @@ fn test_asl_flags_only_negative_when_negative() {
 
 #[test]
 fn test_asl_flags_carry_and_negative_when_carry_and_negative() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x0A);
     cpu.accumulator = 0b1100_0000;
 
@@ -255,7 +255,7 @@ fn test_asl_flags_carry_and_negative_when_carry_and_negative() {
 
 #[test]
 fn test_asl_flags_carry_and_zero_when_carry_and_zero() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x0A);
     cpu.accumulator = 0b1000_0000;
 

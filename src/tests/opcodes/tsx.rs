@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_tsx_simple() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.stack_pointer = 0x66;
 
     cpu.mem_write(0x0, 0xBA);
@@ -15,7 +15,7 @@ fn test_tsx_simple() {
 
 #[test]
 fn test_tsx_complicated() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.stack_pointer = 0x66;
 
     cpu.mem_write(0x0, 0xBA);

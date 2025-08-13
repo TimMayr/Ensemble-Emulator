@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_nop() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.processor_status |= 0b00000001;
     cpu.accumulator = 0x66;
 

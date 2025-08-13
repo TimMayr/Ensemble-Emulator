@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_plp_implied_simple() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
 
     //Load 0 into acc to trigger Zero flag
     cpu.mem_write(0x0, 0xA9);
@@ -33,7 +33,7 @@ fn test_plp_implied_simple() {
 
 #[test]
 fn test_plp_implied_complicated() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
 
     //Load 0 into acc to trigger Zero flag
     cpu.mem_write(0x0, 0xA9);

@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_pla_implied_simple() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     //Init acc
     cpu.accumulator = 0x66;
 
@@ -26,7 +26,7 @@ fn test_pla_implied_simple() {
 
 #[test]
 fn test_pla_implied_complicated() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     //Init acc
     cpu.accumulator = 0x0;
 

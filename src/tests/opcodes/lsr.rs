@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_lsr_complete() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x4A);
 
     cpu.accumulator = 0b1000_0001;
@@ -98,7 +98,7 @@ fn test_lsr_complete() {
 
 #[test]
 fn test_lsr_accumulator() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x4A);
 
     cpu.accumulator = 0b1000_0001;
@@ -112,7 +112,7 @@ fn test_lsr_accumulator() {
 
 #[test]
 fn test_lsr_zero_page() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x46);
     cpu.mem_write(0x1, 0x10);
     cpu.mem_write(0x10, 0b0100_0000);
@@ -127,7 +127,7 @@ fn test_lsr_zero_page() {
 
 #[test]
 fn test_lsr_zero_page_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x56);
     cpu.mem_write(0x1, 0x20);
     cpu.x_register = 0x01;
@@ -144,7 +144,7 @@ fn test_lsr_zero_page_x() {
 
 #[test]
 fn test_lsr_absolute() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x4E);
     cpu.mem_write_u16(0x1, 0x1234);
     cpu.mem_write(0x1234, 0b0000_0010);
@@ -159,7 +159,7 @@ fn test_lsr_absolute() {
 
 #[test]
 fn test_lsr_absolute_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x5E);
     cpu.mem_write_u16(0x1, 0x2000);
     cpu.mem_write(0x2001, 0b0000_0001);
@@ -174,7 +174,7 @@ fn test_lsr_absolute_x() {
 
 #[test]
 fn test_lsr_flags_none_when_none() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x4A);
     cpu.accumulator = 0b0011_1110;
 
@@ -187,7 +187,7 @@ fn test_lsr_flags_none_when_none() {
 
 #[test]
 fn test_lsr_flags_only_carry_when_carry() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x4A);
     cpu.accumulator = 0b1000_0011;
 
@@ -200,7 +200,7 @@ fn test_lsr_flags_only_carry_when_carry() {
 
 #[test]
 fn test_lsr_flags_only_zero_when_zero() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x4A);
     cpu.accumulator = 0b0000_0000;
 
@@ -213,7 +213,7 @@ fn test_lsr_flags_only_zero_when_zero() {
 
 #[test]
 fn test_lsr_flags_carry_and_zero_when_carry_and_zero() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x4A);
     cpu.accumulator = 0b0000_0001;
 

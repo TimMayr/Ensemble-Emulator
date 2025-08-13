@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_and_complete() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x29);
     cpu.mem_write(0x1, 0b01100110);
 
@@ -106,7 +106,7 @@ fn test_and_complete() {
 
 #[test]
 fn test_and_immediate() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x29);
     cpu.mem_write(0x1, 0b01100110);
 
@@ -117,7 +117,7 @@ fn test_and_immediate() {
 
 #[test]
 fn test_and_zero_page() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x25);
     cpu.mem_write(0x1, 0x0025);
     cpu.mem_write(0x0025, 0b01100110);
@@ -129,7 +129,7 @@ fn test_and_zero_page() {
 
 #[test]
 fn test_and_zero_page_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x35);
     cpu.mem_write(0x1, 0x0035);
     cpu.x_register = 0x0010;
@@ -142,7 +142,7 @@ fn test_and_zero_page_x() {
 
 #[test]
 fn test_and_absolute() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x2D);
     cpu.mem_write_u16(0x1, 0x2D2D);
     cpu.mem_write(0x2D2D, 0b01100110);
@@ -154,7 +154,7 @@ fn test_and_absolute() {
 
 #[test]
 fn test_and_absolute_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x3D);
     cpu.mem_write_u16(0x1, 0x3D3D);
     cpu.x_register = 0x0010;
@@ -167,7 +167,7 @@ fn test_and_absolute_x() {
 
 #[test]
 fn test_and_absolute_y() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x39);
     cpu.mem_write_u16(0x1, 0x3939);
     cpu.y_register = 0x0010;
@@ -180,7 +180,7 @@ fn test_and_absolute_y() {
 
 #[test]
 fn test_and_indirect_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x21);
     cpu.mem_write(0x1, 0x0021);
     cpu.x_register = 0x0010;
@@ -194,7 +194,7 @@ fn test_and_indirect_x() {
 
 #[test]
 fn test_and_indirect_y() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x31);
     cpu.mem_write(0x1, 0x0031);
     cpu.mem_write_u16(0x0031, 0x3131);
@@ -208,7 +208,7 @@ fn test_and_indirect_y() {
 
 #[test]
 fn test_and_flags_none_when_none() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x29);
     cpu.mem_write(0x1, 0b0111111);
     cpu.accumulator = 0b01111111;
@@ -221,7 +221,7 @@ fn test_and_flags_none_when_none() {
 
 #[test]
 fn test_and_flags_only_zero_when_zero() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x29);
     cpu.mem_write(0x1, 0b00000000);
     cpu.accumulator = 0b11000011;
@@ -234,7 +234,7 @@ fn test_and_flags_only_zero_when_zero() {
 
 #[test]
 fn test_and_flags_only_negative_when_negative() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x29);
     cpu.mem_write(0x1, 0b11000000);
     cpu.accumulator = 0b11000000;

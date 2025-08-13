@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_stx_complete() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.x_register = 0x66;
 
     cpu.mem_write(0x0, 0x86);
@@ -27,7 +27,7 @@ fn test_stx_complete() {
 
 #[test]
 fn test_stx_zero_page() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.x_register = 0x66;
 
     cpu.mem_write(0x0, 0x86);
@@ -39,7 +39,7 @@ fn test_stx_zero_page() {
 
 #[test]
 fn test_stx_zero_page_y() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.x_register = 0x66;
 
     cpu.mem_write(0x0, 0x96);
@@ -52,7 +52,7 @@ fn test_stx_zero_page_y() {
 
 #[test]
 fn test_stx_absolute() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.x_register = 0x66;
 
     cpu.mem_write(0x0, 0x8E);

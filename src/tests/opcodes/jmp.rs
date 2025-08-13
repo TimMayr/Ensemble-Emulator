@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_jmp_complete() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x4C);
     cpu.mem_write_u16(0x1, 0x1234);
 
@@ -27,7 +27,7 @@ fn test_jmp_complete() {
 
 #[test]
 fn test_jmp_absolute() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x4C);
     cpu.mem_write_u16(0x1, 0x1234);
 
@@ -43,7 +43,7 @@ fn test_jmp_absolute() {
 
 #[test]
 fn test_jmp_indirect() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x6C);
     cpu.mem_write_u16(0x1, 0x1234);
     cpu.mem_write_u16(0x1234, 0x2345);

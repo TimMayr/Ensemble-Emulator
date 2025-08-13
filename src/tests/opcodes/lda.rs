@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_lda_complete() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xA9);
     cpu.mem_write(0x1, 0x65);
 
@@ -92,7 +92,7 @@ fn test_lda_complete() {
 
 #[test]
 fn test_lda_immediate() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xA9);
     cpu.mem_write(0x1, 0x66);
 
@@ -102,7 +102,7 @@ fn test_lda_immediate() {
 
 #[test]
 fn test_lda_zero_page() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xA5);
     cpu.mem_write(0x1, 0x00A5);
     cpu.mem_write(0x00A5, 0x66);
@@ -113,7 +113,7 @@ fn test_lda_zero_page() {
 
 #[test]
 fn test_lda_zero_page_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xB5);
     cpu.mem_write(0x1, 0x00B5);
     cpu.x_register = 0x0010;
@@ -125,7 +125,7 @@ fn test_lda_zero_page_x() {
 
 #[test]
 fn test_lda_absolute() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xAD);
     cpu.mem_write_u16(0x1, 0xADAD);
     cpu.mem_write(0xADAD, 0x66);
@@ -136,7 +136,7 @@ fn test_lda_absolute() {
 
 #[test]
 fn test_lda_absolute_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xBD);
     cpu.mem_write_u16(0x1, 0xBDBD);
     cpu.x_register = 0x0010;
@@ -148,7 +148,7 @@ fn test_lda_absolute_x() {
 
 #[test]
 fn test_lda_absolute_y() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xB9);
     cpu.mem_write_u16(0x1, 0xB9B9);
     cpu.y_register = 0x0010;
@@ -160,7 +160,7 @@ fn test_lda_absolute_y() {
 
 #[test]
 fn test_lda_indirect_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xA1);
     cpu.mem_write(0x1, 0x00A1);
     cpu.x_register = 0x0010;
@@ -173,7 +173,7 @@ fn test_lda_indirect_x() {
 
 #[test]
 fn test_lda_indirect_y() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xB1);
     cpu.mem_write(0x1, 0x00B1);
     cpu.mem_write_u16(0x00B1, 0xB1B1);
@@ -186,7 +186,7 @@ fn test_lda_indirect_y() {
 
 #[test]
 fn test_lda_flags_none_when_none() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xA9);
     cpu.mem_write(0x1, 0x66);
 
@@ -198,7 +198,7 @@ fn test_lda_flags_none_when_none() {
 
 #[test]
 fn test_lda_flags_only_zero_when_zero() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xA9);
     cpu.mem_write(0x1, 0x0);
 
@@ -210,7 +210,7 @@ fn test_lda_flags_only_zero_when_zero() {
 
 #[test]
 fn test_lda_flags_only_negative_when_negative() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xA9);
     cpu.mem_write(0x1, 0x80);
 

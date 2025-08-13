@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_jsr_absolute() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x20);
     cpu.mem_write_u16(0x1, 0x1234);
 

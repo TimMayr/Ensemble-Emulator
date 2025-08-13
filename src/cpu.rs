@@ -1,8 +1,8 @@
 use crate::mem::memory_map::MemoryMap;
 use crate::mem::mirror_memory::MirrorMemory;
-use crate::mem::{Memory, Ram};
+use crate::mem::Ram;
 use crate::opcode;
-use crate::opcode::{OPCODES_MAP, OpCode};
+use crate::opcode::{OpCode, OPCODES_MAP};
 use crate::rom::RomFile;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -847,6 +847,11 @@ impl Cpu {
         }
     }
 
+    fn isc(&mut self, mode: &AddressingMode) {
+        self.inc(mode);
+        self.sbc(mode);
+    }
+
     pub fn reset(&mut self) {
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
@@ -940,6 +945,8 @@ impl Cpu {
             0x00 => self.brk(),
             0xEA => self.nop(),
             0x40 => self.rti(),
+            //Illegal Opcodes
+            0xFF => self.isc(&op.addressing_mode),
             _ => {
                 println!(
                     "Instruction \"{opcode}\" at address 0x{:X} isn't valid",
@@ -998,5 +1005,15 @@ impl Cpu {
             ),
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+impl Cpu {
+    pub fn test_instance() -> Self {
+        let mut inst = Cpu::new();
+        inst.memory
+            .add_memory(0x4020..=0xFFFF, Box::new(Ram::new(0xBFE0)));
+        inst
     }
 }

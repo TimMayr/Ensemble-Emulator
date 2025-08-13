@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_cpy_immediate() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.y_register = 0x20;
     cpu.mem_write(0x0, 0xC0);
     cpu.mem_write(0x1, 0x10);
@@ -16,7 +16,7 @@ fn test_cpy_immediate() {
 
 #[test]
 fn test_cpy_zero_page() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.y_register = 0x20;
     cpu.mem_write(0x0, 0xC4);
     cpu.mem_write(0x1, 0xC5);
@@ -31,7 +31,7 @@ fn test_cpy_zero_page() {
 
 #[test]
 fn test_cpy_absolute() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.y_register = 0x20;
     cpu.mem_write(0x0, 0xCC);
     cpu.mem_write_u16(0x1, 0xCDCD);
@@ -46,7 +46,7 @@ fn test_cpy_absolute() {
 
 #[test]
 fn test_cpy_zero_when_equal() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.y_register = 0x20;
     cpu.mem_write(0x0, 0xC0);
     cpu.mem_write(0x1, 0x20);
@@ -60,7 +60,7 @@ fn test_cpy_zero_when_equal() {
 
 #[test]
 fn test_cpy_negative_when_negative() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.y_register = 0x20;
     cpu.mem_write(0x0, 0xC0);
     cpu.mem_write(0x1, 0x30);

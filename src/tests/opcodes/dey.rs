@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_dey_complete() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x88);
 
     cpu.step();
@@ -40,7 +40,7 @@ fn test_dey_complete() {
 
 #[test]
 fn test_dey_zero_page() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x88);
 
     cpu.step();
@@ -50,7 +50,7 @@ fn test_dey_zero_page() {
 
 #[test]
 fn test_dey_flags_none_when_none() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x88);
     cpu.y_register = 0x2;
     cpu.step();
@@ -62,7 +62,7 @@ fn test_dey_flags_none_when_none() {
 
 #[test]
 fn test_dey_flags_zero_when_zero() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x88);
     cpu.y_register = 0x1;
 
@@ -75,7 +75,7 @@ fn test_dey_flags_zero_when_zero() {
 
 #[test]
 fn test_dey_flags_negative_when_negative() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x88);
     cpu.y_register = 0xFF;
 

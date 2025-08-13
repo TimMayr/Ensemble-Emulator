@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_sei() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.processor_status &= !0b0000_0100;
     cpu.mem_write(0x0, 0x78);
     cpu.step();

@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn bne_fail() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.processor_status |= 0b00000010;
 
     cpu.mem_write(0x0, 0xEA);
@@ -21,7 +21,7 @@ fn bne_fail() {
 
 #[test]
 fn bne_success() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xEA);
     cpu.mem_write(0x1, 0xEA);
     cpu.mem_write(0x2, 0xEA);

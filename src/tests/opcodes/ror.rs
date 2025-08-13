@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_ror_complete() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b0100_0000;
 
     cpu.mem_write(0x0, 0x6A);
@@ -140,7 +140,7 @@ fn test_ror_complete() {
 
 #[test]
 fn test_ror_accumulator() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b0100_0000;
 
     cpu.mem_write(0x0, 0x6A);
@@ -155,7 +155,7 @@ fn test_ror_accumulator() {
 
 #[test]
 fn test_ror_zero_page() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x66);
     cpu.mem_write(0x1, 0x20);
     cpu.mem_write(0x20, 0b1000_0000);
@@ -170,7 +170,7 @@ fn test_ror_zero_page() {
 
 #[test]
 fn test_ror_accumulator_with_carry() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b0100_0000;
     cpu.processor_status |= 0b00000001;
 
@@ -186,7 +186,7 @@ fn test_ror_accumulator_with_carry() {
 
 #[test]
 fn test_ror_zero_page_with_carry() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.processor_status |= 0b00000001;
 
     cpu.mem_write(0x0, 0x66);
@@ -203,7 +203,7 @@ fn test_ror_zero_page_with_carry() {
 
 #[test]
 fn test_ror_zero_page_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.x_register = 0x01;
 
     cpu.mem_write(0x0, 0x76);
@@ -220,7 +220,7 @@ fn test_ror_zero_page_x() {
 
 #[test]
 fn test_ror_absolute() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x6E);
     cpu.mem_write_u16(0x1, 0x1234);
     cpu.mem_write(0x1234, 0b0000_0010);
@@ -235,7 +235,7 @@ fn test_ror_absolute() {
 
 #[test]
 fn test_ror_absolute_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.x_register = 0x01;
 
     cpu.mem_write(0x0, 0x3E);
@@ -252,7 +252,7 @@ fn test_ror_absolute_x() {
 
 #[test]
 fn test_ror_flags_none_when_none() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b00011110;
 
     cpu.mem_write(0x0, 0x6A);
@@ -266,7 +266,7 @@ fn test_ror_flags_none_when_none() {
 
 #[test]
 fn test_ror_flags_only_zero_when_only_zero() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b00000000;
 
     cpu.mem_write(0x0, 0x6A);
@@ -280,7 +280,7 @@ fn test_ror_flags_only_zero_when_only_zero() {
 
 #[test]
 fn test_ror_flags_only_carry_when_only_carry() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b00001111;
 
     cpu.mem_write(0x0, 0x6A);
@@ -294,7 +294,7 @@ fn test_ror_flags_only_carry_when_only_carry() {
 
 #[test]
 fn test_ror_flags_carry_and_zero_when_carry_and_zero() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b00000001;
 
     cpu.mem_write(0x0, 0x6A);

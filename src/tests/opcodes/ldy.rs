@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_ldy_complete() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xA0);
     cpu.mem_write(0x1, 0x66);
 
@@ -66,7 +66,7 @@ fn test_ldy_complete() {
 
 #[test]
 fn test_ldy_immediate() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xA0);
     cpu.mem_write(0x1, 0x66);
 
@@ -76,7 +76,7 @@ fn test_ldy_immediate() {
 
 #[test]
 fn test_ldy_zero_page() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xA4);
     cpu.mem_write(0x1, 0x00A4);
     cpu.mem_write(0x00A4, 0x66);
@@ -87,7 +87,7 @@ fn test_ldy_zero_page() {
 
 #[test]
 fn test_ldy_zero_page_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xB4);
     cpu.mem_write(0x1, 0x00B4);
     cpu.x_register = 0x0010;
@@ -99,7 +99,7 @@ fn test_ldy_zero_page_x() {
 
 #[test]
 fn test_ldy_absolute() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xAC);
     cpu.mem_write_u16(0x1, 0xACAC);
     cpu.mem_write(0xACAC, 0x66);
@@ -110,7 +110,7 @@ fn test_ldy_absolute() {
 
 #[test]
 fn test_ldy_absolute_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xBC);
     cpu.mem_write_u16(0x1, 0xBCBC);
     cpu.x_register = 0x0010;
@@ -122,7 +122,7 @@ fn test_ldy_absolute_x() {
 
 #[test]
 fn test_ldy_flags_none_when_none() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xA0);
     cpu.mem_write(0x1, 0x66);
 
@@ -134,7 +134,7 @@ fn test_ldy_flags_none_when_none() {
 
 #[test]
 fn test_ldy_flags_only_zero_when_zero() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xA0);
     cpu.mem_write(0x1, 0x0);
 
@@ -146,7 +146,7 @@ fn test_ldy_flags_only_zero_when_zero() {
 
 #[test]
 fn test_ldy_flags_only_negative_when_negative() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xA0);
     cpu.mem_write(0x1, 0x80);
 

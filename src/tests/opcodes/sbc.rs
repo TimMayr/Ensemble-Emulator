@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_sbc_immediate() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x55;
     cpu.mem_write(0x0, 0xE9);
     cpu.mem_write(0x1, 0x11);
@@ -14,7 +14,7 @@ fn test_sbc_immediate() {
 
 #[test]
 fn test_sbc_zero_page() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x55;
     cpu.mem_write(0x0, 0xE5);
     cpu.mem_write(0x1, 0x33);
@@ -27,7 +27,7 @@ fn test_sbc_zero_page() {
 
 #[test]
 fn test_sbc_zero_page_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x55;
     cpu.x_register = 0x10;
     cpu.mem_write(0x0, 0xF5);
@@ -41,7 +41,7 @@ fn test_sbc_zero_page_x() {
 
 #[test]
 fn test_sbc_absolute() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x55;
     cpu.mem_write(0x0, 0xED);
     cpu.mem_write_u16(0x1, 0x3333);
@@ -54,7 +54,7 @@ fn test_sbc_absolute() {
 
 #[test]
 fn test_sbc_absolute_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x55;
     cpu.x_register = 0x10;
     cpu.mem_write(0x0, 0xFD);
@@ -68,7 +68,7 @@ fn test_sbc_absolute_x() {
 
 #[test]
 fn test_sbc_absolute_y() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x55;
     cpu.y_register = 0x10;
     cpu.mem_write(0x0, 0xF9);
@@ -82,7 +82,7 @@ fn test_sbc_absolute_y() {
 
 #[test]
 fn test_sbc_indirect_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x55;
     cpu.x_register = 0x10;
     cpu.mem_write(0x0, 0xE1);
@@ -97,7 +97,7 @@ fn test_sbc_indirect_x() {
 
 #[test]
 fn test_sbc_indirect_y() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x55;
     cpu.y_register = 0x10;
     cpu.mem_write(0x0, 0xF1);
@@ -112,7 +112,7 @@ fn test_sbc_indirect_y() {
 
 #[test]
 fn test_sbc_with_carry() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x55;
     cpu.processor_status |= 0b00000001;
 
@@ -126,7 +126,7 @@ fn test_sbc_with_carry() {
 
 #[test]
 fn test_sbc_flags_none_when_none() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x55;
     cpu.processor_status |= 0b00000001;
 
@@ -144,7 +144,7 @@ fn test_sbc_flags_none_when_none() {
 
 #[test]
 fn test_sbc_flags_negative_when_negative() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x90;
     cpu.processor_status |= 0b00000001;
 
@@ -162,7 +162,7 @@ fn test_sbc_flags_negative_when_negative() {
 
 #[test]
 fn test_sbc_flags_carry_and_negative_when_carry_and_negative() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x0;
     cpu.processor_status |= 0b00000001;
 
@@ -180,7 +180,7 @@ fn test_sbc_flags_carry_and_negative_when_carry_and_negative() {
 
 #[test]
 fn test_sbc_flags_zero_when_zero() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x1;
     cpu.processor_status |= 0b00000001;
 
@@ -198,7 +198,7 @@ fn test_sbc_flags_zero_when_zero() {
 
 #[test]
 fn test_sbc_flags_overflow_when_overflow() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x80;
     cpu.processor_status |= 0b00000001;
 

@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_inc_complete() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xE6);
     cpu.mem_write(0x1, 0x00E6);
 
@@ -68,7 +68,7 @@ fn test_inc_complete() {
 
 #[test]
 fn test_inc_zero_page() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xE6);
     cpu.mem_write(0x1, 0x00E6);
 
@@ -79,7 +79,7 @@ fn test_inc_zero_page() {
 
 #[test]
 fn test_inc_zero_page_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xF6);
     cpu.mem_write(0x1, 0x00E6);
     cpu.x_register = 0x10;
@@ -93,7 +93,7 @@ fn test_inc_zero_page_x() {
 
 #[test]
 fn test_inc_absolute() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xEE);
     cpu.mem_write_u16(0x1, 0xEEEE);
 
@@ -106,7 +106,7 @@ fn test_inc_absolute() {
 
 #[test]
 fn test_inc_absolute_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xFE);
     cpu.mem_write_u16(0x1, 0xFEEE);
     cpu.x_register = 0x10;
@@ -120,7 +120,7 @@ fn test_inc_absolute_x() {
 
 #[test]
 fn test_inc_flags_none_when_none() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xE6);
     cpu.mem_write(0x1, 0x00E6);
     cpu.step();
@@ -132,7 +132,7 @@ fn test_inc_flags_none_when_none() {
 
 #[test]
 fn test_inc_flags_zero_when_zero() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xE6);
     cpu.mem_write(0x1, 0x00E6);
     cpu.mem_write(0x00E6, 0xFF);
@@ -145,7 +145,7 @@ fn test_inc_flags_zero_when_zero() {
 
 #[test]
 fn test_inc_flags_negative_when_negative() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xE6);
     cpu.mem_write(0x1, 0x00E6);
     cpu.mem_write(0x00E6, 0x7F);

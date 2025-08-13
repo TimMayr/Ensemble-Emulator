@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_sta_complete() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x66;
 
     cpu.mem_write(0x0, 0x85);
@@ -57,7 +57,7 @@ fn test_sta_complete() {
 
 #[test]
 fn test_sta_zero_page() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x66;
 
     cpu.mem_write(0x0, 0x85);
@@ -69,7 +69,7 @@ fn test_sta_zero_page() {
 
 #[test]
 fn test_sta_zero_page_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x66;
 
     cpu.mem_write(0x0, 0x95);
@@ -82,7 +82,7 @@ fn test_sta_zero_page_x() {
 
 #[test]
 fn test_sta_absolute() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x66;
 
     cpu.mem_write(0x0, 0x8D);
@@ -94,7 +94,7 @@ fn test_sta_absolute() {
 
 #[test]
 fn test_sta_absolute_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x66;
 
     cpu.mem_write(0x0, 0x9D);
@@ -107,7 +107,7 @@ fn test_sta_absolute_x() {
 
 #[test]
 fn test_sta_absolute_y() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x66;
 
     cpu.mem_write(0x0, 0x99);
@@ -120,7 +120,7 @@ fn test_sta_absolute_y() {
 
 #[test]
 fn test_sta_indirect_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x66;
 
     cpu.mem_write(0x0, 0x81);
@@ -134,7 +134,7 @@ fn test_sta_indirect_x() {
 
 #[test]
 fn test_sta_indirect_y() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x66;
 
     cpu.mem_write(0x0, 0x91);

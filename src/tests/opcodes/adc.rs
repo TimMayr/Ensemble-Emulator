@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_adc_immediate() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x11;
     cpu.mem_write(0x0, 0x69);
     cpu.mem_write(0x1, 0x55);
@@ -14,7 +14,7 @@ fn test_adc_immediate() {
 
 #[test]
 fn test_adc_zero_page() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x11;
     cpu.mem_write(0x0, 0x65);
     cpu.mem_write(0x1, 0x33);
@@ -27,7 +27,7 @@ fn test_adc_zero_page() {
 
 #[test]
 fn test_adc_zero_page_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x11;
     cpu.x_register = 0x10;
     cpu.mem_write(0x0, 0x75);
@@ -41,7 +41,7 @@ fn test_adc_zero_page_x() {
 
 #[test]
 fn test_adc_absolute() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x11;
     cpu.mem_write(0x0, 0x6D);
     cpu.mem_write_u16(0x1, 0x3333);
@@ -54,7 +54,7 @@ fn test_adc_absolute() {
 
 #[test]
 fn test_adc_absolute_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x11;
     cpu.x_register = 0x10;
     cpu.mem_write(0x0, 0x7D);
@@ -68,7 +68,7 @@ fn test_adc_absolute_x() {
 
 #[test]
 fn test_adc_absolute_y() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x11;
     cpu.y_register = 0x10;
     cpu.mem_write(0x0, 0x79);
@@ -82,7 +82,7 @@ fn test_adc_absolute_y() {
 
 #[test]
 fn test_adc_indirect_x() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x11;
     cpu.x_register = 0x10;
     cpu.mem_write(0x0, 0x61);
@@ -97,7 +97,7 @@ fn test_adc_indirect_x() {
 
 #[test]
 fn test_adc_indirect_y() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x11;
     cpu.y_register = 0x10;
     cpu.mem_write(0x0, 0x71);
@@ -112,7 +112,7 @@ fn test_adc_indirect_y() {
 
 #[test]
 fn test_adc_with_carry() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x10;
     cpu.processor_status |= 0b00000001;
 
@@ -126,7 +126,7 @@ fn test_adc_with_carry() {
 
 #[test]
 fn test_adc_flags_none_when_none() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x10;
     cpu.processor_status |= 0b00000001;
 
@@ -144,7 +144,7 @@ fn test_adc_flags_none_when_none() {
 
 #[test]
 fn test_adc_flags_negative_when_negative() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x10;
 
     cpu.mem_write(0x0, 0x69);
@@ -161,7 +161,7 @@ fn test_adc_flags_negative_when_negative() {
 
 #[test]
 fn test_adc_flags_carry_when_carry() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0xFF;
 
     cpu.mem_write(0x0, 0x69);
@@ -178,7 +178,7 @@ fn test_adc_flags_carry_when_carry() {
 
 #[test]
 fn test_adc_flags_zero_and_carry_when_zero_and_carry() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0xFF;
 
     cpu.mem_write(0x0, 0x69);
@@ -195,7 +195,7 @@ fn test_adc_flags_zero_and_carry_when_zero_and_carry() {
 
 #[test]
 fn test_adc_flags_overflow_when_overflow() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x7F;
 
     cpu.mem_write(0x0, 0x69);

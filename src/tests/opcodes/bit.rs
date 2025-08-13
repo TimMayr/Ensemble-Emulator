@@ -2,7 +2,7 @@ use crate::cpu::Cpu;
 
 #[test]
 fn test_bit_complete() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b00000000;
     cpu.mem_write(0x0, 0x24);
     cpu.mem_write(0x1, 0x0020);
@@ -120,7 +120,7 @@ fn test_bit_complete() {
 
 #[test]
 fn test_bit_zero_page() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b00000000;
     cpu.mem_write(0x0, 0x24);
     cpu.mem_write(0x1, 0x0020);
@@ -135,7 +135,7 @@ fn test_bit_zero_page() {
 
 #[test]
 fn test_bit_absolute_page() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b00000000;
     cpu.mem_write(0x0, 0x2C);
     cpu.mem_write_u16(0x1, 0x2020);
@@ -150,7 +150,7 @@ fn test_bit_absolute_page() {
 
 #[test]
 fn test_bit_flags_none_when_none() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b00000001;
     cpu.mem_write(0x0, 0x24);
     cpu.mem_write(0x1, 0x0020);
@@ -165,7 +165,7 @@ fn test_bit_flags_none_when_none() {
 
 #[test]
 fn test_bit_flags_zero_when_zero() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b00000000;
     cpu.mem_write(0x0, 0x24);
     cpu.mem_write(0x1, 0x0020);
@@ -180,7 +180,7 @@ fn test_bit_flags_zero_when_zero() {
 
 #[test]
 fn test_bit_flags_negative_when_negative() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b00000010;
     cpu.mem_write(0x0, 0x24);
     cpu.mem_write(0x1, 0x0020);
@@ -195,7 +195,7 @@ fn test_bit_flags_negative_when_negative() {
 
 #[test]
 fn test_bit_flags_overflow_when_overflow() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b01000000;
     cpu.mem_write(0x0, 0x24);
     cpu.mem_write(0x1, 0x0020);
@@ -210,7 +210,7 @@ fn test_bit_flags_overflow_when_overflow() {
 
 #[test]
 fn test_bit_flags_negative_and_overflow_when_negative_and_overflow() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b01000000;
     cpu.mem_write(0x0, 0x24);
     cpu.mem_write(0x1, 0x0020);
@@ -225,7 +225,7 @@ fn test_bit_flags_negative_and_overflow_when_negative_and_overflow() {
 
 #[test]
 fn test_bit_flags_zero_and_overflow_when_zero_and_overflow() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b00000000;
     cpu.mem_write(0x0, 0x24);
     cpu.mem_write(0x1, 0x0020);
@@ -240,7 +240,7 @@ fn test_bit_flags_zero_and_overflow_when_zero_and_overflow() {
 
 #[test]
 fn test_bit_flags_zero_and_negative_when_zero_and_negative() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b00000000;
     cpu.mem_write(0x0, 0x24);
     cpu.mem_write(0x1, 0x0020);
@@ -255,7 +255,7 @@ fn test_bit_flags_zero_and_negative_when_zero_and_negative() {
 
 #[test]
 fn test_bit_flags_zero_and_negative_and_overflow_when_zero_and_negative_and_overflow() {
-    let mut cpu = Cpu::new();
+    let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b00000000;
     cpu.mem_write(0x0, 0x24);
     cpu.mem_write(0x1, 0x0020);
