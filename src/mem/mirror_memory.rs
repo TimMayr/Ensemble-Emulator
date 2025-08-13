@@ -1,5 +1,6 @@
 use crate::mem::Memory;
 
+#[derive(Debug)]
 pub struct MirrorMemory {
     base: Box<dyn Memory>,
     mirror_mask: u16,
@@ -13,8 +14,8 @@ impl MirrorMemory {
 
 impl Memory for MirrorMemory {
     #[inline(always)]
-    fn mem_read(&self, addr: u16) -> u8 {
-        self.base.mem_read(addr & self.mirror_mask)
+    fn read(&self, addr: u16) -> u8 {
+        self.base.read(addr & self.mirror_mask)
     }
 
     #[inline(always)]

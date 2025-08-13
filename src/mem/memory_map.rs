@@ -39,7 +39,7 @@ impl MemoryMap {
             return 0x00u8;
         }
 
-        self.regions[device - 1].mem_read(addr)
+        self.regions[device - 1].read(addr)
     }
 
     pub fn mem_write(&mut self, addr: u16, data: u8) {
@@ -64,5 +64,14 @@ impl MemoryMap {
         let highest_significant_bits = (data >> 8) as u8;
         self.mem_write(addr, least_significant_bits);
         self.mem_write(addr + 1, highest_significant_bits)
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn get_memory(&self, range: RangeInclusive<u16>) -> Vec<u8> {
+        let mut vec = Vec::<u8>::new();
+        for addr in range {
+            vec.push(self.mem_read(addr));
+        }
+        vec
     }
 }

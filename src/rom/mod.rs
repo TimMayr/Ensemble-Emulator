@@ -35,7 +35,6 @@ pub trait RomParser: Debug {
     fn parse(&self, rom: &[u8]) -> Result<RomFile, ParseError>;
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct RomFile {
     pub prg_memory: PrgMemory,
@@ -56,7 +55,6 @@ pub struct RomFile {
     data: Vec<u8>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
 pub struct PrgMemory {
     pub prg_rom_size: u32,
@@ -74,7 +72,6 @@ impl PrgMemory {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
 pub struct ChrMemory {
     pub chr_rom_size: u32,

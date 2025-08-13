@@ -4,6 +4,7 @@ use crate::mem::mirror_memory::MirrorMemory;
 use crate::opcode;
 use crate::opcode::{OPCODES_MAP, OpCode};
 use crate::rom::RomFile;
+use std::ops::RangeInclusive;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
@@ -72,7 +73,6 @@ impl Default for Cpu {
     }
 }
 
-#[allow(dead_code)]
 impl Cpu {
     pub fn new() -> Self {
         OPCODES_MAP.get_or_init(opcode::init);
@@ -885,6 +885,12 @@ impl Cpu {
         let pnc = &OpCode::default();
         let op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
 
+        #[cfg(debug_assertions)]
+        let _memory = self.memory.get_memory(RangeInclusive::new(
+            self.program_counter - 10,
+            self.program_counter + 10,
+        ));
+
         self.program_counter += 1u16;
         let pc_check = self.program_counter;
 
@@ -949,7 +955,7 @@ impl Cpu {
             0xFF => self.isc(&op.addressing_mode),
             _ => {
                 println!(
-                    "Instruction \"{opcode}\" at address 0x{:X} isn't valid",
+                    "Instruction 0x{opcode:X} at address 0x{:X} isn't valid",
                     self.program_counter - 1
                 );
                 return 0xFF;
