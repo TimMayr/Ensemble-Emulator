@@ -2,3 +2,20 @@
 name = "nesamabob"
 version = "0.1.0"
 edition = "2024"
+
+[profile.dev]
+opt-level = 3          # Or 2 if you want more speed
+debug = true           # Keep debug info for debugging
+lto = false            # LTO slows compilation a lot
+codegen-units = 32     # Keeps compile times reasonable
+
+[profile.dev.package."*"]
+opt-level = 3          # Force hot inner loops in dependencies to be fast
+
+[profile.dev-fast]
+inherits = "dev"
+opt-level = 2
+
+[profile.profiling]
+inherits = "release"
+debug = true

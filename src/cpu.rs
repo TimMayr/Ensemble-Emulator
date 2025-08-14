@@ -1,8 +1,8 @@
-use crate::mem::Ram;
 use crate::mem::memory_map::MemoryMap;
 use crate::mem::mirror_memory::MirrorMemory;
+use crate::mem::Ram;
 use crate::opcode;
-use crate::opcode::{OPCODES_MAP, OpCode};
+use crate::opcode::{OpCode, OPCODES_MAP};
 use crate::ppu::PpuStub;
 use crate::rom::RomFile;
 use std::cell::RefCell;
@@ -862,7 +862,7 @@ impl Cpu {
         self.stack_push_u16(self.program_counter);
         self.stack_push(self.processor_status | 0b00010000);
         self.sei();
-        self.program_counter = self.mem_read_u16(0xFFFA)
+        self.program_counter = self.mem_read_u16(0xFFFA) - 1
     }
 
     pub fn reset(&mut self) {
@@ -875,6 +875,7 @@ impl Cpu {
             Some(ppu) => {
                 if ppu.borrow_mut().poll_nmi() {
                     self.trigger_nmi();
+                    println!("Nmi occurred");
                 }
             }
         }
@@ -886,7 +887,7 @@ impl Cpu {
         let op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
 
         #[cfg(debug_assertions)]
-        let _memory = self.memory.get_memory(RangeInclusive::new(0, 0xFFFF));
+        let _memory = self.memory.get_memory_debug(RangeInclusive::new(0, 0xFFFF));
 
         self.program_counter += 1u16;
         let pc_check = self.program_counter;

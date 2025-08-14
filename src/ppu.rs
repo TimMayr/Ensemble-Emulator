@@ -29,10 +29,6 @@ impl PpuStub {
     pub fn step(&mut self) {
         self.cycle_counter += 1;
 
-        if self.cycle_counter % CPU_CYCLES_PER_FRAME as u64 == 0 {
-            dbg!()
-        }
-
         let frame_cycle = self.cycle_counter % CPU_CYCLES_PER_FRAME as u64;
 
         if frame_cycle >= 241 * 113 {
@@ -52,6 +48,10 @@ impl PpuStub {
         let result = self.status;
         self.status &= !0x80;
         result
+    }
+
+    pub fn get_ppu_status_debug(&self) -> u8 {
+        self.status
     }
 
     pub fn get_ppu_ctrl(&self) -> u8 {

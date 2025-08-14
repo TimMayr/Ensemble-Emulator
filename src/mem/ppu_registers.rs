@@ -26,8 +26,7 @@ impl Memory for PpuRegisters {
     }
 
     #[inline(always)]
-    fn mem_write(&mut self, addr: u16, data: u8) {
-        #[allow(clippy::single_match)]
+    fn write(&mut self, addr: u16, data: u8) {
         match addr {
             0x0 => self.ppu.borrow_mut().set_ppu_ctrl(data),
             0x1 => self.ppu.borrow_mut().set_ppu_ctrl(data),
@@ -36,4 +35,14 @@ impl Memory for PpuRegisters {
     }
 
     fn load(&mut self, _: Box<[u8]>) {}
+
+    #[cfg(debug_assertions)]
+    fn read_debug(&self, addr: u16) -> u8 {
+        match addr {
+            0x0 => self.ppu.borrow().get_ppu_ctrl(),
+            0x1 => self.ppu.borrow().get_mask_register(),
+            0x2 => self.ppu.borrow().get_ppu_status_debug(),
+            _ => 0,
+        }
+    }
 }

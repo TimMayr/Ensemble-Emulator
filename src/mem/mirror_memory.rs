@@ -19,11 +19,16 @@ impl Memory for MirrorMemory {
     }
 
     #[inline(always)]
-    fn mem_write(&mut self, addr: u16, data: u8) {
-        self.base.mem_write(addr & self.mirror_mask, data)
+    fn write(&mut self, addr: u16, data: u8) {
+        self.base.write(addr & self.mirror_mask, data)
     }
 
     fn load(&mut self, data: Box<[u8]>) {
         self.base.load(data)
+    }
+
+    #[cfg(debug_assertions)]
+    fn read_debug(&self, addr: u16) -> u8 {
+        self.base.read_debug(addr & self.mirror_mask)
     }
 }

@@ -140,7 +140,6 @@ impl RomFile {
         file.read_to_end(&mut rom).expect("Couldn't read file");
 
         let rom_type = RomFile::get_rom_type(&rom);
-        println!("Rom Type: {rom_type:?}");
         let mut rom_file = rom_type.parse(&rom).expect("Error loading Rom");
         rom_file.data = rom;
         rom_file

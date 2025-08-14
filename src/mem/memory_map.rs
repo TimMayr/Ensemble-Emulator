@@ -32,6 +32,7 @@ impl MemoryMap {
         self.regions.push(memory)
     }
 
+    #[inline]
     pub fn mem_read(&self, addr: u16) -> u8 {
         let device = self.lookup[addr as usize];
 
@@ -42,6 +43,18 @@ impl MemoryMap {
         self.regions[device - 1].read(addr)
     }
 
+    #[cfg(debug_assertions)]
+    pub fn mem_read_debug(&self, addr: u16) -> u8 {
+        let device = self.lookup[addr as usize];
+
+        if device == 0 {
+            return 0x00u8;
+        }
+
+        self.regions[device - 1].read_debug(addr)
+    }
+
+    #[inline]
     pub fn mem_write(&mut self, addr: u16, data: u8) {
         let device = self.lookup[addr as usize];
 
@@ -49,9 +62,10 @@ impl MemoryMap {
             return;
         }
 
-        self.regions[device - 1].mem_write(addr, data)
+        self.regions[device - 1].write(addr, data)
     }
 
+    #[inline]
     pub fn mem_read_u16(&self, addr: u16) -> u16 {
         let least_significant_bits = self.mem_read(addr) as u16;
         let highest_significant_bits = self.mem_read(addr + 1) as u16;
@@ -59,6 +73,7 @@ impl MemoryMap {
         (highest_significant_bits << 8) | (least_significant_bits)
     }
 
+    #[inline]
     pub fn mem_write_u16(&mut self, addr: u16, data: u16) {
         let least_significant_bits = (data & 0x00FF) as u8;
         let highest_significant_bits = (data >> 8) as u8;
@@ -67,10 +82,10 @@ impl MemoryMap {
     }
 
     #[cfg(debug_assertions)]
-    pub fn get_memory(&self, range: RangeInclusive<u16>) -> Vec<u8> {
+    pub fn get_memory_debug(&self, range: RangeInclusive<u16>) -> Vec<u8> {
         let mut vec = Vec::<u8>::new();
         for addr in range {
-            vec.push(self.mem_read(addr));
+            vec.push(self.mem_read_debug(addr));
         }
         vec
     }
