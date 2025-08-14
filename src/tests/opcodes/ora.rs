@@ -28,26 +28,26 @@ fn test_ora_complete() {
     assert_eq!(cpu.accumulator, 0b11100111);
 
     cpu.mem_write(0x6, 0x0D);
-    cpu.mem_write_u16(0x7, 0x2D2D);
-    cpu.mem_write(0x2D2D, 0b01100110);
+    cpu.mem_write_u16(0x7, 0x8D2D);
+    cpu.mem_write(0x8D2D, 0b01100110);
 
     cpu.accumulator = 0b11000011;
     cpu.step();
     assert_eq!(cpu.accumulator, 0b11100111);
 
     cpu.mem_write(0x9, 0x1D);
-    cpu.mem_write_u16(0xA, 0x3D3D);
+    cpu.mem_write_u16(0xA, 0x8D3D);
     cpu.x_register = 0x0010;
-    cpu.mem_write(0x3D4D, 0b01100110);
+    cpu.mem_write(0x8D4D, 0b01100110);
 
     cpu.accumulator = 0b11000011;
     cpu.step();
     assert_eq!(cpu.accumulator, 0b11100111);
 
     cpu.mem_write(0xC, 0x19);
-    cpu.mem_write_u16(0xD, 0x3939);
+    cpu.mem_write_u16(0xD, 0x8939);
     cpu.y_register = 0x0010;
-    cpu.mem_write(0x3949, 0b01100110);
+    cpu.mem_write(0x8949, 0b01100110);
 
     cpu.accumulator = 0b11000011;
     cpu.step();
@@ -56,8 +56,8 @@ fn test_ora_complete() {
     cpu.mem_write(0xF, 0x01);
     cpu.mem_write(0x10, 0x0021);
     cpu.x_register = 0x0010;
-    cpu.mem_write_u16(0x31, 0x2121);
-    cpu.mem_write(0x2121, 0b01100110);
+    cpu.mem_write_u16(0x31, 0x8121);
+    cpu.mem_write(0x8121, 0b01100110);
 
     cpu.accumulator = 0b11000011;
     cpu.step();
@@ -65,9 +65,9 @@ fn test_ora_complete() {
 
     cpu.mem_write(0x11, 0x11);
     cpu.mem_write(0x12, 0x0031);
-    cpu.mem_write_u16(0x0031, 0x3131);
+    cpu.mem_write_u16(0x0031, 0x8131);
     cpu.y_register = 0x0010;
-    cpu.mem_write(0x3141, 0b01100110);
+    cpu.mem_write(0x8141, 0b01100110);
 
     cpu.accumulator = 0b11000011;
     cpu.step();
@@ -144,8 +144,8 @@ fn test_ora_zero_page_x() {
 fn test_ora_absolute() {
     let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x0D);
-    cpu.mem_write_u16(0x1, 0x2D2D);
-    cpu.mem_write(0x2D2D, 0b01100110);
+    cpu.mem_write_u16(0x1, 0x8D2D);
+    cpu.mem_write(0x8D2D, 0b01100110);
 
     cpu.accumulator = 0b11000011;
     cpu.step();
@@ -156,9 +156,9 @@ fn test_ora_absolute() {
 fn test_ora_absolute_x() {
     let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x1D);
-    cpu.mem_write_u16(0x1, 0x3D3D);
+    cpu.mem_write_u16(0x1, 0x8D3D);
     cpu.x_register = 0x0010;
-    cpu.mem_write(0x3D4D, 0b01100110);
+    cpu.mem_write(0x8D4D, 0b01100110);
 
     cpu.accumulator = 0b11000011;
     cpu.step();
@@ -169,9 +169,9 @@ fn test_ora_absolute_x() {
 fn test_ora_absolute_y() {
     let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x19);
-    cpu.mem_write_u16(0x1, 0x3939);
+    cpu.mem_write_u16(0x1, 0x8939);
     cpu.y_register = 0x0010;
-    cpu.mem_write(0x3949, 0b01100110);
+    cpu.mem_write(0x8949, 0b01100110);
 
     cpu.accumulator = 0b11000011;
     cpu.step();
@@ -184,8 +184,8 @@ fn test_ora_indirect_x() {
     cpu.mem_write(0x0, 0x01);
     cpu.mem_write(0x1, 0x0021);
     cpu.x_register = 0x0010;
-    cpu.mem_write_u16(0x31, 0x2121);
-    cpu.mem_write(0x2121, 0b01100110);
+    cpu.mem_write_u16(0x31, 0x8121);
+    cpu.mem_write(0x8121, 0b01100110);
 
     cpu.accumulator = 0b11000011;
     cpu.step();
@@ -197,9 +197,9 @@ fn test_ora_indirect_y() {
     let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x11);
     cpu.mem_write(0x1, 0x0031);
-    cpu.mem_write_u16(0x0031, 0x3131);
+    cpu.mem_write_u16(0x0031, 0x8131);
     cpu.y_register = 0x0010;
-    cpu.mem_write(0x3141, 0b01100110);
+    cpu.mem_write(0x8141, 0b01100110);
 
     cpu.accumulator = 0b11000011;
     cpu.step();

@@ -3,16 +3,15 @@ use crate::mem::memory_map::MemoryMap;
 use crate::mem::mirror_memory::MirrorMemory;
 use crate::opcode;
 use crate::opcode::{OPCODES_MAP, OpCode};
+use crate::ppu::PpuStub;
 use crate::rom::RomFile;
+use std::cell::RefCell;
 use std::ops::RangeInclusive;
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::rc::Rc;
 
 const INTERNAL_RAM_SIZE: u16 = 0x800;
 const STACK_START: u8 = 0xFF;
 
-const CYCLES_PER_FRAME: u16 = 29780;
-const FRAME_DURATION: Duration = Duration::from_nanos(16_666_667);
 const STACK_START_ADDRESS: u16 = 0x0100;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -40,6 +39,7 @@ pub struct Cpu {
     pub y_register: u8,
     pub processor_status: u8,
     pub memory: Box<MemoryMap>,
+    pub ppu: Option<Rc<RefCell<PpuStub>>>,
     additional_cycles: u8,
 }
 
@@ -53,10 +53,7 @@ impl Default for Cpu {
                 0x07FF,
             )),
         );
-        mem.add_memory(
-            0x2000..=0x3FFF,
-            Box::new(MirrorMemory::new(Box::new(Ram::new(0x8)), 0x0007)),
-        );
+
         mem.add_memory(0x4000..=0x4017, Box::new(Ram::new(0x18)));
         mem.add_memory(0x4018..=0x401F, Box::new(Ram::new(0x8)));
 
@@ -69,6 +66,7 @@ impl Default for Cpu {
             memory: Box::new(mem),
             stack_pointer: STACK_START,
             additional_cycles: 0,
+            ppu: None,
         }
     }
 }
@@ -598,6 +596,7 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
+                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
         }
     }
@@ -615,6 +614,7 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
+                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
         }
     }
@@ -632,6 +632,7 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
+                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
         }
     }
@@ -649,6 +650,7 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
+                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
         }
     }
@@ -666,6 +668,7 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
+                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
         }
     }
@@ -683,6 +686,7 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
+                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
         }
     }
@@ -700,6 +704,7 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
+                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
         }
     }
@@ -717,6 +722,7 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
+                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
         }
     }
@@ -852,33 +858,27 @@ impl Cpu {
         self.sbc(mode);
     }
 
+    fn trigger_nmi(&mut self) {
+        self.stack_push_u16(self.program_counter);
+        self.stack_push(self.processor_status | 0b00010000);
+        self.sei();
+        self.program_counter = self.mem_read_u16(0xFFFA)
+    }
+
     pub fn reset(&mut self) {
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
 
-    pub fn run(&mut self) {
-        loop {
-            let frame_start = Instant::now();
-            let mut cycles = 0;
-
-            while cycles < CYCLES_PER_FRAME {
-                let current_cycles = self.step();
-                if current_cycles == 0xFF {
-                    return;
+    pub fn step(&mut self) -> u8 {
+        match &self.ppu {
+            None => (),
+            Some(ppu) => {
+                if ppu.borrow_mut().poll_nmi() {
+                    self.trigger_nmi();
                 }
-
-                cycles += current_cycles as u16;
-            }
-
-            let frame_time = frame_start.elapsed();
-
-            if frame_time < FRAME_DURATION {
-                sleep(FRAME_DURATION - frame_time);
             }
         }
-    }
 
-    pub fn step(&mut self) -> u8 {
         self.additional_cycles = 0;
 
         let opcode = self.mem_read(self.program_counter);
@@ -886,10 +886,7 @@ impl Cpu {
         let op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
 
         #[cfg(debug_assertions)]
-        let _memory = self.memory.get_memory(RangeInclusive::new(
-            self.program_counter.overflowing_sub(10).0,
-            self.program_counter.overflowing_add(10).0,
-        ));
+        let _memory = self.memory.get_memory(RangeInclusive::new(0, 0xFFFF));
 
         self.program_counter += 1u16;
         let pc_check = self.program_counter;
@@ -967,9 +964,9 @@ impl Cpu {
         }
 
         let opcode = self.mem_read(self.program_counter);
-        let op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
+        let check_op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
 
-        if op.opcode == pnc.opcode {
+        if check_op.opcode == pnc.opcode {
             println!("Execution resulted in invalid pc")
         }
 

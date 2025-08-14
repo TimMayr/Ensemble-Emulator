@@ -25,7 +25,7 @@ impl MemoryMap {
     pub fn add_memory(&mut self, address_space: RangeInclusive<u16>, memory: Box<dyn Memory>) {
         let device_index = self.regions.len() + 1;
 
-        for addr in address_space.clone() {
+        for addr in address_space {
             self.lookup[addr as usize] = device_index;
         }
 

@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 pub mod memory_map;
 pub mod mirror_memory;
+pub mod ppu_registers;
 
 pub trait Memory: Debug {
     fn read(&self, addr: u16) -> u8;

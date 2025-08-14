@@ -17,8 +17,8 @@ fn test_bit_complete() {
     cpu.processor_status = 0b00000000;
 
     cpu.mem_write(0x2, 0x2C);
-    cpu.mem_write_u16(0x3, 0x2020);
-    cpu.mem_write(0x2020, 0b11111111);
+    cpu.mem_write_u16(0x3, 0x8000);
+    cpu.mem_write(0x8000, 0b11111111);
 
     cpu.step();
 
@@ -138,8 +138,8 @@ fn test_bit_absolute_page() {
     let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b00000000;
     cpu.mem_write(0x0, 0x2C);
-    cpu.mem_write_u16(0x1, 0x2020);
-    cpu.mem_write(0x2020, 0b11111111);
+    cpu.mem_write_u16(0x1, 0x8000);
+    cpu.mem_write(0x8000, 0b11111111);
 
     cpu.step();
 

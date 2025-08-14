@@ -100,8 +100,8 @@ fn test_cmp_indirect_x() {
     cpu.x_register = 0x10;
     cpu.mem_write(0x0, 0xC1);
     cpu.mem_write(0x1, 0x33);
-    cpu.mem_write_u16(0x43, 0x3343);
-    cpu.mem_write(0x3343, 0x10);
+    cpu.mem_write_u16(0x43, 0x8343);
+    cpu.mem_write(0x8343, 0x10);
 
     cpu.step();
 
@@ -117,8 +117,8 @@ fn test_cmp_indirect_y() {
     cpu.y_register = 10;
     cpu.mem_write(0x0, 0xD1);
     cpu.mem_write(0x1, 0x33);
-    cpu.mem_write_u16(0x33, 0x3333);
-    cpu.mem_write(0x3343, 0x10);
+    cpu.mem_write_u16(0x33, 0x8333);
+    cpu.mem_write(0x8343, 0x10);
     cpu.step();
 
     assert!(cpu.get_carry_flag());

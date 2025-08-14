@@ -48,13 +48,13 @@ fn test_lsr_complete() {
     assert!(!cpu.get_negative_flag());
 
     cpu.mem_write(0x8, 0x5E);
-    cpu.mem_write_u16(0x9, 0x2000);
-    cpu.mem_write(0x2001, 0b0000_0001);
+    cpu.mem_write_u16(0x9, 0x8000);
+    cpu.mem_write(0x8001, 0b0000_0001);
     cpu.x_register = 0x01;
 
     cpu.step();
 
-    assert_eq!(cpu.mem_read(0x2001), 0);
+    assert_eq!(cpu.mem_read(0x8001), 0);
     assert!(cpu.get_carry_flag());
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -161,12 +161,12 @@ fn test_lsr_absolute() {
 fn test_lsr_absolute_x() {
     let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x5E);
-    cpu.mem_write_u16(0x1, 0x2000);
-    cpu.mem_write(0x2001, 0b0000_0001);
+    cpu.mem_write_u16(0x1, 0x8000);
+    cpu.mem_write(0x8001, 0b0000_0001);
 
     cpu.x_register = 0x01;
     cpu.step();
-    assert_eq!(cpu.mem_read(0x2001), 0);
+    assert_eq!(cpu.mem_read(0x8001), 0);
     assert!(cpu.get_carry_flag());
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());

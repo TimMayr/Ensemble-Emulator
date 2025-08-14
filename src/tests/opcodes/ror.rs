@@ -83,8 +83,8 @@ fn test_ror_complete() {
     cpu.x_register = 0x01;
 
     cpu.mem_write(0xB, 0x3E);
-    cpu.mem_write_u16(0xC, 0x2000);
-    cpu.mem_write(0x2001, 0b1000_0000);
+    cpu.mem_write_u16(0xC, 0x8000);
+    cpu.mem_write(0x8001, 0b1000_0000);
 
     cpu.step();
 
@@ -239,8 +239,8 @@ fn test_ror_absolute_x() {
     cpu.x_register = 0x01;
 
     cpu.mem_write(0x0, 0x3E);
-    cpu.mem_write_u16(0x1, 0x2000);
-    cpu.mem_write(0x2001, 0b1000_0000);
+    cpu.mem_write_u16(0x1, 0x8000);
+    cpu.mem_write(0x8001, 0b1000_0000);
 
     cpu.step();
 

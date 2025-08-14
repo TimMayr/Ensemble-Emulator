@@ -44,8 +44,8 @@ fn test_sbc_absolute() {
     let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0x55;
     cpu.mem_write(0x0, 0xED);
-    cpu.mem_write_u16(0x1, 0x3333);
-    cpu.mem_write(0x3333, 0x11);
+    cpu.mem_write_u16(0x1, 0x8333);
+    cpu.mem_write(0x8333, 0x11);
 
     cpu.step();
 
@@ -58,8 +58,8 @@ fn test_sbc_absolute_x() {
     cpu.accumulator = 0x55;
     cpu.x_register = 0x10;
     cpu.mem_write(0x0, 0xFD);
-    cpu.mem_write_u16(0x1, 0x3333);
-    cpu.mem_write(0x3343, 0x11);
+    cpu.mem_write_u16(0x1, 0x8333);
+    cpu.mem_write(0x8343, 0x11);
 
     cpu.step();
 
@@ -72,8 +72,8 @@ fn test_sbc_absolute_y() {
     cpu.accumulator = 0x55;
     cpu.y_register = 0x10;
     cpu.mem_write(0x0, 0xF9);
-    cpu.mem_write_u16(0x1, 0x3333);
-    cpu.mem_write(0x3343, 0x11);
+    cpu.mem_write_u16(0x1, 0x8333);
+    cpu.mem_write(0x8343, 0x11);
 
     cpu.step();
 
@@ -87,8 +87,8 @@ fn test_sbc_indirect_x() {
     cpu.x_register = 0x10;
     cpu.mem_write(0x0, 0xE1);
     cpu.mem_write(0x1, 0x33);
-    cpu.mem_write_u16(0x43, 0x3343);
-    cpu.mem_write(0x3343, 0x11);
+    cpu.mem_write_u16(0x43, 0x8343);
+    cpu.mem_write(0x8343, 0x11);
 
     cpu.step();
 
@@ -102,8 +102,8 @@ fn test_sbc_indirect_y() {
     cpu.y_register = 0x10;
     cpu.mem_write(0x0, 0xF1);
     cpu.mem_write(0x1, 0x33);
-    cpu.mem_write_u16(0x33, 0x3333);
-    cpu.mem_write(0x3343, 0x11);
+    cpu.mem_write_u16(0x33, 0x8333);
+    cpu.mem_write(0x8343, 0x11);
 
     cpu.step();
 

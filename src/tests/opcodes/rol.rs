@@ -82,12 +82,12 @@ fn test_rol_complete() {
     cpu.x_register = 0x01;
 
     cpu.mem_write(0xB, 0x3E);
-    cpu.mem_write_u16(0xC, 0x2000);
-    cpu.mem_write(0x2001, 0b1000_0000);
+    cpu.mem_write_u16(0xC, 0x8000);
+    cpu.mem_write(0x8001, 0b1000_0000);
 
     cpu.step();
 
-    assert_eq!(cpu.mem_read(0x2001), 0);
+    assert_eq!(cpu.mem_read(0x8001), 0);
     assert!(cpu.get_carry_flag());
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -254,12 +254,12 @@ fn test_rol_absolute_x() {
     cpu.x_register = 0x01;
 
     cpu.mem_write(0x0, 0x3E);
-    cpu.mem_write_u16(0x1, 0x2000);
-    cpu.mem_write(0x2001, 0b1000_0000);
+    cpu.mem_write_u16(0x1, 0x8000);
+    cpu.mem_write(0x8001, 0b1000_0000);
 
     cpu.step();
 
-    assert_eq!(cpu.mem_read(0x2001), 0);
+    assert_eq!(cpu.mem_read(0x8001), 0);
     assert!(cpu.get_carry_flag());
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());

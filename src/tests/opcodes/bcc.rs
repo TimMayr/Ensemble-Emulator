@@ -32,10 +32,10 @@ fn bcc_success() {
     cpu.step();
     cpu.step();
 
-    assert_eq!(cpu.program_counter, 0x16);
+    assert_eq!(cpu.program_counter, 0x17);
 
-    cpu.mem_write(0x16, 0xA9);
-    cpu.mem_write(0x17, 0x66);
+    cpu.mem_write(0x17, 0xA9);
+    cpu.mem_write(0x18, 0x66);
 
     cpu.step();
 
@@ -56,5 +56,5 @@ fn bcc_success_neg() {
     cpu.step();
     cpu.step();
 
-    assert_eq!(cpu.program_counter, 0x2);
+    assert_eq!(cpu.program_counter, 0x3);
 }
