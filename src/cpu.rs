@@ -1,8 +1,8 @@
-use crate::mem::Ram;
 use crate::mem::memory_map::MemoryMap;
 use crate::mem::mirror_memory::MirrorMemory;
+use crate::mem::Ram;
 use crate::opcode;
-use crate::opcode::{OPCODES_MAP, OpCode};
+use crate::opcode::{OpCode, OPCODES_MAP};
 use crate::ppu::Ppu;
 use crate::rom::{RomFile, RomFileConvertible};
 use crate::savestate::CpuState;
