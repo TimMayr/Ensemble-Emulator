@@ -83,11 +83,11 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             //CPX
             OpCode::new(0xE0, "CPX", 2, 2, Immediate),
             OpCode::new(0xE4, "CPX", 2, 3, ZeroPage),
-            OpCode::new(0xEC, "CPX", 3, 4, AbsoluteX),
+            OpCode::new(0xEC, "CPX", 3, 4, Absolute),
             //CPY
             OpCode::new(0xC0, "CPY", 2, 2, Immediate),
             OpCode::new(0xC4, "CPY", 2, 3, ZeroPage),
-            OpCode::new(0xCC, "CPY", 3, 4, AbsoluteX),
+            OpCode::new(0xCC, "CPY", 3, 4, Absolute),
             //DEC
             OpCode::new(0xC6, "DEC", 2, 5, ZeroPage),
             OpCode::new(0xD6, "DEC", 2, 6, ZeroPageX),

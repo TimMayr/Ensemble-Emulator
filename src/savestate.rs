@@ -1,7 +1,7 @@
 use crate::cpu::Cpu;
 use crate::ppu::Ppu;
 use crate::rom::RomFile;
-use bincode::{config, Decode, Encode};
+use bincode::{Decode, Encode, config};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
