@@ -27,8 +27,6 @@ mod bvs;
 #[cfg(test)]
 mod clc;
 #[cfg(test)]
-mod cld;
-#[cfg(test)]
 mod cli;
 #[cfg(test)]
 mod clv;
@@ -87,8 +85,6 @@ mod rts;
 mod sbc;
 #[cfg(test)]
 mod sec;
-#[cfg(test)]
-mod sed;
 #[cfg(test)]
 mod sei;
 #[cfg(test)]
