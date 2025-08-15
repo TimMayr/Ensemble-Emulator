@@ -1,11 +1,13 @@
+use crate::mem::Ram;
 use crate::mem::memory_map::MemoryMap;
 use crate::mem::mirror_memory::MirrorMemory;
-use crate::mem::Ram;
 use crate::opcode;
-use crate::opcode::{OpCode, OPCODES_MAP};
+use crate::opcode::{OPCODES_MAP, OpCode};
 use crate::ppu::PpuStub;
-use crate::rom::RomFile;
+use crate::rom::{RomFile, RomFileConvertible};
+use crate::savestate::CpuState;
 use std::cell::RefCell;
+#[cfg(debug_assertions)]
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
@@ -875,7 +877,8 @@ impl Cpu {
             Some(ppu) => {
                 if ppu.borrow_mut().poll_nmi() {
                     self.trigger_nmi();
-                    println!("Nmi occurred");
+                    println!("Nmi Triggered");
+                    return 0xFF;
                 }
             }
         }
@@ -974,8 +977,8 @@ impl Cpu {
         op.cycles
     }
 
-    pub fn load_rom(&mut self, path: &String) {
-        let rom_file = RomFile::load(path);
+    pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
+        let rom_file = rom_get.as_rom_file();
         let prg_rom = rom_file.get_prg_rom();
 
         if rom_file.prg_memory.prg_rom_size > (16 * 1024) {
@@ -1019,5 +1022,39 @@ impl Cpu {
         inst.memory
             .add_memory(0x4020..=0xFFFF, Box::new(Ram::new(0xBFE0)));
         inst
+    }
+}
+
+impl Cpu {
+    pub fn from(state: CpuState, ppu: Rc<RefCell<PpuStub>>, rom: RomFile) -> Self {
+        OPCODES_MAP.get_or_init(opcode::init);
+
+        let mut mem = MemoryMap::default();
+        mem.add_memory(
+            0x0..=0x1FFF,
+            Box::new(MirrorMemory::new(
+                Box::new(Ram::new(INTERNAL_RAM_SIZE as usize)),
+                0x07FF,
+            )),
+        );
+
+        mem.add_memory(0x4000..=0x4017, Box::new(Ram::new(0x18)));
+        mem.add_memory(0x4018..=0x401F, Box::new(Ram::new(0x8)));
+
+        let mut cpu = Self {
+            program_counter: state.program_counter,
+            stack_pointer: state.stack_pointer,
+            accumulator: state.accumulator,
+            x_register: state.x_register,
+            y_register: state.y_register,
+            processor_status: state.processor_status,
+            memory: Box::new(mem),
+            ppu: Some(ppu),
+            additional_cycles: 0,
+        };
+
+        cpu.load_rom(&rom);
+
+        cpu
     }
 }

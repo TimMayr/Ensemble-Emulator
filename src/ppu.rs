@@ -1,12 +1,13 @@
 use crate::nes::CPU_CYCLES_PER_FRAME;
+use crate::savestate::PpuState;
 
 #[derive(Debug, Clone)]
 pub struct PpuStub {
-    status: u8,
-    cycle_counter: u64,
-    mask_register: u8,
-    ctrl: u8,
-    nmi_requested: bool,
+    pub cycle_counter: u64,
+    pub status: u8,
+    pub mask_register: u8,
+    pub ctrl: u8,
+    pub nmi_requested: bool,
 }
 
 impl Default for PpuStub {
@@ -77,5 +78,17 @@ impl PpuStub {
         }
 
         false
+    }
+}
+
+impl From<PpuState> for PpuStub {
+    fn from(state: PpuState) -> Self {
+        Self {
+            cycle_counter: state.cycle_counter,
+            status: state.status,
+            ctrl: state.ctrl,
+            mask_register: state.mask_register,
+            nmi_requested: state.nmi_requested,
+        }
     }
 }

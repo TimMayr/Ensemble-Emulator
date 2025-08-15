@@ -7,10 +7,9 @@ pub mod ppu_registers;
 pub trait Memory: Debug {
     fn read(&self, addr: u16) -> u8;
     fn write(&mut self, addr: u16, data: u8);
-
+    fn init(&mut self, addr: u16, data: u8);
     fn load(&mut self, data: Box<[u8]>);
 
-    #[cfg(debug_assertions)]
     fn read_debug(&self, addr: u16) -> u8 {
         self.read(addr)
     }
@@ -40,6 +39,11 @@ impl Memory for Ram {
         self.memory[addr as usize % self.memory.len()] = value;
     }
 
+    #[inline(always)]
+    fn init(&mut self, addr: u16, data: u8) {
+        self.memory[addr as usize % self.memory.len()] = data;
+    }
+
     fn load(&mut self, data: Box<[u8]>) {
         self.memory = data
     }
@@ -66,6 +70,11 @@ impl Memory for Rom {
 
     #[inline(always)]
     fn write(&mut self, _: u16, _: u8) {}
+
+    #[inline(always)]
+    fn init(&mut self, addr: u16, data: u8) {
+        self.memory[addr as usize % self.memory.len()] = data;
+    }
 
     fn load(&mut self, data: Box<[u8]>) {
         self.memory = data

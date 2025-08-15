@@ -5,6 +5,8 @@ use crate::rom::formats::archaic_ines::ArchaicInes;
 use crate::rom::formats::ines::Ines;
 use crate::rom::formats::ines_07::Ines07;
 use crate::rom::formats::ines2::Ines2;
+use bincode::{Decode, Encode};
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
@@ -35,7 +37,7 @@ pub trait RomParser: Debug {
     fn parse(&self, rom: &[u8]) -> Result<RomFile, ParseError>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct RomFile {
     pub prg_memory: PrgMemory,
     pub chr_memory: ChrMemory,
@@ -52,10 +54,11 @@ pub struct RomFile {
     pub trainer_present: bool,
     pub alternative_nametables: bool,
     pub submapper_number: u8,
+    #[serde(skip)]
     data: Vec<u8>,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct PrgMemory {
     pub prg_rom_size: u32,
     pub prg_ram_size: u32,
@@ -72,7 +75,7 @@ impl PrgMemory {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct ChrMemory {
     pub chr_rom_size: u32,
     pub chr_ram_size: u32,
@@ -197,6 +200,18 @@ impl RomFile {
                 .into_boxed_slice(),
         );
         Box::new(ram)
+    }
+}
+
+impl From<&String> for RomFile {
+    fn from(path: &String) -> Self {
+        RomFile::load(path)
+    }
+}
+
+impl From<&RomFile> for RomFile {
+    fn from(rom: &RomFile) -> Self {
+        rom.clone()
     }
 }
 
@@ -367,5 +382,21 @@ impl RomBuilder {
             submapper_number: self.submapper_number,
             data: Vec::new(),
         }
+    }
+}
+
+pub trait RomFileConvertible {
+    fn as_rom_file(&self) -> RomFile;
+}
+
+impl RomFileConvertible for String {
+    fn as_rom_file(&self) -> RomFile {
+        RomFile::from(self)
+    }
+}
+
+impl RomFileConvertible for RomFile {
+    fn as_rom_file(&self) -> RomFile {
+        RomFile::from(self)
     }
 }

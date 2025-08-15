@@ -23,6 +23,11 @@ impl Memory for MirrorMemory {
         self.base.write(addr & self.mirror_mask, data)
     }
 
+    #[inline(always)]
+    fn init(&mut self, addr: u16, data: u8) {
+        self.base.init(addr & self.mirror_mask, data)
+    }
+
     fn load(&mut self, data: Box<[u8]>) {
         self.base.load(data)
     }

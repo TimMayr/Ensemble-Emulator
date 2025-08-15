@@ -29,7 +29,17 @@ impl Memory for PpuRegisters {
     fn write(&mut self, addr: u16, data: u8) {
         match addr {
             0x0 => self.ppu.borrow_mut().set_ppu_ctrl(data),
-            0x1 => self.ppu.borrow_mut().set_ppu_ctrl(data),
+            0x1 => self.ppu.borrow_mut().set_mask_register(data),
+            _ => (),
+        }
+    }
+
+    #[inline(always)]
+    fn init(&mut self, addr: u16, data: u8) {
+        match addr {
+            0x0 => self.ppu.borrow_mut().ctrl = data,
+            0x1 => self.ppu.borrow_mut().mask_register = data,
+            0x2 => self.ppu.borrow_mut().status = data,
             _ => (),
         }
     }

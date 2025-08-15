@@ -43,7 +43,7 @@ impl MemoryMap {
         self.regions[device - 1].read(addr)
     }
 
-    #[cfg(debug_assertions)]
+    #[inline]
     pub fn mem_read_debug(&self, addr: u16) -> u8 {
         let device = self.lookup[addr as usize];
 
@@ -81,12 +81,28 @@ impl MemoryMap {
         self.mem_write(addr + 1, highest_significant_bits)
     }
 
-    #[cfg(debug_assertions)]
+    #[inline]
+    fn mem_init(&mut self, addr: u16, data: u8) {
+        let device = self.lookup[addr as usize];
+
+        if device == 0 {
+            return;
+        }
+
+        self.regions[device - 1].init(addr, data)
+    }
+
     pub fn get_memory_debug(&self, range: RangeInclusive<u16>) -> Vec<u8> {
         let mut vec = Vec::<u8>::new();
         for addr in range {
             vec.push(self.mem_read_debug(addr));
         }
         vec
+    }
+
+    pub fn load(&mut self, data: &[u8]) {
+        for (addr, byte) in data.iter().enumerate() {
+            self.mem_init(addr as u16, *byte);
+        }
     }
 }
