@@ -17,7 +17,7 @@ pub const MASTER_CYCLES_PER_FRAME: u32 = 357366;
 pub struct Nes {
     pub cpu: Cpu,
     pub ppu: Rc<RefCell<Ppu>>,
-    pub cycles: u64,
+    pub cycles: u128,
     pub rom_file: Option<RomFile>,
 }
 
@@ -45,7 +45,7 @@ impl Nes {
         self.cpu.reset()
     }
 
-    pub fn run(&mut self, until: u64) {
+    pub fn run(&mut self, until: u128) {
         let mut leftover_cpu_cycles = 0;
         loop {
             if self.cycles == until {

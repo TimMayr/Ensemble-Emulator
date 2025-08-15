@@ -1,8 +1,8 @@
+use crate::mem::Ram;
 use crate::mem::memory_map::MemoryMap;
 use crate::mem::mirror_memory::MirrorMemory;
-use crate::mem::Ram;
 use crate::opcode;
-use crate::opcode::{OpCode, OPCODES_MAP};
+use crate::opcode::{OPCODES_MAP, OpCode};
 use crate::ppu::Ppu;
 use crate::rom::{RomFile, RomFileConvertible};
 use crate::savestate::CpuState;
@@ -876,8 +876,39 @@ impl Cpu {
     }
 
     fn isc(&mut self, mode: &AddressingMode) {
-        self.inc(mode);
-        self.sbc(mode);
+        let target = self.get_operand_address(mode);
+
+        //Inc
+        let target_value = self.mem_read(target);
+        let (mod_value, _) = target_value.overflowing_add(1);
+        self.mem_write(target, mod_value);
+        self.update_negative_and_zero_flags(mod_value);
+
+        //SBC
+        let target_value = self.mem_read(target);
+        let carry_in = self.processor_status & 0b00000001;
+
+        let acc_check = self.accumulator;
+
+        let value = target_value ^ 0xFF;
+        let sum = self.accumulator as u16 + value as u16 + carry_in as u16;
+        let result = sum as u8;
+
+        self.accumulator = result;
+
+        if sum > 0xFF {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        if ((acc_check ^ result) & (value ^ result) & 0x80) != 0 {
+            self.set_overflow_flag();
+        } else {
+            self.clear_overflow_flag();
+        }
+
+        self.update_negative_and_zero_flags(self.accumulator);
     }
 
     fn trigger_nmi(&mut self) {
@@ -965,10 +996,10 @@ impl Cpu {
             0xF8 => self.sed(),
             0x78 => self.sei(),
             0x00 => self.brk(),
-            0xEA => self.nop(),
+            0xEA | 0x3A => self.nop(),
             0x40 => self.rti(),
             //Illegal Opcodes
-            0xFF => self.isc(&op.addressing_mode),
+            0xFF | 0xE3 => self.isc(&op.addressing_mode),
             _ => {
                 println!(
                     "Instruction 0x{opcode:X} at address 0x{:X} isn't valid",

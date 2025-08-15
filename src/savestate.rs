@@ -53,7 +53,7 @@ pub struct SaveState {
     pub cpu: CpuState,
     pub ppu: PpuState,
     pub memory: Vec<u8>, // PRG RAM + Work RAM
-    pub cycles: u64,
+    pub cycles: u128,
     pub rom_file: RomFile,
     pub version: u16,
 }

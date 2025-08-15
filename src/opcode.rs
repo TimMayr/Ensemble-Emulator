@@ -227,6 +227,8 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             OpCode::new(0x98, "TYA", 1, 2, Implied),
             //Illegal Opcodes
             OpCode::new(0xFF, "ISC", 2, 7, AbsoluteX),
+            OpCode::new(0xE3, "ISC", 2, 7, IndirectX),
+            OpCode::new(0x3A, "NOP", 1, 2, Implied),
         ])
         .ok();
 
