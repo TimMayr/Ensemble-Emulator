@@ -1,6 +1,6 @@
 use nesamabob::cpu::Cpu;
 use nesamabob::nes::Nes;
-use nesamabob::ppu::PpuStub;
+use nesamabob::ppu::Ppu;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -10,9 +10,9 @@ fn main() {
     // println!("{:?}", rom);
 
     let cpu = Cpu::new();
-    let ppu = Rc::new(RefCell::new(PpuStub::default()));
+    let ppu = Rc::new(RefCell::new(Ppu::default()));
     let mut nes = Nes::new(cpu, ppu);
-    run_branch_01_init(&mut nes)
+    run_branch_01_remainder(&mut nes)
 }
 
 #[allow(dead_code)]

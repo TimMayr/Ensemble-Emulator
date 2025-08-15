@@ -32,8 +32,7 @@ impl Memory for MirrorMemory {
         self.base.load(data)
     }
 
-    #[cfg(debug_assertions)]
-    fn read_debug(&self, addr: u16) -> u8 {
-        self.base.read_debug(addr & self.mirror_mask)
+    fn snapshot(&self, addr: u16) -> u8 {
+        self.base.snapshot(addr & self.mirror_mask)
     }
 }

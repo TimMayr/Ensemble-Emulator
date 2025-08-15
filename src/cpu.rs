@@ -3,7 +3,7 @@ use crate::mem::memory_map::MemoryMap;
 use crate::mem::mirror_memory::MirrorMemory;
 use crate::opcode;
 use crate::opcode::{OPCODES_MAP, OpCode};
-use crate::ppu::PpuStub;
+use crate::ppu::Ppu;
 use crate::rom::{RomFile, RomFileConvertible};
 use crate::savestate::CpuState;
 use std::cell::RefCell;
@@ -41,7 +41,7 @@ pub struct Cpu {
     pub y_register: u8,
     pub processor_status: u8,
     pub memory: Box<MemoryMap>,
-    pub ppu: Option<Rc<RefCell<PpuStub>>>,
+    pub ppu: Option<Rc<RefCell<Ppu>>>,
     additional_cycles: u8,
 }
 
@@ -875,7 +875,7 @@ impl Cpu {
         match &self.ppu {
             None => (),
             Some(ppu) => {
-                if ppu.borrow_mut().poll_nmi() {
+                if ppu.borrow().poll_nmi() {
                     self.trigger_nmi();
                     println!("Nmi Triggered");
                     return 0xFF;
@@ -1026,7 +1026,7 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub fn from(state: CpuState, ppu: Rc<RefCell<PpuStub>>, rom: RomFile) -> Self {
+    pub fn from(state: CpuState, ppu: Rc<RefCell<Ppu>>, rom: RomFile) -> Self {
         OPCODES_MAP.get_or_init(opcode::init);
 
         let mut mem = MemoryMap::default();

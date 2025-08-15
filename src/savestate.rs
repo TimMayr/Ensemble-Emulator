@@ -1,9 +1,8 @@
 use crate::cpu::Cpu;
-use crate::ppu::PpuStub;
+use crate::ppu::Ppu;
 use crate::rom::RomFile;
-use bincode::{Decode, Encode, config};
+use bincode::{config, Decode, Encode};
 use serde::{Deserialize, Serialize};
-use serde_big_array::BigArray;
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 pub struct CpuState {
@@ -37,14 +36,14 @@ pub struct PpuState {
     pub nmi_requested: bool,
 }
 
-impl From<&PpuStub> for PpuState {
-    fn from(ppu: &PpuStub) -> Self {
+impl From<&Ppu> for PpuState {
+    fn from(ppu: &Ppu) -> Self {
         Self {
             cycle_counter: ppu.cycle_counter,
             status: ppu.status,
             ctrl: ppu.ctrl,
-            mask_register: ppu.mask_register,
-            nmi_requested: ppu.nmi_requested,
+            mask_register: ppu.mask,
+            nmi_requested: ppu.nmi_requested.get(),
         }
     }
 }
@@ -53,8 +52,7 @@ impl From<&PpuStub> for PpuState {
 pub struct SaveState {
     pub cpu: CpuState,
     pub ppu: PpuState,
-    #[serde(with = "BigArray")]
-    pub memory: [u8; 0x10000], // PRG RAM + Work RAM
+    pub memory: Vec<u8>, // PRG RAM + Work RAM
     pub cycles: u64,
     pub rom_file: RomFile,
 }

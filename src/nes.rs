@@ -1,7 +1,7 @@
 use crate::cpu::Cpu;
 use crate::mem::mirror_memory::MirrorMemory;
 use crate::mem::ppu_registers::PpuRegisters;
-use crate::ppu::PpuStub;
+use crate::ppu::Ppu;
 use crate::rom::{RomFile, RomFileConvertible};
 use crate::savestate;
 use crate::savestate::{CpuState, PpuState, SaveState};
@@ -16,16 +16,16 @@ pub const MASTER_CYCLES_PER_FRAME: i32 = 357366;
 
 pub struct Nes {
     pub cpu: Cpu,
-    pub ppu: Rc<RefCell<PpuStub>>,
+    pub ppu: Rc<RefCell<Ppu>>,
     pub cycles: u64,
     pub rom_file: Option<RomFile>,
 }
 
 impl Nes {
-    pub fn new(cpu: Cpu, ppu_stub: Rc<RefCell<PpuStub>>) -> Self {
+    pub fn new(cpu: Cpu, ppu: Rc<RefCell<Ppu>>) -> Self {
         Self {
             cpu,
-            ppu: ppu_stub,
+            ppu,
             cycles: 0,
             rom_file: None,
         }
@@ -75,17 +75,16 @@ impl Nes {
     }
 
     pub fn save_state(&self, path: &str) {
+        let ppu_state = {
+            let ppu_ref = self.ppu.borrow();
+            PpuState::from(ppu_ref.deref())
+        };
+
         let state = SaveState {
             cpu: CpuState::from(&self.cpu),
-            ppu: PpuState::from(self.ppu.borrow().deref()),
+            ppu: ppu_state,
             cycles: self.cycles,
-            memory: self
-                .cpu
-                .memory
-                .get_memory_debug(0x00..=0xFFFF)
-                .as_slice()
-                .try_into()
-                .expect("Wrong memory length"),
+            memory: self.cpu.memory.get_memory_debug(0x00..=0xFFFF),
             rom_file: self.rom_file.as_ref().unwrap().clone(),
         };
 
@@ -96,7 +95,7 @@ impl Nes {
         let state = savestate::load_state(path);
 
         self.rom_file = Some(state.rom_file);
-        self.ppu = Rc::new(RefCell::new(PpuStub::from(state.ppu)));
+        self.ppu = Rc::new(RefCell::new(Ppu::from(state.ppu)));
         self.cpu = Cpu::from(
             state.cpu,
             self.ppu.clone(),

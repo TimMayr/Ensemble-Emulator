@@ -23,5 +23,4 @@ split-debuginfo = "unpacked"  # Ensures symbols are separate
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-serde-big-array = "0.5"
 bincode = { version = "2", features = ["serde"] } # Latest version

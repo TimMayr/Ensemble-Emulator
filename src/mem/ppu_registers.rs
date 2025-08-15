@@ -1,15 +1,15 @@
 use crate::mem::Memory;
-use crate::ppu::PpuStub;
+use crate::ppu::Ppu;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct PpuRegisters {
-    ppu: Rc<RefCell<PpuStub>>,
+    ppu: Rc<RefCell<Ppu>>,
 }
 
 impl PpuRegisters {
-    pub fn new(ppu: Rc<RefCell<PpuStub>>) -> Self {
+    pub fn new(ppu: Rc<RefCell<Ppu>>) -> Self {
         Self { ppu }
     }
 }
@@ -18,9 +18,18 @@ impl Memory for PpuRegisters {
     #[inline(always)]
     fn read(&self, addr: u16) -> u8 {
         match addr {
-            0x0 => self.ppu.borrow().get_ppu_ctrl(),
-            0x1 => self.ppu.borrow().get_mask_register(),
-            0x2 => self.ppu.borrow_mut().get_ppu_status(),
+            0x0 => {
+                let ppu = self.ppu.borrow();
+                ppu.get_ppu_ctrl()
+            }
+            0x1 => {
+                let ppu = self.ppu.borrow();
+                ppu.get_mask_register()
+            }
+            0x2 => {
+                let mut ppu = self.ppu.borrow_mut();
+                ppu.get_ppu_status()
+            }
             _ => 0,
         }
     }
@@ -28,8 +37,14 @@ impl Memory for PpuRegisters {
     #[inline(always)]
     fn write(&mut self, addr: u16, data: u8) {
         match addr {
-            0x0 => self.ppu.borrow_mut().set_ppu_ctrl(data),
-            0x1 => self.ppu.borrow_mut().set_mask_register(data),
+            0x0 => {
+                let mut ppu = self.ppu.borrow_mut();
+                ppu.set_ppu_ctrl(data)
+            }
+            0x1 => {
+                let mut ppu = self.ppu.borrow_mut();
+                ppu.set_mask_register(data)
+            }
             _ => (),
         }
     }
@@ -37,21 +52,29 @@ impl Memory for PpuRegisters {
     #[inline(always)]
     fn init(&mut self, addr: u16, data: u8) {
         match addr {
-            0x0 => self.ppu.borrow_mut().ctrl = data,
-            0x1 => self.ppu.borrow_mut().mask_register = data,
-            0x2 => self.ppu.borrow_mut().status = data,
+            0x0 => {
+                let mut ppu = self.ppu.borrow_mut();
+                ppu.ctrl = data;
+            }
+            0x1 => {
+                let mut ppu = self.ppu.borrow_mut();
+                ppu.mask = data;
+            }
+            0x2 => {
+                let mut ppu = self.ppu.borrow_mut();
+                ppu.status = data;
+            }
             _ => (),
         }
     }
 
     fn load(&mut self, _: Box<[u8]>) {}
 
-    #[cfg(debug_assertions)]
-    fn read_debug(&self, addr: u16) -> u8 {
+    fn snapshot(&self, addr: u16) -> u8 {
         match addr {
-            0x0 => self.ppu.borrow().get_ppu_ctrl(),
-            0x1 => self.ppu.borrow().get_mask_register(),
-            0x2 => self.ppu.borrow().get_ppu_status_debug(),
+            0x0 => self.ppu.borrow().ctrl,
+            0x1 => self.ppu.borrow().mask,
+            0x2 => self.ppu.borrow().status,
             _ => 0,
         }
     }

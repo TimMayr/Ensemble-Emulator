@@ -1,5 +1,5 @@
 pub mod cpu;
-mod mem;
+pub mod mem;
 pub mod nes;
 pub mod opcode;
 pub mod ppu;

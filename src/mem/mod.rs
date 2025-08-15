@@ -10,7 +10,7 @@ pub trait Memory: Debug {
     fn init(&mut self, addr: u16, data: u8);
     fn load(&mut self, data: Box<[u8]>);
 
-    fn read_debug(&self, addr: u16) -> u8 {
+    fn snapshot(&self, addr: u16) -> u8 {
         self.read(addr)
     }
 }

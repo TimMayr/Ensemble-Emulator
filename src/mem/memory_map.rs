@@ -51,7 +51,7 @@ impl MemoryMap {
             return 0x00u8;
         }
 
-        self.regions[device - 1].read_debug(addr)
+        self.regions[device - 1].snapshot(addr)
     }
 
     #[inline]

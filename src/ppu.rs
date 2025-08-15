@@ -1,29 +1,30 @@
 use crate::nes::CPU_CYCLES_PER_FRAME;
 use crate::savestate::PpuState;
+use std::cell::Cell;
 
 #[derive(Debug, Clone)]
-pub struct PpuStub {
+pub struct Ppu {
     pub cycle_counter: u64,
     pub status: u8,
-    pub mask_register: u8,
+    pub mask: u8,
     pub ctrl: u8,
-    pub nmi_requested: bool,
+    pub nmi_requested: Cell<bool>,
 }
 
-impl Default for PpuStub {
+impl Default for Ppu {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl PpuStub {
+impl Ppu {
     pub fn new() -> Self {
         Self {
             status: 0x00,
             cycle_counter: 0,
             ctrl: 0,
-            mask_register: 0,
-            nmi_requested: false,
+            mask: 0,
+            nmi_requested: Cell::new(false),
         }
     }
 
@@ -37,7 +38,7 @@ impl PpuStub {
                 // Just entered VBlank
                 self.status |= 0x80;
                 if self.ctrl & 0x80 != 0 {
-                    self.nmi_requested = true;
+                    self.nmi_requested.set(true);
                 }
             }
         } else {
@@ -51,12 +52,8 @@ impl PpuStub {
         result
     }
 
-    pub fn get_ppu_status_debug(&self) -> u8 {
-        self.status
-    }
-
     pub fn get_ppu_ctrl(&self) -> u8 {
-        self.status
+        self.ctrl
     }
 
     pub fn set_ppu_ctrl(&mut self, value: u8) {
@@ -64,16 +61,16 @@ impl PpuStub {
     }
 
     pub fn get_mask_register(&self) -> u8 {
-        self.mask_register
+        self.mask
     }
 
     pub fn set_mask_register(&mut self, value: u8) {
-        self.mask_register = value;
+        self.mask = value;
     }
 
-    pub fn poll_nmi(&mut self) -> bool {
-        if self.nmi_requested {
-            self.nmi_requested = false;
+    pub fn poll_nmi(&self) -> bool {
+        if self.nmi_requested.get() {
+            self.nmi_requested.set(false);
             return true;
         }
 
@@ -81,14 +78,14 @@ impl PpuStub {
     }
 }
 
-impl From<PpuState> for PpuStub {
+impl From<PpuState> for Ppu {
     fn from(state: PpuState) -> Self {
         Self {
             cycle_counter: state.cycle_counter,
             status: state.status,
             ctrl: state.ctrl,
-            mask_register: state.mask_register,
-            nmi_requested: state.nmi_requested,
+            mask: state.mask_register,
+            nmi_requested: Cell::new(state.nmi_requested),
         }
     }
 }
