@@ -1,8 +1,8 @@
-use crate::mem::Ram;
 use crate::mem::memory_map::MemoryMap;
 use crate::mem::mirror_memory::MirrorMemory;
+use crate::mem::Ram;
 use crate::opcode;
-use crate::opcode::{OPCODES_MAP, OpCode};
+use crate::opcode::{OpCode, OPCODES_MAP};
 use crate::ppu::Ppu;
 use crate::rom::{RomFile, RomFileConvertible};
 use crate::savestate::CpuState;
@@ -108,10 +108,14 @@ impl Cpu {
     pub fn stack_pop_u16(&mut self) -> u16 {
         self.stack_pointer += 2;
         self.mem_read_u16(STACK_START_ADDRESS + self.stack_pointer as u16 - 1)
+            .swap_bytes()
     }
 
     pub fn stack_push_u16(&mut self, data: u16) {
-        self.mem_write_u16(STACK_START_ADDRESS + self.stack_pointer as u16 - 1, data);
+        self.mem_write_u16(
+            STACK_START_ADDRESS + self.stack_pointer as u16 - 1,
+            data.swap_bytes(),
+        );
         self.stack_pointer -= 2;
     }
 
@@ -124,7 +128,7 @@ impl Cpu {
     }
 
     fn clear_negative_flag(&mut self) {
-        self.processor_status &= 0b01111111
+        self.processor_status &= 0b0111_1111
     }
 
     fn set_negative_flag(&mut self) {
@@ -177,7 +181,7 @@ impl Cpu {
     }
 
     fn clear_interrupt_disable(&mut self) {
-        self.processor_status &= 0b1011_1011;
+        self.processor_status &= 0b1111_1011;
     }
 
     fn clear_decimal_flag(&mut self) {
@@ -202,20 +206,28 @@ impl Cpu {
 
     fn get_operand_address(&mut self, addressing_mode: &AddressingMode) -> u16 {
         match addressing_mode {
-            AddressingMode::Immediate => self.program_counter,
-            AddressingMode::ZeroPage => self.read_next_byte() as u16,
+            AddressingMode::Immediate => {
+                let res = self.program_counter;
+                self.program_counter = self.program_counter.wrapping_add(1);
+                res
+            }
+            AddressingMode::ZeroPage => self.fetch_next_byte() as u16,
             AddressingMode::ZeroPageX => {
-                let pos = self.read_next_byte();
+                let pos = self.fetch_next_byte();
                 pos.wrapping_add(self.x_register) as u16
             }
             AddressingMode::ZeroPageY => {
-                let pos = self.read_next_byte();
+                let pos = self.fetch_next_byte();
                 pos.wrapping_add(self.y_register) as u16
             }
-            AddressingMode::Relative => self.program_counter,
-            AddressingMode::Absolute => self.read_next_two_bytes(),
+            AddressingMode::Relative => {
+                let res = self.program_counter;
+                self.program_counter = self.program_counter.wrapping_add(1);
+                res
+            }
+            AddressingMode::Absolute => self.fetch_next_bytes_u16(),
             AddressingMode::AbsoluteX => {
-                let base = self.read_next_two_bytes();
+                let base = self.fetch_next_bytes_u16();
                 let pos = base + self.x_register as u16;
 
                 if Cpu::crosses_page_boundary_u8(base, self.x_register) {
@@ -225,7 +237,7 @@ impl Cpu {
                 pos
             }
             AddressingMode::AbsoluteY => {
-                let base = self.read_next_two_bytes();
+                let base = self.fetch_next_bytes_u16();
                 let pos = base + self.y_register as u16;
 
                 if Cpu::crosses_page_boundary_u8(base, self.y_register) {
@@ -235,16 +247,16 @@ impl Cpu {
                 pos
             }
             AddressingMode::Indirect => {
-                let base = self.read_next_two_bytes();
+                let base = self.fetch_next_bytes_u16();
                 self.mem_read_u16(base)
             }
             AddressingMode::IndirectX => {
-                let base = self.read_next_byte();
+                let base = self.fetch_next_byte();
                 let lookup_addr = base.wrapping_add(self.x_register);
                 self.mem_read_u16(lookup_addr as u16)
             }
             AddressingMode::IndirectY => {
-                let lookup_addr = self.read_next_byte();
+                let lookup_addr = self.fetch_next_byte();
                 let addr = self.mem_read_u16(lookup_addr as u16);
 
                 if Self::crosses_page_boundary_u8(addr, self.y_register) {
@@ -266,12 +278,16 @@ impl Cpu {
         (base & 0xFF00) != (target & 0xFF00)
     }
 
-    fn read_next_byte(&self) -> u8 {
-        self.mem_read(self.program_counter)
+    fn fetch_next_byte(&mut self) -> u8 {
+        let res = self.mem_read(self.program_counter);
+        self.program_counter += 1;
+        res
     }
 
-    fn read_next_two_bytes(&self) -> u16 {
-        self.mem_read_u16(self.program_counter)
+    fn fetch_next_bytes_u16(&mut self) -> u16 {
+        let res = self.mem_read_u16(self.program_counter);
+        self.program_counter += 2;
+        res
     }
 
     fn shift_left(&mut self, data: u8) -> u8 {
@@ -576,12 +592,12 @@ impl Cpu {
 
     fn jsr(&mut self, mode: &AddressingMode) {
         let target_address = self.get_operand_address(mode);
-        self.stack_push_u16(self.program_counter + 1);
+        self.stack_push_u16(self.program_counter.wrapping_sub(1));
         self.program_counter = target_address;
     }
 
     fn rts(&mut self) {
-        let pc = self.stack_pop_u16() + 1;
+        let pc = self.stack_pop_u16().wrapping_add(1);
         self.program_counter = pc;
     }
 
@@ -598,8 +614,9 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
-                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
+        } else {
+            self.program_counter = self.program_counter.wrapping_add(1);
         }
     }
 
@@ -616,8 +633,9 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
-                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
+        } else {
+            self.program_counter = self.program_counter.wrapping_add(1);
         }
     }
 
@@ -634,8 +652,9 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
-                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
+        } else {
+            self.program_counter = self.program_counter.wrapping_add(1);
         }
     }
 
@@ -652,8 +671,9 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
-                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
+        } else {
+            self.program_counter = self.program_counter.wrapping_add(1);
         }
     }
 
@@ -670,8 +690,9 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
-                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
+        } else {
+            self.program_counter = self.program_counter.wrapping_add(1);
         }
     }
 
@@ -688,8 +709,9 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
-                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
+        } else {
+            self.program_counter = self.program_counter.wrapping_add(1);
         }
     }
 
@@ -706,8 +728,9 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
-                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
+        } else {
+            self.program_counter = self.program_counter.wrapping_add(1);
         }
     }
 
@@ -724,8 +747,9 @@ impl Cpu {
 
             self.program_counter = self
                 .program_counter
-                .wrapping_add(1)
                 .wrapping_add(target_value as i16 as u16);
+        } else {
+            self.program_counter = self.program_counter.wrapping_add(1);
         }
     }
 
@@ -893,7 +917,6 @@ impl Cpu {
         let _memory = self.memory.get_memory_debug(RangeInclusive::new(0, 0xFFFF));
 
         self.program_counter += 1u16;
-        let pc_check = self.program_counter;
 
         match op.opcode {
             0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(&op.addressing_mode),
@@ -963,10 +986,6 @@ impl Cpu {
             }
         }
 
-        if self.program_counter == pc_check {
-            self.program_counter += op.bytes as u16 - 1 + self.additional_cycles as u16;
-        }
-
         let opcode = self.mem_read(self.program_counter);
         let check_op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
 
@@ -974,7 +993,7 @@ impl Cpu {
             println!("Execution resulted in invalid pc")
         }
 
-        op.cycles
+        op.cycles + self.additional_cycles
     }
 
     pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
