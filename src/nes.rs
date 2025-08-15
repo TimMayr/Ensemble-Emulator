@@ -12,7 +12,7 @@ use std::time::Duration;
 
 pub const CPU_CYCLES_PER_FRAME: u16 = 29780;
 pub const FRAME_DURATION: Duration = Duration::from_nanos(16_666_667);
-pub const MASTER_CYCLES_PER_FRAME: i32 = 357366;
+pub const MASTER_CYCLES_PER_FRAME: u32 = 357366;
 
 pub struct Nes {
     pub cpu: Cpu,
@@ -86,6 +86,7 @@ impl Nes {
             cycles: self.cycles,
             memory: self.cpu.memory.get_memory_debug(0x00..=0xFFFF),
             rom_file: self.rom_file.as_ref().unwrap().clone(),
+            version: 1,
         };
 
         savestate::save_state(state, path);

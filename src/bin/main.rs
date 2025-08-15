@@ -12,7 +12,7 @@ fn main() {
     let cpu = Cpu::new();
     let ppu = Rc::new(RefCell::new(Ppu::default()));
     let mut nes = Nes::new(cpu, ppu);
-    run_branch_01_remainder(&mut nes)
+    run_branch_01_init(&mut nes)
 }
 
 #[allow(dead_code)]

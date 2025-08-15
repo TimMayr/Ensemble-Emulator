@@ -55,6 +55,7 @@ pub struct SaveState {
     pub memory: Vec<u8>, // PRG RAM + Work RAM
     pub cycles: u64,
     pub rom_file: RomFile,
+    pub version: u16,
 }
 
 pub fn save_state(state: SaveState, path: &str) {

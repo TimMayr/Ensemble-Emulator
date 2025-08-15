@@ -7,10 +7,10 @@ use crate::ppu::Ppu;
 use crate::rom::{RomFile, RomFileConvertible};
 use crate::savestate::CpuState;
 use std::cell::RefCell;
-#[cfg(debug_assertions)]
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
+const INTERNAL_RAM_MEMORY_RANGE: RangeInclusive<u16> = 0x0..=0x1FFF;
 const INTERNAL_RAM_SIZE: u16 = 0x800;
 const STACK_START: u8 = 0xFF;
 
@@ -144,10 +144,10 @@ impl Cpu {
     }
 
     fn update_negative_flag(&mut self, result: u8) {
-        if result & 0b1000_0000 != 0 {
-            self.processor_status |= 0b1000_0000;
+        if result & 0x80 != 0 {
+            self.set_negative_flag();
         } else {
-            self.processor_status &= 0b0111_1111;
+            self.clear_negative_flag();
         }
     }
 
@@ -176,23 +176,19 @@ impl Cpu {
         self.processor_status |= 0b00000100;
     }
 
-    fn set_decimal_flag(&mut self) {
-        self.processor_status |= 0b00001000;
-    }
+    fn set_decimal_flag(&mut self) {}
 
     fn clear_interrupt_disable(&mut self) {
         self.processor_status &= 0b1111_1011;
     }
 
-    fn clear_decimal_flag(&mut self) {
-        self.processor_status &= 0b1111_0111;
-    }
+    fn clear_decimal_flag(&mut self) {}
 
-    pub fn get_zero_flag(&mut self) -> bool {
+    pub fn get_zero_flag(&self) -> bool {
         (self.processor_status & 0b0000_0010) == 0b0000_0010
     }
 
-    pub fn get_negative_flag(&mut self) -> bool {
+    pub fn get_negative_flag(&self) -> bool {
         (self.processor_status & 0b1000_0000) == 0b1000_0000
     }
 
@@ -826,7 +822,7 @@ impl Cpu {
             self.clear_carry_flag();
         }
 
-        if (self.accumulator.overflowing_sub(target_value).0) & 0b10000000 != 0 {
+        if (self.accumulator.overflowing_sub(target_value).0) & 0x80 != 0 {
             self.set_negative_flag();
         } else {
             self.clear_negative_flag();
@@ -849,7 +845,7 @@ impl Cpu {
             self.clear_carry_flag();
         }
 
-        if (self.x_register.overflowing_sub(target_value).0) & 0b10000000 != 0 {
+        if (self.x_register.overflowing_sub(target_value).0) & 0x80 != 0 {
             self.set_negative_flag();
         } else {
             self.clear_negative_flag();
@@ -872,7 +868,7 @@ impl Cpu {
             self.clear_carry_flag();
         }
 
-        if (self.y_register.overflowing_sub(target_value).0) & 0b10000000 != 0 {
+        if (self.y_register.overflowing_sub(target_value).0) & 0x80 != 0 {
             self.set_negative_flag();
         } else {
             self.clear_negative_flag();
@@ -896,15 +892,10 @@ impl Cpu {
     }
 
     pub fn step(&mut self) -> u8 {
-        match &self.ppu {
-            None => (),
-            Some(ppu) => {
-                if ppu.borrow().poll_nmi() {
-                    self.trigger_nmi();
-                    println!("Nmi Triggered");
-                    return 0xFF;
-                }
-            }
+        if let Some(ppu) = &self.ppu
+            && ppu.borrow().poll_nmi()
+        {
+            self.trigger_nmi();
         }
 
         self.additional_cycles = 0;
@@ -1050,10 +1041,10 @@ impl Cpu {
 
         let mut mem = MemoryMap::default();
         mem.add_memory(
-            0x0..=0x1FFF,
+            INTERNAL_RAM_MEMORY_RANGE,
             Box::new(MirrorMemory::new(
                 Box::new(Ram::new(INTERNAL_RAM_SIZE as usize)),
-                0x07FF,
+                INTERNAL_RAM_SIZE - 1,
             )),
         );
 
