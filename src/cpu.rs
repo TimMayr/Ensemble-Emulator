@@ -1,8 +1,8 @@
-use crate::mem::Ram;
 use crate::mem::memory_map::MemoryMap;
 use crate::mem::mirror_memory::MirrorMemory;
+use crate::mem::Ram;
 use crate::opcode;
-use crate::opcode::{OPCODES_MAP, OpCode};
+use crate::opcode::{OpCode, OPCODES_MAP};
 use crate::ppu::Ppu;
 use crate::rom::{RomFile, RomFileConvertible};
 use crate::savestate::CpuState;
@@ -884,7 +884,7 @@ impl Cpu {
         self.stack_push_u16(self.program_counter);
         self.stack_push(self.processor_status | 0b00010000);
         self.sei();
-        self.program_counter = self.mem_read_u16(0xFFFA) - 1
+        self.program_counter = self.mem_read_u16(0xFFFA);
     }
 
     pub fn reset(&mut self) {
@@ -896,6 +896,7 @@ impl Cpu {
             && ppu.borrow().poll_nmi()
         {
             self.trigger_nmi();
+            println!("Nmi Triggered");
         }
 
         self.additional_cycles = 0;

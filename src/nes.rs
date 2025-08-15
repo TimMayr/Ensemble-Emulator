@@ -45,18 +45,18 @@ impl Nes {
         self.cpu.reset()
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self, until: u64) {
         let mut leftover_cpu_cycles = 0;
         loop {
+            if self.cycles == until {
+                return;
+            }
+
             self.cycles += 1;
 
             if self.cycles.is_multiple_of(12) {
                 if leftover_cpu_cycles == 0 {
                     leftover_cpu_cycles = self.cpu.step();
-                }
-
-                if leftover_cpu_cycles == 0xFF {
-                    return;
                 }
 
                 leftover_cpu_cycles -= 1;
