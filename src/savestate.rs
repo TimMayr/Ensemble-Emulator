@@ -1,7 +1,7 @@
 use crate::cpu::Cpu;
 use crate::ppu::Ppu;
 use crate::rom::RomFile;
-use bincode::{Decode, Encode, config};
+use bincode::{config, Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
@@ -12,6 +12,7 @@ pub struct CpuState {
     pub x_register: u8,
     pub y_register: u8,
     pub processor_status: u8,
+    pub memory: Vec<u8>, // PRG RAM + Work RAM
 }
 
 impl From<&Cpu> for CpuState {
@@ -23,6 +24,7 @@ impl From<&Cpu> for CpuState {
             x_register: cpu.x_register,
             y_register: cpu.y_register,
             processor_status: cpu.processor_status,
+            memory: cpu.memory.get_memory_debug(0x0..=0x07FF),
         }
     }
 }
@@ -30,20 +32,42 @@ impl From<&Cpu> for CpuState {
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 pub struct PpuState {
     pub cycle_counter: u64,
-    pub status: u8,
-    pub ctrl: u8,
+    pub status_register: u8,
+    pub ctrl_register: u8,
     pub mask_register: u8,
     pub nmi_requested: bool,
+    pub memory: Vec<u8>,
+    pub oam_data_register: u8,
+    pub ppu_x_scroll_register: u8,
+    pub ppu_y_scroll_register: u8,
+    pub ppu_addr_register: u16,
+    pub ppu_data_register: u8,
+    pub oam_addr_register: u8,
+    pub write_latch: bool,
+    pub oam_dma_register: u8,
+    pub ppu_data_buffer: u8,
+    pub t_register: u16,
 }
 
 impl From<&Ppu> for PpuState {
     fn from(ppu: &Ppu) -> Self {
         Self {
             cycle_counter: ppu.cycle_counter,
-            status: ppu.status,
-            ctrl: ppu.ctrl,
-            mask_register: ppu.mask,
+            status_register: ppu.status_register,
+            ctrl_register: ppu.ctrl_register,
+            mask_register: ppu.mask_register,
             nmi_requested: ppu.nmi_requested.get(),
+            memory: ppu.memory.get_memory_debug(0x0..=0x3FFF),
+            oam_data_register: ppu.oam_data_register,
+            ppu_x_scroll_register: ppu.ppu_x_scroll_register,
+            ppu_y_scroll_register: ppu.ppu_y_scroll_register,
+            ppu_addr_register: ppu.vram_addr_register,
+            ppu_data_register: ppu.ppu_data_register,
+            oam_addr_register: ppu.oam_addr_register,
+            write_latch: ppu.write_latch,
+            oam_dma_register: ppu.oam_dma_register,
+            ppu_data_buffer: ppu.ppu_data_buffer,
+            t_register: ppu.t_register,
         }
     }
 }
@@ -52,7 +76,6 @@ impl From<&Ppu> for PpuState {
 pub struct SaveState {
     pub cpu: CpuState,
     pub ppu: PpuState,
-    pub memory: Vec<u8>, // PRG RAM + Work RAM
     pub cycles: u128,
     pub rom_file: RomFile,
     pub version: u16,
