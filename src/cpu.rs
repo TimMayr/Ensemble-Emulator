@@ -1,8 +1,8 @@
-use crate::mem::Ram;
 use crate::mem::memory_map::MemoryMap;
 use crate::mem::mirror_memory::MirrorMemory;
+use crate::mem::Ram;
 use crate::opcode;
-use crate::opcode::{OPCODES_MAP, OpCode};
+use crate::opcode::{OpCode, OPCODES_MAP};
 use crate::ppu::Ppu;
 use crate::rom::{RomFile, RomFileConvertible};
 use crate::savestate::CpuState;
@@ -10,11 +10,11 @@ use std::cell::RefCell;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
-const INTERNAL_RAM_MEMORY_RANGE: RangeInclusive<u16> = 0x0..=0x1FFF;
-const INTERNAL_RAM_SIZE: u16 = 0x800;
-const STACK_START: u8 = 0xFF;
+pub const INTERNAL_RAM_MEMORY_RANGE: RangeInclusive<u16> = 0x0..=0x1FFF;
+pub const INTERNAL_RAM_SIZE: u16 = 0x800;
+pub const STACK_START: u8 = 0xFF;
 
-const STACK_START_ADDRESS: u16 = 0x0100;
+pub const STACK_START_ADDRESS: u16 = 0x0100;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum AddressingMode {
@@ -33,6 +33,7 @@ pub enum AddressingMode {
     IndirectY,
 }
 
+#[derive(Debug)]
 pub struct Cpu {
     pub program_counter: u16,
     pub stack_pointer: u8,
@@ -47,17 +48,7 @@ pub struct Cpu {
 
 impl Default for Cpu {
     fn default() -> Self {
-        let mut mem = MemoryMap::default();
-        mem.add_memory(
-            0x0..=0x1FFF,
-            Box::new(MirrorMemory::new(
-                Box::new(Ram::new(INTERNAL_RAM_SIZE as usize)),
-                0x07FF,
-            )),
-        );
-
-        mem.add_memory(0x4000..=0x4017, Box::new(Ram::new(0x18)));
-        mem.add_memory(0x4018..=0x401F, Box::new(Ram::new(0x8)));
+        let mem = Self::get_default_memory_map();
 
         Self {
             program_counter: 0,
@@ -1055,6 +1046,24 @@ impl Cpu {
             _ => {}
         }
     }
+
+    fn get_default_memory_map() -> MemoryMap {
+        let mut mem = MemoryMap::default();
+        //Internal Ram
+        mem.add_memory(
+            INTERNAL_RAM_MEMORY_RANGE,
+            Box::new(MirrorMemory::new(
+                Box::new(Ram::new(INTERNAL_RAM_SIZE as usize)),
+                INTERNAL_RAM_SIZE - 1,
+            )),
+        );
+
+        //APU Registers
+        mem.add_memory(0x4000..=0x4017, Box::new(Ram::new(0x18)));
+        //Unused APU Registers
+        mem.add_memory(0x4018..=0x401F, Box::new(Ram::new(0x8)));
+        mem
+    }
 }
 
 #[cfg(test)]
@@ -1068,20 +1077,8 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub fn from(state: CpuState, ppu: Rc<RefCell<Ppu>>, rom: RomFile) -> Self {
+    pub fn from(state: &CpuState, ppu: Rc<RefCell<Ppu>>, rom: &RomFile) -> Self {
         OPCODES_MAP.get_or_init(opcode::init);
-
-        let mut mem = MemoryMap::default();
-        mem.add_memory(
-            INTERNAL_RAM_MEMORY_RANGE,
-            Box::new(MirrorMemory::new(
-                Box::new(Ram::new(INTERNAL_RAM_SIZE as usize)),
-                INTERNAL_RAM_SIZE - 1,
-            )),
-        );
-
-        mem.add_memory(0x4000..=0x4017, Box::new(Ram::new(0x18)));
-        mem.add_memory(0x4018..=0x401F, Box::new(Ram::new(0x8)));
 
         let mut cpu = Self {
             program_counter: state.program_counter,
@@ -1090,12 +1087,12 @@ impl Cpu {
             x_register: state.x_register,
             y_register: state.y_register,
             processor_status: state.processor_status,
-            memory: Box::new(mem),
+            memory: Box::new(Self::get_default_memory_map()),
             ppu: Some(ppu),
             additional_cycles: 0,
         };
 
-        cpu.load_rom(&rom);
+        cpu.load_rom(rom);
 
         cpu
     }

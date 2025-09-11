@@ -3,6 +3,7 @@ use std::ops::RangeInclusive;
 
 const MEMORY_SIZE: u16 = 0xFFFF;
 
+#[derive(Debug)]
 pub struct MemoryMap {
     pub regions: Vec<Box<dyn Memory>>,
     lookup: Box<[usize]>,
