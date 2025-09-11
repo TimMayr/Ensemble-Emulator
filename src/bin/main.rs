@@ -1,4 +1,4 @@
-use nesamabob::nes::{Nes, MASTER_CYCLES_PER_FRAME};
+use nesamabob::nes::{MASTER_CYCLES_PER_FRAME, Nes};
 
 #[allow(dead_code)]
 fn main() {
