@@ -1,8 +1,8 @@
+use crate::mem::Ram;
 use crate::mem::memory_map::MemoryMap;
 use crate::mem::mirror_memory::MirrorMemory;
-use crate::mem::Ram;
 use crate::opcode;
-use crate::opcode::{OpCode, OPCODES_MAP};
+use crate::opcode::{OPCODES_MAP, OpCode};
 use crate::ppu::Ppu;
 use crate::rom::{RomFile, RomFileConvertible};
 use crate::savestate::CpuState;
@@ -13,8 +13,15 @@ use std::rc::Rc;
 pub const INTERNAL_RAM_MEMORY_RANGE: RangeInclusive<u16> = 0x0..=0x1FFF;
 pub const INTERNAL_RAM_SIZE: u16 = 0x800;
 pub const STACK_START: u8 = 0xFF;
-
 pub const STACK_START_ADDRESS: u16 = 0x0100;
+
+const NEGATIVE_BIT: u8 = 0x80;
+const CARRY_BIT: u8 = 0x1;
+const ZERO_BIT: u8 = 0x2;
+const OVERFLOW_BIT: u8 = 0x40;
+const IRQ_BIT: u8 = 0x4;
+const UNUSED_BIT: u8 = 0x10;
+const BREAK_BIT: u8 = 0x20;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum AddressingMode {
@@ -64,13 +71,7 @@ impl Default for Cpu {
     }
 }
 
-const NEGATIVE_BIT: u8 = 0x80;
-const CARRY_BIT: u8 = 0x1;
-const ZERO_BIT: u8 = 0x2;
-const OVERFLOW_BIT: u8 = 0x40;
-const IRQ_BIT: u8 = 0x4;
-const UNUSED_BIT: u8 = 0x10;
-const BREAK_BIT: u8 = 0x20;
+const IRQ_VECTOR_ADDR: u16 = 0xFFFE;
 
 impl Cpu {
     pub fn new() -> Self {
@@ -143,7 +144,7 @@ impl Cpu {
     }
 
     fn update_negative_flag(&mut self, result: u8) {
-        if result & 0x80 != 0 {
+        if result & NEGATIVE_BIT != 0 {
             self.set_negative_flag();
         } else {
             self.clear_negative_flag();
@@ -570,7 +571,7 @@ impl Cpu {
         self.stack_push_u16(self.program_counter + 1);
         self.php();
 
-        self.program_counter = self.mem_read_u16(0xFFFE);
+        self.program_counter = self.mem_read_u16(IRQ_VECTOR_ADDR);
     }
 
     fn nop(&mut self) {}
@@ -768,7 +769,7 @@ impl Cpu {
         }
 
         // Overflow Flag
-        if (!(acc_check ^ target_value) & (acc_check ^ result)) & 0x80 != 0 {
+        if (!(acc_check ^ target_value) & (acc_check ^ result)) & NEGATIVE_BIT != 0 {
             self.set_overflow_flag();
         } else {
             self.clear_overflow_flag();
@@ -796,7 +797,7 @@ impl Cpu {
             self.clear_carry_flag();
         }
 
-        if ((acc_check ^ result) & (value ^ result) & 0x80) != 0 {
+        if ((acc_check ^ result) & (value ^ result) & NEGATIVE_BIT) != 0 {
             self.set_overflow_flag();
         } else {
             self.clear_overflow_flag();
@@ -821,7 +822,7 @@ impl Cpu {
             self.clear_carry_flag();
         }
 
-        if (self.accumulator.overflowing_sub(target_value).0) & 0x80 != 0 {
+        if (self.accumulator.overflowing_sub(target_value).0) & NEGATIVE_BIT != 0 {
             self.set_negative_flag();
         } else {
             self.clear_negative_flag();
@@ -844,7 +845,7 @@ impl Cpu {
             self.clear_carry_flag();
         }
 
-        if (self.x_register.overflowing_sub(target_value).0) & 0x80 != 0 {
+        if (self.x_register.overflowing_sub(target_value).0) & NEGATIVE_BIT != 0 {
             self.set_negative_flag();
         } else {
             self.clear_negative_flag();

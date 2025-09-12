@@ -38,7 +38,7 @@ impl MemoryMap {
         let device = self.lookup[addr as usize];
 
         if device == 0 {
-            return 0x00u8;
+            return 0;
         }
 
         self.regions[device - 1].read(addr)
@@ -49,7 +49,7 @@ impl MemoryMap {
         let device = self.lookup[addr as usize];
 
         if device == 0 {
-            return 0x00u8;
+            return 0;
         }
 
         self.regions[device - 1].snapshot(addr)
