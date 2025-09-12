@@ -1,7 +1,7 @@
 use crate::cpu::Cpu;
 use crate::ppu::Ppu;
 use crate::rom::RomFile;
-use bincode::{Decode, Encode, config};
+use bincode::{config, Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
@@ -12,6 +12,7 @@ pub struct CpuState {
     pub x_register: u8,
     pub y_register: u8,
     pub processor_status: u8,
+    pub additional_cycles: u8,
     pub memory: Vec<u8>, // PRG RAM + Work RAM
 }
 
@@ -24,6 +25,7 @@ impl From<&Cpu> for CpuState {
             x_register: cpu.x_register,
             y_register: cpu.y_register,
             processor_status: cpu.processor_status,
+            additional_cycles: cpu.additional_cycles,
             memory: cpu.memory.get_memory_debug(0x0..=0x07FF),
         }
     }

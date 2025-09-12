@@ -1,8 +1,8 @@
-use crate::mem::Ram;
 use crate::mem::memory_map::MemoryMap;
 use crate::mem::mirror_memory::MirrorMemory;
+use crate::mem::Ram;
 use crate::opcode;
-use crate::opcode::{OPCODES_MAP, OpCode};
+use crate::opcode::{OpCode, OPCODES_MAP};
 use crate::ppu::Ppu;
 use crate::rom::{RomFile, RomFileConvertible};
 use crate::savestate::CpuState;
@@ -43,7 +43,7 @@ pub struct Cpu {
     pub processor_status: u8,
     pub memory: Box<MemoryMap>,
     pub ppu: Option<Rc<RefCell<Ppu>>>,
-    additional_cycles: u8,
+    pub additional_cycles: u8,
 }
 
 impl Default for Cpu {
@@ -52,7 +52,7 @@ impl Default for Cpu {
 
         Self {
             program_counter: 0,
-            processor_status: 0b00000000,
+            processor_status: 0,
             accumulator: 0,
             x_register: 0,
             y_register: 0,
@@ -63,6 +63,14 @@ impl Default for Cpu {
         }
     }
 }
+
+const NEGATIVE_BIT: u8 = 0x80;
+const CARRY_BIT: u8 = 0x1;
+const ZERO_BIT: u8 = 0x2;
+const OVERFLOW_BIT: u8 = 0x40;
+const IRQ_BIT: u8 = 0x4;
+const UNUSED_BIT: u8 = 0x10;
+const BREAK_BIT: u8 = 0x20;
 
 impl Cpu {
     pub fn new() -> Self {
@@ -111,19 +119,19 @@ impl Cpu {
     }
 
     fn set_zero_flag(&mut self) {
-        self.processor_status |= 0b0000_0010;
+        self.processor_status |= ZERO_BIT;
     }
 
     fn clear_zero_flag(&mut self) {
-        self.processor_status &= 0b1111_1101;
-    }
-
-    fn clear_negative_flag(&mut self) {
-        self.processor_status &= 0b0111_1111
+        self.processor_status &= !ZERO_BIT;
     }
 
     fn set_negative_flag(&mut self) {
-        self.processor_status |= 0b10000000
+        self.processor_status |= NEGATIVE_BIT
+    }
+
+    fn clear_negative_flag(&mut self) {
+        self.processor_status &= !NEGATIVE_BIT
     }
 
     fn update_zero_flag(&mut self, result: u8) {
@@ -148,47 +156,47 @@ impl Cpu {
     }
 
     fn set_carry_flag(&mut self) {
-        self.processor_status |= 0b0000_0001;
+        self.processor_status |= CARRY_BIT;
     }
 
     fn clear_carry_flag(&mut self) {
-        self.processor_status &= 0b1111_1110;
+        self.processor_status &= !CARRY_BIT;
     }
 
     fn set_overflow_flag(&mut self) {
-        self.processor_status |= 0b0100_0000;
+        self.processor_status |= OVERFLOW_BIT;
     }
 
     fn clear_overflow_flag(&mut self) {
-        self.processor_status &= 0b1011_1111;
+        self.processor_status &= !OVERFLOW_BIT;
     }
 
     fn set_interrupt_disable(&mut self) {
-        self.processor_status |= 0b00000100;
+        self.processor_status |= IRQ_BIT;
+    }
+
+    fn clear_interrupt_disable(&mut self) {
+        self.processor_status &= !IRQ_BIT;
     }
 
     fn set_decimal_flag(&mut self) {}
 
-    fn clear_interrupt_disable(&mut self) {
-        self.processor_status &= 0b1111_1011;
-    }
-
     fn clear_decimal_flag(&mut self) {}
 
     pub fn get_zero_flag(&self) -> bool {
-        (self.processor_status & 0b0000_0010) == 0b0000_0010
+        (self.processor_status & ZERO_BIT) != 0
     }
 
     pub fn get_negative_flag(&self) -> bool {
-        (self.processor_status & 0b1000_0000) == 0b1000_0000
+        (self.processor_status & NEGATIVE_BIT) != 0
     }
 
     pub fn get_carry_flag(&self) -> bool {
-        (self.processor_status & 0b0000_0001) == 0b0000_0001
+        (self.processor_status & CARRY_BIT) != 0
     }
 
     pub fn get_overflow_flag(&self) -> bool {
-        (self.processor_status & 0b0100_0000) == 0b0100_0000
+        (self.processor_status & OVERFLOW_BIT) != 0
     }
 
     fn get_operand_address(&mut self, addressing_mode: &AddressingMode) -> u16 {
@@ -280,7 +288,7 @@ impl Cpu {
     fn shift_left(&mut self, data: u8) -> u8 {
         let res = data << 1;
 
-        if data & 0b10000000 != 0 {
+        if data & NEGATIVE_BIT != 0 {
             self.set_carry_flag();
         } else {
             self.clear_carry_flag();
@@ -293,7 +301,7 @@ impl Cpu {
     fn shift_right(&mut self, data: u8) -> u8 {
         let res = data >> 1;
 
-        if data & 0b00000001 != 0 {
+        if data & CARRY_BIT != 0 {
             self.set_carry_flag();
         } else {
             self.clear_carry_flag();
@@ -306,9 +314,9 @@ impl Cpu {
     fn rotate_left(&mut self, data: u8) -> u8 {
         let mut res = data << 1;
 
-        res |= self.processor_status & 0b00000001;
+        res |= self.processor_status & CARRY_BIT;
 
-        if data & 0b10000000 != 0 {
+        if data & NEGATIVE_BIT != 0 {
             self.set_carry_flag();
         } else {
             self.clear_carry_flag();
@@ -322,10 +330,10 @@ impl Cpu {
         let mut res = data >> 1;
 
         if self.get_carry_flag() {
-            res |= 0b10000000;
+            res |= NEGATIVE_BIT;
         }
 
-        if data & 0b00000001 != 0 {
+        if data & CARRY_BIT != 0 {
             self.set_carry_flag();
         } else {
             self.clear_carry_flag();
@@ -396,7 +404,7 @@ impl Cpu {
     }
 
     fn php(&mut self) {
-        self.stack_push(self.processor_status | 0b00110000);
+        self.stack_push(self.processor_status | (BREAK_BIT | UNUSED_BIT));
     }
 
     fn pla(&mut self) {
@@ -405,7 +413,7 @@ impl Cpu {
     }
 
     fn plp(&mut self) {
-        self.processor_status = self.stack_pop() & 0b11001111;
+        self.processor_status = self.stack_pop() & !(BREAK_BIT | UNUSED_BIT);
     }
 
     fn tsx(&mut self) {
@@ -443,7 +451,7 @@ impl Cpu {
         let target_val = self.mem_read(target);
         let res = self.accumulator & target_val;
         self.update_zero_flag(res);
-        self.processor_status |= target_val & 0b11000000
+        self.processor_status |= target_val & (NEGATIVE_BIT | OVERFLOW_BIT)
     }
 
     fn inc(&mut self, mode: &AddressingMode) {
@@ -743,7 +751,7 @@ impl Cpu {
     fn adc(&mut self, mode: &AddressingMode) {
         let target = self.get_operand_address(mode);
         let target_value = self.mem_read(target);
-        let carry_in = self.processor_status & 0b00000001;
+        let carry_in = self.processor_status & CARRY_BIT;
 
         let acc_check = self.accumulator;
 
@@ -772,7 +780,7 @@ impl Cpu {
     fn sbc(&mut self, mode: &AddressingMode) {
         let target = self.get_operand_address(mode);
         let target_value = self.mem_read(target);
-        let carry_in = self.processor_status & 0b00000001;
+        let carry_in = self.processor_status & CARRY_BIT;
 
         let acc_check = self.accumulator;
 
@@ -877,7 +885,7 @@ impl Cpu {
 
         //SBC
         let target_value = self.mem_read(target);
-        let carry_in = self.processor_status & 0b00000001;
+        let carry_in = self.processor_status & CARRY_BIT;
 
         let acc_check = self.accumulator;
 
@@ -904,7 +912,7 @@ impl Cpu {
 
     fn trigger_nmi(&mut self) {
         self.stack_push_u16(self.program_counter);
-        self.stack_push(self.processor_status | 0b00010000);
+        self.stack_push(self.processor_status | UNUSED_BIT);
         self.sei();
         self.program_counter = self.mem_read_u16(0xFFFA);
     }
@@ -1089,7 +1097,7 @@ impl Cpu {
             processor_status: state.processor_status,
             memory: Box::new(Self::get_default_memory_map()),
             ppu: Some(ppu),
-            additional_cycles: 0,
+            additional_cycles: state.additional_cycles,
         };
 
         cpu.load_rom(rom);
