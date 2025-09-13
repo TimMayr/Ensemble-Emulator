@@ -914,7 +914,7 @@ impl Cpu {
         self.update_negative_and_zero_flags(self.accumulator);
     }
 
-    fn trigger_nmi(&mut self) {
+    pub fn trigger_nmi(&mut self) {
         self.stack_push_u16(self.program_counter);
         self.stack_push(self.processor_status | UNUSED_BIT);
         self.sei();

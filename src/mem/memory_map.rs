@@ -3,10 +3,16 @@ use std::ops::RangeInclusive;
 
 const MEMORY_SIZE: u16 = 0xFFFF;
 
+#[derive(Clone, Copy, Debug)]
+struct RegionEntry {
+    device: usize, // index into self.regions
+    offset: u16,   // offset into that device
+}
+
 #[derive(Debug)]
 pub struct MemoryMap {
     pub regions: Vec<Box<dyn Memory>>,
-    lookup: Box<[usize]>,
+    lookup: Box<[Option<RegionEntry>]>,
 }
 
 impl Default for MemoryMap {
@@ -19,15 +25,20 @@ impl MemoryMap {
     pub fn new() -> Self {
         Self {
             regions: Vec::new(),
-            lookup: vec![0; MEMORY_SIZE as usize + 1].into_boxed_slice(),
+            lookup: vec![None; MEMORY_SIZE as usize + 1].into_boxed_slice(),
         }
     }
 
     pub fn add_memory(&mut self, address_space: RangeInclusive<u16>, memory: Box<dyn Memory>) {
-        let device_index = self.regions.len() + 1;
+        let device_index = self.regions.len();
 
+        let start = *address_space.start();
         for addr in address_space {
-            self.lookup[addr as usize] = device_index;
+            let offset = addr - start;
+            self.lookup[addr as usize] = Some(RegionEntry {
+                device: device_index,
+                offset,
+            });
         }
 
         self.regions.push(memory)
@@ -35,35 +46,27 @@ impl MemoryMap {
 
     #[inline]
     pub fn mem_read(&self, addr: u16) -> u8 {
-        let device = self.lookup[addr as usize];
-
-        if device == 0 {
-            return 0;
+        if let Some(entry) = self.lookup[addr as usize] {
+            self.regions[entry.device].read(entry.offset)
+        } else {
+            0
         }
-
-        self.regions[device - 1].read(addr)
     }
 
     #[inline]
     pub fn mem_read_debug(&self, addr: u16) -> u8 {
-        let device = self.lookup[addr as usize];
-
-        if device == 0 {
-            return 0;
+        if let Some(entry) = self.lookup[addr as usize] {
+            self.regions[entry.device].snapshot(entry.offset)
+        } else {
+            0
         }
-
-        self.regions[device - 1].snapshot(addr)
     }
 
     #[inline]
     pub fn mem_write(&mut self, addr: u16, data: u8) {
-        let device = self.lookup[addr as usize];
-
-        if device == 0 {
-            return;
+        if let Some(entry) = self.lookup[addr as usize] {
+            self.regions[entry.device].write(entry.offset, data)
         }
-
-        self.regions[device - 1].write(addr, data)
     }
 
     #[inline]
@@ -84,13 +87,9 @@ impl MemoryMap {
 
     #[inline]
     fn mem_init(&mut self, addr: u16, data: u8) {
-        let device = self.lookup[addr as usize];
-
-        if device == 0 {
-            return;
+        if let Some(entry) = self.lookup[addr as usize] {
+            self.regions[entry.device].init(entry.offset, data)
         }
-
-        self.regions[device - 1].init(addr, data)
     }
 
     pub fn get_memory_debug(&self, range: RangeInclusive<u16>) -> Vec<u8> {

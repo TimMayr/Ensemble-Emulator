@@ -76,9 +76,18 @@ impl Memory for PpuRegisters {
 
     fn snapshot(&self, addr: u16) -> u8 {
         match addr {
-            0x0 => self.ppu.borrow().ctrl_register,
-            0x1 => self.ppu.borrow().mask_register,
-            0x2 => self.ppu.borrow().status_register,
+            0x2 => {
+                let ppu = self.ppu.borrow();
+                ppu.status_register
+            }
+            0x4 => {
+                let ppu = self.ppu.borrow();
+                ppu.get_oam_at_addr()
+            }
+            0x7 => {
+                let ppu = self.ppu.borrow();
+                ppu.ppu_data_buffer
+            }
             _ => 0,
         }
     }
