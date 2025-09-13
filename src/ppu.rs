@@ -35,6 +35,9 @@ impl Default for Ppu {
 
 const VBLANK_NMI_BIT: u8 = 0x80;
 const VRAM_ADDR_INC_BIT: u8 = 0x4;
+const UPPER_BYTE: u16 = 0xFF00;
+const LOWER_BYTE: u16 = 0x00FF;
+const BIT_14: u16 = 0x2000;
 
 impl Ppu {
     pub fn new() -> Self {
@@ -42,7 +45,7 @@ impl Ppu {
             cycle_counter: 0,
             ctrl_register: 0,
             mask_register: 0,
-            status_register: 0x00,
+            status_register: 0,
             oam_addr_register: 0,
             oam_data_register: 0,
             ppu_x_scroll_register: 0,
@@ -87,7 +90,7 @@ impl Ppu {
                 }
             }
         } else {
-            self.status_register &= !0x80; // clear vblank bit
+            self.status_register &= !VBLANK_NMI_BIT; // clear vblank bit
         }
     }
 
@@ -101,7 +104,7 @@ impl Ppu {
 
     pub fn get_ppu_status(&mut self) -> u8 {
         let result = self.status_register;
-        self.status_register &= !0x80;
+        self.status_register &= !VBLANK_NMI_BIT;
         self.write_latch = false;
         result
     }
@@ -159,10 +162,10 @@ impl Ppu {
 
     pub fn write_vram_addr(&mut self, data: u8) {
         if !self.write_latch {
-            self.vram_addr_register = ((data as u16) << 8) | (self.vram_addr_register & 0xFF);
-            self.t_register &= 0xBFFF
+            self.vram_addr_register = ((data as u16) << 8) | (self.vram_addr_register & LOWER_BYTE);
+            self.t_register &= !BIT_14
         } else {
-            self.vram_addr_register = (self.vram_addr_register & 0xFF00) | data as u16;
+            self.vram_addr_register = (self.vram_addr_register & UPPER_BYTE) | data as u16;
         }
 
         self.write_latch = !self.write_latch;

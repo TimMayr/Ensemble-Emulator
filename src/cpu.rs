@@ -22,6 +22,11 @@ const OVERFLOW_BIT: u8 = 0x40;
 const IRQ_BIT: u8 = 0x4;
 const UNUSED_BIT: u8 = 0x10;
 const BREAK_BIT: u8 = 0x20;
+const IRQ_VECTOR_ADDR: u16 = 0xFFFE;
+const NMI_HANDLER_ADDR: u16 = 0xFFFA;
+const RESET_VECTOR_ADDR: u16 = 0xFFFC;
+const UPPER_BYTE: u16 = 0xFF00;
+const LOWER_BYTE: u16 = 0x00FF;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum AddressingMode {
@@ -70,8 +75,6 @@ impl Default for Cpu {
         }
     }
 }
-
-const IRQ_VECTOR_ADDR: u16 = 0xFFFE;
 
 impl Cpu {
     pub fn new() -> Self {
@@ -266,12 +269,12 @@ impl Cpu {
     }
 
     fn crosses_page_boundary_u8(base: u16, offset: u8) -> bool {
-        (base & 0xFF00) != ((base + offset as u16) & 0xFF00)
+        (base & UPPER_BYTE) != ((base + offset as u16) & UPPER_BYTE)
     }
 
     fn crosses_page_boundary_i8(base: u16, offset: i8) -> bool {
         let target = base.wrapping_add(offset as i16 as u16);
-        (base & 0xFF00) != (target & 0xFF00)
+        (base & UPPER_BYTE) != (target & UPPER_BYTE)
     }
 
     fn fetch_next_byte(&mut self) -> u8 {
@@ -762,7 +765,7 @@ impl Cpu {
         self.accumulator = result;
 
         // Carry Flag
-        if sum > 0xFF {
+        if sum > LOWER_BYTE {
             self.set_carry_flag();
         } else {
             self.clear_carry_flag();
@@ -785,13 +788,13 @@ impl Cpu {
 
         let acc_check = self.accumulator;
 
-        let value = target_value ^ 0xFF;
+        let value = target_value ^ LOWER_BYTE as u8;
         let sum = self.accumulator as u16 + value as u16 + carry_in as u16;
         let result = sum as u8;
 
         self.accumulator = result;
 
-        if sum > 0xFF {
+        if sum > LOWER_BYTE {
             self.set_carry_flag();
         } else {
             self.clear_carry_flag();
@@ -868,7 +871,7 @@ impl Cpu {
             self.clear_carry_flag();
         }
 
-        if (self.y_register.overflowing_sub(target_value).0) & 0x80 != 0 {
+        if (self.y_register.overflowing_sub(target_value).0) & NEGATIVE_BIT != 0 {
             self.set_negative_flag();
         } else {
             self.clear_negative_flag();
@@ -890,19 +893,19 @@ impl Cpu {
 
         let acc_check = self.accumulator;
 
-        let value = target_value ^ 0xFF;
+        let value = target_value ^ LOWER_BYTE as u8;
         let sum = self.accumulator as u16 + value as u16 + carry_in as u16;
         let result = sum as u8;
 
         self.accumulator = result;
 
-        if sum > 0xFF {
+        if sum > LOWER_BYTE {
             self.set_carry_flag();
         } else {
             self.clear_carry_flag();
         }
 
-        if ((acc_check ^ result) & (value ^ result) & 0x80) != 0 {
+        if ((acc_check ^ result) & (value ^ result) & NEGATIVE_BIT) != 0 {
             self.set_overflow_flag();
         } else {
             self.clear_overflow_flag();
@@ -915,11 +918,11 @@ impl Cpu {
         self.stack_push_u16(self.program_counter);
         self.stack_push(self.processor_status | UNUSED_BIT);
         self.sei();
-        self.program_counter = self.mem_read_u16(0xFFFA);
+        self.program_counter = self.mem_read_u16(NMI_HANDLER_ADDR);
     }
 
     pub fn reset(&mut self) {
-        self.program_counter = self.mem_read_u16(0xFFFC);
+        self.program_counter = self.mem_read_u16(RESET_VECTOR_ADDR);
     }
 
     pub fn step(&mut self) -> u8 {
