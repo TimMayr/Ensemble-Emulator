@@ -4,6 +4,7 @@ use crate::mem::{Memory, Ram};
 use crate::nes::CPU_CYCLES_PER_FRAME;
 use crate::rom::{RomFile, RomFileConvertible};
 use crate::savestate::PpuState;
+use crate::util;
 use std::cell::Cell;
 
 #[derive(Debug)]
@@ -25,6 +26,12 @@ pub struct Ppu {
     pub oam: Box<Ram>,
     pub write_latch: bool,
     pub t_register: u16,
+    pub bg_next_tile_id: u8,
+    pub bg_next_tile_attribute: u8,
+    pub bg_next_tile: u16,
+    pub bg_shifter_pattern: u16,
+    pub bg_shifter_attribute: u16,
+    pub fine_x_scroll: u8,
 }
 
 impl Default for Ppu {
@@ -38,6 +45,15 @@ const VRAM_ADDR_INC_BIT: u8 = 0x4;
 const UPPER_BYTE: u16 = 0xFF00;
 const LOWER_BYTE: u16 = 0x00FF;
 const BIT_14: u16 = 0x2000;
+const BACKGROUND_RENDER_BIT: u8 = 0x8;
+const SPRITE_RENDER_BIT: u8 = 0x10;
+const VRAM_ADDR_COARSE_X_SCROLL_MASK: u16 = 0x1F;
+const VRAM_ADDR_COARSE_Y_SCROLL_MASK: u16 = 0x3E0;
+const VRAM_ADDR_FINE_Y_SCROLL_MASK: u16 = 0x7000;
+const VRAM_ADDR_NAMETABLE_X_BIT: u16 = 0x400;
+const VRAM_ADDR_NAMETABLE_Y_BIT: u16 = 0x800;
+const FINE_Y_SCROLL_WIDTH: u8 = 0x7;
+const COARSE_SCROLL_WIDTH: u8 = 0x1F;
 
 impl Ppu {
     pub fn new() -> Self {
@@ -54,6 +70,12 @@ impl Ppu {
             ppu_data_register: 0,
             ppu_data_buffer: 0,
             oam_dma_register: 0,
+            bg_next_tile_id: 0,
+            bg_next_tile_attribute: 0,
+            bg_next_tile: 0,
+            bg_shifter_pattern: 0,
+            bg_shifter_attribute: 0,
+            fine_x_scroll: 0,
             nmi_requested: Cell::new(false),
             memory: Box::new(Self::get_default_memory_map()),
             oam: Box::new(Self::get_default_oam()),
@@ -180,6 +202,95 @@ impl Ppu {
         false
     }
 
+    pub fn is_background_rendering(&self) -> bool {
+        self.mask_register & BACKGROUND_RENDER_BIT != 0
+    }
+
+    pub fn is_sprite_rendering(&self) -> bool {
+        self.mask_register & SPRITE_RENDER_BIT != 0
+    }
+
+    pub fn get_coarse_x_scroll(&self) -> u8 {
+        (self.vram_addr_register & VRAM_ADDR_COARSE_X_SCROLL_MASK) as u8
+    }
+
+    pub fn set_coarse_x_scroll(&mut self, val: u8) {
+        self.vram_addr_register = util::set_packed(
+            &self.vram_addr_register,
+            &val,
+            &VRAM_ADDR_COARSE_X_SCROLL_MASK,
+            &COARSE_SCROLL_WIDTH,
+        );
+    }
+
+    pub fn get_coarse_y_scroll(&self) -> u8 {
+        (self.vram_addr_register & VRAM_ADDR_COARSE_Y_SCROLL_MASK) as u8
+    }
+
+    pub fn set_coarse_y_scroll(&mut self, val: u8) {
+        self.vram_addr_register = util::set_packed(
+            &self.vram_addr_register,
+            &val,
+            &VRAM_ADDR_COARSE_Y_SCROLL_MASK,
+            &COARSE_SCROLL_WIDTH,
+        );
+    }
+
+    pub fn get_fine_x_scroll(&self) -> u8 {
+        self.fine_x_scroll
+    }
+
+    pub fn get_fine_y_scroll(&self) -> u8 {
+        (self.vram_addr_register & VRAM_ADDR_FINE_Y_SCROLL_MASK) as u8
+    }
+
+    pub fn set_fine_y_scroll(&mut self, val: u8) {
+        self.vram_addr_register = util::set_packed(
+            &self.vram_addr_register,
+            &val,
+            &VRAM_ADDR_FINE_Y_SCROLL_MASK,
+            &FINE_Y_SCROLL_WIDTH,
+        );
+    }
+
+    pub fn get_nametable_x(&self) -> u8 {
+        (self.vram_addr_register & VRAM_ADDR_NAMETABLE_X_BIT) as u8
+    }
+
+    pub fn get_nametable_y(&self) -> u8 {
+        (self.vram_addr_register & VRAM_ADDR_NAMETABLE_Y_BIT) as u8
+    }
+
+    pub fn increment_scroll_x(&mut self) {
+        if self.is_background_rendering() || self.is_sprite_rendering() {
+            if self.get_coarse_x_scroll() == 31 {
+                self.vram_addr_register &= !VRAM_ADDR_COARSE_X_SCROLL_MASK;
+                self.vram_addr_register ^= VRAM_ADDR_NAMETABLE_X_BIT;
+            } else {
+                self.set_coarse_x_scroll(self.get_coarse_x_scroll() + 1)
+            }
+        }
+    }
+
+    pub fn increment_scroll_y(&mut self) {
+        if self.is_background_rendering() || self.is_sprite_rendering() {
+            if self.get_fine_y_scroll() < 7 {
+                self.set_fine_y_scroll(self.get_fine_y_scroll() + 1)
+            } else {
+                self.set_fine_y_scroll(0);
+
+                if self.get_coarse_y_scroll() == 29 {
+                    self.set_coarse_y_scroll(0);
+                    self.vram_addr_register ^= VRAM_ADDR_NAMETABLE_Y_BIT;
+                } else if self.get_coarse_y_scroll() == 31 {
+                    self.set_coarse_y_scroll(0);
+                } else {
+                    self.set_coarse_y_scroll(self.get_coarse_y_scroll() + 1)
+                }
+            }
+        }
+    }
+
     pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
         let rom_file = rom_get.as_rom_file();
         let chr_rom = rom_file.get_chr_rom();
@@ -212,6 +323,12 @@ impl Ppu {
             oam_dma_register: state.oam_dma_register,
             write_latch: state.write_latch,
             t_register: state.t_register,
+            bg_next_tile_id: state.bg_next_tile_id,
+            bg_next_tile_attribute: state.bg_next_tile_attribute,
+            bg_next_tile: state.bg_next_tile,
+            bg_shifter_pattern: state.bg_shifter_pattern,
+            bg_shifter_attribute: state.bg_shifter_attribute,
+            fine_x_scroll: state.fine_x_scroll,
         };
 
         ppu.load_rom(rom);

@@ -49,6 +49,12 @@ pub struct PpuState {
     pub oam_dma_register: u8,
     pub ppu_data_buffer: u8,
     pub t_register: u16,
+    pub bg_next_tile_id: u8,
+    pub bg_next_tile_attribute: u8,
+    pub bg_next_tile: u16,
+    pub bg_shifter_pattern: u16,
+    pub bg_shifter_attribute: u16,
+    pub fine_x_scroll: u8,
 }
 
 impl From<&Ppu> for PpuState {
@@ -70,6 +76,12 @@ impl From<&Ppu> for PpuState {
             oam_dma_register: ppu.oam_dma_register,
             ppu_data_buffer: ppu.ppu_data_buffer,
             t_register: ppu.t_register,
+            bg_next_tile_id: ppu.bg_next_tile_id,
+            bg_next_tile_attribute: ppu.bg_next_tile_attribute,
+            bg_next_tile: ppu.bg_next_tile,
+            bg_shifter_pattern: ppu.bg_shifter_pattern,
+            bg_shifter_attribute: ppu.bg_shifter_attribute,
+            fine_x_scroll: ppu.fine_x_scroll,
         }
     }
 }
