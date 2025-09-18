@@ -14,17 +14,9 @@ jobs:
             -   name: Checkout code
                 uses: actions/checkout@v4
 
-            -   name: Cache Rustup toolchains
-                uses: actions/cache@v4
+            -   uses: dtolnay/rust-toolchain@stable
                 with:
-                    path: |
-                        ~/.rustup/toolchains
-                    key: ${{ runner.os }}-.rustup-toolchain-${{ hashFiles('~/.rustup/update-hashes/*') }}
-                    restore-keys: |
-                        ${{ runner.os }}-rustup-toolchains-
-
-            -   name: Install Cargo Components
-                run: rustup component add rustfmt && rustup component add clippy
+                    components: clippy, rustfmt
 
             -   name: Cache Cargo registry
                 uses: actions/cache@v4
@@ -32,6 +24,9 @@ jobs:
                     path: |
                         ~/.cargo/registry
                         ~/.cargo/git
+                        target
+                        ~/.cargo/.crates2.json
+                        ~/.cargo/.crates.toml
                     key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
                     restore-keys: |
                         ${{ runner.os }}-cargo-registry-
@@ -51,5 +46,5 @@ jobs:
                 run: cargo clippy --all-targets --all-features -- -D warnings
 
             -   name: Check formatting
-                run: cargo fmt --all -- --check
+                run: cargo fmt --check
 
