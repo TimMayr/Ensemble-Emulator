@@ -14,6 +14,15 @@ jobs:
             -   name: Checkout code
                 uses: actions/checkout@v4
 
+            -   name: Cache Rustup toolchains
+                uses: actions/cache@v4
+                with:
+                    path: |
+                        ~/.rustup/toolchains
+                    key: ${{ runner.os }}-.rustup-toolchain-${{ hashFiles('~/.rustup/update-hashes/*') }}
+                    restore-keys: |
+                        ${{ runner.os }}-rustup-toolchains-
+
             -   name: Install Cargo Components
                 run: rustup component add rustfmt && rustup component add clippy
 
