@@ -1,7 +1,6 @@
 use crate::mem::memory_map::MemoryMap;
 use crate::mem::mirror_memory::MirrorMemory;
 use crate::mem::{Memory, Ram};
-use crate::nes::CPU_CYCLES_PER_FRAME;
 use crate::rom::{RomFile, RomFileConvertible};
 use crate::savestate::PpuState;
 use crate::util;
@@ -9,7 +8,7 @@ use std::cell::Cell;
 
 #[derive(Debug)]
 pub struct Ppu {
-    pub cycle_counter: u64,
+    pub dot_counter: u128,
     pub ctrl_register: u8,
     pub mask_register: u8,
     pub status_register: u8,
@@ -32,6 +31,8 @@ pub struct Ppu {
     pub bg_shifter_pattern: u16,
     pub bg_shifter_attribute: u16,
     pub fine_x_scroll: u8,
+    pub even_frame: bool,
+    pub reset_signal: bool,
 }
 
 impl Default for Ppu {
@@ -54,11 +55,12 @@ const VRAM_ADDR_NAMETABLE_X_BIT: u16 = 0x400;
 const VRAM_ADDR_NAMETABLE_Y_BIT: u16 = 0x800;
 const FINE_Y_SCROLL_WIDTH: u8 = 0x7;
 const COARSE_SCROLL_WIDTH: u8 = 0x1F;
+const DOTS_PER_FRAME: u64 = 89342;
 
 impl Ppu {
     pub fn new() -> Self {
         Self {
-            cycle_counter: 0,
+            dot_counter: 0,
             ctrl_register: 0,
             mask_register: 0,
             status_register: 0,
@@ -81,6 +83,8 @@ impl Ppu {
             oam: Box::new(Self::get_default_oam()),
             write_latch: false,
             t_register: 0,
+            even_frame: true,
+            reset_signal: true,
         }
     }
 
@@ -99,11 +103,29 @@ impl Ppu {
     }
 
     pub fn step(&mut self) {
-        self.cycle_counter += 1;
+        if self.reset_signal {
+            self.ctrl_register = 0;
+            self.mask_register = 0;
+            self.write_latch = false;
+            self.ppu_y_scroll_register = 0;
+            self.ppu_x_scroll_register = 0;
+            self.ppu_data_buffer = 0;
+        }
 
-        let frame_cycle = self.cycle_counter % CPU_CYCLES_PER_FRAME as u64;
+        let mut frame_dot = self.dot_counter % DOTS_PER_FRAME as u128;
 
-        if frame_cycle >= 241 * 113 {
+        if frame_dot == 0 {
+            self.even_frame = !self.even_frame;
+        }
+
+        if frame_dot == 261 * 113 {
+            if !self.even_frame && self.is_rendering() {
+                self.dot_counter += 1;
+                frame_dot = self.dot_counter % DOTS_PER_FRAME as u128;
+            }
+        }
+
+        if frame_dot >= (240 * 340) + 2 {
             if (self.status_register & VBLANK_NMI_BIT) == 0 {
                 // Just entered VBlank
                 self.status_register |= VBLANK_NMI_BIT;
@@ -111,9 +133,17 @@ impl Ppu {
                     self.nmi_requested.set(true);
                 }
             }
-        } else {
-            self.status_register &= !VBLANK_NMI_BIT; // clear vblank bit
         }
+
+        if frame_dot >= (261 * 340) + 2 {
+            self.status_register &= !VBLANK_NMI_BIT;
+        }
+
+        self.dot_counter += 1;
+    }
+
+    pub fn is_rendering(&self) -> bool {
+        self.is_background_rendering() || self.is_sprite_rendering()
     }
 
     pub fn get_vram_addr_step(&self) -> u8 {
@@ -136,7 +166,9 @@ impl Ppu {
     }
 
     pub fn set_ppu_ctrl(&mut self, value: u8) {
-        self.ctrl_register = value;
+        if !self.reset_signal {
+            self.ctrl_register = value;
+        }
     }
 
     pub fn get_mask_register(&self) -> u8 {
@@ -144,7 +176,9 @@ impl Ppu {
     }
 
     pub fn set_mask_register(&mut self, value: u8) {
-        self.mask_register = value;
+        if !self.reset_signal {
+            self.mask_register = value;
+        }
     }
 
     pub fn set_oam_addr_register(&mut self, value: u8) {
@@ -173,24 +207,29 @@ impl Ppu {
     }
 
     pub fn write_ppu_scroll(&mut self, data: u8) {
-        if !self.write_latch {
-            self.ppu_x_scroll_register = data
-        } else {
-            self.ppu_y_scroll_register = data
-        }
+        if !self.reset_signal {
+            if !self.write_latch {
+                self.ppu_x_scroll_register = data
+            } else {
+                self.ppu_y_scroll_register = data
+            }
 
-        self.write_latch = !self.write_latch;
+            self.write_latch = !self.write_latch;
+        }
     }
 
     pub fn write_vram_addr(&mut self, data: u8) {
-        if !self.write_latch {
-            self.vram_addr_register = ((data as u16) << 8) | (self.vram_addr_register & LOWER_BYTE);
-            self.t_register &= !BIT_14
-        } else {
-            self.vram_addr_register = (self.vram_addr_register & UPPER_BYTE) | data as u16;
-        }
+        if !self.reset_signal {
+            if !self.write_latch {
+                self.vram_addr_register =
+                    ((data as u16) << 8) | (self.vram_addr_register & LOWER_BYTE);
+                self.t_register &= !BIT_14
+            } else {
+                self.vram_addr_register = (self.vram_addr_register & UPPER_BYTE) | data as u16;
+            }
 
-        self.write_latch = !self.write_latch;
+            self.write_latch = !self.write_latch;
+        }
     }
 
     pub fn poll_nmi(&self) -> bool {
@@ -262,7 +301,7 @@ impl Ppu {
     }
 
     pub fn increment_scroll_x(&mut self) {
-        if self.is_background_rendering() || self.is_sprite_rendering() {
+        if self.is_rendering() {
             if self.get_coarse_x_scroll() == 31 {
                 self.vram_addr_register &= !VRAM_ADDR_COARSE_X_SCROLL_MASK;
                 self.vram_addr_register ^= VRAM_ADDR_NAMETABLE_X_BIT;
@@ -273,7 +312,7 @@ impl Ppu {
     }
 
     pub fn increment_scroll_y(&mut self) {
-        if self.is_background_rendering() || self.is_sprite_rendering() {
+        if self.is_rendering() {
             if self.get_fine_y_scroll() < 7 {
                 self.set_fine_y_scroll(self.get_fine_y_scroll() + 1)
             } else {
@@ -301,12 +340,16 @@ impl Ppu {
             Box::new(MirrorMemory::new(Box::new(Ram::new(2 * 1024)), 2 * 1024)),
         )
     }
+
+    pub fn reset(&mut self) {
+        self.reset_signal = true;
+    }
 }
 
 impl Ppu {
     pub fn from(state: &PpuState, rom: &RomFile) -> Self {
         let mut ppu = Self {
-            cycle_counter: state.cycle_counter,
+            dot_counter: state.cycle_counter,
             ctrl_register: state.ctrl_register,
             mask_register: state.mask_register,
             status_register: state.status_register,
@@ -329,6 +372,8 @@ impl Ppu {
             bg_shifter_pattern: state.bg_shifter_pattern,
             bg_shifter_attribute: state.bg_shifter_attribute,
             fine_x_scroll: state.fine_x_scroll,
+            even_frame: state.even_frame,
+            reset_signal: state.reset_signal,
         };
 
         ppu.load_rom(rom);

@@ -1,7 +1,7 @@
 use crate::cpu::Cpu;
 use crate::ppu::Ppu;
 use crate::rom::RomFile;
-use bincode::{Decode, Encode, config};
+use bincode::{config, Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
@@ -33,7 +33,7 @@ impl From<&Cpu> for CpuState {
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 pub struct PpuState {
-    pub cycle_counter: u64,
+    pub cycle_counter: u128,
     pub status_register: u8,
     pub ctrl_register: u8,
     pub mask_register: u8,
@@ -55,12 +55,14 @@ pub struct PpuState {
     pub bg_shifter_pattern: u16,
     pub bg_shifter_attribute: u16,
     pub fine_x_scroll: u8,
+    pub even_frame: bool,
+    pub reset_signal: bool,
 }
 
 impl From<&Ppu> for PpuState {
     fn from(ppu: &Ppu) -> Self {
         Self {
-            cycle_counter: ppu.cycle_counter,
+            cycle_counter: ppu.dot_counter,
             status_register: ppu.status_register,
             ctrl_register: ppu.ctrl_register,
             mask_register: ppu.mask_register,
@@ -82,6 +84,8 @@ impl From<&Ppu> for PpuState {
             bg_shifter_pattern: ppu.bg_shifter_pattern,
             bg_shifter_attribute: ppu.bg_shifter_attribute,
             fine_x_scroll: ppu.fine_x_scroll,
+            even_frame: ppu.even_frame,
+            reset_signal: ppu.reset_signal,
         }
     }
 }

@@ -42,7 +42,8 @@ impl Nes {
 
         self.cpu.ppu = Some(self.ppu.clone());
 
-        self.cpu.reset()
+        self.cpu.reset();
+        self.ppu.borrow_mut().reset();
     }
 
     pub fn run(&mut self, until: u128) {
