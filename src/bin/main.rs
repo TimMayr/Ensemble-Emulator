@@ -6,7 +6,9 @@ fn main() -> Result<(), String> {
     let mut emu = Consoles::Nes(Nes::default());
     let frontend = Frontends::Sdl2(SdlFrontend::default());
 
-    emu.load_rom(&String::from("./tests/Pac-Man (USA) (Namco).nes"));
+    emu.load_rom(&String::from(
+        "./tests/nes-test-roms/instr_test-v5/rom_singles/01-basics.nes",
+    ));
     emu.reset();
     emu.run(&mut Some(frontend))
 }

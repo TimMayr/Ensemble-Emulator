@@ -6,7 +6,6 @@ use crate::emulation::opcode::{OPCODES_MAP, OpCode};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
-use crate::emulation::util::write_to_file;
 use std::cell::RefCell;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
@@ -110,17 +109,16 @@ impl Cpu {
     }
 
     pub fn stack_pop_u16(&mut self) -> u16 {
-        self.stack_pointer += 2;
-        self.mem_read_u16(STACK_START_ADDRESS + self.stack_pointer as u16 - 1)
-            .swap_bytes()
+        let lo = self.stack_pop() as u16;
+        let hi = self.stack_pop() as u16;
+        (hi << 8) | lo
     }
 
     pub fn stack_push_u16(&mut self, data: u16) {
-        self.mem_write_u16(
-            STACK_START_ADDRESS + self.stack_pointer as u16 - 1,
-            data.swap_bytes(),
-        );
-        self.stack_pointer -= 2;
+        let hi = (data >> 8) as u8;
+        let lo = (data & 0xFF) as u8;
+        self.stack_push(hi);
+        self.stack_push(lo);
     }
 
     fn set_zero_flag(&mut self) {
@@ -351,11 +349,6 @@ impl Cpu {
     fn lda(&mut self, mode: &AddressingMode) {
         let target = self.get_operand_address(mode);
         let target_val = self.mem_read(target);
-
-        if target_val == 6 {
-            print!("reached");
-        }
-
         self.accumulator = target_val;
         self.update_negative_and_zero_flags(self.accumulator);
     }
@@ -376,10 +369,6 @@ impl Cpu {
 
     fn sta(&mut self, mode: &AddressingMode) {
         let target = self.get_operand_address(mode);
-        if target == 0x6000 {
-            println!("{:02X?}", self.memory.get_memory_debug(0x6000..=0xFFFF));
-            // panic!()
-        }
         self.mem_write(target, self.accumulator);
     }
 
@@ -933,7 +922,6 @@ impl Cpu {
 
     pub fn reset(&mut self) {
         self.program_counter = self.mem_read_u16(RESET_VECTOR_ADDR);
-        write_to_file("dump.bin", self.memory.get_memory_debug(0..=0xFFFF));
     }
 
     pub fn step(&mut self) -> u8 {
@@ -945,14 +933,12 @@ impl Cpu {
 
         self.additional_cycles = 0;
 
-        let opcode = self.mem_read(self.program_counter);
+        let opcode = self.fetch_next_byte();
         let pnc = &OpCode::default();
         let op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
 
         #[cfg(debug_assertions)]
         let _memory = self.memory.get_memory_debug(RangeInclusive::new(0, 0xFFFF));
-
-        self.program_counter += 1u16;
 
         match op.opcode {
             0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(&op.addressing_mode),
