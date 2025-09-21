@@ -9,7 +9,7 @@ use crate::emulation::savestate;
 use crate::emulation::savestate::{CpuState, PpuState, SaveState};
 use crate::frontend::{Frontend, Frontends};
 use std::cell::RefCell;
-use std::ops::Deref;
+use std::ops::{Deref, RangeInclusive};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -37,29 +37,70 @@ impl Console for Nes {
         self.reset()
     }
 
-    fn run(&mut self, possible_frontend: &mut Option<Frontends>) -> Result<(), String> {
+    fn run(&mut self, frontend: &mut Option<Frontends>) -> Result<(), String> {
         let mut leftover_cpu_cycles = 0;
         loop {
             self.cycles += 1;
 
             if self.cycles.is_multiple_of(12) {
                 if leftover_cpu_cycles == 0 {
-                    leftover_cpu_cycles = self.cpu.step();
+                    leftover_cpu_cycles = self.cpu.step(self.cycles);
                 }
 
                 leftover_cpu_cycles -= 1;
             }
 
             if self.cycles.is_multiple_of(4) {
-                self.ppu.borrow_mut().step();
+                self.ppu.borrow_mut().step(self.cycles);
             }
 
             if self.cycles.is_multiple_of(MASTER_CYCLES_PER_FRAME as u128)
-                && let Some(frontend) = possible_frontend.as_mut()
+                && let Some(frontend) = frontend.as_mut()
             {
                 frontend.show_frame(&self.get_pixel_buffer())?
             }
         }
+    }
+
+    fn run_until(
+        &mut self,
+        frontend: &mut Option<Frontends>,
+        last_cycle: u128,
+    ) -> Result<(), String> {
+        let mut leftover_cpu_cycles = 0;
+
+        loop {
+            self.cycles += 1;
+
+            if self.cycles > last_cycle {
+                return Ok(());
+            };
+
+            if self.cycles.is_multiple_of(12) {
+                if leftover_cpu_cycles == 0 {
+                    leftover_cpu_cycles = self.cpu.step(self.cycles);
+                }
+
+                leftover_cpu_cycles -= 1;
+            }
+
+            if self.cycles.is_multiple_of(4) {
+                self.ppu.borrow_mut().step(self.cycles);
+            }
+
+            if self.cycles.is_multiple_of(MASTER_CYCLES_PER_FRAME as u128)
+                && let Some(frontend) = frontend.as_mut()
+            {
+                frontend.show_frame(&self.get_pixel_buffer())?
+            }
+        }
+    }
+
+    fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>> {
+        vec![
+            self.cpu.get_memory_debug(range.clone()),
+            self.ppu.borrow().get_memory_debug(range.clone()),
+        ]
     }
 }
 

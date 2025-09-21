@@ -92,10 +92,16 @@ impl MemoryMap {
         }
     }
 
-    pub fn get_memory_debug(&self, range: RangeInclusive<u16>) -> Vec<u8> {
+    pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
         let mut vec = Vec::<u8>::new();
-        for addr in range {
-            vec.push(self.mem_read_debug(addr));
+        if let Some(range) = range {
+            for addr in range {
+                vec.push(self.mem_read_debug(addr));
+            }
+        } else {
+            for addr in 0..=MEMORY_SIZE {
+                vec.push(self.mem_read_debug(addr));
+            }
         }
         vec
     }

@@ -56,6 +56,7 @@ pub struct Cpu {
     pub memory: Box<MemoryMap>,
     pub ppu: Option<Rc<RefCell<Ppu>>>,
     pub additional_cycles: u8,
+    pub master_cycle: u128,
 }
 
 impl Default for Cpu {
@@ -72,6 +73,7 @@ impl Default for Cpu {
             stack_pointer: STACK_START,
             additional_cycles: 0,
             ppu: None,
+            master_cycle: 0,
         }
     }
 }
@@ -370,8 +372,11 @@ impl Cpu {
     fn sta(&mut self, mode: &AddressingMode) {
         let target = self.get_operand_address(mode);
         if target == 0x6000 {
-            println!("{:02X?}", self.memory.get_memory_debug(0x6000..=0x6100));
-            // panic!()
+            println!(
+                "{:02X?}",
+                self.memory.get_memory_debug(Some(0x6000..=0x6100))
+            );
+            println!("{}", self.master_cycle)
         }
         self.mem_write(target, self.accumulator);
     }
@@ -928,7 +933,13 @@ impl Cpu {
         self.program_counter = self.mem_read_u16(RESET_VECTOR_ADDR);
     }
 
-    pub fn step(&mut self) -> u8 {
+    pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
+        self.memory.get_memory_debug(range)
+    }
+
+    pub fn step(&mut self, master_cycle: u128) -> u8 {
+        self.master_cycle = master_cycle;
+
         if let Some(ppu) = &self.ppu
             && ppu.borrow().poll_nmi()
         {
@@ -942,7 +953,7 @@ impl Cpu {
         let op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
 
         #[cfg(debug_assertions)]
-        let _memory = self.memory.get_memory_debug(RangeInclusive::new(0, 0xFFFF));
+        let _memory = self.memory.get_memory_debug(None);
 
         match op.opcode {
             0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(&op.addressing_mode),
@@ -1106,6 +1117,7 @@ impl Cpu {
             memory: Box::new(Self::get_default_memory_map()),
             ppu: Some(ppu),
             additional_cycles: state.additional_cycles,
+            master_cycle: state.master_cycle,
         };
 
         cpu.load_rom(rom);

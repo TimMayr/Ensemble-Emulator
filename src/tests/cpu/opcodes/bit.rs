@@ -8,7 +8,7 @@ fn test_bit_complete() {
     cpu.mem_write(0x1, 0x0020);
     cpu.mem_write(0x0020, 0b11111111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
@@ -20,7 +20,7 @@ fn test_bit_complete() {
     cpu.mem_write_u16(0x3, 0x8000);
     cpu.mem_write(0x8000, 0b11111111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
@@ -33,7 +33,7 @@ fn test_bit_complete() {
     cpu.mem_write(0x6, 0x0020);
     cpu.mem_write(0x0020, 0b00000001);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -46,7 +46,7 @@ fn test_bit_complete() {
     cpu.mem_write(0x8, 0x0020);
     cpu.mem_write(0x0020, 0b00011111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -59,7 +59,7 @@ fn test_bit_complete() {
     cpu.mem_write(0xA, 0x0020);
     cpu.mem_write(0x0020, 0b01011111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -72,7 +72,7 @@ fn test_bit_complete() {
     cpu.mem_write(0xC, 0x0020);
     cpu.mem_write(0x0020, 0b11011111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(!cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
@@ -85,7 +85,7 @@ fn test_bit_complete() {
     cpu.mem_write(0xE, 0x0020);
     cpu.mem_write(0x0020, 0b01011111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -98,7 +98,7 @@ fn test_bit_complete() {
     cpu.mem_write(0x10, 0x0020);
     cpu.mem_write(0x0020, 0b10011111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
@@ -111,7 +111,7 @@ fn test_bit_complete() {
     cpu.mem_write(0x12, 0x0020);
     cpu.mem_write(0x0020, 0b10011111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
@@ -126,7 +126,7 @@ fn test_bit_zero_page() {
     cpu.mem_write(0x1, 0x0020);
     cpu.mem_write(0x0020, 0b11111111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
@@ -141,7 +141,7 @@ fn test_bit_absolute_page() {
     cpu.mem_write_u16(0x1, 0x8000);
     cpu.mem_write(0x8000, 0b11111111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
@@ -156,7 +156,7 @@ fn test_bit_flags_none_when_none() {
     cpu.mem_write(0x1, 0x0020);
     cpu.mem_write(0x0020, 0b00000001);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -171,7 +171,7 @@ fn test_bit_flags_zero_when_zero() {
     cpu.mem_write(0x1, 0x0020);
     cpu.mem_write(0x0020, 0b00011111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -186,7 +186,7 @@ fn test_bit_flags_negative_when_negative() {
     cpu.mem_write(0x1, 0x0020);
     cpu.mem_write(0x0020, 0b10011111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(!cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
@@ -201,7 +201,7 @@ fn test_bit_flags_overflow_when_overflow() {
     cpu.mem_write(0x1, 0x0020);
     cpu.mem_write(0x0020, 0b01011111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -216,7 +216,7 @@ fn test_bit_flags_negative_and_overflow_when_negative_and_overflow() {
     cpu.mem_write(0x1, 0x0020);
     cpu.mem_write(0x0020, 0b11011111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(!cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
@@ -231,7 +231,7 @@ fn test_bit_flags_zero_and_overflow_when_zero_and_overflow() {
     cpu.mem_write(0x1, 0x0020);
     cpu.mem_write(0x0020, 0b01011111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -246,7 +246,7 @@ fn test_bit_flags_zero_and_negative_when_zero_and_negative() {
     cpu.mem_write(0x1, 0x0020);
     cpu.mem_write(0x0020, 0b10011111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
@@ -261,7 +261,7 @@ fn test_bit_flags_zero_and_negative_and_overflow_when_zero_and_negative_and_over
     cpu.mem_write(0x1, 0x0020);
     cpu.mem_write(0x0020, 0b11011111);
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());

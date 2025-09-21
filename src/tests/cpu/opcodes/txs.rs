@@ -6,7 +6,7 @@ fn test_txs_simple() {
     cpu.x_register = 0x66;
 
     cpu.mem_write(0x0, 0x9A);
-    cpu.step();
+    cpu.step(0);
 
     assert_eq!(0x66, cpu.stack_pointer);
 }

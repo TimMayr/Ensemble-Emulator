@@ -6,7 +6,7 @@ fn test_asl_complete() {
     cpu.mem_write(0x0, 0x0A);
 
     cpu.accumulator = 0b1000_0001;
-    cpu.step();
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0b0000_0010);
     assert!(cpu.get_carry_flag());
@@ -17,7 +17,7 @@ fn test_asl_complete() {
     cpu.mem_write(0x2, 0xA6);
     cpu.mem_write(0xA6, 0b0100_0000);
 
-    cpu.step();
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0xA6), 0b1000_0000);
     assert!(!cpu.get_carry_flag());
@@ -30,7 +30,7 @@ fn test_asl_complete() {
 
     cpu.x_register = 0x01;
 
-    cpu.step();
+    cpu.step(0);
     assert_eq!(cpu.mem_read(0x21), 0b1111_1110);
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -40,7 +40,7 @@ fn test_asl_complete() {
     cpu.mem_write_u16(0x6, 0x1234);
     cpu.mem_write(0x1234, 0b0000_0001);
 
-    cpu.step();
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x1234), 0b0000_0010);
     assert!(!cpu.get_carry_flag());
@@ -52,7 +52,7 @@ fn test_asl_complete() {
     cpu.mem_write(0x8001, 0b1000_0000);
 
     cpu.x_register = 0x01;
-    cpu.step();
+    cpu.step(0);
     assert_eq!(cpu.mem_read(0x8001), 0);
     assert!(cpu.get_carry_flag());
     assert!(cpu.get_zero_flag());
@@ -61,7 +61,7 @@ fn test_asl_complete() {
     cpu.mem_write(0xB, 0x0A);
     cpu.accumulator = 0b0011_1111;
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(!cpu.get_carry_flag());
     assert!(!cpu.get_negative_flag());
@@ -70,7 +70,7 @@ fn test_asl_complete() {
     cpu.mem_write(0xC, 0x0A);
     cpu.accumulator = 0b1000_0010;
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_negative_flag());
@@ -79,7 +79,7 @@ fn test_asl_complete() {
     cpu.mem_write(0xD, 0x0A);
     cpu.accumulator = 0b0000_0000;
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_carry_flag());
@@ -88,7 +88,7 @@ fn test_asl_complete() {
     cpu.mem_write(0xE, 0x0A);
     cpu.accumulator = 0b0100_0010;
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(!cpu.get_carry_flag());
     assert!(cpu.get_negative_flag());
@@ -97,7 +97,7 @@ fn test_asl_complete() {
     cpu.mem_write(0xF, 0x0A);
     cpu.accumulator = 0b1100_0000;
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_carry_flag());
     assert!(cpu.get_negative_flag());
@@ -106,7 +106,7 @@ fn test_asl_complete() {
     cpu.mem_write(0x10, 0x0A);
     cpu.accumulator = 0b1000_0000;
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_negative_flag());
@@ -119,7 +119,7 @@ fn test_asl_accumulator() {
     cpu.mem_write(0x0, 0x0A);
 
     cpu.accumulator = 0b1000_0001;
-    cpu.step();
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0b0000_0010);
     assert!(cpu.get_carry_flag());
@@ -134,7 +134,7 @@ fn test_asl_zero_page() {
     cpu.mem_write(0x1, 0x10);
     cpu.mem_write(0x10, 0b0100_0000);
 
-    cpu.step();
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x10), 0b1000_0000);
     assert!(!cpu.get_carry_flag());
@@ -151,7 +151,7 @@ fn test_asl_zero_page_x() {
 
     cpu.x_register = 0x01;
 
-    cpu.step();
+    cpu.step(0);
     assert_eq!(cpu.mem_read(0x21), 0b1111_1110);
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -165,7 +165,7 @@ fn test_asl_absolute() {
     cpu.mem_write_u16(0x1, 0x1234);
     cpu.mem_write(0x1234, 0b0000_0001);
 
-    cpu.step();
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x1234), 0b0000_0010);
     assert!(!cpu.get_carry_flag());
@@ -181,7 +181,7 @@ fn test_asl_absolute_x() {
     cpu.mem_write(0x8001, 0b1000_0000);
 
     cpu.x_register = 0x01;
-    cpu.step();
+    cpu.step(0);
     assert_eq!(cpu.mem_read(0x8001), 0);
     assert!(cpu.get_carry_flag());
     assert!(cpu.get_zero_flag());
@@ -194,7 +194,7 @@ fn test_asl_flags_none_when_none() {
     cpu.mem_write(0x0, 0x0A);
     cpu.accumulator = 0b0011_1111;
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(!cpu.get_carry_flag());
     assert!(!cpu.get_negative_flag());
@@ -207,7 +207,7 @@ fn test_asl_flags_only_carry_when_carry() {
     cpu.mem_write(0x0, 0x0A);
     cpu.accumulator = 0b1000_0010;
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_negative_flag());
@@ -220,7 +220,7 @@ fn test_asl_flags_only_zero_when_zero() {
     cpu.mem_write(0x0, 0x0A);
     cpu.accumulator = 0b0000_0000;
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_carry_flag());
@@ -233,7 +233,7 @@ fn test_asl_flags_only_negative_when_negative() {
     cpu.mem_write(0x0, 0x0A);
     cpu.accumulator = 0b0100_0010;
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(!cpu.get_carry_flag());
     assert!(cpu.get_negative_flag());
@@ -246,7 +246,7 @@ fn test_asl_flags_carry_and_negative_when_carry_and_negative() {
     cpu.mem_write(0x0, 0x0A);
     cpu.accumulator = 0b1100_0000;
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_carry_flag());
     assert!(cpu.get_negative_flag());
@@ -259,7 +259,7 @@ fn test_asl_flags_carry_and_zero_when_carry_and_zero() {
     cpu.mem_write(0x0, 0x0A);
     cpu.accumulator = 0b1000_0000;
 
-    cpu.step();
+    cpu.step(0);
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_negative_flag());

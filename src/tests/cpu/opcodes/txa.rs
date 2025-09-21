@@ -7,7 +7,7 @@ fn test_txa_complete() {
 
     cpu.mem_write(0x0, 0x8A);
 
-    cpu.step();
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x66);
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -16,7 +16,7 @@ fn test_txa_complete() {
 
     cpu.mem_write(0x1, 0x8A);
 
-    cpu.step();
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x0);
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -25,7 +25,7 @@ fn test_txa_complete() {
 
     cpu.mem_write(0x2, 0x8A);
 
-    cpu.step();
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x80);
     assert!(!cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
@@ -38,7 +38,7 @@ fn test_txa_implied() {
 
     cpu.mem_write(0x0, 0x8A);
 
-    cpu.step();
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x66)
 }
 
@@ -49,7 +49,7 @@ fn test_txa_flags_none_when_none() {
 
     cpu.mem_write(0x0, 0x8A);
 
-    cpu.step();
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x66);
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -63,7 +63,7 @@ fn test_txa_flags_only_zero_when_zero() {
 
     cpu.mem_write(0x0, 0x8A);
 
-    cpu.step();
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x0);
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -76,7 +76,7 @@ fn test_txa_flags_only_negative_when_negative() {
 
     cpu.mem_write(0x0, 0x8A);
 
-    cpu.step();
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x80);
     assert!(!cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());

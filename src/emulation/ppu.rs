@@ -7,6 +7,7 @@ use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::PpuState;
 use crate::emulation::util;
 use std::cell::Cell;
+use std::ops::RangeInclusive;
 
 #[derive(Debug)]
 pub struct Ppu {
@@ -36,6 +37,7 @@ pub struct Ppu {
     pub even_frame: bool,
     pub reset_signal: bool,
     pub pixel_buffer: [u32; (WIDTH * HEIGHT) as usize],
+    pub master_cycle: u128,
 }
 
 impl Default for Ppu {
@@ -106,6 +108,7 @@ impl Ppu {
             even_frame: true,
             reset_signal: true,
             pixel_buffer: [0u32; (WIDTH * HEIGHT) as usize],
+            master_cycle: 0,
         }
     }
 
@@ -126,7 +129,9 @@ impl Ppu {
         Ram::new(0xFF)
     }
 
-    pub fn step(&mut self) {
+    pub fn step(&mut self, master_cycle: u128) {
+        self.master_cycle = master_cycle;
+
         if self.reset_signal {
             self.ctrl_register = 0;
             self.mask_register = 0;
@@ -471,6 +476,10 @@ impl Ppu {
     pub fn get_pixel_buffer(&self) -> &[u32; (WIDTH * HEIGHT) as usize] {
         &self.pixel_buffer
     }
+
+    pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
+        self.memory.get_memory_debug(range)
+    }
 }
 
 impl Ppu {
@@ -502,6 +511,7 @@ impl Ppu {
             even_frame: state.even_frame,
             reset_signal: state.reset_signal,
             pixel_buffer: state.pixel_buffer.clone().try_into().unwrap(),
+            master_cycle: state.master_cycle,
         };
 
         ppu.load_rom(rom);

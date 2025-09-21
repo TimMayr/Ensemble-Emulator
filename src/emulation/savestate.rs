@@ -15,6 +15,7 @@ pub struct CpuState {
     pub processor_status: u8,
     pub additional_cycles: u8,
     pub memory: Vec<u8>, // PRG RAM + Work RAM
+    pub master_cycle: u128,
 }
 
 impl From<&Cpu> for CpuState {
@@ -27,7 +28,8 @@ impl From<&Cpu> for CpuState {
             y_register: cpu.y_register,
             processor_status: cpu.processor_status,
             additional_cycles: cpu.additional_cycles,
-            memory: cpu.memory.get_memory_debug(0x0..=0x07FF),
+            memory: cpu.memory.get_memory_debug(Some(0x0..=0x07FF)),
+            master_cycle: cpu.master_cycle,
         }
     }
 }
@@ -35,6 +37,7 @@ impl From<&Cpu> for CpuState {
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 pub struct PpuState {
     pub cycle_counter: u128,
+    pub master_cycle: u128,
     pub status_register: u8,
     pub ctrl_register: u8,
     pub mask_register: u8,
@@ -65,11 +68,12 @@ impl From<&Ppu> for PpuState {
     fn from(ppu: &Ppu) -> Self {
         Self {
             cycle_counter: ppu.dot_counter,
+            master_cycle: ppu.master_cycle,
             status_register: ppu.status_register,
             ctrl_register: ppu.ctrl_register,
             mask_register: ppu.mask_register,
             nmi_requested: ppu.nmi_requested.get(),
-            memory: ppu.memory.get_memory_debug(0x0..=0x3FFF),
+            memory: ppu.memory.get_memory_debug(Some(0x0..=0x3FFF)),
             oam_data_register: ppu.oam_data_register,
             ppu_x_scroll_register: ppu.ppu_x_scroll_register,
             ppu_y_scroll_register: ppu.ppu_y_scroll_register,

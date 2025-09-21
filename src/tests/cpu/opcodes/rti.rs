@@ -13,12 +13,12 @@ fn test_rti() {
     cpu.mem_write(0x3, 0x55);
     cpu.mem_write(0x4, 0x78);
 
-    cpu.step();
-    cpu.step();
-    cpu.step();
-    cpu.step();
-    cpu.step();
-    cpu.step();
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x66);
     assert_eq!(cpu.x_register, 0x55);

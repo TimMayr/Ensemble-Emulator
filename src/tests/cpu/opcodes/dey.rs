@@ -5,7 +5,7 @@ fn test_dey_complete() {
     let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x88);
 
-    cpu.step();
+    cpu.step(0);
 
     assert_eq!(cpu.y_register, 0xFF);
     assert!(!cpu.get_zero_flag());
@@ -13,7 +13,7 @@ fn test_dey_complete() {
 
     cpu.mem_write(0x1, 0x88);
     cpu.y_register = 0x2;
-    cpu.step();
+    cpu.step(0);
 
     assert_eq!(cpu.y_register, 0x1);
     assert!(!cpu.get_zero_flag());
@@ -22,7 +22,7 @@ fn test_dey_complete() {
     cpu.mem_write(0x2, 0x88);
     cpu.y_register = 0x1;
 
-    cpu.step();
+    cpu.step(0);
 
     assert_eq!(cpu.y_register, 0x00);
     assert!(cpu.get_zero_flag());
@@ -31,7 +31,7 @@ fn test_dey_complete() {
     cpu.mem_write(0x3, 0x88);
     cpu.y_register = 0xFF;
 
-    cpu.step();
+    cpu.step(0);
 
     assert_eq!(cpu.y_register, 0xFE);
     assert!(!cpu.get_zero_flag());
@@ -43,7 +43,7 @@ fn test_dey_zero_page() {
     let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x88);
 
-    cpu.step();
+    cpu.step(0);
 
     assert_eq!(cpu.y_register, 0xFF)
 }
@@ -53,7 +53,7 @@ fn test_dey_flags_none_when_none() {
     let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0x88);
     cpu.y_register = 0x2;
-    cpu.step();
+    cpu.step(0);
 
     assert_eq!(cpu.y_register, 0x1);
     assert!(!cpu.get_zero_flag());
@@ -66,7 +66,7 @@ fn test_dey_flags_zero_when_zero() {
     cpu.mem_write(0x0, 0x88);
     cpu.y_register = 0x1;
 
-    cpu.step();
+    cpu.step(0);
 
     assert_eq!(cpu.y_register, 0x00);
     assert!(cpu.get_zero_flag());
@@ -79,7 +79,7 @@ fn test_dey_flags_negative_when_negative() {
     cpu.mem_write(0x0, 0x88);
     cpu.y_register = 0xFF;
 
-    cpu.step();
+    cpu.step(0);
 
     assert_eq!(cpu.y_register, 0xFE);
     assert!(!cpu.get_zero_flag());

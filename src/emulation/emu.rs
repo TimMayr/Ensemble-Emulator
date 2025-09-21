@@ -1,5 +1,6 @@
 use crate::emulation::nes::Nes;
 use crate::frontend::Frontends;
+use std::ops::RangeInclusive;
 
 pub const WIDTH: u32 = 272;
 pub const HEIGHT: u32 = 128;
@@ -32,6 +33,22 @@ impl Console for Consoles {
             Consoles::Nes(nes) => nes.run(frontend),
         }
     }
+
+    fn run_until(
+        &mut self,
+        frontend: &mut Option<Frontends>,
+        last_cycle: u128,
+    ) -> Result<(), String> {
+        match self {
+            Consoles::Nes(nes) => nes.run_until(frontend, last_cycle),
+        }
+    }
+
+    fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>> {
+        match self {
+            Consoles::Nes(nes) => nes.get_memory_debug(range),
+        }
+    }
 }
 
 pub trait Console {
@@ -40,4 +57,11 @@ pub trait Console {
     fn load_rom(&mut self, path: &String);
     fn reset(&mut self);
     fn run(&mut self, option: &mut Option<Frontends>) -> Result<(), String>;
+    fn run_until(
+        &mut self,
+        frontend: &mut Option<Frontends>,
+        last_cycle: u128,
+    ) -> Result<(), String>;
+
+    fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>>;
 }
