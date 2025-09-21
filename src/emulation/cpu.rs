@@ -6,6 +6,7 @@ use crate::emulation::opcode::{OPCODES_MAP, OpCode};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
+use crate::emulation::util::write_to_file;
 use std::cell::RefCell;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
@@ -350,6 +351,11 @@ impl Cpu {
     fn lda(&mut self, mode: &AddressingMode) {
         let target = self.get_operand_address(mode);
         let target_val = self.mem_read(target);
+
+        if target_val == 6 {
+            print!("reached");
+        }
+
         self.accumulator = target_val;
         self.update_negative_and_zero_flags(self.accumulator);
     }
@@ -370,6 +376,10 @@ impl Cpu {
 
     fn sta(&mut self, mode: &AddressingMode) {
         let target = self.get_operand_address(mode);
+        if target == 0x6000 {
+            println!("{:02X?}", self.memory.get_memory_debug(0x6000..=0xFFFF));
+            // panic!()
+        }
         self.mem_write(target, self.accumulator);
     }
 
@@ -923,6 +933,7 @@ impl Cpu {
 
     pub fn reset(&mut self) {
         self.program_counter = self.mem_read_u16(RESET_VECTOR_ADDR);
+        write_to_file("dump.bin", self.memory.get_memory_debug(0..=0xFFFF));
     }
 
     pub fn step(&mut self) -> u8 {
@@ -930,7 +941,6 @@ impl Cpu {
             && ppu.borrow().poll_nmi()
         {
             self.trigger_nmi();
-            println!("Nmi Triggered");
         }
 
         self.additional_cycles = 0;
@@ -1027,7 +1037,6 @@ impl Cpu {
         let prg_rom = rom_file.get_prg_rom();
 
         if rom_file.prg_memory.prg_rom_size > (16 * 1024) {
-            println!("{:0X?}", prg_rom);
             self.memory.add_memory(0x8000..=0xFFFF, prg_rom)
         } else {
             self.memory.add_memory(

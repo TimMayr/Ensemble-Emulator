@@ -423,7 +423,16 @@ impl Ppu {
             )
         }
 
-        let palette_index = current_palette[*color_bits as usize] as usize;
+        // let mut palette_index = current_palette[*color_bits as usize] as usize;
+
+        let palette_index = match color_bits {
+            0b00 => 0x0f,
+            0b11 => 0x26,
+            0b01 => 0x2A,
+            0b10 => 0x21,
+            _ => 0x0f,
+        };
+
         NES_PALETTE[palette_index]
     }
 

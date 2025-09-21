@@ -8,6 +8,7 @@ opt-level = 0         # Or 2 if you want more speed
 debug = true           # Keep debug info for debugging
 lto = false            # LTO slows compilation a lot
 codegen-units = 1    # Keeps compile times reasonable
+overflow-checks = false
 
 [profile.dev.package."*"]
 opt-level = 3          # Force hot inner loops in dependencies to be fast
