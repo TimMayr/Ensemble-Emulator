@@ -1,10 +1,10 @@
 use crate::emulation::emu::{HEIGHT, WIDTH};
+use sdl2::EventPump;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::render::{TextureCreator, WindowCanvas};
 use sdl2::video::WindowContext;
-use sdl2::EventPump;
 use std::time::Duration;
 
 pub enum Frontends {

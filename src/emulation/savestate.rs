@@ -2,7 +2,7 @@ use crate::emulation::cpu::Cpu;
 use crate::emulation::emu::{HEIGHT, WIDTH};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::RomFile;
-use bincode::{config, Decode, Encode};
+use bincode::{Decode, Encode, config};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
