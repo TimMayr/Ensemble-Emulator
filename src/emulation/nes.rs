@@ -54,12 +54,10 @@ impl Console for Nes {
                 self.ppu.borrow_mut().step();
             }
 
-            if self.cycles.is_multiple_of(MASTER_CYCLES_PER_FRAME as u128) {
-                if let Some(frontend) = possible_frontend.as_mut() {
-                    if let Err(res) = frontend.show_frame(&self.get_pixel_buffer()) {
-                        return Err(res);
-                    }
-                }
+            if self.cycles.is_multiple_of(MASTER_CYCLES_PER_FRAME as u128)
+                && let Some(frontend) = possible_frontend.as_mut()
+            {
+                frontend.show_frame(&self.get_pixel_buffer())?
             }
         }
     }

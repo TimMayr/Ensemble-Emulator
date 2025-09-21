@@ -142,20 +142,16 @@ impl Ppu {
             self.even_frame = !self.even_frame;
         }
 
-        if frame_dot == 261 * 113 {
-            if !self.even_frame && self.is_rendering() {
-                self.dot_counter += 1;
-                frame_dot = self.dot_counter % DOTS_PER_FRAME as u128;
-            }
+        if frame_dot == 261 * 113 && !self.even_frame && self.is_rendering() {
+            self.dot_counter += 1;
+            frame_dot = self.dot_counter % DOTS_PER_FRAME as u128;
         }
 
-        if frame_dot >= (240 * 340) + 2 {
-            if (self.status_register & VBLANK_NMI_BIT) == 0 {
-                // Just entered VBlank
-                self.status_register |= VBLANK_NMI_BIT;
-                if self.ctrl_register & VBLANK_NMI_BIT != 0 {
-                    self.nmi_requested.set(true);
-                }
+        if frame_dot >= (240 * 340) + 2 && (self.status_register & VBLANK_NMI_BIT) == 0 {
+            // Just entered VBlank
+            self.status_register |= VBLANK_NMI_BIT;
+            if self.ctrl_register & VBLANK_NMI_BIT != 0 {
+                self.nmi_requested.set(true);
             }
         }
 
@@ -355,8 +351,8 @@ impl Ppu {
     }
 
     pub fn get_pattern_table_0(&self, buffer: &mut [u8; PATTERN_TABLE_SIZE]) {
-        for i in 0..PATTERN_TABLE_SIZE {
-            buffer[i] = self.mem_read(i as u16);
+        for (i, byte) in buffer.iter_mut().enumerate().take(PATTERN_TABLE_SIZE) {
+            *byte = self.mem_read(i as u16);
         }
     }
 
@@ -419,8 +415,8 @@ impl Ppu {
     pub fn get_color_for_bits(&mut self, color_bits: &u8) -> u32 {
         let mut current_palette: [u8; 4] = [0; 4];
 
-        for i in 0..4 {
-            current_palette[i] = self.mem_read(
+        for (i, item) in current_palette.iter_mut().enumerate() {
+            *item = self.mem_read(
                 PALETTE_RAM_START_ADDRESS
                     + (self.get_selected_palette() as u16 * PALETTE_SIZE)
                     + i as u16,
