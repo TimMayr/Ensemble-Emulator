@@ -369,6 +369,10 @@ impl Cpu {
 
     fn sta(&mut self, mode: &AddressingMode) {
         let target = self.get_operand_address(mode);
+        if target == 0x6000 {
+            println!("{:02X?}", self.memory.get_memory_debug(0x6000..=0x6100));
+            // panic!()
+        }
         self.mem_write(target, self.accumulator);
     }
 
