@@ -1,12 +1,5 @@
 #![feature(uint_bit_width)]
-
-pub mod cpu;
-pub mod mem;
-pub mod nes;
-pub mod opcode;
-pub mod ppu;
-pub mod rom;
-pub mod savestate;
+pub mod emulation;
+pub mod frontend;
 #[cfg(test)]
 mod tests;
-pub mod util;

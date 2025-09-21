@@ -1,5 +1,5 @@
-use crate::mem::{Memory, Rom};
-use crate::nes::Nes;
+use crate::emulation::mem::{Memory, MemoryDevice, Rom};
+use crate::emulation::nes::Nes;
 
 #[test]
 fn test_nmi_vector() {
@@ -15,7 +15,7 @@ fn test_nmi_vector() {
     rom.init(0x1, 0x20);
 
     //Attach new Rom memory device to cpu
-    nes.cpu.memory.add_memory(0x4020..=0xFFFF, Box::new(rom));
+    nes.cpu.memory.add_memory(0x4020..=0xFFFF, Memory::Rom(rom));
 
     //Manually force an nmi
     nes.ppu.borrow().nmi_requested.set(true);

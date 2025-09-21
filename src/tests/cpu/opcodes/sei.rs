@@ -1,4 +1,4 @@
-use crate::cpu::Cpu;
+use crate::emulation::cpu::Cpu;
 
 #[test]
 fn test_sei() {

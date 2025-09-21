@@ -1,5 +1,5 @@
-use crate::cpu::Cpu;
-use crate::mem::{Memory, Rom};
+use crate::emulation::cpu::Cpu;
+use crate::emulation::mem::{Memory, MemoryDevice, Rom};
 
 #[test]
 fn test_brk_vector() {
@@ -20,7 +20,7 @@ fn test_brk_vector() {
     cpu.mem_write(0x0, 0x0);
 
     //Attach new Rom memory device to cpu
-    cpu.memory.add_memory(0x4020..=0xFFFF, Box::new(rom));
+    cpu.memory.add_memory(0x4020..=0xFFFF, Memory::Rom(rom));
 
     cpu.reset();
     cpu.step();

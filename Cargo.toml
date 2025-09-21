@@ -29,4 +29,6 @@ split-debuginfo = "unpacked"  # Ensures symbols are separate
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-bincode = { version = "2", features = ["serde"] } # Latest version
+bincode = { version = "2", features = ["serde"] }
+sdl2 = "0.38.0"
+bytemuck = "1.23.2"
