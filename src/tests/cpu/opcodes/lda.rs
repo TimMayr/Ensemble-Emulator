@@ -7,12 +7,15 @@ fn test_lda_complete() {
     cpu.mem_write(0x1, 0x65);
 
     cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x65);
 
     cpu.mem_write(0x2, 0xA5);
     cpu.mem_write(0x3, 0x00A5);
     cpu.mem_write(0x00A5, 0x66);
 
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 0x66);
 
@@ -22,12 +25,18 @@ fn test_lda_complete() {
     cpu.mem_write(0x00C5, 0x67);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x67);
 
     cpu.mem_write(0x6, 0xAD);
     cpu.mem_write_u16(0x7, 0xADAD);
     cpu.mem_write(0xADAD, 0x68);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 0x68);
 
@@ -37,6 +46,9 @@ fn test_lda_complete() {
     cpu.mem_write(0xBDCD, 0x69);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x69);
 
     cpu.mem_write(0xC, 0xB9);
@@ -44,6 +56,9 @@ fn test_lda_complete() {
     cpu.y_register = 0x0010;
     cpu.mem_write(0xB9C9, 0x6A);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 0x6A);
 
@@ -54,6 +69,11 @@ fn test_lda_complete() {
     cpu.mem_write(0xA1A1, 0x6B);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x6B);
 
     cpu.mem_write(0x11, 0xB1);
@@ -63,11 +83,16 @@ fn test_lda_complete() {
     cpu.mem_write(0xB1C1, 0x6C);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x6C);
 
     cpu.mem_write(0x13, 0xA9);
     cpu.mem_write(0x14, 0x6D);
 
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 0x6D);
     assert!(!cpu.get_negative_flag());
@@ -77,6 +102,7 @@ fn test_lda_complete() {
     cpu.mem_write(0x16, 0x0);
 
     cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x0);
     assert!(!cpu.get_negative_flag());
     assert!(cpu.get_zero_flag());
@@ -84,6 +110,7 @@ fn test_lda_complete() {
     cpu.mem_write(0x17, 0xA9);
     cpu.mem_write(0x18, 0x80);
 
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 0x80);
     assert!(cpu.get_negative_flag());
@@ -97,6 +124,7 @@ fn test_lda_immediate() {
     cpu.mem_write(0x1, 0x66);
 
     cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x66);
 }
 
@@ -107,6 +135,8 @@ fn test_lda_zero_page() {
     cpu.mem_write(0x1, 0x00A5);
     cpu.mem_write(0x00A5, 0x66);
 
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 0x66);
 }
@@ -120,6 +150,9 @@ fn test_lda_zero_page_x() {
     cpu.mem_write(0x00C5, 0x66);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x66);
 }
 
@@ -130,6 +163,9 @@ fn test_lda_absolute() {
     cpu.mem_write_u16(0x1, 0xADAD);
     cpu.mem_write(0xADAD, 0x66);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 0x66);
 }
@@ -143,6 +179,9 @@ fn test_lda_absolute_x() {
     cpu.mem_write(0xBDCD, 0x66);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x66);
 }
 
@@ -154,6 +193,9 @@ fn test_lda_absolute_y() {
     cpu.y_register = 0x0010;
     cpu.mem_write(0xB9C9, 0x66);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 0x66);
 }
@@ -168,6 +210,11 @@ fn test_lda_indirect_x() {
     cpu.mem_write(0xA1A1, 0x66);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x66);
 }
 
@@ -181,6 +228,10 @@ fn test_lda_indirect_y() {
     cpu.mem_write(0xB1C1, 0x66);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x66);
 }
 
@@ -190,6 +241,7 @@ fn test_lda_flags_none_when_none() {
     cpu.mem_write(0x0, 0xA9);
     cpu.mem_write(0x1, 0x66);
 
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 0x66);
     assert!(!cpu.get_negative_flag());
@@ -203,6 +255,7 @@ fn test_lda_flags_only_zero_when_zero() {
     cpu.mem_write(0x1, 0x0);
 
     cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x0);
     assert!(!cpu.get_negative_flag());
     assert!(cpu.get_zero_flag());
@@ -214,6 +267,7 @@ fn test_lda_flags_only_negative_when_negative() {
     cpu.mem_write(0x0, 0xA9);
     cpu.mem_write(0x1, 0x80);
 
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 0x80);
     assert!(cpu.get_negative_flag());

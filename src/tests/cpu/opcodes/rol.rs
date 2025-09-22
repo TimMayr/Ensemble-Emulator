@@ -151,6 +151,21 @@ fn test_rol_complete() {
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
+
+    cpu.accumulator = 0b10000000;
+    cpu.processor_status = 0b00000000;
+
+    cpu.mem_write(0x14, 0x2A);
+    cpu.mem_write(0x15, 0x2A);
+    cpu.step(0);
+    assert_eq!(cpu.accumulator, 0);
+    assert!(cpu.get_carry_flag());
+    assert!(cpu.get_zero_flag());
+
+    cpu.step(0);
+    assert_eq!(cpu.accumulator, 1);
+    assert!(!cpu.get_carry_flag());
+    assert!(!cpu.get_zero_flag());
 }
 
 #[test]

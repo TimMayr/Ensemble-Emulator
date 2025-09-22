@@ -8,6 +8,7 @@ fn test_adc_immediate() {
     cpu.mem_write(0x1, 0x55);
 
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x66);
 }
@@ -20,6 +21,8 @@ fn test_adc_zero_page() {
     cpu.mem_write(0x1, 0x33);
     cpu.mem_write(0x33, 0x55);
 
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x66);
@@ -35,6 +38,9 @@ fn test_adc_zero_page_x() {
     cpu.mem_write(0x43, 0x55);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x66);
 }
@@ -47,6 +53,9 @@ fn test_adc_absolute() {
     cpu.mem_write_u16(0x1, 0x8333);
     cpu.mem_write(0x8333, 0x55);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x66);
@@ -62,6 +71,9 @@ fn test_adc_absolute_x() {
     cpu.mem_write(0x8343, 0x55);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x66);
 }
@@ -75,6 +87,9 @@ fn test_adc_absolute_y() {
     cpu.mem_write_u16(0x1, 0x8333);
     cpu.mem_write(0x8343, 0x55);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x66);
@@ -91,6 +106,11 @@ fn test_adc_indirect_x() {
     cpu.mem_write(0x8343, 0x55);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x66);
 }
@@ -106,6 +126,10 @@ fn test_adc_indirect_y() {
     cpu.mem_write(0x8343, 0x55);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x66);
 }
@@ -120,6 +144,7 @@ fn test_adc_with_carry() {
     cpu.mem_write(0x1, 0x55);
 
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x66);
 }
@@ -133,6 +158,7 @@ fn test_adc_flags_none_when_none() {
     cpu.mem_write(0x0, 0x69);
     cpu.mem_write(0x1, 0x55);
 
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x66);
@@ -151,6 +177,7 @@ fn test_adc_flags_negative_when_negative() {
     cpu.mem_write(0x1, 0x80);
 
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x90);
     assert!(!cpu.get_overflow_flag());
@@ -167,6 +194,7 @@ fn test_adc_flags_carry_when_carry() {
     cpu.mem_write(0x0, 0x69);
     cpu.mem_write(0x1, 0x3);
 
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x2);
@@ -185,6 +213,7 @@ fn test_adc_flags_zero_and_carry_when_zero_and_carry() {
     cpu.mem_write(0x1, 0x1);
 
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x0);
     assert!(!cpu.get_overflow_flag());
@@ -201,6 +230,7 @@ fn test_adc_flags_overflow_when_overflow() {
     cpu.mem_write(0x0, 0x69);
     cpu.mem_write(0x1, 0x3);
 
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x82);

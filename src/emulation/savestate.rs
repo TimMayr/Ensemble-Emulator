@@ -1,4 +1,4 @@
-use crate::emulation::cpu::Cpu;
+use crate::emulation::cpu::{Cpu, MicroOp};
 use crate::emulation::emu::{HEIGHT, WIDTH};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::RomFile;
@@ -16,6 +16,12 @@ pub struct CpuState {
     pub additional_cycles: u8,
     pub memory: Vec<u8>, // PRG RAM + Work RAM
     pub master_cycle: u128,
+    pub lo: u8,
+    pub hi: u8,
+    pub current_op: MicroOp,
+    pub op_queue: Vec<MicroOp>,
+    pub current_opcode: u8,
+    pub temp: u8,
 }
 
 impl From<&Cpu> for CpuState {
@@ -30,6 +36,12 @@ impl From<&Cpu> for CpuState {
             additional_cycles: cpu.additional_cycles,
             memory: cpu.memory.get_memory_debug(Some(0x0..=0x07FF)),
             master_cycle: cpu.master_cycle,
+            lo: cpu.lo,
+            hi: cpu.hi,
+            current_op: cpu.current_op,
+            op_queue: cpu.op_queue.clone(),
+            current_opcode: cpu.current_opcode.opcode,
+            temp: cpu.temp,
         }
     }
 }

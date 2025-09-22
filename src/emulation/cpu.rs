@@ -6,6 +6,8 @@ use crate::emulation::opcode::{OPCODES_MAP, OpCode};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
+use bincode::{Decode, Encode};
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
@@ -28,7 +30,7 @@ const RESET_VECTOR_ADDR: u16 = 0xFFFC;
 const UPPER_BYTE: u16 = 0xFF00;
 const LOWER_BYTE: u16 = 0x00FF;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
 pub enum AddressingMode {
     Implied,
     Accumulator,
@@ -57,6 +59,12 @@ pub struct Cpu {
     pub ppu: Option<Rc<RefCell<Ppu>>>,
     pub additional_cycles: u8,
     pub master_cycle: u128,
+    pub lo: u8,
+    pub hi: u8,
+    pub current_op: MicroOp,
+    pub op_queue: Vec<MicroOp>,
+    pub current_opcode: OpCode,
+    pub temp: u8,
 }
 
 impl Default for Cpu {
@@ -74,6 +82,12 @@ impl Default for Cpu {
             additional_cycles: 0,
             ppu: None,
             master_cycle: 0,
+            lo: 0,
+            hi: 0,
+            current_op: MicroOp::FetchOpcode(MicroOpCallback::None),
+            op_queue: vec![],
+            current_opcode: Default::default(),
+            temp: 0,
         }
     }
 }
@@ -204,71 +218,6 @@ impl Cpu {
         (self.processor_status & OVERFLOW_BIT) != 0
     }
 
-    fn get_operand_address(&mut self, addressing_mode: &AddressingMode) -> u16 {
-        match addressing_mode {
-            AddressingMode::Immediate => {
-                let res = self.program_counter;
-                self.program_counter = self.program_counter.wrapping_add(1);
-                res
-            }
-            AddressingMode::ZeroPage => self.fetch_next_byte() as u16,
-            AddressingMode::ZeroPageX => {
-                let pos = self.fetch_next_byte();
-                pos.wrapping_add(self.x_register) as u16
-            }
-            AddressingMode::ZeroPageY => {
-                let pos = self.fetch_next_byte();
-                pos.wrapping_add(self.y_register) as u16
-            }
-            AddressingMode::Relative => {
-                let res = self.program_counter;
-                self.program_counter = self.program_counter.wrapping_add(1);
-                res
-            }
-            AddressingMode::Absolute => self.fetch_next_bytes_u16(),
-            AddressingMode::AbsoluteX => {
-                let base = self.fetch_next_bytes_u16();
-                let pos = base + self.x_register as u16;
-
-                if Cpu::crosses_page_boundary_u8(base, self.x_register) {
-                    self.additional_cycles += 1;
-                }
-
-                pos
-            }
-            AddressingMode::AbsoluteY => {
-                let base = self.fetch_next_bytes_u16();
-                let pos = base + self.y_register as u16;
-
-                if Cpu::crosses_page_boundary_u8(base, self.y_register) {
-                    self.additional_cycles += 1;
-                }
-
-                pos
-            }
-            AddressingMode::Indirect => {
-                let base = self.fetch_next_bytes_u16();
-                self.mem_read_u16(base)
-            }
-            AddressingMode::IndirectX => {
-                let base = self.fetch_next_byte();
-                let lookup_addr = base.wrapping_add(self.x_register);
-                self.mem_read_u16(lookup_addr as u16)
-            }
-            AddressingMode::IndirectY => {
-                let lookup_addr = self.fetch_next_byte();
-                let addr = self.mem_read_u16(lookup_addr as u16);
-
-                if Self::crosses_page_boundary_u8(addr, self.y_register) {
-                    self.additional_cycles += 1;
-                }
-
-                addr.wrapping_add(self.y_register as u16)
-            }
-            _ => panic!("Invalid addressing mode"),
-        }
-    }
-
     fn crosses_page_boundary_u8(base: u16, offset: u8) -> bool {
         (base & UPPER_BYTE) != ((base + offset as u16) & UPPER_BYTE)
     }
@@ -276,12 +225,6 @@ impl Cpu {
     fn crosses_page_boundary_i8(base: u16, offset: i8) -> bool {
         let target = base.wrapping_add(offset as i16 as u16);
         (base & UPPER_BYTE) != (target & UPPER_BYTE)
-    }
-
-    fn fetch_next_byte(&mut self) -> u8 {
-        let res = self.mem_read(self.program_counter);
-        self.program_counter += 1;
-        res
     }
 
     fn fetch_next_bytes_u16(&mut self) -> u16 {
@@ -348,48 +291,133 @@ impl Cpu {
         res
     }
 
-    fn lda(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_val = self.mem_read(target);
-        self.accumulator = target_val;
-        self.update_negative_and_zero_flags(self.accumulator);
+    fn get_temp_as_addr(&self) -> u16 {
+        ((self.hi as u16) << 8) | (self.lo as u16)
     }
 
-    fn ldx(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_val = self.mem_read(target);
-        self.x_register = target_val;
-        self.update_negative_and_zero_flags(self.x_register);
+    fn get_instructions_for_op_type(&mut self) -> Vec<MicroOp> {
+        let mut instructions = vec![];
+        match self.current_opcode.op_type {
+            OpType::AccumulatorOrImplied(callback) => {
+                instructions.push(MicroOp::DummyRead(callback))
+            }
+            OpType::ImmediateAddressing(target, callback) => {
+                instructions.push(MicroOp::Transfer(Source::Immediate, target, callback))
+            }
+            OpType::AbsoluteRead(target, callback) => {
+                instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
+                instructions.push(MicroOp::FetchOperandHi(MicroOpCallback::None));
+                instructions.push(MicroOp::Read(AddressSource::AddressLatch, target, callback))
+            }
+            OpType::AbsoluteIndexRead(index, target, callback) => {
+                instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
+                instructions.push(MicroOp::ReadWithOffsetAndAddSomething(
+                    AddressSource::PC,
+                    Source::None,
+                    Target::HI,
+                    Source::LO,
+                    index,
+                    Target::LO,
+                    true,
+                    MicroOpCallback::None,
+                ));
+                instructions.push(MicroOp::ReadPageCrossAware(
+                    AddressSource::AddressLatch,
+                    index,
+                    target,
+                    callback,
+                ))
+            }
+            OpType::ZeroPageRead(target, callback) => {
+                instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
+                instructions.push(MicroOp::Read(AddressSource::LO, target, callback))
+            }
+            OpType::ZeroPageIndexRead(index, target, callback) => {
+                instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
+                instructions.push(MicroOp::DummyReadAddOffsetWriteToTarget(
+                    AddressSource::LO,
+                    index,
+                    Target::TEMP,
+                    MicroOpCallback::None,
+                ));
+                instructions.push(MicroOp::Read(AddressSource::TemP, target, callback))
+            }
+            OpType::IndexedIndirect(target, callback) => {
+                instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
+                instructions.push(MicroOp::DummyReadAddOffsetWriteToTarget(
+                    AddressSource::LO,
+                    Source::X,
+                    Target::TEMP,
+                    MicroOpCallback::None,
+                ));
+                instructions.push(MicroOp::Read(
+                    AddressSource::TemP,
+                    Target::LO,
+                    MicroOpCallback::None,
+                ));
+                instructions.push(MicroOp::ReadWithOffsetAndAddSomething(
+                    AddressSource::TemP,
+                    Source::Constant(1),
+                    Target::HI,
+                    Source::None,
+                    Source::None,
+                    Target::None,
+                    false,
+                    MicroOpCallback::None,
+                ));
+                instructions.push(MicroOp::Read(AddressSource::AddressLatch, target, callback))
+            }
+            OpType::IndirectIndexed(target, callback) => {
+                instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
+                instructions.push(MicroOp::Read(
+                    AddressSource::LO,
+                    Target::TEMP,
+                    MicroOpCallback::None,
+                ));
+                instructions.push(MicroOp::ReadWithOffsetAndAddSomething(
+                    AddressSource::LO,
+                    Source::Constant(1),
+                    Target::HI,
+                    Source::TEMP,
+                    Source::Y,
+                    Target::LO,
+                    false,
+                    MicroOpCallback::None,
+                ));
+                instructions.push(MicroOp::ReadPageCrossAware(
+                    AddressSource::AddressLatch,
+                    Source::Y,
+                    target,
+                    callback,
+                ));
+            }
+        };
+
+        instructions
     }
 
-    fn ldy(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_val = self.mem_read(target);
-        self.y_register = target_val;
-        self.update_negative_and_zero_flags(self.y_register);
-    }
-
-    fn sta(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        if target == 0x6000 {
-            println!(
-                "{:02X?}",
-                self.memory.get_memory_debug(Some(0x6000..=0x6100))
-            );
-            println!("{}", self.master_cycle)
-        }
-        self.mem_write(target, self.accumulator);
-    }
-
-    fn stx(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        self.mem_write(target, self.x_register);
-    }
-
-    fn sty(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        self.mem_write(target, self.y_register);
-    }
+    //
+    // fn sta(&mut self, mode: &AddressingMode) {
+    //     let target = self.get_operand_address(mode);
+    //     if target == 0x6000 {
+    //         println!(
+    //             "{:02X?}",
+    //             self.memory.get_memory_debug(Some(0x6000..=0x6100))
+    //         );
+    //         println!("{}", self.master_cycle)
+    //     }
+    //     self.mem_write(target, self.accumulator);
+    // }
+    //
+    // fn stx(&mut self, mode: &AddressingMode) {
+    //     let target = self.get_operand_address(mode);
+    //     self.mem_write(target, self.x_register);
+    // }
+    //
+    // fn sty(&mut self, mode: &AddressingMode) {
+    //     let target = self.get_operand_address(mode);
+    //     self.mem_write(target, self.y_register);
+    // }
 
     fn tax(&mut self) {
         self.x_register = self.accumulator;
@@ -437,118 +465,118 @@ impl Cpu {
         self.stack_pointer = self.x_register;
     }
 
-    fn and(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_val = self.mem_read(target);
-        self.accumulator &= target_val;
-        self.update_negative_and_zero_flags(self.accumulator);
-    }
-
-    fn eor(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_val = self.mem_read(target);
-        self.accumulator ^= target_val;
-        self.update_negative_and_zero_flags(self.accumulator);
-    }
-
-    fn ora(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_val = self.mem_read(target);
-        self.accumulator |= target_val;
-        self.update_negative_and_zero_flags(self.accumulator);
-    }
-
-    fn bit(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_val = self.mem_read(target);
-        let res = self.accumulator & target_val;
-        self.update_zero_flag(res);
-        self.processor_status |= target_val & (NEGATIVE_BIT | OVERFLOW_BIT)
-    }
-
-    fn inc(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_value = self.mem_read(target);
-        let (mod_value, _) = target_value.overflowing_add(1);
-        self.mem_write(target, mod_value);
-        self.update_negative_and_zero_flags(mod_value);
-    }
-
-    fn inx(&mut self) {
-        let (mod_value, _) = self.x_register.overflowing_add(1);
-        self.x_register = mod_value;
-        self.update_negative_and_zero_flags(self.x_register);
-    }
-
-    fn iny(&mut self) {
-        let (mod_value, _) = self.y_register.overflowing_add(1);
-        self.y_register = mod_value;
-        self.update_negative_and_zero_flags(self.y_register);
-    }
-
-    fn dec(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_value = self.mem_read(target);
-        let (mod_value, _) = target_value.overflowing_sub(1);
-        self.mem_write(target, mod_value);
-        self.update_negative_and_zero_flags(mod_value);
-    }
-
-    fn dex(&mut self) {
-        let (mod_value, _) = self.x_register.overflowing_sub(1);
-        self.x_register = mod_value;
-        self.update_negative_and_zero_flags(self.x_register);
-    }
-
-    fn dey(&mut self) {
-        let (mod_value, _) = self.y_register.overflowing_sub(1);
-        self.y_register = mod_value;
-        self.update_negative_and_zero_flags(self.y_register);
-    }
-
-    fn asl(&mut self, mode: &AddressingMode) {
-        if mode != &AddressingMode::Accumulator {
-            let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target);
-            let res = self.shift_left(target_value);
-            self.mem_write(target, res);
-        } else {
-            self.accumulator = self.shift_left(self.accumulator);
-        }
-    }
-
-    fn lsr(&mut self, mode: &AddressingMode) {
-        if mode != &AddressingMode::Accumulator {
-            let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target);
-            let res = self.shift_right(target_value);
-            self.mem_write(target, res);
-        } else {
-            self.accumulator = self.shift_right(self.accumulator);
-        }
-    }
-
-    fn rol(&mut self, mode: &AddressingMode) {
-        if mode != &AddressingMode::Accumulator {
-            let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target);
-            let res = self.rotate_left(target_value);
-            self.mem_write(target, res);
-        } else {
-            self.accumulator = self.rotate_left(self.accumulator);
-        }
-    }
-
-    fn ror(&mut self, mode: &AddressingMode) {
-        if mode != &AddressingMode::Accumulator {
-            let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target);
-            let res = self.rotate_right(target_value);
-            self.mem_write(target, res);
-        } else {
-            self.accumulator = self.rotate_right(self.accumulator);
-        }
-    }
+    // fn and(&mut self, mode: &AddressingMode) {
+    //     let target = self.get_operand_address(mode);
+    //     let target_val = self.mem_read(target);
+    //     self.accumulator &= target_val;
+    //     self.update_negative_and_zero_flags(self.accumulator);
+    // }
+    //
+    // fn eor(&mut self, mode: &AddressingMode) {
+    //     let target = self.get_operand_address(mode);
+    //     let target_val = self.mem_read(target);
+    //     self.accumulator ^= target_val;
+    //     self.update_negative_and_zero_flags(self.accumulator);
+    // }
+    //
+    // fn ora(&mut self, mode: &AddressingMode) {
+    //     let target = self.get_operand_address(mode);
+    //     let target_val = self.mem_read(target);
+    //     self.accumulator |= target_val;
+    //     self.update_negative_and_zero_flags(self.accumulator);
+    // }
+    //
+    // fn bit(&mut self, mode: &AddressingMode) {
+    //     let target = self.get_operand_address(mode);
+    //     let target_val = self.mem_read(target);
+    //     let res = self.accumulator & target_val;
+    //     self.update_zero_flag(res);
+    //     self.processor_status |= target_val & (NEGATIVE_BIT | OVERFLOW_BIT)
+    // }
+    //
+    // fn inc(&mut self, mode: &AddressingMode) {
+    //     let target = self.get_operand_address(mode);
+    //     let target_value = self.mem_read(target);
+    //     let (mod_value, _) = target_value.overflowing_add(1);
+    //     self.mem_write(target, mod_value);
+    //     self.update_negative_and_zero_flags(mod_value);
+    // }
+    //
+    // fn inx(&mut self) {
+    //     let (mod_value, _) = self.x_register.overflowing_add(1);
+    //     self.x_register = mod_value;
+    //     self.update_negative_and_zero_flags(self.x_register);
+    // }
+    //
+    // fn iny(&mut self) {
+    //     let (mod_value, _) = self.y_register.overflowing_add(1);
+    //     self.y_register = mod_value;
+    //     self.update_negative_and_zero_flags(self.y_register);
+    // }
+    //
+    // fn dec(&mut self, mode: &AddressingMode) {
+    //     let target = self.get_operand_address(mode);
+    //     let target_value = self.mem_read(target);
+    //     let (mod_value, _) = target_value.overflowing_sub(1);
+    //     self.mem_write(target, mod_value);
+    //     self.update_negative_and_zero_flags(mod_value);
+    // }
+    //
+    // fn dex(&mut self) {
+    //     let (mod_value, _) = self.x_register.overflowing_sub(1);
+    //     self.x_register = mod_value;
+    //     self.update_negative_and_zero_flags(self.x_register);
+    // }
+    //
+    // fn dey(&mut self) {
+    //     let (mod_value, _) = self.y_register.overflowing_sub(1);
+    //     self.y_register = mod_value;
+    //     self.update_negative_and_zero_flags(self.y_register);
+    // }
+    //
+    // fn asl(&mut self, mode: &AddressingMode) {
+    //     if mode != &AddressingMode::Accumulator {
+    //         let target = self.get_operand_address(mode);
+    //         let target_value = self.mem_read(target);
+    //         let res = self.shift_left(target_value);
+    //         self.mem_write(target, res);
+    //     } else {
+    //         self.accumulator = self.shift_left(self.accumulator);
+    //     }
+    // }
+    //
+    // fn lsr(&mut self, mode: &AddressingMode) {
+    //     if mode != &AddressingMode::Accumulator {
+    //         let target = self.get_operand_address(mode);
+    //         let target_value = self.mem_read(target);
+    //         let res = self.shift_right(target_value);
+    //         self.mem_write(target, res);
+    //     } else {
+    //         self.accumulator = self.shift_right(self.accumulator);
+    //     }
+    // }
+    //
+    // fn rol(&mut self, mode: &AddressingMode) {
+    //     if mode != &AddressingMode::Accumulator {
+    //         let target = self.get_operand_address(mode);
+    //         let target_value = self.mem_read(target);
+    //         let res = self.rotate_left(target_value);
+    //         self.mem_write(target, res);
+    //     } else {
+    //         self.accumulator = self.rotate_left(self.accumulator);
+    //     }
+    // }
+    //
+    // fn ror(&mut self, mode: &AddressingMode) {
+    //     if mode != &AddressingMode::Accumulator {
+    //         let target = self.get_operand_address(mode);
+    //         let target_value = self.mem_read(target);
+    //         let res = self.rotate_right(target_value);
+    //         self.mem_write(target, res);
+    //     } else {
+    //         self.accumulator = self.rotate_right(self.accumulator);
+    //     }
+    // }
 
     fn clc(&mut self) {
         self.clear_carry_flag();
@@ -579,7 +607,7 @@ impl Cpu {
     }
 
     fn brk(&mut self) {
-        self.stack_push_u16(self.program_counter + 1);
+        self.stack_push_u16(self.program_counter);
         self.php();
 
         self.program_counter = self.mem_read_u16(IRQ_VECTOR_ADDR);
@@ -592,335 +620,307 @@ impl Cpu {
         self.program_counter = self.stack_pop_u16();
     }
 
-    fn jmp(&mut self, mode: &AddressingMode) {
-        let target_address = self.get_operand_address(mode);
-        self.program_counter = target_address;
-    }
-
-    fn jsr(&mut self, mode: &AddressingMode) {
-        let target_address = self.get_operand_address(mode);
-        self.stack_push_u16(self.program_counter.wrapping_sub(1));
-        self.program_counter = target_address;
-    }
-
-    fn rts(&mut self) {
-        let pc = self.stack_pop_u16().wrapping_add(1);
-        self.program_counter = pc;
-    }
-
-    fn bcc(&mut self, mode: &AddressingMode) {
-        if !self.get_carry_flag() {
-            self.additional_cycles += 1;
-
-            let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target) as i8;
-
-            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
-                self.additional_cycles += 1;
-            }
-
-            self.program_counter = self
-                .program_counter
-                .wrapping_add(target_value as i16 as u16);
-        } else {
-            self.program_counter = self.program_counter.wrapping_add(1);
-        }
-    }
-
-    fn bcs(&mut self, mode: &AddressingMode) {
-        if self.get_carry_flag() {
-            self.additional_cycles += 1;
-
-            let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target) as i8;
-
-            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
-                self.additional_cycles += 1;
-            }
-
-            self.program_counter = self
-                .program_counter
-                .wrapping_add(target_value as i16 as u16);
-        } else {
-            self.program_counter = self.program_counter.wrapping_add(1);
-        }
-    }
-
-    fn beq(&mut self, mode: &AddressingMode) {
-        if self.get_zero_flag() {
-            self.additional_cycles += 1;
-
-            let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target) as i8;
-
-            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
-                self.additional_cycles += 1;
-            }
-
-            self.program_counter = self
-                .program_counter
-                .wrapping_add(target_value as i16 as u16);
-        } else {
-            self.program_counter = self.program_counter.wrapping_add(1);
-        }
-    }
-
-    fn bne(&mut self, mode: &AddressingMode) {
-        if !self.get_zero_flag() {
-            self.additional_cycles += 1;
-
-            let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target) as i8;
-
-            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
-                self.additional_cycles += 1;
-            }
-
-            self.program_counter = self
-                .program_counter
-                .wrapping_add(target_value as i16 as u16);
-        } else {
-            self.program_counter = self.program_counter.wrapping_add(1);
-        }
-    }
-
-    fn bmi(&mut self, mode: &AddressingMode) {
-        if self.get_negative_flag() {
-            self.additional_cycles += 1;
-
-            let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target) as i8;
-
-            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
-                self.additional_cycles += 1;
-            }
-
-            self.program_counter = self
-                .program_counter
-                .wrapping_add(target_value as i16 as u16);
-        } else {
-            self.program_counter = self.program_counter.wrapping_add(1);
-        }
-    }
-
-    fn bpl(&mut self, mode: &AddressingMode) {
-        if !self.get_negative_flag() {
-            self.additional_cycles += 1;
-
-            let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target) as i8;
-
-            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
-                self.additional_cycles += 1;
-            }
-
-            self.program_counter = self
-                .program_counter
-                .wrapping_add(target_value as i16 as u16);
-        } else {
-            self.program_counter = self.program_counter.wrapping_add(1);
-        }
-    }
-
-    fn bvs(&mut self, mode: &AddressingMode) {
-        if self.get_overflow_flag() {
-            self.additional_cycles += 1;
-
-            let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target) as i8;
-
-            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
-                self.additional_cycles += 1;
-            }
-
-            self.program_counter = self
-                .program_counter
-                .wrapping_add(target_value as i16 as u16);
-        } else {
-            self.program_counter = self.program_counter.wrapping_add(1);
-        }
-    }
-
-    fn bvc(&mut self, mode: &AddressingMode) {
-        if !self.get_overflow_flag() {
-            self.additional_cycles += 1;
-
-            let target = self.get_operand_address(mode);
-            let target_value = self.mem_read(target) as i8;
-
-            if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
-                self.additional_cycles += 1;
-            }
-
-            self.program_counter = self
-                .program_counter
-                .wrapping_add(target_value as i16 as u16);
-        } else {
-            self.program_counter = self.program_counter.wrapping_add(1);
-        }
-    }
-
-    fn adc(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_value = self.mem_read(target);
-        let carry_in = self.processor_status & CARRY_BIT;
-
-        let acc_check = self.accumulator;
-
-        let sum = self.accumulator as u16 + target_value as u16 + carry_in as u16;
-        let result = sum as u8;
-
-        self.accumulator = result;
-
-        // Carry Flag
-        if sum > LOWER_BYTE {
-            self.set_carry_flag();
-        } else {
-            self.clear_carry_flag();
-        }
-
-        // Overflow Flag
-        if (!(acc_check ^ target_value) & (acc_check ^ result)) & NEGATIVE_BIT != 0 {
-            self.set_overflow_flag();
-        } else {
-            self.clear_overflow_flag();
-        }
-
-        self.update_negative_and_zero_flags(self.accumulator);
-    }
-
-    fn sbc(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_value = self.mem_read(target);
-        let carry_in = self.processor_status & CARRY_BIT;
-
-        let acc_check = self.accumulator;
-
-        let value = target_value ^ LOWER_BYTE as u8;
-        let sum = self.accumulator as u16 + value as u16 + carry_in as u16;
-        let result = sum as u8;
-
-        self.accumulator = result;
-
-        if sum > LOWER_BYTE {
-            self.set_carry_flag();
-        } else {
-            self.clear_carry_flag();
-        }
-
-        if ((acc_check ^ result) & (value ^ result) & NEGATIVE_BIT) != 0 {
-            self.set_overflow_flag();
-        } else {
-            self.clear_overflow_flag();
-        }
-
-        self.update_negative_and_zero_flags(self.accumulator);
-    }
-
-    fn cmp(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_value = self.mem_read(target);
-
-        if target_value == self.accumulator {
-            self.set_zero_flag();
-        } else {
-            self.clear_zero_flag();
-        }
-
-        if self.accumulator >= target_value {
-            self.set_carry_flag();
-        } else {
-            self.clear_carry_flag();
-        }
-
-        if (self.accumulator.overflowing_sub(target_value).0) & NEGATIVE_BIT != 0 {
-            self.set_negative_flag();
-        } else {
-            self.clear_negative_flag();
-        }
-    }
-
-    fn cpx(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_value = self.mem_read(target);
-
-        if target_value == self.x_register {
-            self.set_zero_flag();
-        } else {
-            self.clear_zero_flag();
-        }
-
-        if self.x_register >= target_value {
-            self.set_carry_flag();
-        } else {
-            self.clear_carry_flag();
-        }
-
-        if (self.x_register.overflowing_sub(target_value).0) & NEGATIVE_BIT != 0 {
-            self.set_negative_flag();
-        } else {
-            self.clear_negative_flag();
-        }
-    }
-
-    fn cpy(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-        let target_value = self.mem_read(target);
-
-        if target_value == self.y_register {
-            self.set_zero_flag();
-        } else {
-            self.clear_zero_flag();
-        }
-
-        if self.y_register >= target_value {
-            self.set_carry_flag();
-        } else {
-            self.clear_carry_flag();
-        }
-
-        if (self.y_register.overflowing_sub(target_value).0) & NEGATIVE_BIT != 0 {
-            self.set_negative_flag();
-        } else {
-            self.clear_negative_flag();
-        }
-    }
-
-    fn isc(&mut self, mode: &AddressingMode) {
-        let target = self.get_operand_address(mode);
-
-        //Inc
-        let target_value = self.mem_read(target);
-        let (mod_value, _) = target_value.overflowing_add(1);
-        self.mem_write(target, mod_value);
-        self.update_negative_and_zero_flags(mod_value);
-
-        //SBC
-        let target_value = self.mem_read(target);
-        let carry_in = self.processor_status & CARRY_BIT;
-
-        let acc_check = self.accumulator;
-
-        let value = target_value ^ LOWER_BYTE as u8;
-        let sum = self.accumulator as u16 + value as u16 + carry_in as u16;
-        let result = sum as u8;
-
-        self.accumulator = result;
-
-        if sum > LOWER_BYTE {
-            self.set_carry_flag();
-        } else {
-            self.clear_carry_flag();
-        }
-
-        if ((acc_check ^ result) & (value ^ result) & NEGATIVE_BIT) != 0 {
-            self.set_overflow_flag();
-        } else {
-            self.clear_overflow_flag();
-        }
-
-        self.update_negative_and_zero_flags(self.accumulator);
-    }
+    // fn jmp(&mut self, mode: &AddressingMode) {
+    //     let target_address = self.get_operand_address(mode);
+    //     self.program_counter = target_address;
+    // }
+    //
+    // fn jsr(&mut self, mode: &AddressingMode) {
+    //     self.stack_push_u16(self.program_counter.wrapping_sub(2));
+    //     let target_address = self.get_operand_address(mode);
+    //     self.program_counter = target_address;
+    // }
+    //
+    // fn rts(&mut self) {
+    //     let pc = self.stack_pop_u16().wrapping_add(2);
+    //     self.program_counter = pc;
+    // }
+    //
+    // fn bcc(&mut self, mode: &AddressingMode) {
+    //     if !self.get_carry_flag() {
+    //         self.additional_cycles += 1;
+    //
+    //         let target = self.get_operand_address(mode);
+    //         let target_value = self.mem_read(target) as i8;
+    //
+    //         if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
+    //             self.additional_cycles += 1;
+    //         }
+    //
+    //         self.program_counter = self
+    //             .program_counter
+    //             .wrapping_add(target_value as i16 as u16);
+    //     } else {
+    //         self.program_counter = self.program_counter.wrapping_add(1);
+    //     }
+    // }
+    //
+    // fn bcs(&mut self, mode: &AddressingMode) {
+    //     if self.get_carry_flag() {
+    //         self.additional_cycles += 1;
+    //
+    //         let target = self.get_operand_address(mode);
+    //         let target_value = self.mem_read(target) as i8;
+    //
+    //         if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
+    //             self.additional_cycles += 1;
+    //         }
+    //
+    //         self.program_counter = self
+    //             .program_counter
+    //             .wrapping_add(target_value as i16 as u16);
+    //     } else {
+    //         self.program_counter = self.program_counter.wrapping_add(1);
+    //     }
+    // }
+    //
+    // fn beq(&mut self, mode: &AddressingMode) {
+    //     if self.get_zero_flag() {
+    //         self.additional_cycles += 1;
+    //
+    //         let target = self.get_operand_address(mode);
+    //         let target_value = self.mem_read(target) as i8;
+    //
+    //         if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
+    //             self.additional_cycles += 1;
+    //         }
+    //
+    //         self.program_counter = self
+    //             .program_counter
+    //             .wrapping_add(target_value as i16 as u16);
+    //     } else {
+    //         self.program_counter = self.program_counter.wrapping_add(1);
+    //     }
+    // }
+    //
+    // fn bne(&mut self, mode: &AddressingMode) {
+    //     if !self.get_zero_flag() {
+    //         self.additional_cycles += 1;
+    //
+    //         let target = self.get_operand_address(mode);
+    //         let target_value = self.mem_read(target) as i8;
+    //
+    //         if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
+    //             self.additional_cycles += 1;
+    //         }
+    //
+    //         self.program_counter = self
+    //             .program_counter
+    //             .wrapping_add(target_value as i16 as u16);
+    //     } else {
+    //         self.program_counter = self.program_counter.wrapping_add(1);
+    //     }
+    // }
+    //
+    // fn bmi(&mut self, mode: &AddressingMode) {
+    //     if self.get_negative_flag() {
+    //         self.additional_cycles += 1;
+    //
+    //         let target = self.get_operand_address(mode);
+    //         let target_value = self.mem_read(target) as i8;
+    //
+    //         if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
+    //             self.additional_cycles += 1;
+    //         }
+    //
+    //         self.program_counter = self
+    //             .program_counter
+    //             .wrapping_add(target_value as i16 as u16);
+    //     } else {
+    //         self.program_counter = self.program_counter.wrapping_add(1);
+    //     }
+    // }
+    //
+    // fn bpl(&mut self, mode: &AddressingMode) {
+    //     if !self.get_negative_flag() {
+    //         self.additional_cycles += 1;
+    //
+    //         let target = self.get_operand_address(mode);
+    //         let target_value = self.mem_read(target) as i8;
+    //
+    //         if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
+    //             self.additional_cycles += 1;
+    //         }
+    //
+    //         self.program_counter = self
+    //             .program_counter
+    //             .wrapping_add(target_value as i16 as u16);
+    //     } else {
+    //         self.program_counter = self.program_counter.wrapping_add(1);
+    //     }
+    // }
+    //
+    // fn bvs(&mut self, mode: &AddressingMode) {
+    //     if self.get_overflow_flag() {
+    //         self.additional_cycles += 1;
+    //
+    //         let target = self.get_operand_address(mode);
+    //         let target_value = self.mem_read(target) as i8;
+    //
+    //         if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
+    //             self.additional_cycles += 1;
+    //         }
+    //
+    //         self.program_counter = self
+    //             .program_counter
+    //             .wrapping_add(target_value as i16 as u16);
+    //     } else {
+    //         self.program_counter = self.program_counter.wrapping_add(1);
+    //     }
+    // }
+    //
+    // fn bvc(&mut self, mode: &AddressingMode) {
+    //     if !self.get_overflow_flag() {
+    //         self.additional_cycles += 1;
+    //
+    //         let target = self.get_operand_address(mode);
+    //         let target_value = self.mem_read(target) as i8;
+    //
+    //         if Cpu::crosses_page_boundary_i8(self.program_counter, target_value) {
+    //             self.additional_cycles += 1;
+    //         }
+    //
+    //         self.program_counter = self
+    //             .program_counter
+    //             .wrapping_add(target_value as i16 as u16);
+    //     } else {
+    //         self.program_counter = self.program_counter.wrapping_add(1);
+    //     }
+    // }
+    //
+    //
+    // fn sbc(&mut self, mode: &AddressingMode) {
+    //     let target = self.get_operand_address(mode);
+    //     let target_value = self.mem_read(target);
+    //     let carry_in = self.processor_status & CARRY_BIT;
+    //
+    //     let acc_check = self.accumulator;
+    //
+    //     let value = target_value ^ LOWER_BYTE as u8;
+    //     let sum = self.accumulator as u16 + value as u16 + carry_in as u16;
+    //     let result = sum as u8;
+    //
+    //     self.accumulator = result;
+    //
+    //     if sum > LOWER_BYTE {
+    //         self.set_carry_flag();
+    //     } else {
+    //         self.clear_carry_flag();
+    //     }
+    //
+    //     if ((acc_check ^ result) & (value ^ result) & NEGATIVE_BIT) != 0 {
+    //         self.set_overflow_flag();
+    //     } else {
+    //         self.clear_overflow_flag();
+    //     }
+    //
+    //     self.update_negative_and_zero_flags(self.accumulator);
+    // }
+    //
+    // fn cmp(&mut self, mode: &AddressingMode) {
+    //     let target = self.get_operand_address(mode);
+    //     let target_value = self.mem_read(target);
+    //
+    //     if target_value == self.accumulator {
+    //         self.set_zero_flag();
+    //     } else {
+    //         self.clear_zero_flag();
+    //     }
+    //
+    //     if self.accumulator >= target_value {
+    //         self.set_carry_flag();
+    //     } else {
+    //         self.clear_carry_flag();
+    //     }
+    //
+    //     if (self.accumulator.overflowing_sub(target_value).0) & NEGATIVE_BIT != 0 {
+    //         self.set_negative_flag();
+    //     } else {
+    //         self.clear_negative_flag();
+    //     }
+    // }
+    //
+    // fn cpx(&mut self, mode: &AddressingMode) {
+    //     let target = self.get_operand_address(mode);
+    //     let target_value = self.mem_read(target);
+    //
+    //     if target_value == self.x_register {
+    //         self.set_zero_flag();
+    //     } else {
+    //         self.clear_zero_flag();
+    //     }
+    //
+    //     if self.x_register >= target_value {
+    //         self.set_carry_flag();
+    //     } else {
+    //         self.clear_carry_flag();
+    //     }
+    //
+    //     if (self.x_register.overflowing_sub(target_value).0) & NEGATIVE_BIT != 0 {
+    //         self.set_negative_flag();
+    //     } else {
+    //         self.clear_negative_flag();
+    //     }
+    // }
+    //
+    // fn cpy(&mut self, mode: &AddressingMode) {
+    //     let target = self.get_operand_address(mode);
+    //     let target_value = self.mem_read(target);
+    //
+    //     if target_value == self.y_register {
+    //         self.set_zero_flag();
+    //     } else {
+    //         self.clear_zero_flag();
+    //     }
+    //
+    //     if self.y_register >= target_value {
+    //         self.set_carry_flag();
+    //     } else {
+    //         self.clear_carry_flag();
+    //     }
+    //
+    //     if (self.y_register.overflowing_sub(target_value).0) & NEGATIVE_BIT != 0 {
+    //         self.set_negative_flag();
+    //     } else {
+    //         self.clear_negative_flag();
+    //     }
+    // }
+    //
+    // fn isc(&mut self, mode: &AddressingMode) {
+    //     let target = self.get_operand_address(mode);
+    //
+    //     //Inc
+    //     let target_value = self.mem_read(target);
+    //     let (mod_value, _) = target_value.overflowing_add(1);
+    //     self.mem_write(target, mod_value);
+    //     self.update_negative_and_zero_flags(mod_value);
+    //
+    //     //SBC
+    //     let target_value = self.mem_read(target);
+    //     let carry_in = self.processor_status & CARRY_BIT;
+    //
+    //     let acc_check = self.accumulator;
+    //
+    //     let value = target_value ^ LOWER_BYTE as u8;
+    //     let sum = self.accumulator as u16 + value as u16 + carry_in as u16;
+    //     let result = sum as u8;
+    //
+    //     self.accumulator = result;
+    //
+    //     if sum > LOWER_BYTE {
+    //         self.set_carry_flag();
+    //     } else {
+    //         self.clear_carry_flag();
+    //     }
+    //
+    //     if ((acc_check ^ result) & (value ^ result) & NEGATIVE_BIT) != 0 {
+    //         self.set_overflow_flag();
+    //     } else {
+    //         self.clear_overflow_flag();
+    //     }
+    //
+    //     self.update_negative_and_zero_flags(self.accumulator);
+    // }
 
     pub fn trigger_nmi(&mut self) {
         self.stack_push_u16(self.program_counter);
@@ -946,91 +946,258 @@ impl Cpu {
             self.trigger_nmi();
         }
 
-        self.additional_cycles = 0;
+        let op = self.current_op;
+        self.current_op = match self.execute_micro_op(&op) {
+            MicroOpResult::Next(next) => next,
+            MicroOpResult::Sequence(mut seq) => {
+                if !seq.is_empty() {
+                    // sequence head becomes next, rest get queued
+                    let first = seq.remove(0);
+                    self.op_queue = seq;
+                    first
+                } else {
+                    MicroOp::FetchOpcode(MicroOpCallback::None)
+                }
+            }
+            MicroOpResult::Repeat => op,
+        };
 
-        let opcode = self.fetch_next_byte();
-        let pnc = &OpCode::default();
-        let op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
+        0
 
-        #[cfg(debug_assertions)]
-        let _memory = self.memory.get_memory_debug(None);
+        // self.additional_cycles = 0;
+        //
+        // let opcode = self.fetch_next_byte_and_increment_pc();
+        // let pnc = &OpCode::default();
+        // let op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
+        // self.lo_byte = self.fetch_next_byte_and_increment_pc();
+        //
+        // #[cfg(debug_assertions)]
+        // let _memory = self.memory.get_memory_debug(None);
+        //
+        // match op.opcode {
+        //     0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(&op.addressing_mode),
+        //     0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => self.ldx(&op.addressing_mode),
+        //     0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => self.ldy(&op.addressing_mode),
+        //     0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => self.sta(&op.addressing_mode),
+        //     0x86 | 0x96 | 0x8E => self.stx(&op.addressing_mode),
+        //     0x84 | 0x94 | 0x8C => self.sty(&op.addressing_mode),
+        //     0xAA => self.tax(),
+        //     0xA8 => self.tay(),
+        //     0x8A => self.txa(),
+        //     0x98 => self.tya(),
+        //     0x48 => self.pha(),
+        //     0x08 => self.php(),
+        //     0x68 => self.pla(),
+        //     0x28 => self.plp(),
+        //     0xBA => self.tsx(),
+        //     0x9A => self.txs(),
+        //     0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(&op.addressing_mode),
+        //     0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(&op.addressing_mode),
+        //     0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(&op.addressing_mode),
+        //     0x24 | 0x2C => self.bit(&op.addressing_mode),
+        //     0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => self.adc(&op.addressing_mode),
+        //     0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => self.sbc(&op.addressing_mode),
+        //     0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => self.cmp(&op.addressing_mode),
+        //     0xE0 | 0xE4 | 0xEC => self.cpx(&op.addressing_mode),
+        //     0xC0 | 0xC4 | 0xCC => self.cpy(&op.addressing_mode),
+        //     0xE6 | 0xF6 | 0xEE | 0xFE => self.inc(&op.addressing_mode),
+        //     0xE8 => self.inx(),
+        //     0xC8 => self.iny(),
+        //     0xC6 | 0xD6 | 0xCE | 0xDE => self.dec(&op.addressing_mode),
+        //     0xCA => self.dex(),
+        //     0x88 => self.dey(),
+        //     0x0A | 0x06 | 0x16 | 0x0E | 0x1E => self.asl(&op.addressing_mode),
+        //     0x4A | 0x46 | 0x56 | 0x4E | 0x5E => self.lsr(&op.addressing_mode),
+        //     0x2A | 0x26 | 0x36 | 0x2E | 0x3E => self.rol(&op.addressing_mode),
+        //     0x6A | 0x66 | 0x76 | 0x6E | 0x7E => self.ror(&op.addressing_mode),
+        //     0x4C | 0x6C => self.jmp(&op.addressing_mode),
+        //     0x20 => self.jsr(&op.addressing_mode),
+        //     0x60 => self.rts(),
+        //     0x90 => self.bcc(&op.addressing_mode),
+        //     0xB0 => self.bcs(&op.addressing_mode),
+        //     0xF0 => self.beq(&op.addressing_mode),
+        //     0xD0 => self.bne(&op.addressing_mode),
+        //     0x30 => self.bmi(&op.addressing_mode),
+        //     0x10 => self.bpl(&op.addressing_mode),
+        //     0x50 => self.bvc(&op.addressing_mode),
+        //     0x70 => self.bvs(&op.addressing_mode),
+        //     0x18 => self.clc(),
+        //     0xD8 => self.cld(),
+        //     0x58 => self.cli(),
+        //     0xB8 => self.clv(),
+        //     0x38 => self.sec(),
+        //     0xF8 => self.sed(),
+        //     0x78 => self.sei(),
+        //     0x00 => self.brk(),
+        //     0xEA | 0x3A => self.nop(),
+        //     0x40 => self.rti(),
+        //     //Illegal Opcodes
+        //     0xFF | 0xE3 => self.isc(&op.addressing_mode),
+        //     _ => {
+        //         println!(
+        //             "Instruction 0x{opcode:X} at address 0x{:X} isn't valid",
+        //             self.program_counter - 1
+        //         );
+        //         return 0xFF;
+        //     }
+        // }
+        //
+        // let opcode = self.mem_read(self.program_counter);
+        // let check_op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
+        //
+        // if check_op.opcode == pnc.opcode {
+        //     println!("Execution resulted in invalid pc")
+        // }
+        //
+        // op.cycles + self.additional_cycles
+    }
 
-        match op.opcode {
-            0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(&op.addressing_mode),
-            0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => self.ldx(&op.addressing_mode),
-            0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => self.ldy(&op.addressing_mode),
-            0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => self.sta(&op.addressing_mode),
-            0x86 | 0x96 | 0x8E => self.stx(&op.addressing_mode),
-            0x84 | 0x94 | 0x8C => self.sty(&op.addressing_mode),
-            0xAA => self.tax(),
-            0xA8 => self.tay(),
-            0x8A => self.txa(),
-            0x98 => self.tya(),
-            0x48 => self.pha(),
-            0x08 => self.php(),
-            0x68 => self.pla(),
-            0x28 => self.plp(),
-            0xBA => self.tsx(),
-            0x9A => self.txs(),
-            0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(&op.addressing_mode),
-            0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(&op.addressing_mode),
-            0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(&op.addressing_mode),
-            0x24 | 0x2C => self.bit(&op.addressing_mode),
-            0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => self.adc(&op.addressing_mode),
-            0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => self.sbc(&op.addressing_mode),
-            0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => self.cmp(&op.addressing_mode),
-            0xE0 | 0xE4 | 0xEC => self.cpx(&op.addressing_mode),
-            0xC0 | 0xC4 | 0xCC => self.cpy(&op.addressing_mode),
-            0xE6 | 0xF6 | 0xEE | 0xFE => self.inc(&op.addressing_mode),
-            0xE8 => self.inx(),
-            0xC8 => self.iny(),
-            0xC6 | 0xD6 | 0xCE | 0xDE => self.dec(&op.addressing_mode),
-            0xCA => self.dex(),
-            0x88 => self.dey(),
-            0x0A | 0x06 | 0x16 | 0x0E | 0x1E => self.asl(&op.addressing_mode),
-            0x4A | 0x46 | 0x56 | 0x4E | 0x5E => self.lsr(&op.addressing_mode),
-            0x2A | 0x26 | 0x36 | 0x2E | 0x3E => self.rol(&op.addressing_mode),
-            0x6A | 0x66 | 0x76 | 0x6E | 0x7E => self.ror(&op.addressing_mode),
-            0x4C | 0x6C => self.jmp(&op.addressing_mode),
-            0x20 => self.jsr(&op.addressing_mode),
-            0x60 => self.rts(),
-            0x90 => self.bcc(&op.addressing_mode),
-            0xB0 => self.bcs(&op.addressing_mode),
-            0xF0 => self.beq(&op.addressing_mode),
-            0xD0 => self.bne(&op.addressing_mode),
-            0x30 => self.bmi(&op.addressing_mode),
-            0x10 => self.bpl(&op.addressing_mode),
-            0x50 => self.bvc(&op.addressing_mode),
-            0x70 => self.bvs(&op.addressing_mode),
-            0x18 => self.clc(),
-            0xD8 => self.cld(),
-            0x58 => self.cli(),
-            0xB8 => self.clv(),
-            0x38 => self.sec(),
-            0xF8 => self.sed(),
-            0x78 => self.sei(),
-            0x00 => self.brk(),
-            0xEA | 0x3A => self.nop(),
-            0x40 => self.rti(),
-            //Illegal Opcodes
-            0xFF | 0xE3 => self.isc(&op.addressing_mode),
-            _ => {
-                println!(
-                    "Instruction 0x{opcode:X} at address 0x{:X} isn't valid",
-                    self.program_counter - 1
-                );
-                return 0xFF;
+    fn execute_micro_op(&mut self, micro_op: &MicroOp) -> MicroOpResult {
+        match micro_op {
+            MicroOp::FetchOpcode(callback) => {
+                let opcode = self.mem_read(self.program_counter);
+                self.program_counter = self.program_counter.wrapping_add(1);
+
+                let pnc = &OpCode::default();
+                self.current_opcode = **OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
+
+                self.run_op(*callback);
+
+                MicroOpResult::Sequence(self.get_instructions_for_op_type())
+            }
+            MicroOp::FetchOperandLo(callback) => {
+                self.lo = self.mem_read(self.program_counter);
+                self.program_counter = self.program_counter.wrapping_add(1);
+
+                self.run_op(*callback);
+
+                MicroOpResult::Sequence(self.op_queue.clone())
+            }
+            MicroOp::FetchOperandHi(callback) => {
+                self.hi = self.mem_read(self.program_counter);
+                self.program_counter = self.program_counter.wrapping_add(1);
+
+                self.run_op(*callback);
+
+                MicroOpResult::Sequence(self.op_queue.clone())
+            }
+            MicroOp::Transfer(src, trg, callback) => {
+                let value = self.get_src_value(src);
+                self.write_to_target(trg, value);
+
+                self.run_op(*callback);
+
+                MicroOpResult::Sequence(self.op_queue.clone())
+            }
+            MicroOp::Read(source, target, callback) => {
+                let address = self.get_u16_address(source);
+                let val = self.mem_read(address);
+                self.write_to_target(target, val);
+
+                self.run_op(*callback);
+
+                MicroOpResult::Sequence(self.op_queue.clone())
+            }
+            MicroOp::Write(_, _, _) => {
+                todo!()
+            }
+            MicroOp::Push(_, _) => {
+                todo!()
+            }
+            MicroOp::Pop(_, _) => {
+                todo!()
+            }
+            MicroOp::BranchIf(_, _, _) => {
+                todo!()
+            }
+            MicroOp::Tick(_) => {
+                todo!()
+            }
+            MicroOp::ReadPageCrossAware(source, offset, target, callback) => {
+                let address = self.get_u16_address(source);
+                let val = self.mem_read(address);
+                self.write_to_target(target, val);
+
+                let offset = self.get_src_value(offset);
+
+                if Self::crosses_page_boundary_u8(address - offset as u16, offset) {
+                    self.op_queue
+                        .push(MicroOp::Read(*source, *target, *callback));
+                }
+
+                self.hi = self.hi.wrapping_add(1);
+
+                self.run_op(*callback);
+
+                MicroOpResult::Sequence(self.op_queue.clone())
+            }
+            MicroOp::DummyReadAddOffsetWriteToTarget(source, offset, target, callback) => {
+                let address = self.get_u16_address(source);
+                let _ = self.mem_read(address);
+                let src_value = self.get_src_value(offset) as u16;
+                self.write_to_target(target, address.wrapping_add(src_value) as u8);
+
+                self.run_op(*callback);
+
+                MicroOpResult::Sequence(self.op_queue.clone())
+            }
+            MicroOp::DummyRead(callback) => {
+                self.mem_read(self.program_counter);
+                self.run_op(*callback);
+
+                MicroOpResult::Sequence(self.op_queue.clone())
+            }
+            MicroOp::ReadWithOffsetAndAddSomething(
+                address_source,
+                offset,
+                target,
+                add_to_src,
+                to_add,
+                to_save,
+                inc_pc,
+                callback,
+            ) => {
+                let address = self.get_u16_address(address_source) as u8;
+                let src_value = self.get_src_value(offset);
+                let offset_address = address.wrapping_add(src_value);
+                let value = self.mem_read(offset_address as u16);
+                self.write_to_target(target, value);
+
+                let add_to = self.get_src_value(add_to_src);
+                let to_add = self.get_src_value(to_add);
+                let value = add_to.wrapping_add(to_add);
+                self.write_to_target(to_save, value);
+
+                if *inc_pc {
+                    self.program_counter = self.program_counter.wrapping_add(1);
+                }
+
+                self.run_op(*callback);
+
+                MicroOpResult::Sequence(self.op_queue.clone())
             }
         }
+    }
 
-        let opcode = self.mem_read(self.program_counter);
-        let check_op = OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
-
-        if check_op.opcode == pnc.opcode {
-            println!("Execution resulted in invalid pc")
+    fn run_op(&mut self, op: MicroOpCallback) {
+        match op {
+            MicroOpCallback::None => {}
+            MicroOpCallback::ADC => {
+                adc(self);
+            }
         }
+    }
 
-        op.cycles + self.additional_cycles
+    fn get_u16_address(&self, address_source: &AddressSource) -> u16 {
+        match address_source {
+            AddressSource::AddressLatch => self.get_temp_as_addr(),
+            AddressSource::Address(u16) => *u16,
+            AddressSource::LO => self.get_temp_as_addr() as u8 as u16,
+            AddressSource::TemP => self.temp as u16,
+            AddressSource::None => 0,
+            AddressSource::HI => self.hi as u16,
+            AddressSource::PC => self.program_counter,
+        }
     }
 
     pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
@@ -1091,6 +1258,162 @@ impl Cpu {
         mem.add_memory(0x4018..=0x401F, Memory::Ram(Ram::new(0x8)));
         mem
     }
+
+    fn fetch_next_byte_and_increment_pc(&mut self) -> u8 {
+        let res = self.mem_read(self.program_counter);
+        self.program_counter += 1;
+        res
+    }
+
+    fn get_src_value(&mut self, src: &Source) -> u8 {
+        match src {
+            Source::A => self.accumulator,
+            Source::X => self.x_register,
+            Source::Y => self.y_register,
+            Source::SP => self.stack_pointer,
+            Source::PCL => (self.program_counter & LOWER_BYTE) as u8,
+            Source::PCH => ((self.program_counter & UPPER_BYTE) >> 8) as u8,
+            Source::LO => self.lo,
+            Source::HI => self.hi,
+            Source::Immediate => {
+                let v = self.mem_read(self.program_counter);
+                self.program_counter = self.program_counter.wrapping_add(1);
+                v
+            }
+            Source::TEMP => self.temp,
+            Source::Constant(val) => *val,
+            Source::None => 0,
+        }
+    }
+
+    fn write_to_target(&mut self, trg: &Target, val: u8) {
+        match trg {
+            Target::A => {
+                self.accumulator = val;
+                self.update_negative_and_zero_flags(self.accumulator)
+            }
+            Target::X => {
+                self.x_register = val;
+                self.update_negative_and_zero_flags(self.x_register)
+            }
+            Target::Y => {
+                self.y_register = val;
+                self.update_negative_and_zero_flags(self.y_register)
+            }
+            Target::SP => self.stack_pointer = val,
+            Target::PCL => self.program_counter |= val as u16,
+            Target::PCH => self.program_counter |= (val as u16) << 8,
+            Target::LO => self.lo = val,
+            Target::HI => self.hi = val,
+            Target::TEMP => self.temp = val,
+            Target::None => {}
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+pub enum MicroOp {
+    FetchOpcode(MicroOpCallback),
+    FetchOperandLo(MicroOpCallback),
+    FetchOperandHi(MicroOpCallback),
+    Read(AddressSource, Target, MicroOpCallback),
+    Write(u16, Target, MicroOpCallback),
+    Push(Target, MicroOpCallback),
+    Pop(Target, MicroOpCallback),
+    BranchIf(Condition, i8, MicroOpCallback),
+    Tick(MicroOpCallback),
+    Transfer(Source, Target, MicroOpCallback),
+    ReadPageCrossAware(AddressSource, Source, Target, MicroOpCallback),
+    DummyReadAddOffsetWriteToTarget(AddressSource, Source, Target, MicroOpCallback),
+    DummyRead(MicroOpCallback),
+    ReadWithOffsetAndAddSomething(
+        AddressSource,
+        Source,
+        Target,
+        Source,
+        Source,
+        Target,
+        bool,
+        MicroOpCallback,
+    ),
+}
+
+#[derive(Debug, Clone)]
+pub enum MicroOpResult {
+    Next(MicroOp),
+    Sequence(Vec<MicroOp>),
+    Repeat,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+pub enum Target {
+    A,
+    X,
+    Y,
+    SP,
+    PCL,
+    PCH,
+    LO,
+    HI,
+    TEMP,
+    None,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+pub enum Source {
+    A,
+    X,
+    Y,
+    SP,
+    PCL,
+    PCH,
+    LO,
+    HI,
+    Immediate,
+    TEMP,
+    Constant(u8),
+    None,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+pub enum AddressSource {
+    AddressLatch,
+    Address(u16),
+    LO,
+    TemP,
+    None,
+    HI,
+    PC,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+pub enum MicroOpCallback {
+    None,
+    ADC,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+pub enum Condition {
+    CarrySet,
+    CarryClear,
+    ZeroSet,
+    ZeroClear,
+    NegativeSet,
+    NegativeClear,
+    OverflowSet,
+    OverflowClear,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum OpType {
+    ImmediateAddressing(Target, MicroOpCallback),
+    AbsoluteRead(Target, MicroOpCallback),
+    AbsoluteIndexRead(Source, Target, MicroOpCallback),
+    ZeroPageRead(Target, MicroOpCallback),
+    ZeroPageIndexRead(Source, Target, MicroOpCallback),
+    AccumulatorOrImplied(MicroOpCallback),
+    IndexedIndirect(Target, MicroOpCallback),
+    IndirectIndexed(Target, MicroOpCallback),
 }
 
 #[cfg(test)]
@@ -1118,10 +1441,47 @@ impl Cpu {
             ppu: Some(ppu),
             additional_cycles: state.additional_cycles,
             master_cycle: state.master_cycle,
+            lo: state.lo,
+            hi: state.hi,
+            current_op: state.current_op,
+            op_queue: state.op_queue.clone(),
+            current_opcode: **OPCODES_MAP
+                .get_or_init(opcode::init)
+                .get(&state.current_opcode)
+                .expect("Error loading savestate"),
+            temp: state.temp,
         };
 
         cpu.load_rom(rom);
 
         cpu
     }
+}
+
+pub fn adc(cpu: &mut Cpu) {
+    let target_value = cpu.temp;
+    let carry_in = cpu.processor_status & CARRY_BIT;
+
+    let acc_check = cpu.accumulator;
+
+    let sum = cpu.accumulator as u16 + target_value as u16 + carry_in as u16;
+    let result = sum as u8;
+
+    cpu.accumulator = result;
+
+    // Carry Flag
+    if sum > LOWER_BYTE {
+        cpu.set_carry_flag();
+    } else {
+        cpu.clear_carry_flag();
+    }
+
+    // Overflow Flag
+    if (!(acc_check ^ target_value) & (acc_check ^ result)) & NEGATIVE_BIT != 0 {
+        cpu.set_overflow_flag();
+    } else {
+        cpu.clear_overflow_flag();
+    }
+
+    cpu.update_negative_and_zero_flags(cpu.accumulator);
 }
