@@ -8,14 +8,18 @@ fn test_plp_implied_simple() {
     cpu.mem_write(0x0, 0xA9);
     cpu.mem_write(0x1, 0x00);
     cpu.step(0);
+    cpu.step(0);
 
     //Write Processor Status with Set Zero flag to Stack
     cpu.mem_write(0x2, 0x08);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     //Load 0x66 to acc to reset Zero flag
     cpu.mem_write(0x3, 0xA9);
     cpu.mem_write(0x4, 0x66);
+    cpu.step(0);
     cpu.step(0);
 
     //Validate that Zero flag was reset
@@ -23,6 +27,9 @@ fn test_plp_implied_simple() {
 
     //Load saved Processor Status from Stack
     cpu.mem_write(0x5, 0x28);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     //Validate that Processor Status was loaded correctly
@@ -45,6 +52,10 @@ fn test_plp_implied_complicated() {
     cpu.step(0);
     cpu.step(0);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+
     //Load 0x80 into acc to trigger Negative flag
     cpu.mem_write(0x3, 0xA9);
     cpu.mem_write(0x4, 0x80);
@@ -52,6 +63,10 @@ fn test_plp_implied_complicated() {
     //Write Processor Status with Set Negative flag to Stack
     cpu.mem_write(0x5, 0x08);
 
+    cpu.step(0);
+    cpu.step(0);
+
+    cpu.step(0);
     cpu.step(0);
     cpu.step(0);
 
@@ -65,8 +80,15 @@ fn test_plp_implied_complicated() {
     cpu.step(0);
     cpu.step(0);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+
     //Load Processor Status from Stack
     cpu.mem_write(0x9, 0x28);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     //Validate that loaded Processor Status doesn't have flags set
@@ -75,11 +97,17 @@ fn test_plp_implied_complicated() {
     //Load Processor Status from Stack
     cpu.mem_write(0xA, 0x28);
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     //Validate that loaded Processor Status has Negative flag set
     assert_eq!(cpu.processor_status, 0b10000000);
 
     cpu.mem_write(0xB, 0x28);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     //Validate that loaded Processor Status has Zero flag set

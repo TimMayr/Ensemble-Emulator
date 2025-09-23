@@ -9,6 +9,8 @@ fn test_sta_complete() {
     cpu.mem_write(0x1, 0x0085);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.mem_read(0x0085), 0x66);
 
     cpu.mem_write(0x2, 0x95);
@@ -16,11 +18,17 @@ fn test_sta_complete() {
     cpu.x_register = 0x0010;
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.mem_read(0x00A5), 0x66);
 
     cpu.mem_write(0x4, 0x8D);
     cpu.mem_write_u16(0x5, 0x8D8D);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.mem_read(0x8D8D), 0x66);
 
@@ -64,6 +72,8 @@ fn test_sta_zero_page() {
     cpu.mem_write(0x1, 0x0085);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.mem_read(0x0085), 0x66);
 }
 
@@ -77,6 +87,9 @@ fn test_sta_zero_page_x() {
     cpu.x_register = 0x0010;
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.mem_read(0x00A5), 0x66);
 }
 
@@ -88,6 +101,9 @@ fn test_sta_absolute() {
     cpu.mem_write(0x0, 0x8D);
     cpu.mem_write_u16(0x1, 0x8D8D);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.mem_read(0x8D8D), 0x66);
 }

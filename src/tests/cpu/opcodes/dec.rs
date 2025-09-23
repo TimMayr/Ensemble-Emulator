@@ -7,6 +7,10 @@ fn test_dec_complete() {
     cpu.mem_write(0x1, 0x00C6);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00C6), 0xFF);
 
@@ -17,6 +21,11 @@ fn test_dec_complete() {
     cpu.mem_write(0x00E6, 0x3);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00E6), 0x2);
 
@@ -25,6 +34,11 @@ fn test_dec_complete() {
 
     cpu.mem_write(0xCECE, 0xA9);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.mem_read(0xCECE), 0xA8);
@@ -42,6 +56,10 @@ fn test_dec_complete() {
     cpu.mem_write(0xA, 0xC6);
     cpu.mem_write(0xB, 0x00C7);
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00C7), 0xFF);
     assert!(!cpu.get_zero_flag());
@@ -50,6 +68,10 @@ fn test_dec_complete() {
     cpu.mem_write(0xC, 0xC6);
     cpu.mem_write(0xD, 0x00C7);
     cpu.mem_write(0x00C7, 0x1);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00C7), 0x0);
@@ -60,6 +82,10 @@ fn test_dec_complete() {
     cpu.mem_write(0xF, 0x00C8);
     cpu.mem_write(0x00C8, 0x81);
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00C8), 0x80);
     assert!(!cpu.get_zero_flag());
@@ -69,45 +95,59 @@ fn test_dec_complete() {
 #[test]
 fn test_dec_zero_page() {
     let mut cpu = Cpu::test_instance();
-    cpu.mem_write(0x0, 0xE6);
+    cpu.mem_write(0x0, 0xC6);
     cpu.mem_write(0x1, 0x00E6);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
-    assert_eq!(cpu.mem_read(0x00E6), 0x1)
+    assert_eq!(cpu.mem_read(0x00E6), 0xFF)
 }
 
 #[test]
 fn test_dec_zero_page_x() {
     let mut cpu = Cpu::test_instance();
-    cpu.mem_write(0x0, 0xF6);
+    cpu.mem_write(0x0, 0xD6);
     cpu.mem_write(0x1, 0x00E6);
     cpu.x_register = 0x10;
 
     cpu.mem_write(0x00F6, 0x3);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
-    assert_eq!(cpu.mem_read(0x00F6), 0x4)
+    assert_eq!(cpu.mem_read(0x00F6), 0x2)
 }
 
 #[test]
 fn test_dec_absolute() {
     let mut cpu = Cpu::test_instance();
-    cpu.mem_write(0x0, 0xEE);
+    cpu.mem_write(0x0, 0xCE);
     cpu.mem_write_u16(0x1, 0xEEEE);
 
     cpu.mem_write(0xEEEE, 0xA9);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
-    assert_eq!(cpu.mem_read(0xEEEE), 0xAA)
+    assert_eq!(cpu.mem_read(0xEEEE), 0xA8)
 }
 
 #[test]
 fn test_dec_absolute_x() {
     let mut cpu = Cpu::test_instance();
-    cpu.mem_write(0x0, 0xFE);
+    cpu.mem_write(0x0, 0xDE);
     cpu.mem_write_u16(0x1, 0xFEEE);
     cpu.x_register = 0x10;
 
@@ -115,14 +155,19 @@ fn test_dec_absolute_x() {
 
     cpu.step(0);
 
-    assert_eq!(cpu.mem_read(0xFEFE), 0x3)
+    assert_eq!(cpu.mem_read(0xFEFE), 0x1)
 }
 
 #[test]
 fn test_dec_flags_none_when_none() {
     let mut cpu = Cpu::test_instance();
-    cpu.mem_write(0x0, 0xE6);
+    cpu.mem_write(0x0, 0xC6);
     cpu.mem_write(0x1, 0x00E6);
+    cpu.mem_write(0x00E6, 0x2);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00E6), 0x1);
@@ -133,9 +178,13 @@ fn test_dec_flags_none_when_none() {
 #[test]
 fn test_dec_flags_zero_when_zero() {
     let mut cpu = Cpu::test_instance();
-    cpu.mem_write(0x0, 0xE6);
+    cpu.mem_write(0x0, 0xC6);
     cpu.mem_write(0x1, 0x00E6);
-    cpu.mem_write(0x00E6, 0xFF);
+    cpu.mem_write(0x00E6, 0x1);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00E6), 0x0);
@@ -146,12 +195,16 @@ fn test_dec_flags_zero_when_zero() {
 #[test]
 fn test_dec_flags_negative_when_negative() {
     let mut cpu = Cpu::test_instance();
-    cpu.mem_write(0x0, 0xE6);
+    cpu.mem_write(0x0, 0xC6);
     cpu.mem_write(0x1, 0x00E6);
-    cpu.mem_write(0x00E6, 0x7F);
+    cpu.mem_write(0x00E6, 0x0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
-    assert_eq!(cpu.mem_read(0x00E6), 0x80);
+    assert_eq!(cpu.mem_read(0x00E6), 0xFF);
     assert!(!cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
 }

@@ -10,6 +10,8 @@ fn test_pla_implied_simple() {
     cpu.mem_write(0x0, 0x48);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     //Reset acc
     cpu.accumulator = 0x00;
@@ -17,6 +19,9 @@ fn test_pla_implied_simple() {
     //Load acc from stack
     cpu.mem_write(0x1, 0x68);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     //Validate that acc has been loaded correctly
     assert_eq!(cpu.accumulator, 0x66);
@@ -33,11 +38,15 @@ fn test_pla_implied_complicated() {
     //Write acc to stack
     cpu.mem_write(0x0, 0x48);
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     cpu.accumulator = 0x80;
 
     //Write acc to stack
     cpu.mem_write(0x1, 0x48);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     cpu.accumulator = 0x70;
@@ -45,9 +54,14 @@ fn test_pla_implied_complicated() {
     //Write acc to stack
     cpu.mem_write(0x2, 0x48);
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     //Load acc from stack
     cpu.mem_write(0x3, 0x68);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     //Validate that correct value was loaded
@@ -59,6 +73,9 @@ fn test_pla_implied_complicated() {
     //Load acc from stack
     cpu.mem_write(0x4, 0x68);
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     //Validate that correct value was loaded
     assert_eq!(cpu.accumulator, 0x80);
@@ -68,6 +85,9 @@ fn test_pla_implied_complicated() {
 
     //Load acc from stack
     cpu.mem_write(0x5, 0x68);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     //Validate that correct value was loaded

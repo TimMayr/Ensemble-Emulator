@@ -7,6 +7,10 @@ fn test_inc_complete() {
     cpu.mem_write(0x1, 0x00E6);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00E6), 0x1);
 
@@ -17,6 +21,11 @@ fn test_inc_complete() {
     cpu.mem_write(0x00F6, 0x3);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00F6), 0x4);
 
@@ -25,6 +34,11 @@ fn test_inc_complete() {
 
     cpu.mem_write(0xEEEE, 0xA9);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.mem_read(0xEEEE), 0xAA);
@@ -42,6 +56,10 @@ fn test_inc_complete() {
     cpu.mem_write(0xA, 0xE6);
     cpu.mem_write(0xB, 0x00E7);
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00E7), 0x1);
     assert!(!cpu.get_zero_flag());
@@ -51,6 +69,10 @@ fn test_inc_complete() {
     cpu.mem_write(0xD, 0x00E6);
     cpu.mem_write(0x00E6, 0xFF);
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00E6), 0x0);
     assert!(cpu.get_zero_flag());
@@ -59,6 +81,10 @@ fn test_inc_complete() {
     cpu.mem_write(0xE, 0xE6);
     cpu.mem_write(0xF, 0x00E6);
     cpu.mem_write(0x00E6, 0x7F);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00E6), 0x80);
@@ -72,6 +98,10 @@ fn test_inc_zero_page() {
     cpu.mem_write(0x0, 0xE6);
     cpu.mem_write(0x1, 0x00E6);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00E6), 0x1)
@@ -87,6 +117,11 @@ fn test_inc_zero_page_x() {
     cpu.mem_write(0x00F6, 0x3);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00F6), 0x4)
 }
@@ -99,6 +134,11 @@ fn test_inc_absolute() {
 
     cpu.mem_write(0xEEEE, 0xA9);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.mem_read(0xEEEE), 0xAA)
@@ -124,6 +164,10 @@ fn test_inc_flags_none_when_none() {
     cpu.mem_write(0x0, 0xE6);
     cpu.mem_write(0x1, 0x00E6);
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00E6), 0x1);
     assert!(!cpu.get_zero_flag());
@@ -137,6 +181,10 @@ fn test_inc_flags_zero_when_zero() {
     cpu.mem_write(0x1, 0x00E6);
     cpu.mem_write(0x00E6, 0xFF);
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00E6), 0x0);
     assert!(cpu.get_zero_flag());
@@ -149,6 +197,10 @@ fn test_inc_flags_negative_when_negative() {
     cpu.mem_write(0x0, 0xE6);
     cpu.mem_write(0x1, 0x00E6);
     cpu.mem_write(0x00E6, 0x7F);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x00E6), 0x80);

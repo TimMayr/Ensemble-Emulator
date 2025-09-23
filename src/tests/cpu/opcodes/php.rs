@@ -13,6 +13,10 @@ fn test_php_implied_simple() {
     cpu.step(0);
     cpu.step(0);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+
     //Validate that saved Processor Status has Zero flag set
     assert_eq!(cpu.mem_read(0x01FF), 0b00110010);
     //Validate that Stack Pointer has been incremented
@@ -32,6 +36,10 @@ fn test_php_implied_complicated() {
     cpu.step(0);
     cpu.step(0);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+
     //Load 0x80 to acc to trigger Negative flag
     cpu.mem_write(0x3, 0xA9);
     cpu.mem_write(0x4, 0x80);
@@ -42,6 +50,10 @@ fn test_php_implied_complicated() {
     cpu.step(0);
     cpu.step(0);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+
     //Load 0x66 to acc to reset flags
     cpu.mem_write(0x6, 0xA9);
     cpu.mem_write(0x7, 0x66);
@@ -49,6 +61,10 @@ fn test_php_implied_complicated() {
     //Write Processor Status to Stack
     cpu.mem_write(0x8, 0x08);
 
+    cpu.step(0);
+    cpu.step(0);
+
+    cpu.step(0);
     cpu.step(0);
     cpu.step(0);
 
