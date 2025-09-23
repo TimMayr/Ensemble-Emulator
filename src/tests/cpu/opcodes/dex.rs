@@ -6,6 +6,7 @@ fn test_dex_complete() {
     cpu.mem_write(0x0, 0xCA);
 
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.x_register, 0xFF);
     assert!(!cpu.get_zero_flag());
@@ -13,6 +14,7 @@ fn test_dex_complete() {
 
     cpu.mem_write(0x1, 0xCA);
     cpu.x_register = 0x2;
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.x_register, 0x1);
@@ -23,6 +25,7 @@ fn test_dex_complete() {
     cpu.x_register = 0x1;
 
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.x_register, 0x00);
     assert!(cpu.get_zero_flag());
@@ -31,6 +34,7 @@ fn test_dex_complete() {
     cpu.mem_write(0x3, 0xCA);
     cpu.x_register = 0xFF;
 
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.x_register, 0xFE);
@@ -44,6 +48,7 @@ fn test_dex_zero_page() {
     cpu.mem_write(0x0, 0xCA);
 
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.x_register, 0xFF)
 }
@@ -53,6 +58,7 @@ fn test_dex_flags_none_when_none() {
     let mut cpu = Cpu::test_instance();
     cpu.mem_write(0x0, 0xCA);
     cpu.x_register = 0x2;
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.x_register, 0x1);
@@ -67,6 +73,7 @@ fn test_dex_flags_zero_when_zero() {
     cpu.x_register = 0x1;
 
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.x_register, 0x00);
     assert!(cpu.get_zero_flag());
@@ -79,6 +86,7 @@ fn test_dex_flags_negative_when_negative() {
     cpu.mem_write(0x0, 0xCA);
     cpu.x_register = 0xFF;
 
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.x_register, 0xFE);

@@ -7,6 +7,7 @@ fn test_tsx_simple() {
 
     cpu.mem_write(0x0, 0xBA);
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(0x66, cpu.x_register);
     assert!(!cpu.get_zero_flag());
@@ -20,6 +21,7 @@ fn test_tsx_complicated() {
 
     cpu.mem_write(0x0, 0xBA);
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(0x66, cpu.x_register);
     assert!(!cpu.get_zero_flag());
@@ -28,6 +30,7 @@ fn test_tsx_complicated() {
     cpu.stack_pointer = 0x00;
 
     cpu.mem_write(0x1, 0xBA);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(0x00, cpu.x_register);
@@ -38,6 +41,7 @@ fn test_tsx_complicated() {
 
     cpu.mem_write(0x2, 0xBA);
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(0x80, cpu.x_register);
     assert!(!cpu.get_zero_flag());
@@ -46,8 +50,10 @@ fn test_tsx_complicated() {
     //Increment stack counter by reading from stack
     cpu.mem_write(0x3, 0x28);
     cpu.step(0);
+    cpu.step(0);
 
     cpu.mem_write(0x4, 0xBA);
+    cpu.step(0);
     cpu.step(0);
 
     //Validate that incremented stack counter is loaded correctly

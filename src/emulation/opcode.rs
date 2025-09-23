@@ -1,6 +1,6 @@
 use crate::emulation::cpu::OpType::{
-    AbsoluteIndexRead, AbsoluteRead, ImmediateAddressing, IndexedIndirect, IndirectIndexed,
-    ZeroPageIndexRead, ZeroPageRead,
+    AbsoluteIndexRead, AbsoluteRead, AccumulatorOrImplied, ImmediateAddressing, IndexedIndirect,
+    IndirectIndexed, ZeroPageIndexRead, ZeroPageRead, BRK, RTI,
 };
 use crate::emulation::cpu::{MicroOpCallback, OpType, Source, Target};
 use std::collections::HashMap;
@@ -70,7 +70,7 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             // OpCode::new(0x21, "AND", 2, 6, IndirectX),
             // OpCode::new(0x31, "AND", 2, 5, IndirectY),
             // //ASL
-            // OpCode::new(0x0A, "ASL", 1, 2, Accumulator),
+            OpCode::new(0x0A, "ASL", AccumulatorOrImplied(MicroOpCallback::ASL)),
             // OpCode::new(0x06, "ASL", 2, 5, ZeroPage),
             // OpCode::new(0x16, "ASL", 2, 6, ZeroPageX),
             // OpCode::new(0x0E, "ASL", 3, 6, Absolute),
@@ -91,19 +91,19 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             // //BPL
             // OpCode::new(0x10, "BPL", 2, 2, Relative),
             // //BRK
-            // OpCode::new(0x00, "BRK", 2, 7, Implied),
+            OpCode::new(0x00, "BRK", BRK(MicroOpCallback::None)),
             // //BVC
             // OpCode::new(0x50, "BVC", 2, 2, Relative),
             // //BVS
             // OpCode::new(0x70, "BVS", 2, 2, Relative),
             // //CLC
-            // OpCode::new(0x18, "CLC", 1, 2, Implied),
+            OpCode::new(0x18, "CLC", AccumulatorOrImplied(MicroOpCallback::CLC)),
             // //CLD
-            // OpCode::new(0xD8, "CLD", 1, 2, Implied),
+            OpCode::new(0xD8, "CLD", AccumulatorOrImplied(MicroOpCallback::CLD)),
             // //CLI
-            // OpCode::new(0x58, "CLI", 1, 2, Implied),
+            OpCode::new(0x58, "CLI", AccumulatorOrImplied(MicroOpCallback::CLI)),
             // //CLV
-            // OpCode::new(0xb8, "CLV", 1, 2, Implied),
+            OpCode::new(0xb8, "CLV", AccumulatorOrImplied(MicroOpCallback::CLV)),
             // //CMP
             // OpCode::new(0xC9, "CMP", 2, 2, Immediate),
             // OpCode::new(0xC5, "CMP", 2, 3, ZeroPage),
@@ -127,9 +127,9 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             // OpCode::new(0xCE, "DEC", 3, 6, Absolute),
             // OpCode::new(0xDE, "DEC", 3, 7, AbsoluteX),
             // //DEX
-            // OpCode::new(0xCA, "DEX", 1, 2, Implied),
+            OpCode::new(0xCA, "DEX", AccumulatorOrImplied(MicroOpCallback::DEX)),
             // //DEY
-            // OpCode::new(0x88, "DEY", 1, 2, Implied),
+            OpCode::new(0x88, "DEY", AccumulatorOrImplied(MicroOpCallback::DEY)),
             // //EOR
             // OpCode::new(0x49, "EOR", 2, 2, Immediate),
             // OpCode::new(0x45, "EOR", 2, 3, ZeroPage),
@@ -145,9 +145,9 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             // OpCode::new(0xEE, "INC", 3, 6, Absolute),
             // OpCode::new(0xFE, "INC", 3, 7, AbsoluteX),
             // //INX
-            // OpCode::new(0xE8, "INX", 1, 2, Implied),
+            OpCode::new(0xE8, "INX", AccumulatorOrImplied(MicroOpCallback::INX)),
             // //INY
-            // OpCode::new(0xC8, "INY", 1, 2, Implied),
+            OpCode::new(0xC8, "INY", AccumulatorOrImplied(MicroOpCallback::INY)),
             // //JMP
             // OpCode::new(0x4C, "JMP", 3, 3, Absolute),
             // OpCode::new(0x6C, "JMP", 3, 5, Indirect),
@@ -223,13 +223,13 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 AbsoluteIndexRead(Source::X, Target::Y, MicroOpCallback::None),
             ),
             // //LSR
-            // OpCode::new(0x4A, "LSR", 1, 2, Accumulator),
+            OpCode::new(0x4A, "LSR", AccumulatorOrImplied(MicroOpCallback::LSR)),
             // OpCode::new(0x46, "LSR", 2, 5, ZeroPage),
             // OpCode::new(0x56, "LSR", 2, 6, ZeroPageX),
             // OpCode::new(0x4E, "LSR", 3, 6, Absolute),
             // OpCode::new(0x5E, "LSR", 3, 7, AbsoluteX),
             // //NOP
-            // OpCode::new(0xEA, "NOP", 1, 2, Implied),
+            OpCode::new(0xEA, "NOP", AccumulatorOrImplied(MicroOpCallback::None)),
             // //ORA
             // OpCode::new(0x09, "ORA", 2, 2, Immediate),
             // OpCode::new(0x05, "ORA", 2, 3, ZeroPage),
@@ -248,19 +248,19 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             // //PLP
             // OpCode::new(0x28, "PLP", 1, 4, Implied),
             // //ROL
-            // OpCode::new(0x2A, "ROL", 1, 2, Accumulator),
+            OpCode::new(0x2A, "ROL", AccumulatorOrImplied(MicroOpCallback::ROL)),
             // OpCode::new(0x26, "ROL", 2, 5, ZeroPage),
             // OpCode::new(0x36, "ROL", 2, 6, ZeroPageX),
             // OpCode::new(0x2E, "ROL", 3, 6, Absolute),
             // OpCode::new(0x3E, "ROL", 3, 7, AbsoluteX),
             // //ROR
-            // OpCode::new(0x6A, "ROR", 1, 2, Accumulator),
+            OpCode::new(0x6A, "ROR", AccumulatorOrImplied(MicroOpCallback::ROR)),
             // OpCode::new(0x66, "ROR", 2, 5, ZeroPage),
             // OpCode::new(0x76, "ROR", 2, 6, ZeroPageX),
             // OpCode::new(0x6E, "ROR", 3, 6, Absolute),
             // OpCode::new(0x7E, "ROR", 3, 7, AbsoluteX),
             // //RTI
-            // OpCode::new(0x40, "RTI", 1, 6, Implied),
+            OpCode::new(0x40, "RTI", RTI(MicroOpCallback::None)),
             // //RTS
             // OpCode::new(0x60, "RTS", 1, 6, Implied),
             // //SBC
@@ -273,11 +273,11 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             // OpCode::new(0xE1, "SBC", 2, 6, IndirectX),
             // OpCode::new(0xF1, "SBC", 2, 5, IndirectY),
             // //SEC
-            // OpCode::new(0x38, "SEC", 1, 2, Implied),
+            OpCode::new(0x38, "SEC", AccumulatorOrImplied(MicroOpCallback::SEC)),
             // //SED
-            // OpCode::new(0xF8, "SED", 1, 2, Implied),
+            OpCode::new(0xF8, "SED", AccumulatorOrImplied(MicroOpCallback::SED)),
             // //SEI
-            // OpCode::new(0x78, "SEI", 1, 2, Implied),
+            OpCode::new(0x78, "SEI", AccumulatorOrImplied(MicroOpCallback::SEI)),
             // //STA
             // OpCode::new(0x85, "STA", 2, 3, ZeroPage),
             // OpCode::new(0x95, "STA", 2, 4, ZeroPageX),
@@ -295,21 +295,21 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             // OpCode::new(0x94, "STY", 2, 4, ZeroPageX),
             // OpCode::new(0x8C, "STY", 3, 4, Absolute),
             // //TAX
-            // OpCode::new(0xAA, "TAX", 1, 2, Implied),
+            OpCode::new(0xAA, "TAX", AccumulatorOrImplied(MicroOpCallback::TAX)),
             // //TAY
-            // OpCode::new(0xA8, "TAY", 1, 2, Implied),
+            OpCode::new(0xA8, "TAY", AccumulatorOrImplied(MicroOpCallback::TAY)),
             // //TSX
-            // OpCode::new(0xBA, "TSX", 1, 2, Implied),
+            OpCode::new(0xBA, "TSX", AccumulatorOrImplied(MicroOpCallback::TSX)),
             // //TXA
-            // OpCode::new(0x8A, "TXA", 1, 2, Implied),
+            OpCode::new(0x8A, "TXA", AccumulatorOrImplied(MicroOpCallback::TXA)),
             // //TXS
-            // OpCode::new(0x9A, "TXS", 1, 2, Implied),
+            OpCode::new(0x9A, "TXS", AccumulatorOrImplied(MicroOpCallback::TXS)),
             // //TYA
-            // OpCode::new(0x98, "TYA", 1, 2, Implied),
+            OpCode::new(0x98, "TYA", AccumulatorOrImplied(MicroOpCallback::TYA)),
             // //Illegal Opcodes
             // OpCode::new(0xFF, "ISC", 2, 7, AbsoluteX),
             // OpCode::new(0xE3, "ISC", 2, 7, IndirectX),
-            // OpCode::new(0x3A, "NOP", 1, 2, Implied),
+            OpCode::new(0x3A, "NOP", AccumulatorOrImplied(MicroOpCallback::None2)),
         ])
         .ok();
 

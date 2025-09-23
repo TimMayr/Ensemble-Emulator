@@ -6,7 +6,7 @@ fn main() -> Result<(), String> {
     let mut emu = Consoles::Nes(Nes::default());
     let frontend = Frontends::Sdl2(SdlFrontend::default());
 
-    emu.load_rom(&String::from("./tests/Mario Bros. (World).nes"));
+    emu.load_rom(&String::from("./tests/Donkey Kong (JU) [p1].nes"));
     emu.reset();
     emu.run(&mut Some(frontend))
 }

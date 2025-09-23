@@ -120,6 +120,7 @@ fn test_asl_accumulator() {
 
     cpu.accumulator = 0b1000_0001;
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0b0000_0010);
     assert!(cpu.get_carry_flag());

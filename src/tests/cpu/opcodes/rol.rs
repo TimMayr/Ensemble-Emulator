@@ -176,6 +176,7 @@ fn test_rol_accumulator() {
     cpu.mem_write(0x0, 0x2A);
 
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0b1000_0000);
     assert!(!cpu.get_carry_flag());

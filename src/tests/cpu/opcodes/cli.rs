@@ -6,5 +6,6 @@ fn test_cli() {
     cpu.processor_status |= 0b0000_0100;
     cpu.mem_write(0x0, 0x58);
     cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.processor_status & 0b0000_0100, 0);
 }

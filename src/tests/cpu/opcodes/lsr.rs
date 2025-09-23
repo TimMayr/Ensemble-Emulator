@@ -103,6 +103,7 @@ fn test_lsr_accumulator() {
 
     cpu.accumulator = 0b1000_0001;
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0b0100_0000);
     assert!(cpu.get_carry_flag());

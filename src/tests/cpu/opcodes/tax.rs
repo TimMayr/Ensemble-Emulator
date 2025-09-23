@@ -8,6 +8,7 @@ fn test_tax_complete() {
     cpu.mem_write(0x0, 0xAA);
 
     cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.x_register, 0x66);
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -17,6 +18,7 @@ fn test_tax_complete() {
     cpu.mem_write(0x1, 0xAA);
 
     cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.x_register, 0x0);
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -25,6 +27,7 @@ fn test_tax_complete() {
 
     cpu.mem_write(0x2, 0xAA);
 
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.x_register, 0x80);
     assert!(!cpu.get_zero_flag());
@@ -39,6 +42,7 @@ fn test_tax_implied() {
     cpu.mem_write(0x0, 0xAA);
 
     cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.x_register, 0x66)
 }
 
@@ -49,6 +53,7 @@ fn test_tax_flags_none_when_none() {
 
     cpu.mem_write(0x0, 0xAA);
 
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.x_register, 0x66);
     assert!(!cpu.get_zero_flag());
@@ -64,6 +69,7 @@ fn test_tax_flags_only_zero_when_zero() {
     cpu.mem_write(0x0, 0xAA);
 
     cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.x_register, 0x0);
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -76,6 +82,7 @@ fn test_tax_flags_only_negative_when_negative() {
 
     cpu.mem_write(0x0, 0xAA);
 
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.x_register, 0x80);
     assert!(!cpu.get_zero_flag());

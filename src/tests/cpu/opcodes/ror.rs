@@ -146,6 +146,7 @@ fn test_ror_accumulator() {
     cpu.mem_write(0x0, 0x6A);
 
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0b0010_0000);
     assert!(!cpu.get_carry_flag());
