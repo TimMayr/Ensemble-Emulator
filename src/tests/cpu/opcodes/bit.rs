@@ -9,6 +9,9 @@ fn test_bit_complete() {
     cpu.mem_write(0x0020, 0b11111111);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
@@ -134,13 +137,16 @@ fn test_bit_zero_page() {
 }
 
 #[test]
-fn test_bit_absolute_page() {
+fn test_bit_absolute() {
     let mut cpu = Cpu::test_instance();
     cpu.accumulator = 0b00000000;
     cpu.mem_write(0x0, 0x2C);
     cpu.mem_write_u16(0x1, 0x8000);
     cpu.mem_write(0x8000, 0b11111111);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert!(cpu.get_zero_flag());

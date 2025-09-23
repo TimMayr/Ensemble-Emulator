@@ -9,6 +9,8 @@ fn test_pha_implied_simple() {
     cpu.mem_write(0x0, 0x48);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     //Validate that acc was saved to stack
     assert_eq!(cpu.mem_read(0x01FF), 0x66);
@@ -25,6 +27,8 @@ fn test_pha_implied_complicated() {
     cpu.mem_write(0x0, 0x48);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     //Init acc
     cpu.accumulator = 0x88;
@@ -32,12 +36,16 @@ fn test_pha_implied_complicated() {
     cpu.mem_write(0x1, 0x48);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     //Init acc
     cpu.accumulator = 0x99;
     //Write acc to stack
     cpu.mem_write(0x2, 0x48);
 
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     //Validate that acc was saved to correct address

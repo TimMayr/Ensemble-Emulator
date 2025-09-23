@@ -51,6 +51,8 @@ fn test_tsx_complicated() {
     cpu.mem_write(0x3, 0x28);
     cpu.step(0);
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     cpu.mem_write(0x4, 0xBA);
     cpu.step(0);

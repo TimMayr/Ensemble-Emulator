@@ -8,6 +8,7 @@ fn test_and_complete() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 66);
 
     cpu.mem_write(0x2, 0x25);
@@ -15,6 +16,7 @@ fn test_and_complete() {
     cpu.mem_write(0x0025, 0b01100110);
 
     cpu.accumulator = 0b11000011;
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 66);
 
@@ -25,6 +27,7 @@ fn test_and_complete() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 66);
 
     cpu.mem_write(0x6, 0x2D);
@@ -32,6 +35,9 @@ fn test_and_complete() {
     cpu.mem_write(0x8D2D, 0b01100110);
 
     cpu.accumulator = 0b11000011;
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 66);
 
@@ -42,6 +48,9 @@ fn test_and_complete() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 66);
 
     cpu.mem_write(0xC, 0x39);
@@ -50,6 +59,9 @@ fn test_and_complete() {
     cpu.mem_write(0x8949, 0b01100110);
 
     cpu.accumulator = 0b11000011;
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 66);
 
@@ -61,6 +73,7 @@ fn test_and_complete() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 66);
 
     cpu.mem_write(0x11, 0x31);
@@ -71,12 +84,14 @@ fn test_and_complete() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 66);
 
     cpu.mem_write(0x13, 0x29);
     cpu.mem_write(0x14, 0b01111111);
     cpu.accumulator = 0b01111111;
 
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 127);
@@ -88,6 +103,7 @@ fn test_and_complete() {
     cpu.accumulator = 0b11000011;
 
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0);
     assert!(cpu.get_zero_flag());
@@ -97,6 +113,7 @@ fn test_and_complete() {
     cpu.mem_write(0x18, 0b11000000);
     cpu.accumulator = 0b11000000;
 
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0xC0);
@@ -111,6 +128,7 @@ fn test_and_immediate() {
     cpu.mem_write(0x1, 0b01100110);
 
     cpu.accumulator = 0b11000011;
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 66);
 }
@@ -149,6 +167,9 @@ fn test_and_absolute() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 66);
 }
 
@@ -162,6 +183,9 @@ fn test_and_absolute_x() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 66);
 }
 
@@ -174,6 +198,9 @@ fn test_and_absolute_y() {
     cpu.mem_write(0x8949, 0b01100110);
 
     cpu.accumulator = 0b11000011;
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 66);
 }
@@ -214,6 +241,7 @@ fn test_and_flags_none_when_none() {
     cpu.accumulator = 0b01111111;
 
     cpu.step(0);
+    cpu.step(0);
 
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -227,6 +255,7 @@ fn test_and_flags_only_zero_when_zero() {
     cpu.accumulator = 0b11000011;
 
     cpu.step(0);
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -239,6 +268,7 @@ fn test_and_flags_only_negative_when_negative() {
     cpu.mem_write(0x1, 0b11000000);
     cpu.accumulator = 0b11000000;
 
+    cpu.step(0);
     cpu.step(0);
 
     assert!(cpu.get_negative_flag());

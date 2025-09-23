@@ -8,6 +8,7 @@ fn test_eor_complete() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0b10100101);
 
     cpu.mem_write(0x2, 0x45);
@@ -33,6 +34,9 @@ fn test_eor_complete() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0b10100101);
 
     cpu.mem_write(0x9, 0x5D);
@@ -42,6 +46,9 @@ fn test_eor_complete() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0b10100101);
 
     cpu.mem_write(0xC, 0x59);
@@ -50,6 +57,9 @@ fn test_eor_complete() {
     cpu.mem_write(0x8949, 0b01100110);
 
     cpu.accumulator = 0b11000011;
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 0b10100101);
 
@@ -112,6 +122,7 @@ fn test_eor_immediate() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0b10100101);
 }
 
@@ -149,6 +160,9 @@ fn test_eor_absolute() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0b10100101);
 }
 
@@ -162,6 +176,9 @@ fn test_eor_absolute_x() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0b10100101);
 }
 
@@ -174,6 +191,9 @@ fn test_eor_absolute_y() {
     cpu.mem_write(0x8949, 0b01100110);
 
     cpu.accumulator = 0b11000011;
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 0b10100101);
 }
@@ -214,6 +234,7 @@ fn test_eor_flags_none_when_none() {
     cpu.accumulator = 0b00000000;
 
     cpu.step(0);
+    cpu.step(0);
 
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -227,6 +248,7 @@ fn test_eor_flags_only_zero_when_zero() {
     cpu.accumulator = 0b11000011;
 
     cpu.step(0);
+    cpu.step(0);
 
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -239,6 +261,7 @@ fn test_eor_flags_only_negative_when_negative() {
     cpu.mem_write(0x1, 0b01000000);
     cpu.accumulator = 0b11000000;
 
+    cpu.step(0);
     cpu.step(0);
 
     assert!(cpu.get_negative_flag());
