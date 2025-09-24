@@ -332,6 +332,7 @@ impl Cpu {
                     AddressSource::AddressLatch,
                     index,
                     target,
+                    true,
                     callback,
                 ))
             }
@@ -395,6 +396,7 @@ impl Cpu {
                     AddressSource::AddressLatch,
                     Source::Y,
                     target,
+                    true,
                     callback,
                 ));
             }
@@ -534,20 +536,20 @@ impl Cpu {
             OpType::ZeroPageRMW(target, callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
                 instructions.push(MicroOp::Read(
-                    AddressSource::AddressLatch,
+                    AddressSource::LO,
                     target,
                     MicroOpCallback::None,
                 ));
-                instructions.push(MicroOp::Write(Target::AddressLatch, Source::TEMP, callback));
+                instructions.push(MicroOp::Write(Target::LoWrite, Source::TEMP, callback));
                 instructions.push(MicroOp::Write(
-                    Target::AddressLatch,
+                    Target::LoWrite,
                     Source::TEMP,
                     MicroOpCallback::None,
                 ))
             }
             OpType::ZeroPageWrite(source, callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
-                instructions.push(MicroOp::Write(Target::AddressLatch, source, callback));
+                instructions.push(MicroOp::Write(Target::LoWrite, source, callback));
             }
             OpType::ZeroPageIndexRMW(index, callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
@@ -566,9 +568,9 @@ impl Cpu {
                     Target::TEMP,
                     MicroOpCallback::None,
                 ));
-                instructions.push(MicroOp::Write(Target::AddressLatch, Source::TEMP, callback));
+                instructions.push(MicroOp::Write(Target::LoWrite, Source::TEMP, callback));
                 instructions.push(MicroOp::Write(
-                    Target::AddressLatch,
+                    Target::LoWrite,
                     Source::TEMP,
                     MicroOpCallback::None,
                 ));
@@ -585,7 +587,38 @@ impl Cpu {
                     false,
                     MicroOpCallback::None,
                 ));
-                instructions.push(MicroOp::Write(Target::AddressLatch, source, callback));
+                instructions.push(MicroOp::Write(Target::LoWrite, source, callback));
+            }
+            OpType::AbsoluteIndexRMW(offset, callback) => {
+                instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
+                instructions.push(MicroOp::ReadWithOffsetAndAddSomething(
+                    AddressSource::PC,
+                    Source::None,
+                    Target::HI,
+                    Source::LO,
+                    offset,
+                    Target::LO,
+                    true,
+                    MicroOpCallback::None,
+                ));
+                instructions.push(MicroOp::ReadPageCrossAware(
+                    AddressSource::AddressLatch,
+                    Source::X,
+                    Target::TEMP,
+                    false,
+                    MicroOpCallback::None,
+                ));
+                instructions.push(MicroOp::Read(
+                    AddressSource::AddressLatch,
+                    Target::TEMP,
+                    MicroOpCallback::None,
+                ));
+                instructions.push(MicroOp::Write(Target::AddressLatch, Source::TEMP, callback));
+                instructions.push(MicroOp::Write(
+                    Target::AddressLatch,
+                    Source::TEMP,
+                    MicroOpCallback::None,
+                ));
             }
         }
 
@@ -1065,19 +1098,25 @@ impl Cpu {
             MicroOp::Tick(_) => {
                 todo!()
             }
-            MicroOp::ReadPageCrossAware(source, offset, target, callback) => {
+            MicroOp::ReadPageCrossAware(source, offset, target, schedule_read, callback) => {
                 let address = self.get_u16_address(source);
                 let val = self.mem_read(address);
                 self.write_to_target(target, val);
 
                 let offset = self.get_src_value(offset);
 
-                if Self::crosses_page_boundary_u8(address - offset as u16, offset) {
-                    self.op_queue
-                        .push(MicroOp::Read(*source, *target, *callback));
-                }
+                if *schedule_read {
+                    if Self::crosses_page_boundary_u8(address - offset as u16, offset) {
+                        self.op_queue
+                            .push(MicroOp::Read(*source, *target, *callback));
+                    }
 
-                self.hi = self.hi.wrapping_add(1);
+                    self.hi = self.hi.wrapping_add(1);
+                } else {
+                    if Self::crosses_page_boundary_u8(address - offset as u16, offset) {
+                        self.hi = self.hi.wrapping_add(1);
+                    }
+                }
 
                 self.run_op(*callback);
 
@@ -1296,11 +1335,11 @@ impl Cpu {
             Target::LO => self.lo = val,
             Target::HI => self.hi = val,
             Target::TEMP => self.temp = val,
-            Target::TempWrite => self.mem_write(self.temp as u16, val),
             Target::P => self.processor_status = val & (!UNUSED_BIT & !BREAK_BIT),
             Target::AddressLatch => {
                 self.mem_write(self.get_addr_latch(), val);
             }
+            Target::LoWrite => self.mem_write(self.lo as u16, val),
             Target::None => {}
         }
     }
@@ -1318,7 +1357,7 @@ pub enum MicroOp {
     BranchIf(Condition, i8, MicroOpCallback),
     Tick(MicroOpCallback),
     Transfer(Source, Target, MicroOpCallback),
-    ReadPageCrossAware(AddressSource, Source, Target, MicroOpCallback),
+    ReadPageCrossAware(AddressSource, Source, Target, bool, MicroOpCallback),
     DummyReadAddOffsetWriteToTarget(AddressSource, Source, Target, MicroOpCallback),
     DummyRead(MicroOpCallback),
     ReadWithOffsetAndAddSomething(
@@ -1355,7 +1394,7 @@ pub enum Target {
     None,
     P,
     AddressLatch,
-    TempWrite,
+    LoWrite,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
@@ -1460,6 +1499,7 @@ pub enum OpType {
     ZeroPageWrite(Source, MicroOpCallback),
     ZeroPageIndexRMW(Source, MicroOpCallback),
     ZeroPageIndexWrite(Source, Source, MicroOpCallback),
+    AbsoluteIndexRMW(Source, MicroOpCallback),
 }
 
 #[cfg(test)]

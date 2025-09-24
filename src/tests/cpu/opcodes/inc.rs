@@ -50,6 +50,12 @@ fn test_inc_complete() {
     cpu.mem_write(0xFEFE, 0x2);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0xFEFE), 0x3);
 
@@ -153,6 +159,12 @@ fn test_inc_absolute_x() {
 
     cpu.mem_write(0xFEFE, 0x2);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.mem_read(0xFEFE), 0x3)

@@ -68,6 +68,12 @@ fn test_lsr_complete() {
     cpu.x_register = 0x01;
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x8001), 0);
     assert!(cpu.get_carry_flag());
@@ -199,6 +205,12 @@ fn test_lsr_absolute_x() {
     cpu.mem_write(0x8001, 0b0000_0001);
 
     cpu.x_register = 0x01;
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.mem_read(0x8001), 0);
     assert!(cpu.get_carry_flag());

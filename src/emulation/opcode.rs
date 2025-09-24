@@ -1,8 +1,8 @@
 use crate::emulation::cpu::OpType::{
-    AbsoluteIndexRead, AbsoluteRMW, AbsoluteRead, AbsoluteWrite, AccumulatorOrImplied, ImmediateAddressing,
-    IndexedIndirect, IndirectIndexed, JmpAbsolute, ZeroPageIndexRMW, ZeroPageIndexRead, ZeroPageIndexWrite, ZeroPageRMW, ZeroPageRead, ZeroPageWrite,
-    BRK, JSR, PH, PL, RTI,
-    RTS,
+    AbsoluteIndexRMW, AbsoluteIndexRead, AbsoluteRMW, AbsoluteRead, AbsoluteWrite,
+    AccumulatorOrImplied, ImmediateAddressing, IndexedIndirect, IndirectIndexed, JmpAbsolute, ZeroPageIndexRMW,
+    ZeroPageIndexRead, ZeroPageIndexWrite, ZeroPageRMW, ZeroPageRead, ZeroPageWrite, BRK, JSR, PH,
+    PL, RTI, RTS,
 };
 use crate::emulation::cpu::{MicroOpCallback, OpType, Source, Target};
 use std::collections::HashMap;
@@ -96,7 +96,11 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 ZeroPageIndexRMW(Source::X, MicroOpCallback::ASL),
             ),
             OpCode::new(0x0E, "ASL", AbsoluteRMW(Target::TEMP, MicroOpCallback::ASL)),
-            // OpCode::new(0x1E, "ASL", 3, 7, AbsoluteX),
+            OpCode::new(
+                0x1E,
+                "ASL",
+                AbsoluteIndexRMW(Source::X, MicroOpCallback::ASL),
+            ),
             // //BCC
             // OpCode::new(0x90, "BCC", 2, 2, Relative),
             // //BCS
@@ -187,7 +191,11 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 ZeroPageIndexRMW(Source::X, MicroOpCallback::DEC),
             ),
             OpCode::new(0xCE, "DEC", AbsoluteRMW(Target::TEMP, MicroOpCallback::DEC)),
-            // OpCode::new(0xDE, "DEC", 3, 7, AbsoluteX),
+            OpCode::new(
+                0xDE,
+                "DEC",
+                AbsoluteIndexRMW(Source::X, MicroOpCallback::DEC),
+            ),
             // //DEX
             OpCode::new(0xCA, "DEX", AccumulatorOrImplied(MicroOpCallback::DEX)),
             // //DEY
@@ -225,7 +233,11 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 ZeroPageIndexRMW(Source::X, MicroOpCallback::INC),
             ),
             OpCode::new(0xEE, "INC", AbsoluteRMW(Target::TEMP, MicroOpCallback::INC)),
-            // OpCode::new(0xFE, "INC", 3, 7, AbsoluteX),
+            OpCode::new(
+                0xFE,
+                "INC",
+                AbsoluteIndexRMW(Source::X, MicroOpCallback::INC),
+            ),
             // //INX
             OpCode::new(0xE8, "INX", AccumulatorOrImplied(MicroOpCallback::INX)),
             // //INY
@@ -313,7 +325,11 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 ZeroPageIndexRMW(Source::X, MicroOpCallback::LSR),
             ),
             OpCode::new(0x4E, "LSR", AbsoluteRMW(Target::TEMP, MicroOpCallback::LSR)),
-            // OpCode::new(0x5E, "LSR", 3, 7, AbsoluteX),
+            OpCode::new(
+                0x5E,
+                "LSR",
+                AbsoluteIndexRMW(Source::X, MicroOpCallback::LSR),
+            ),
             // //NOP
             OpCode::new(0xEA, "NOP", AccumulatorOrImplied(MicroOpCallback::None)),
             // //ORA
@@ -358,7 +374,11 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 ZeroPageIndexRMW(Source::X, MicroOpCallback::ROL),
             ),
             OpCode::new(0x2E, "ROL", AbsoluteRMW(Target::TEMP, MicroOpCallback::ROL)),
-            // OpCode::new(0x3E, "ROL", 3, 7, AbsoluteX),
+            OpCode::new(
+                0x3E,
+                "ROL",
+                AbsoluteIndexRMW(Source::X, MicroOpCallback::ROL),
+            ),
             // //ROR
             OpCode::new(0x6A, "ROR", AccumulatorOrImplied(MicroOpCallback::ROR)),
             OpCode::new(0x66, "ROR", ZeroPageRMW(Target::TEMP, MicroOpCallback::ROR)),
@@ -368,7 +388,11 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 ZeroPageIndexRMW(Source::X, MicroOpCallback::ROR),
             ),
             OpCode::new(0x6E, "ROR", AbsoluteRMW(Target::TEMP, MicroOpCallback::ROR)),
-            // OpCode::new(0x7E, "ROR", 3, 7, AbsoluteX),
+            OpCode::new(
+                0x7E,
+                "ROR",
+                AbsoluteIndexRMW(Source::X, MicroOpCallback::ROR),
+            ),
             // //RTI
             OpCode::new(0x40, "RTI", RTI(MicroOpCallback::None)),
             // //RTS

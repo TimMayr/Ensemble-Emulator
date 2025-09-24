@@ -21,6 +21,10 @@ fn test_rol_complete() {
     cpu.mem_write(0x20, 0b1000_0000);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x20), 0);
     assert!(cpu.get_carry_flag());
@@ -33,6 +37,7 @@ fn test_rol_complete() {
 
     cpu.mem_write(0x3, 0x2A);
 
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0b1000_0001);
@@ -83,6 +88,11 @@ fn test_rol_complete() {
     cpu.mem_write(0x1234, 0b0000_0001);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x1234), 0b0000_0010);
     assert!(!cpu.get_carry_flag());
@@ -95,6 +105,12 @@ fn test_rol_complete() {
     cpu.mem_write_u16(0xC, 0x8000);
     cpu.mem_write(0x8001, 0b1000_0000);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x8001), 0);
@@ -310,6 +326,12 @@ fn test_rol_absolute_x() {
     cpu.mem_write_u16(0x1, 0x8000);
     cpu.mem_write(0x8001, 0b1000_0000);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.mem_read(0x8001), 0);

@@ -8,6 +8,7 @@ fn test_ror_complete() {
     cpu.mem_write(0x0, 0x6A);
 
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0b0010_0000);
     assert!(!cpu.get_carry_flag());
@@ -19,6 +20,10 @@ fn test_ror_complete() {
     cpu.mem_write(0x2, 0x20);
     cpu.mem_write(0x20, 0b1000_0000);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.mem_read(0b0100_0000), 0);
@@ -32,6 +37,7 @@ fn test_ror_complete() {
 
     cpu.mem_write(0x3, 0x6A);
 
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0b1010_0000);
@@ -100,6 +106,12 @@ fn test_ror_complete() {
     cpu.mem_write_u16(0xC, 0x8000);
     cpu.mem_write(0x8001, 0b1000_0000);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.mem_read(0b0100_0000), 0);
@@ -280,6 +292,12 @@ fn test_ror_absolute_x() {
     cpu.mem_write_u16(0x1, 0x8000);
     cpu.mem_write(0x8001, 0b1000_0000);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.mem_read(0b0100_0000), 0);

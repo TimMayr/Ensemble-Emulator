@@ -68,6 +68,12 @@ fn test_asl_complete() {
 
     cpu.x_register = 0x01;
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.mem_read(0x8001), 0);
     assert!(cpu.get_carry_flag());
     assert!(cpu.get_zero_flag());
@@ -217,6 +223,12 @@ fn test_asl_absolute_x() {
     cpu.mem_write(0x8001, 0b1000_0000);
 
     cpu.x_register = 0x01;
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.mem_read(0x8001), 0);
     assert!(cpu.get_carry_flag());
