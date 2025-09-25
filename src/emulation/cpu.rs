@@ -2,7 +2,7 @@ use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::{Memory, Ram};
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OpCode, OPCODES_MAP};
+use crate::emulation::opcode::{OPCODES_MAP, OpCode};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
@@ -234,12 +234,6 @@ impl Cpu {
         (base & UPPER_BYTE) != (target & UPPER_BYTE)
     }
 
-    fn fetch_next_bytes_u16(&mut self) -> u16 {
-        let res = self.mem_read_u16(self.program_counter);
-        self.program_counter += 2;
-        res
-    }
-
     fn shift_left(&mut self, data: u8) -> u8 {
         let res = data << 1;
 
@@ -318,7 +312,7 @@ impl Cpu {
             }
             OpType::AbsoluteIndexRead(index, target, callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
-                instructions.push(MicroOp::ReadWithOffsetFromZPAndAddSomethingU8(
+                instructions.push(MicroOp::ReadWithOffsetFromU16AndAddSomething(
                     AddressSource::PC,
                     Source::None,
                     Target::HI,
@@ -401,7 +395,7 @@ impl Cpu {
                 ));
             }
             OpType::BRK(callback) => {
-                instructions.push(MicroOp::ReadWithOffsetFromZPAndAddSomethingU8(
+                instructions.push(MicroOp::ReadWithOffsetFromU16AndAddSomething(
                     AddressSource::PC,
                     Source::None,
                     Target::None,
@@ -489,7 +483,7 @@ impl Cpu {
                 instructions.push(MicroOp::DummyRead(MicroOpCallback::None));
                 instructions.push(MicroOp::StackPush(Source::PCH, MicroOpCallback::None));
                 instructions.push(MicroOp::StackPush(Source::PCL, MicroOpCallback::None));
-                instructions.push(MicroOp::ReadWithOffsetFromZPAndAddSomethingU8(
+                instructions.push(MicroOp::ReadWithOffsetFromU16AndAddSomething(
                     AddressSource::PC,
                     Source::None,
                     Target::PCH,
@@ -502,7 +496,7 @@ impl Cpu {
             }
             OpType::JmpAbsolute(callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
-                instructions.push(MicroOp::ReadWithOffsetFromZPAndAddSomethingU8(
+                instructions.push(MicroOp::ReadWithOffsetFromU16AndAddSomething(
                     AddressSource::PC,
                     Source::None,
                     Target::PCH,
@@ -591,7 +585,7 @@ impl Cpu {
             }
             OpType::AbsoluteIndexRMW(offset, callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
-                instructions.push(MicroOp::ReadWithOffsetFromZPAndAddSomethingU8(
+                instructions.push(MicroOp::ReadWithOffsetFromU16AndAddSomething(
                     AddressSource::PC,
                     Source::None,
                     Target::HI,
@@ -622,7 +616,7 @@ impl Cpu {
             }
             OpType::AbsoluteIndexWrite(source, offset, callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
-                instructions.push(MicroOp::ReadWithOffsetFromZPAndAddSomethingU8(
+                instructions.push(MicroOp::ReadWithOffsetFromU16AndAddSomething(
                     AddressSource::PC,
                     Source::None,
                     Target::HI,
@@ -728,35 +722,6 @@ impl Cpu {
         instructions
     }
 
-    fn pha(&mut self) {
-        self.stack_push(self.accumulator);
-    }
-
-    fn php(&mut self) {
-        self.stack_push(self.processor_status | (BREAK_BIT | UNUSED_BIT));
-    }
-
-    fn pla(&mut self) {
-        self.accumulator = self.stack_pop();
-        self.update_negative_and_zero_flags(self.accumulator);
-    }
-
-    fn plp(&mut self) {
-        self.processor_status = self.stack_pop() & !(BREAK_BIT | UNUSED_BIT);
-    }
-
-    fn brk(&mut self) {
-        self.stack_push_u16(self.program_counter);
-        self.php();
-
-        self.program_counter = self.mem_read_u16(IRQ_VECTOR_ADDR);
-    }
-
-    fn rti(&mut self) {
-        self.plp();
-        self.program_counter = self.stack_pop_u16();
-    }
-
     //
     //
     // fn isc(&mut self, mode: &AddressingMode) {
@@ -810,7 +775,7 @@ impl Cpu {
         self.memory.get_memory_debug(range)
     }
 
-    pub fn step(&mut self, master_cycle: u128) -> u8 {
+    pub fn step(&mut self, master_cycle: u128) {
         self.master_cycle = master_cycle;
 
         if let Some(ppu) = &self.ppu
@@ -834,8 +799,6 @@ impl Cpu {
             }
             MicroOpResult::Repeat => op,
         };
-
-        0
     }
 
     fn execute_micro_op(&mut self, micro_op: &MicroOp) -> MicroOpResult {
@@ -846,7 +809,6 @@ impl Cpu {
 
                 let pnc = &OpCode::default();
                 self.current_opcode = **OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
-
                 self.run_op(*callback);
 
                 MicroOpResult::Sequence(self.get_instructions_for_op_type())
@@ -931,10 +893,8 @@ impl Cpu {
                     }
 
                     self.hi = self.hi.wrapping_add(1);
-                } else {
-                    if Self::crosses_page_boundary_u8(address - offset as u16, offset) {
-                        self.hi = self.hi.wrapping_add(1);
-                    }
+                } else if Self::crosses_page_boundary_u8(address - offset as u16, offset) {
+                    self.hi = self.hi.wrapping_add(1);
                 }
 
                 self.run_op(*callback);
@@ -1019,9 +979,11 @@ impl Cpu {
                 let add_to = self.program_counter;
                 let to_add = self.get_src_value(to_add) as i8;
                 let value = add_to.wrapping_add(to_add as i16 as u16);
-                self.write_to_target(&Target::LO, value as u8);
+                self.write_to_target(&Target::PCL, value as u8);
 
-                self.op_queue.push(MicroOp::FixHiBranch(value));
+                if Self::crosses_page_boundary_i8(add_to, to_add) {
+                    self.op_queue.push(MicroOp::FixHiBranch(value));
+                }
 
                 MicroOpResult::Sequence(self.op_queue.clone())
             }
@@ -1145,12 +1107,6 @@ impl Cpu {
         //Unused APU Registers
         mem.add_memory(0x4018..=0x401F, Memory::Ram(Ram::new(0x8)));
         mem
-    }
-
-    fn fetch_next_byte_and_increment_pc(&mut self) -> u8 {
-        let res = self.mem_read(self.program_counter);
-        self.program_counter += 1;
-        res
     }
 
     fn get_src_value(&mut self, src: &Source) -> u8 {
