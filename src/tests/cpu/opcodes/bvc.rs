@@ -14,6 +14,11 @@ fn bvc_fail() {
     cpu.step(0);
     cpu.step(0);
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.program_counter, 0x5);
 }
@@ -31,12 +36,20 @@ fn bvc_success() {
     cpu.step(0);
     cpu.step(0);
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.program_counter, 0x17);
 
     cpu.mem_write(0x17, 0xA9);
     cpu.mem_write(0x18, 0x66);
 
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x66);

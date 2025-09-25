@@ -22,6 +22,8 @@ fn test_sbc_zero_page() {
     cpu.mem_write(0x33, 0x11);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x43);
 }
@@ -35,6 +37,9 @@ fn test_sbc_zero_page_x() {
     cpu.mem_write(0x1, 0x33);
     cpu.mem_write(0x43, 0x11);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x43);
@@ -101,6 +106,11 @@ fn test_sbc_indirect_x() {
     cpu.mem_write(0x8343, 0x11);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x43);
 }
@@ -115,6 +125,10 @@ fn test_sbc_indirect_y() {
     cpu.mem_write_u16(0x33, 0x8333);
     cpu.mem_write(0x8343, 0x11);
 
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x43);

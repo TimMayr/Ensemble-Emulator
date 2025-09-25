@@ -17,6 +17,8 @@ fn test_ora_complete() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0b11100111);
 
     cpu.mem_write(0x4, 0x15);
@@ -25,6 +27,9 @@ fn test_ora_complete() {
     cpu.mem_write(0x0045, 0b01100110);
 
     cpu.accumulator = 0b11000011;
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 0b11100111);
 
@@ -71,6 +76,11 @@ fn test_ora_complete() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0b11100111);
 
     cpu.mem_write(0x11, 0x11);
@@ -81,12 +91,17 @@ fn test_ora_complete() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0b11100111);
 
     cpu.mem_write(0x13, 0x09);
     cpu.mem_write(0x14, 0b00000001);
     cpu.accumulator = 0b00000000;
 
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0b00000001);
@@ -98,6 +113,7 @@ fn test_ora_complete() {
     cpu.accumulator = 0b00000000;
 
     cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0);
     assert!(cpu.get_zero_flag());
@@ -107,6 +123,7 @@ fn test_ora_complete() {
     cpu.mem_write(0x18, 0b01100000);
     cpu.accumulator = 0b11000000;
 
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0b11100000);
@@ -135,6 +152,8 @@ fn test_ora_zero_page() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0b11100111);
 }
 
@@ -147,6 +166,9 @@ fn test_ora_zero_page_x() {
     cpu.mem_write(0x0045, 0b01100110);
 
     cpu.accumulator = 0b11000011;
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 0b11100111);
 }
@@ -209,6 +231,11 @@ fn test_ora_indirect_x() {
 
     cpu.accumulator = 0b11000011;
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0b11100111);
 }
 
@@ -222,6 +249,10 @@ fn test_ora_indirect_y() {
     cpu.mem_write(0x8141, 0b01100110);
 
     cpu.accumulator = 0b11000011;
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     assert_eq!(cpu.accumulator, 0b11100111);
 }

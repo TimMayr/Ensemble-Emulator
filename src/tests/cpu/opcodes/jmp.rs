@@ -16,6 +16,10 @@ fn test_jmp_complete() {
     cpu.mem_write_u16(0x8345, 0x9456);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.program_counter, 0x9456);
 
@@ -55,12 +59,17 @@ fn test_jmp_indirect() {
     cpu.mem_write_u16(0x1234, 0x8345);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert_eq!(cpu.program_counter, 0x8345);
 
     cpu.mem_write(0x8345, 0xA9);
     cpu.mem_write(0x8346, 0x66);
 
+    cpu.step(0);
     cpu.step(0);
 
     assert_eq!(cpu.accumulator, 0x66);

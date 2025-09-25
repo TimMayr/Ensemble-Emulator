@@ -1,8 +1,8 @@
 use crate::emulation::cpu::Cpu;
 use crate::emulation::emu::{Console, HEIGHT, WIDTH};
-use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::mem::Memory;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
@@ -38,16 +38,11 @@ impl Console for Nes {
     }
 
     fn run(&mut self, frontend: &mut Option<Frontends>) -> Result<(), String> {
-        let mut leftover_cpu_cycles = 0;
         loop {
             self.cycles += 1;
 
             if self.cycles.is_multiple_of(12) {
-                if leftover_cpu_cycles == 0 {
-                    leftover_cpu_cycles = self.cpu.step(self.cycles);
-                }
-
-                leftover_cpu_cycles -= 1;
+                self.cpu.step(self.cycles);
             }
 
             if self.cycles.is_multiple_of(4) {
