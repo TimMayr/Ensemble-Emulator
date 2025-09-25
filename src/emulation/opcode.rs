@@ -1,10 +1,11 @@
 use crate::emulation::cpu::OpType::{
-    AbsoluteIndexRMW, AbsoluteIndexRead, AbsoluteRMW, AbsoluteRead, AbsoluteWrite,
-    AccumulatorOrImplied, ImmediateAddressing, IndexedIndirect, IndirectIndexed, JmpAbsolute, ZeroPageIndexRMW,
+    AbsoluteIndexRMW, AbsoluteIndexRead, AbsoluteIndexWrite, AbsoluteRMW, AbsoluteRead,
+    AbsoluteWrite, AccumulatorOrImplied, ImmediateAddressing, IndexedIndirectRead, IndexedIndirectWrite,
+    IndirectIndexedRead, IndirectIndexedWrite, JmpAbsolute, JmpIndirect, Relative, ZeroPageIndexRMW,
     ZeroPageIndexRead, ZeroPageIndexWrite, ZeroPageRMW, ZeroPageRead, ZeroPageWrite, BRK, JSR, PH,
     PL, RTI, RTS,
 };
-use crate::emulation::cpu::{MicroOpCallback, OpType, Source, Target};
+use crate::emulation::cpu::{Condition, MicroOpCallback, OpType, Source, Target};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -21,7 +22,7 @@ pub struct OpCode {
 pub fn init() -> HashMap<u8, &'static OpCode> {
     OPCODES
         .set(vec![
-            // //ADC
+            //ADC
             OpCode::new(
                 0x69,
                 "ADC",
@@ -55,21 +56,29 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             OpCode::new(
                 0x61,
                 "ADC",
-                IndexedIndirect(Target::TEMP, MicroOpCallback::ADC),
+                IndexedIndirectRead(Target::TEMP, MicroOpCallback::ADC),
             ),
             OpCode::new(
                 0x71,
                 "ADC",
-                IndirectIndexed(Target::TEMP, MicroOpCallback::ADC),
+                IndirectIndexedRead(Target::TEMP, MicroOpCallback::ADC),
             ),
-            // //AND
+            //AND
             OpCode::new(
                 0x29,
                 "AND",
                 ImmediateAddressing(Target::TEMP, MicroOpCallback::AND),
             ),
-            // OpCode::new(0x25, "AND", 2, 3, ZeroPage),
-            // OpCode::new(0x35, "AND", 2, 4, ZeroPageX),
+            OpCode::new(
+                0x25,
+                "AND",
+                ZeroPageRead(Target::TEMP, MicroOpCallback::AND),
+            ),
+            OpCode::new(
+                0x35,
+                "AND",
+                ZeroPageIndexRead(Source::X, Target::TEMP, MicroOpCallback::AND),
+            ),
             OpCode::new(
                 0x2D,
                 "AND",
@@ -85,9 +94,17 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 "AND",
                 AbsoluteIndexRead(Source::Y, Target::TEMP, MicroOpCallback::AND),
             ),
-            // OpCode::new(0x21, "AND", 2, 6, IndirectX),
-            // OpCode::new(0x31, "AND", 2, 5, IndirectY),
-            // //ASL
+            OpCode::new(
+                0x21,
+                "AND",
+                IndexedIndirectRead(Target::TEMP, MicroOpCallback::AND),
+            ),
+            OpCode::new(
+                0x31,
+                "AND",
+                IndirectIndexedRead(Target::TEMP, MicroOpCallback::AND),
+            ),
+            //ASL
             OpCode::new(0x0A, "ASL", AccumulatorOrImplied(MicroOpCallback::ASL)),
             OpCode::new(0x06, "ASL", ZeroPageRMW(Target::TEMP, MicroOpCallback::ASL)),
             OpCode::new(
@@ -101,32 +118,68 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 "ASL",
                 AbsoluteIndexRMW(Source::X, MicroOpCallback::ASL),
             ),
-            // //BCC
-            // OpCode::new(0x90, "BCC", 2, 2, Relative),
-            // //BCS
-            // OpCode::new(0xB0, "BCS", 2, 2, Relative),
-            // //BEQ
-            // OpCode::new(0xF0, "BEQ", 2, 2, Relative),
-            // //BIT
-            // OpCode::new(0x24, "BIT", 2, 3, ZeroPage),
+            //BCC
+            OpCode::new(
+                0x90,
+                "BCC",
+                Relative(MicroOpCallback::BRANCH(Condition::CarryClear)),
+            ),
+            //BCS
+            OpCode::new(
+                0xB0,
+                "BCS",
+                Relative(MicroOpCallback::BRANCH(Condition::CarrySet)),
+            ),
+            //BEQ
+            OpCode::new(
+                0xF0,
+                "BEQ",
+                Relative(MicroOpCallback::BRANCH(Condition::ZeroSet)),
+            ),
+            //BIT
+            OpCode::new(
+                0x24,
+                "BIT",
+                ZeroPageRead(Target::TEMP, MicroOpCallback::BIT),
+            ),
             OpCode::new(
                 0x2c,
                 "BIT",
                 AbsoluteRead(Target::TEMP, MicroOpCallback::BIT),
             ),
-            // //BMI
-            // OpCode::new(0x30, "BMI", 2, 2, Relative),
-            // //BNE
-            // OpCode::new(0xD0, "BNE", 2, 2, Relative),
-            // //BPL
-            // OpCode::new(0x10, "BPL", 2, 2, Relative),
-            // //BRK
+            //BMI
+            OpCode::new(
+                0x30,
+                "BMI",
+                Relative(MicroOpCallback::BRANCH(Condition::NegativeSet)),
+            ),
+            //BNE
+            OpCode::new(
+                0xD0,
+                "BNE",
+                Relative(MicroOpCallback::BRANCH(Condition::ZeroClear)),
+            ),
+            //BPL
+            OpCode::new(
+                0x10,
+                "BPL",
+                Relative(MicroOpCallback::BRANCH(Condition::NegativeClear)),
+            ),
+            //BRK
             OpCode::new(0x00, "BRK", BRK(MicroOpCallback::None)),
-            // //BVC
-            // OpCode::new(0x50, "BVC", 2, 2, Relative),
-            // //BVS
-            // OpCode::new(0x70, "BVS", 2, 2, Relative),
-            // //CLC
+            //BVC
+            OpCode::new(
+                0x50,
+                "BVC",
+                Relative(MicroOpCallback::BRANCH(Condition::OverflowClear)),
+            ),
+            //BVS
+            OpCode::new(
+                0x70,
+                "BVS",
+                Relative(MicroOpCallback::BRANCH(Condition::OverflowSet)),
+            ),
+            //CLC
             OpCode::new(0x18, "CLC", AccumulatorOrImplied(MicroOpCallback::CLC)),
             // //CLD
             OpCode::new(0xD8, "CLD", AccumulatorOrImplied(MicroOpCallback::CLD)),
@@ -140,8 +193,16 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 "CMP",
                 ImmediateAddressing(Target::TEMP, MicroOpCallback::CMP),
             ),
-            // OpCode::new(0xC5, "CMP", 2, 3, ZeroPage),
-            // OpCode::new(0xD5, "CMP", 2, 4, ZeroPageX),
+            OpCode::new(
+                0xC5,
+                "CMP",
+                ZeroPageRead(Target::TEMP, MicroOpCallback::CMP),
+            ),
+            OpCode::new(
+                0xD5,
+                "CMP",
+                ZeroPageIndexRead(Source::X, Target::TEMP, MicroOpCallback::CMP),
+            ),
             OpCode::new(
                 0xCD,
                 "CMP",
@@ -157,15 +218,27 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 "CMP",
                 AbsoluteIndexRead(Source::Y, Target::TEMP, MicroOpCallback::CMP),
             ),
-            // OpCode::new(0xC1, "CMP", 2, 6, IndirectX),
-            // OpCode::new(0xD1, "CMP", 2, 5, IndirectY),
+            OpCode::new(
+                0xC1,
+                "CMP",
+                IndexedIndirectRead(Target::TEMP, MicroOpCallback::CMP),
+            ),
+            OpCode::new(
+                0xD1,
+                "CMP",
+                IndirectIndexedRead(Target::TEMP, MicroOpCallback::CMP),
+            ),
             // //CPX
             OpCode::new(
                 0xE0,
                 "CPX",
                 ImmediateAddressing(Target::TEMP, MicroOpCallback::CPX),
             ),
-            // OpCode::new(0xE4, "CPX", 2, 3, ZeroPage),
+            OpCode::new(
+                0xE4,
+                "CPX",
+                ZeroPageRead(Target::TEMP, MicroOpCallback::CPX),
+            ),
             OpCode::new(
                 0xEC,
                 "CPX",
@@ -177,7 +250,11 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 "CPY",
                 ImmediateAddressing(Target::TEMP, MicroOpCallback::CPY),
             ),
-            // OpCode::new(0xC4, "CPY", 2, 3, ZeroPage),
+            OpCode::new(
+                0xC4,
+                "CPY",
+                ZeroPageRead(Target::TEMP, MicroOpCallback::CPY),
+            ),
             OpCode::new(
                 0xCC,
                 "CPY",
@@ -206,8 +283,16 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 "EOR",
                 ImmediateAddressing(Target::TEMP, MicroOpCallback::EOR),
             ),
-            // OpCode::new(0x45, "EOR", 2, 3, ZeroPage),
-            // OpCode::new(0x55, "EOR", 2, 4, ZeroPageX),
+            OpCode::new(
+                0x45,
+                "EOR",
+                ZeroPageRead(Target::TEMP, MicroOpCallback::EOR),
+            ),
+            OpCode::new(
+                0x55,
+                "EOR",
+                ZeroPageIndexRead(Source::X, Target::TEMP, MicroOpCallback::EOR),
+            ),
             OpCode::new(
                 0x4D,
                 "EOR",
@@ -223,8 +308,16 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 "EOR",
                 AbsoluteIndexRead(Source::Y, Target::TEMP, MicroOpCallback::EOR),
             ),
-            // OpCode::new(0x41, "EOR", 2, 6, IndirectX),
-            // OpCode::new(0x51, "EOR", 2, 5, IndirectY),
+            OpCode::new(
+                0x41,
+                "EOR",
+                IndexedIndirectRead(Target::TEMP, MicroOpCallback::EOR),
+            ),
+            OpCode::new(
+                0x51,
+                "EOR",
+                IndirectIndexedRead(Target::TEMP, MicroOpCallback::EOR),
+            ),
             // //INC
             OpCode::new(0xE6, "INC", ZeroPageRMW(Target::TEMP, MicroOpCallback::INC)),
             OpCode::new(
@@ -244,7 +337,7 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             OpCode::new(0xC8, "INY", AccumulatorOrImplied(MicroOpCallback::INY)),
             // //JMP
             OpCode::new(0x4C, "JMP", JmpAbsolute(MicroOpCallback::None)),
-            // OpCode::new(0x6C, "JMP", 3, 5, Indirect),
+            OpCode::new(0x6C, "JMP", JmpIndirect(MicroOpCallback::None)),
             // //JSR
             OpCode::new(0x20, "JSR", JSR(MicroOpCallback::None)),
             // //LDA
@@ -273,12 +366,12 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             OpCode::new(
                 0xA1,
                 "LDA",
-                IndexedIndirect(Target::A, MicroOpCallback::None),
+                IndexedIndirectRead(Target::A, MicroOpCallback::None),
             ),
             OpCode::new(
                 0xB1,
                 "LDA",
-                IndirectIndexed(Target::A, MicroOpCallback::None),
+                IndirectIndexedRead(Target::A, MicroOpCallback::None),
             ),
             // //LDX
             OpCode::new(
@@ -338,8 +431,16 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 "ORA",
                 ImmediateAddressing(Target::TEMP, MicroOpCallback::ORA),
             ),
-            // OpCode::new(0x05, "ORA", 2, 3, ZeroPage),
-            // OpCode::new(0x15, "ORA", 2, 4, ZeroPageX),
+            OpCode::new(
+                0x05,
+                "ORA",
+                ZeroPageRead(Target::TEMP, MicroOpCallback::ORA),
+            ),
+            OpCode::new(
+                0x15,
+                "ORA",
+                ZeroPageIndexRead(Source::X, Target::TEMP, MicroOpCallback::ORA),
+            ),
             OpCode::new(
                 0x0D,
                 "ORA",
@@ -355,8 +456,16 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 "ORA",
                 AbsoluteIndexRead(Source::Y, Target::TEMP, MicroOpCallback::ORA),
             ),
-            // OpCode::new(0x01, "ORA", 2, 6, IndirectX),
-            // OpCode::new(0x11, "ORA", 2, 5, IndirectY),
+            OpCode::new(
+                0x01,
+                "ORA",
+                IndexedIndirectRead(Target::TEMP, MicroOpCallback::ORA),
+            ),
+            OpCode::new(
+                0x11,
+                "ORA",
+                IndirectIndexedRead(Target::TEMP, MicroOpCallback::ORA),
+            ),
             // //PHA
             OpCode::new(0x48, "PHA", PH(Source::A, MicroOpCallback::None)),
             // //PHP
@@ -403,8 +512,16 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 "SBC",
                 ImmediateAddressing(Target::TEMP, MicroOpCallback::SBC),
             ),
-            // OpCode::new(0xE5, "SBC", 2, 3, ZeroPage),
-            // OpCode::new(0xF5, "SBC", 2, 4, ZeroPageX),
+            OpCode::new(
+                0xE5,
+                "SBC",
+                ZeroPageRead(Target::TEMP, MicroOpCallback::SBC),
+            ),
+            OpCode::new(
+                0xF5,
+                "SBC",
+                ZeroPageIndexRead(Source::X, Target::TEMP, MicroOpCallback::SBC),
+            ),
             OpCode::new(
                 0xED,
                 "SBC",
@@ -420,8 +537,16 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 "SBC",
                 AbsoluteIndexRead(Source::Y, Target::TEMP, MicroOpCallback::SBC),
             ),
-            // OpCode::new(0xE1, "SBC", 2, 6, IndirectX),
-            // OpCode::new(0xF1, "SBC", 2, 5, IndirectY),
+            OpCode::new(
+                0xE1,
+                "SBC",
+                IndexedIndirectRead(Target::TEMP, MicroOpCallback::SBC),
+            ),
+            OpCode::new(
+                0xF1,
+                "SBC",
+                IndirectIndexedRead(Target::TEMP, MicroOpCallback::SBC),
+            ),
             // //SEC
             OpCode::new(0x38, "SEC", AccumulatorOrImplied(MicroOpCallback::SEC)),
             // //SED
@@ -436,10 +561,26 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 ZeroPageIndexWrite(Source::A, Source::X, MicroOpCallback::None),
             ),
             OpCode::new(0x8D, "STA", AbsoluteWrite(Source::A, MicroOpCallback::None)),
-            // OpCode::new(0x9D, "STA", 3, 5, AbsoluteX),
-            // OpCode::new(0x99, "STA", 3, 5, AbsoluteY),
-            // OpCode::new(0x81, "STA", 2, 6, IndirectX),
-            // OpCode::new(0x91, "STA", 2, 6, IndirectY),
+            OpCode::new(
+                0x9D,
+                "STA",
+                AbsoluteIndexWrite(Source::A, Source::X, MicroOpCallback::None),
+            ),
+            OpCode::new(
+                0x99,
+                "STA",
+                AbsoluteIndexWrite(Source::A, Source::Y, MicroOpCallback::None),
+            ),
+            OpCode::new(
+                0x81,
+                "STA",
+                IndexedIndirectWrite(Source::A, MicroOpCallback::None),
+            ),
+            OpCode::new(
+                0x91,
+                "STA",
+                IndirectIndexedWrite(Source::A, MicroOpCallback::None),
+            ),
             // //STX
             OpCode::new(0x86, "STX", ZeroPageWrite(Source::X, MicroOpCallback::None)),
             OpCode::new(

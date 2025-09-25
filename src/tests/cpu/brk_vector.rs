@@ -25,5 +25,13 @@ fn test_brk_vector() {
     cpu.reset();
     cpu.step(0);
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+
+    cpu.step(0);
+    cpu.step(0);
     assert_eq!(cpu.accumulator, 0x20)
 }

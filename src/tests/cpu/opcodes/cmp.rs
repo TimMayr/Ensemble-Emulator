@@ -25,6 +25,7 @@ fn test_cmp_zero_page() {
 
     cpu.step(0);
     cpu.step(0);
+    cpu.step(0);
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -39,6 +40,8 @@ fn test_cmp_zero_page_x() {
     cpu.mem_write(0x0, 0xD5);
     cpu.mem_write(0xD5, 0xC5);
 
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
     cpu.step(0);
 
@@ -116,6 +119,11 @@ fn test_cmp_indirect_x() {
     cpu.mem_write(0x8343, 0x10);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -131,6 +139,10 @@ fn test_cmp_indirect_y() {
     cpu.mem_write(0x1, 0x33);
     cpu.mem_write_u16(0x33, 0x8333);
     cpu.mem_write(0x8343, 0x10);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
     cpu.step(0);
 
     assert!(cpu.get_carry_flag());

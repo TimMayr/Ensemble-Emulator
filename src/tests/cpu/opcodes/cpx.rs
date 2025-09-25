@@ -24,6 +24,8 @@ fn test_cpx_zero_page() {
     cpu.mem_write(0xC5, 0x10);
 
     cpu.step(0);
+    cpu.step(0);
+    cpu.step(0);
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
