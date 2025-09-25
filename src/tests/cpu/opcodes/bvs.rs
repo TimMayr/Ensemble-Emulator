@@ -42,7 +42,6 @@ fn bvs_success() {
     cpu.step(0);
     cpu.step(0);
     cpu.step(0);
-    cpu.step(0);
 
     assert_eq!(cpu.program_counter, 0x17);
 
