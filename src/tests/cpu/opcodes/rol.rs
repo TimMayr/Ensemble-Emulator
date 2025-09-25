@@ -429,3 +429,68 @@ fn test_rol_flags_carry_and_only_negative_when_carry_and_negative() {
     assert!(!cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
 }
+
+#[test]
+fn test_rol_preserves_overflow_flag() {
+    let mut cpu = Cpu::test_instance();
+    cpu.accumulator = 0b0000_0001;
+    cpu.processor_status |= 0b0100_0000; // set V
+
+    cpu.mem_write(0x0, 0x2A); // ROL A
+    cpu.step(0);
+    cpu.step(0);
+
+    assert!(cpu.get_overflow_flag()); // should be unchanged
+}
+
+#[test]
+fn test_rol_preserves_decimal_flag() {
+    let mut cpu = Cpu::test_instance();
+    cpu.accumulator = 0b0000_0001;
+    cpu.processor_status |= 0b0000_1000; // set D
+
+    cpu.mem_write(0x0, 0x2A); // ROL A
+    cpu.step(0);
+    cpu.step(0);
+
+    assert!(cpu.get_decimal_flag()); // should be unchanged
+}
+
+#[test]
+fn test_rol_preserves_interrupt_disable_flag() {
+    let mut cpu = Cpu::test_instance();
+    cpu.accumulator = 0b0000_0001;
+    cpu.processor_status |= 0b0000_0100; // set I
+
+    cpu.mem_write(0x0, 0x2A); // ROL A
+    cpu.step(0);
+    cpu.step(0);
+
+    assert!(cpu.get_interrupt_disable_flag()); // should be unchanged
+}
+
+#[test]
+fn test_rol_preserves_break_flag() {
+    let mut cpu = Cpu::test_instance();
+    cpu.accumulator = 0b0000_0001;
+    cpu.processor_status |= 0b0001_0000; // set B
+
+    cpu.mem_write(0x0, 0x2A); // ROL A
+    cpu.step(0);
+    cpu.step(0);
+
+    assert!(cpu.get_break_flag()); // should be unchanged
+}
+
+#[test]
+fn test_rol_preserves_unused_flag() {
+    let mut cpu = Cpu::test_instance();
+    cpu.accumulator = 0b0000_0001;
+    cpu.processor_status |= 0b0010_0000; // set U (unused bit 5)
+
+    cpu.mem_write(0x0, 0x2A); // ROL A
+    cpu.step(0);
+    cpu.step(0);
+
+    assert!(cpu.get_unused_flag()); // should be unchanged
+}

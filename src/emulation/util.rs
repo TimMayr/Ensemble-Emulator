@@ -1,5 +1,98 @@
+use crate::emulation::cpu::{
+    CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, ZERO_BIT,
+};
+use crate::emulation::emu::WIDTH;
+use crate::emulation::nes::Nes;
 use std::fs::{File, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
+
+pub struct TraceLog {
+    log: String,
+}
+impl TraceLog {
+    pub fn new() -> Self {
+        Self {
+            log: String::from(""),
+        }
+    }
+
+    pub fn trace(&mut self, nes: &Nes) {
+        let cpu = &nes.cpu;
+        let ppu = nes.ppu.borrow();
+        self.log += format!(
+            "{:04X}  {} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3},{:3} CYC:{}\n",
+            cpu.program_counter,
+            cpu.current_opcode.name,
+            cpu.accumulator,
+            cpu.x_register,
+            cpu.y_register,
+            cpu.stack_pointer,
+            cpu.processor_status,
+            ppu.dot_counter % WIDTH as u128,
+            ppu.dot_counter / WIDTH as u128,
+            cpu.master_cycle / 12
+        )
+        .as_str();
+    }
+
+    fn status_as_string(status: u8) -> String {
+        let mut str = String::new();
+
+        if status & NEGATIVE_BIT != 0 {
+            str += "N"
+        } else {
+            str += "n"
+        }
+
+        if status & OVERFLOW_BIT != 0 {
+            str += "V"
+        } else {
+            str += "v"
+        }
+
+        str += "--";
+
+        if status & DECIMAL_BIT != 0 {
+            str += "D"
+        } else {
+            str += "d"
+        }
+
+        if status & IRQ_BIT != 0 {
+            str += "I"
+        } else {
+            str += "i"
+        }
+
+        if status & ZERO_BIT != 0 {
+            str += "Z"
+        } else {
+            str += "z"
+        }
+
+        if status & CARRY_BIT != 0 {
+            str += "C"
+        } else {
+            str += "c"
+        }
+
+        str
+    }
+
+    pub fn flush(&mut self) {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open("./trace-log.txt")
+            .expect("Error saving log");
+
+        unsafe {
+            file.write_all(self.log.as_mut_vec().as_slice())
+                .expect("error");
+        }
+    }
+}
 
 pub fn write_at_offset(path: &str, value: u8, offset: u16) -> std::io::Result<()> {
     let mut file = OpenOptions::new()
