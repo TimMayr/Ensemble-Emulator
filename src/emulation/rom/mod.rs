@@ -3,8 +3,8 @@ mod formats;
 use crate::emulation::mem::{Memory, MemoryDevice, Ram, Rom};
 use crate::emulation::rom::formats::archaic_ines::ArchaicInes;
 use crate::emulation::rom::formats::ines::Ines;
-use crate::emulation::rom::formats::ines_07::Ines07;
 use crate::emulation::rom::formats::ines2::Ines2;
+use crate::emulation::rom::formats::ines_07::Ines07;
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -165,7 +165,11 @@ impl RomFile {
         Memory::Rom(rom)
     }
 
-    pub fn get_chr_rom(&self) -> Memory {
+    pub fn get_chr_rom(&self) -> Option<Memory> {
+        if self.chr_memory.chr_rom_size == 0 {
+            return None;
+        }
+
         let mut rom = Rom::new(self.chr_memory.chr_rom_size as usize);
 
         let mut start = 16usize;
@@ -182,7 +186,7 @@ impl RomFile {
                 .to_vec()
                 .into_boxed_slice(),
         );
-        Memory::Rom(rom)
+        Some(Memory::Rom(rom))
     }
 
     pub fn get_prg_ram(&self) -> Memory {

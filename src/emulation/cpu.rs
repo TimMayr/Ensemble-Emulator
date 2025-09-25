@@ -2,14 +2,13 @@ use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::{Memory, Ram};
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OPCODES_MAP, OpCode};
+use crate::emulation::opcode::{OpCode, OPCODES_MAP};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use std::cmp::PartialEq;
 use std::mem::discriminant;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
@@ -19,35 +18,19 @@ pub const INTERNAL_RAM_SIZE: u16 = 0x800;
 pub const STACK_START: u8 = 0xFF;
 pub const STACK_START_ADDRESS: u16 = 0x0100;
 
-const NEGATIVE_BIT: u8 = 0x80;
-const CARRY_BIT: u8 = 0x1;
-const ZERO_BIT: u8 = 0x2;
-const OVERFLOW_BIT: u8 = 0x40;
-const IRQ_BIT: u8 = 0x4;
-const UNUSED_BIT: u8 = 0x10;
-const BREAK_BIT: u8 = 0x20;
+pub const NEGATIVE_BIT: u8 = 0x80;
+pub const CARRY_BIT: u8 = 0x1;
+pub const ZERO_BIT: u8 = 0x2;
+pub const OVERFLOW_BIT: u8 = 0x40;
+pub const IRQ_BIT: u8 = 0x4;
+pub const UNUSED_BIT: u8 = 0x20;
+pub const BREAK_BIT: u8 = 0x10;
+pub const DECIMAL_BIT: u8 = 0x8;
 const IRQ_VECTOR_ADDR: u16 = 0xFFFE;
 const NMI_HANDLER_ADDR: u16 = 0xFFFA;
 const RESET_VECTOR_ADDR: u16 = 0xFFFC;
 const UPPER_BYTE: u16 = 0xFF00;
 const LOWER_BYTE: u16 = 0x00FF;
-
-#[derive(Debug, Eq, PartialEq, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
-pub enum AddressingMode {
-    Implied,
-    Accumulator,
-    Immediate,
-    ZeroPage,
-    ZeroPageX,
-    ZeroPageY,
-    Relative,
-    Absolute,
-    AbsoluteX,
-    AbsoluteY,
-    Indirect,
-    IndirectX,
-    IndirectY,
-}
 
 #[derive(Debug)]
 pub struct Cpu {
@@ -225,6 +208,22 @@ impl Cpu {
         (self.processor_status & OVERFLOW_BIT) != 0
     }
 
+    pub fn get_decimal_flag(&self) -> bool {
+        (self.processor_status & DECIMAL_BIT) != 0
+    }
+
+    pub fn get_interrupt_disable_flag(&self) -> bool {
+        (self.processor_status & IRQ_BIT) != 0
+    }
+
+    pub fn get_break_flag(&self) -> bool {
+        (self.processor_status & BREAK_BIT) != 0
+    }
+
+    pub fn get_unused_flag(&self) -> bool {
+        (self.processor_status & UNUSED_BIT) != 0
+    }
+
     fn crosses_page_boundary_u8(base: u16, offset: u8) -> bool {
         (base & UPPER_BYTE) != ((base + offset as u16) & UPPER_BYTE)
     }
@@ -294,6 +293,12 @@ impl Cpu {
 
     fn get_addr_latch(&self) -> u16 {
         ((self.hi as u16) << 8) | (self.lo as u16)
+    }
+
+    fn add_to_low_byte(val: u16, add: u8) -> u16 {
+        let high = val & 0xFF00; // preserve high byte
+        let low = (val & 0x00FF).wrapping_add(add as u16); // add with wrapping
+        high | low
     }
 
     fn get_instructions_for_op_type(&mut self) -> Vec<MicroOp> {
@@ -769,6 +774,8 @@ impl Cpu {
 
     pub fn reset(&mut self) {
         self.program_counter = self.mem_read_u16(RESET_VECTOR_ADDR);
+        self.x_register = 0xFF;
+        self.stack_pointer = 0xFD
     }
 
     pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
@@ -808,7 +815,11 @@ impl Cpu {
                 self.program_counter = self.program_counter.wrapping_add(1);
 
                 let pnc = &OpCode::default();
-                self.current_opcode = **OPCODES_MAP.get().unwrap().get(&opcode).unwrap_or(&pnc);
+                self.current_opcode = **OPCODES_MAP
+                    .get()
+                    .unwrap()
+                    .get(&opcode)
+                    .unwrap_or_else(|| panic!("finished at: {}", self.master_cycle));
                 self.run_op(*callback);
 
                 MicroOpResult::Sequence(self.get_instructions_for_op_type())
@@ -903,7 +914,7 @@ impl Cpu {
             }
             MicroOp::DummyReadAddOffsetWriteToTarget(source, offset, target, callback) => {
                 let address = self.get_u16_address(source);
-                let _ = self.mem_read(address);
+                self.mem_read(address);
                 let src_value = self.get_src_value(offset) as u16;
                 self.write_to_target(target, address.wrapping_add(src_value) as u8);
 
@@ -958,7 +969,7 @@ impl Cpu {
             ) => {
                 let address = self.get_u16_address(address_source);
                 let src_value = self.get_src_value(offset);
-                let offset_address = address.wrapping_add(src_value as u16);
+                let offset_address = Self::add_to_low_byte(address, src_value);
                 let value = self.mem_read(offset_address);
                 self.write_to_target(target, value);
 

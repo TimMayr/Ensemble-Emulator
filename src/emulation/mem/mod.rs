@@ -98,6 +98,10 @@ pub struct Ram {
 
 impl Ram {
     pub fn new(size: usize) -> Self {
+        if size == 0 {
+            panic!()
+        }
+
         Self {
             memory: vec![0; size].into_boxed_slice(),
         }
@@ -132,6 +136,10 @@ pub struct Rom {
 
 impl Rom {
     pub fn new(size: usize) -> Self {
+        if size == 0 {
+            panic!()
+        }
+
         Self {
             memory: vec![0; size].into_boxed_slice(),
         }

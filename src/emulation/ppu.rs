@@ -375,7 +375,10 @@ impl Ppu {
         let rom_file = rom_get.as_rom_file();
         let chr_rom = rom_file.get_chr_rom();
 
-        self.memory.add_memory(0x0000..=0x1FFF, chr_rom);
+        if let Some(chr_rom) = chr_rom {
+            self.memory.add_memory(0x0000..=0x1FFF, chr_rom);
+        }
+
         self.memory.add_memory(
             0x2000..=0x3EFF,
             Memory::MirrorMemory(MirrorMemory::new(
@@ -428,7 +431,7 @@ impl Ppu {
             )
         }
 
-        // let mut palette_index = current_palette[*color_bits as usize] as usize;
+        // let palette_index = current_palette[*color_bits as usize] as usize;
 
         let palette_index = match color_bits {
             0b00 => 0x0f,

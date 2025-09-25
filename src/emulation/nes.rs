@@ -1,14 +1,16 @@
-use crate::emulation::cpu::Cpu;
+use crate::emulation::cpu::{Cpu, MicroOp, MicroOpCallback};
 use crate::emulation::emu::{Console, HEIGHT, WIDTH};
-use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::mem::Memory;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
 use crate::emulation::savestate::{CpuState, PpuState, SaveState};
+use crate::emulation::util::TraceLog;
 use crate::frontend::{Frontend, Frontends};
 use std::cell::RefCell;
+use std::mem::discriminant;
 use std::ops::{Deref, RangeInclusive};
 use std::rc::Rc;
 use std::time::Duration;
@@ -62,14 +64,22 @@ impl Console for Nes {
         frontend: &mut Option<Frontends>,
         last_cycle: u128,
     ) -> Result<(), String> {
+        let mut trace = TraceLog::new();
+
         loop {
             self.cycles += 1;
 
-            if self.cycles > last_cycle {
+            if self.cycles >= last_cycle {
+                trace.flush();
                 return Ok(());
             };
 
             if self.cycles.is_multiple_of(12) {
+                if discriminant(&self.cpu.current_op)
+                    == discriminant(&MicroOp::FetchOpcode(MicroOpCallback::None))
+                {
+                    trace.trace(self);
+                }
                 self.cpu.step(self.cycles);
             }
 
@@ -98,7 +108,7 @@ impl Nes {
         Self {
             cpu,
             ppu,
-            cycles: 0,
+            cycles: 84,
             rom_file: None,
         }
     }
