@@ -21,12 +21,18 @@ pub struct CpuState {
     pub hi: u8,
     pub current_op: MicroOp,
     pub op_queue: Vec<MicroOp>,
-    pub current_opcode: u8,
+    pub current_opcode: Option<u8>,
     pub temp: u8,
 }
 
 impl From<&Cpu> for CpuState {
     fn from(cpu: &Cpu) -> Self {
+        let mut current_opcode = None;
+
+        if let Some(op) = cpu.current_opcode {
+            current_opcode = Some(op.opcode);
+        }
+
         Self { program_counter: cpu.program_counter,
                stack_pointer: cpu.stack_pointer,
                accumulator: cpu.accumulator,
@@ -40,7 +46,7 @@ impl From<&Cpu> for CpuState {
                hi: cpu.hi,
                current_op: cpu.current_op,
                op_queue: cpu.op_queue.clone(),
-               current_opcode: cpu.current_opcode.opcode,
+               current_opcode,
                temp: cpu.temp }
     }
 }

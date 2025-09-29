@@ -20,9 +20,9 @@ impl TraceLog {
         let cpu = &nes.cpu;
         let ppu = nes.ppu.borrow();
         self.log += format!(
-            "{:04X}  {} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3},{:3} CYC:{}\n",
+            "{:04X} {:>4} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3},{:3} CYC:{}\n",
             cpu.program_counter - 1,
-            cpu.current_opcode.name,
+            cpu.current_opcode.unwrap().name,
             cpu.accumulator,
             cpu.x_register,
             cpu.y_register,
