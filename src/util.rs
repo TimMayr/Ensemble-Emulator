@@ -1,40 +1,37 @@
-use crate::emulation::cpu::{
-    CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, ZERO_BIT,
-};
-use crate::emulation::emu::WIDTH;
-use crate::emulation::nes::Nes;
 use std::fs::{File, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
+
+use crate::emulation::cpu::{
+    CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, UNUSED_BIT, ZERO_BIT,
+};
+use crate::emulation::nes::Nes;
 
 pub struct TraceLog {
     log: String,
 }
 impl TraceLog {
-    pub fn new() -> Self {
-        Self {
-            log: String::from(""),
-        }
-    }
+    pub fn new() -> Self { Self { log: String::from("") } }
 
     pub fn trace(&mut self, nes: &Nes) {
         let cpu = &nes.cpu;
         let ppu = nes.ppu.borrow();
         self.log += format!(
             "{:04X}  {} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3},{:3} CYC:{}\n",
-            cpu.program_counter,
+            cpu.program_counter - 1,
             cpu.current_opcode.name,
             cpu.accumulator,
             cpu.x_register,
             cpu.y_register,
+            cpu.processor_status | UNUSED_BIT,
             cpu.stack_pointer,
-            cpu.processor_status,
-            ppu.dot_counter % WIDTH as u128,
-            ppu.dot_counter / WIDTH as u128,
-            cpu.master_cycle / 12
+            ppu.dot_counter / 341u128,
+            ppu.dot_counter % 341u128,
+            cpu.master_cycle / 12 - 1
         )
         .as_str();
     }
 
+    #[allow(dead_code)]
     fn status_as_string(status: u8) -> String {
         let mut str = String::new();
 
@@ -80,12 +77,11 @@ impl TraceLog {
     }
 
     pub fn flush(&mut self) {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open("./trace-log.txt")
-            .expect("Error saving log");
+        let mut file = OpenOptions::new().write(true)
+                                         .create(true)
+                                         .truncate(true)
+                                         .open("./trace-log.txt")
+                                         .expect("Error saving log");
 
         unsafe {
             file.write_all(self.log.as_mut_vec().as_slice())
@@ -95,11 +91,10 @@ impl TraceLog {
 }
 
 pub fn write_at_offset(path: &str, value: u8, offset: u16) -> std::io::Result<()> {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(path)?;
+    let mut file = OpenOptions::new().write(true)
+                                     .create(true)
+                                     .truncate(false)
+                                     .open(path)?;
 
     // Seek to 0xFFFC (65532 bytes)
     file.seek(SeekFrom::Start(offset as u64))?;
@@ -116,11 +111,11 @@ pub fn write_to_file(path: &str, data: Vec<u8>) {
 }
 
 pub fn set_packed(packed: &u16, val: &u8, mask: &u16, val_mask: &u8) -> u16 {
-    //1. Flip masked bits off
-    //2. Only take masked bits of value
-    //3. Shift them right by the difference between the bits and the ones
-    //4. Or together
-    //Example:
+    // 1. Flip masked bits off
+    // 2. Only take masked bits of value
+    // 3. Shift them right by the difference between the bits and the ones
+    // 4. Or together
+    // Example:
     // packed:  0b1010_1010_1010_1010
     // val:               0b0101_1111
     // mask:    0b0000_0011_1110_0000

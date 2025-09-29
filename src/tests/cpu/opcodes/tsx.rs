@@ -47,7 +47,7 @@ fn test_tsx_complicated() {
     assert!(!cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
 
-    //Increment stack counter by reading from stack
+    // Increment stack counter by reading from stack
     cpu.mem_write(0x3, 0x28);
     cpu.step(0);
     cpu.step(0);
@@ -58,7 +58,7 @@ fn test_tsx_complicated() {
     cpu.step(0);
     cpu.step(0);
 
-    //Validate that incremented stack counter is loaded correctly
+    // Validate that incremented stack counter is loaded correctly
     assert_eq!(0x81, cpu.x_register);
     assert!(!cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());

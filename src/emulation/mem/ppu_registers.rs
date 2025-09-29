@@ -1,7 +1,8 @@
-use crate::emulation::mem::MemoryDevice;
-use crate::emulation::ppu::Ppu;
 use std::cell::RefCell;
 use std::rc::Rc;
+
+use crate::emulation::mem::MemoryDevice;
+use crate::emulation::ppu::Ppu;
 
 #[derive(Debug, Clone)]
 pub struct PpuRegisters {
@@ -9,9 +10,7 @@ pub struct PpuRegisters {
 }
 
 impl PpuRegisters {
-    pub fn new(ppu: Rc<RefCell<Ppu>>) -> Self {
-        Self { ppu }
-    }
+    pub fn new(ppu: Rc<RefCell<Ppu>>) -> Self { Self { ppu } }
 }
 
 impl MemoryDevice for PpuRegisters {

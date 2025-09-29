@@ -1,19 +1,20 @@
-use crate::emulation::cpu::{Cpu, MicroOp, MicroOpCallback};
-use crate::emulation::emu::{Console, HEIGHT, WIDTH};
-use crate::emulation::mem::mirror_memory::MirrorMemory;
-use crate::emulation::mem::ppu_registers::PpuRegisters;
-use crate::emulation::mem::Memory;
-use crate::emulation::ppu::Ppu;
-use crate::emulation::rom::{RomFile, RomFileConvertible};
-use crate::emulation::savestate;
-use crate::emulation::savestate::{CpuState, PpuState, SaveState};
-use crate::emulation::util::TraceLog;
-use crate::frontend::{Frontend, Frontends};
 use std::cell::RefCell;
 use std::mem::discriminant;
 use std::ops::{Deref, RangeInclusive};
 use std::rc::Rc;
 use std::time::Duration;
+
+use crate::emulation::cpu::{Cpu, MicroOp, MicroOpCallback};
+use crate::emulation::emu::{Console, HEIGHT, WIDTH};
+use crate::emulation::mem::Memory;
+use crate::emulation::mem::mirror_memory::MirrorMemory;
+use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::ppu::Ppu;
+use crate::emulation::rom::{RomFile, RomFileConvertible};
+use crate::emulation::savestate;
+use crate::emulation::savestate::{CpuState, PpuState, SaveState};
+use crate::frontend::{Frontend, Frontends};
+use crate::util::TraceLog;
 
 pub const CPU_CYCLES_PER_FRAME: u16 = 29780;
 pub const FRAME_DURATION: Duration = Duration::from_nanos(16_666_667);
@@ -31,86 +32,51 @@ impl Console for Nes {
         self.ppu.borrow().pixel_buffer
     }
 
-    fn load_rom(&mut self, path: &String) {
-        self.load_rom(path);
-    }
+    fn load_rom(&mut self, path: &String) { self.load_rom(path); }
 
-    fn reset(&mut self) {
-        self.reset()
-    }
+    fn reset(&mut self) { self.reset() }
 
     fn run(&mut self, frontend: &mut Option<Frontends>) -> Result<(), String> {
-        loop {
-            self.cycles += 1;
-
-            if self.cycles.is_multiple_of(12) {
-                self.cpu.step(self.cycles);
-            }
-
-            if self.cycles.is_multiple_of(4) {
-                self.ppu.borrow_mut().step(self.cycles);
-            }
-
-            if self.cycles.is_multiple_of(MASTER_CYCLES_PER_FRAME as u128)
-                && let Some(frontend) = frontend.as_mut()
-            {
-                frontend.show_frame(&self.get_pixel_buffer())?
-            }
-        }
-    }
-
-    fn run_until(
-        &mut self,
-        frontend: &mut Option<Frontends>,
-        last_cycle: u128,
-    ) -> Result<(), String> {
         let mut trace = TraceLog::new();
 
         loop {
             self.cycles += 1;
-
-            if self.cycles >= last_cycle {
-                trace.flush();
-                return Ok(());
-            };
-
-            if self.cycles.is_multiple_of(12) {
-                if discriminant(&self.cpu.current_op)
-                    == discriminant(&MicroOp::FetchOpcode(MicroOpCallback::None))
-                {
-                    trace.trace(self);
+            if let Err(err) = self.step(frontend, u128::MAX, &mut trace) {
+                if err == "Execution finished" {
+                    return Ok(());
                 }
-                self.cpu.step(self.cycles);
             }
+        }
+    }
 
-            if self.cycles.is_multiple_of(4) {
-                self.ppu.borrow_mut().step(self.cycles);
-            }
+    fn run_until(&mut self,
+                 frontend: &mut Option<Frontends>,
+                 last_cycle: u128)
+                 -> Result<(), String> {
+        let mut trace = TraceLog::new();
 
-            if self.cycles.is_multiple_of(MASTER_CYCLES_PER_FRAME as u128)
-                && let Some(frontend) = frontend.as_mut()
-            {
-                frontend.show_frame(&self.get_pixel_buffer())?
+        loop {
+            self.cycles += 1;
+            if let Err(err) = self.step(frontend, last_cycle, &mut trace) {
+                if err == "Execution finished" {
+                    return Ok(());
+                }
             }
         }
     }
 
     fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>> {
-        vec![
-            self.cpu.get_memory_debug(range.clone()),
-            self.ppu.borrow().get_memory_debug(range.clone()),
-        ]
+        vec![self.cpu.get_memory_debug(range.clone()),
+             self.ppu.borrow().get_memory_debug(range.clone()),]
     }
 }
 
 impl Nes {
     pub fn new(cpu: Cpu, ppu: Rc<RefCell<Ppu>>) -> Self {
-        Self {
-            cpu,
-            ppu,
-            cycles: 84,
-            rom_file: None,
-        }
+        Self { cpu,
+               ppu,
+               cycles: 84,
+               rom_file: None }
     }
 
     pub fn reset(&mut self) {
@@ -141,13 +107,11 @@ impl Nes {
             PpuState::from(ppu_ref.deref())
         };
 
-        let state = SaveState {
-            cpu: CpuState::from(&self.cpu),
-            ppu: ppu_state,
-            cycles: self.cycles,
-            rom_file: self.rom_file.as_ref().unwrap().clone(),
-            version: 1,
-        };
+        let state = SaveState { cpu: CpuState::from(&self.cpu),
+                                ppu: ppu_state,
+                                cycles: self.cycles,
+                                rom_file: self.rom_file.as_ref().unwrap().clone(),
+                                version: 1 };
 
         savestate::save_state(state, path);
     }
@@ -156,19 +120,55 @@ impl Nes {
         let state = savestate::load_state(path);
 
         self.rom_file = Some(state.rom_file);
-        self.ppu = Rc::new(RefCell::new(Ppu::from(
-            &state.ppu,
-            self.rom_file.as_ref().unwrap(),
-        )));
-        self.cpu = Cpu::from(
-            &state.cpu,
-            self.ppu.clone(),
-            self.rom_file.as_ref().unwrap(),
-        );
+        self.ppu = Rc::new(RefCell::new(Ppu::from(&state.ppu, self.rom_file.as_ref().unwrap())));
+        self.cpu = Cpu::from(&state.cpu,
+                             self.ppu.clone(),
+                             self.rom_file.as_ref().unwrap());
         self.cycles = state.cycles;
 
         self.cpu.memory.load(&state.cpu.memory);
         self.ppu.borrow_mut().memory.load(&state.ppu.memory);
+    }
+
+    pub fn step(&mut self,
+                frontend: &mut Option<Frontends>,
+                last_cycle: u128,
+                trace: &mut TraceLog)
+                -> Result<(), String> {
+        if self.cycles >= last_cycle {
+            trace.flush();
+            return Err(String::from("Execution finished"));
+        };
+
+        if self.cycles.is_multiple_of(12) {
+            if self.cycles == 121 * 12 {
+                print!("");
+            }
+            let mut do_trace = false;
+            if discriminant(&self.cpu.current_op)
+               == discriminant(&MicroOp::FetchOpcode(MicroOpCallback::None))
+            {
+                do_trace = true;
+            }
+            self.cpu.step(self.cycles);
+
+            if do_trace {
+                trace.trace(self);
+            }
+        }
+
+        if self.cycles.is_multiple_of(4) {
+            self.ppu.borrow_mut().step(self.cycles);
+        }
+
+        if self.cycles.is_multiple_of(MASTER_CYCLES_PER_FRAME as u128)
+           && let Some(frontend) = frontend.as_mut()
+        {
+            self.ppu.borrow_mut().frame();
+            frontend.show_frame(&self.get_pixel_buffer())?
+        }
+
+        Ok(())
     }
 }
 

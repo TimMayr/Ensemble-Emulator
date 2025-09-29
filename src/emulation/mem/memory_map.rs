@@ -1,5 +1,6 @@
-use crate::emulation::mem::{Memory, MemoryDevice};
 use std::ops::RangeInclusive;
+
+use crate::emulation::mem::{Memory, MemoryDevice};
 
 const MEMORY_SIZE: u16 = 0xFFFF;
 
@@ -12,21 +13,19 @@ struct RegionEntry {
 #[derive(Debug)]
 pub struct MemoryMap {
     pub regions: Vec<Memory>,
+    open_bus: u8,
     lookup: Box<[Option<RegionEntry>]>,
 }
 
 impl Default for MemoryMap {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
 impl MemoryMap {
     pub fn new() -> Self {
-        Self {
-            regions: Vec::new(),
-            lookup: vec![None; MEMORY_SIZE as usize + 1].into_boxed_slice(),
-        }
+        Self { regions: Vec::new(),
+               open_bus: 0,
+               lookup: vec![None; MEMORY_SIZE as usize + 1].into_boxed_slice() }
     }
 
     pub fn add_memory(&mut self, address_space: RangeInclusive<u16>, memory: Memory) {
@@ -35,22 +34,20 @@ impl MemoryMap {
         let start = *address_space.start();
         for addr in address_space {
             let offset = addr - start;
-            self.lookup[addr as usize] = Some(RegionEntry {
-                device: device_index,
-                offset,
-            });
+            self.lookup[addr as usize] = Some(RegionEntry { device: device_index,
+                                                            offset });
         }
 
         self.regions.push(memory)
     }
 
     #[inline]
-    pub fn mem_read(&self, addr: u16) -> u8 {
+    pub fn mem_read(&mut self, addr: u16) -> u8 {
         if let Some(entry) = self.lookup[addr as usize] {
-            self.regions[entry.device].read(entry.offset)
-        } else {
-            0
+            self.open_bus = self.regions[entry.device].read(entry.offset);
         }
+
+        self.open_bus
     }
 
     #[inline]
@@ -70,7 +67,7 @@ impl MemoryMap {
     }
 
     #[inline]
-    pub fn mem_read_u16(&self, addr: u16) -> u16 {
+    pub fn mem_read_u16(&mut self, addr: u16) -> u16 {
         let least_significant_bits = self.mem_read(addr) as u16;
         let highest_significant_bits = self.mem_read(addr + 1) as u16;
 
