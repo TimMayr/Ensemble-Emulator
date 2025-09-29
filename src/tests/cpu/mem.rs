@@ -25,11 +25,11 @@ fn test_cpu_ram_mirroring() {
 fn test_rom_readable() {
     let mut cpu = Cpu::new();
 
-    //Create and initialize new Rom
+    // Create and initialize new Rom
     let mut rom = Rom::new(0xBFE0);
     rom.init(0x10, 0x20);
 
-    //Attach new Rom memory device to cpu
+    // Attach new Rom memory device to cpu
     cpu.memory.add_memory(0x4020..=0xFFFF, Memory::Rom(rom));
 
     assert_eq!(cpu.mem_read(0x4030), 0x20);
@@ -39,9 +39,9 @@ fn test_rom_readable() {
 fn test_rom_non_writeable() {
     let mut cpu = Cpu::new();
 
-    //Attach new Rom memory device to cpu
+    // Attach new Rom memory device to cpu
     cpu.memory
-        .add_memory(0x4020..=0xFFFF, Memory::Rom(Rom::new(0xBFE0)));
+       .add_memory(0x4020..=0xFFFF, Memory::Rom(Rom::new(0xBFE0)));
 
     cpu.mem_write(0x4030, 0x20);
 

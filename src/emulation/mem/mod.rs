@@ -1,7 +1,8 @@
+use std::fmt::{Debug, Formatter};
+
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
-use std::fmt::{Debug, Formatter};
 
 pub mod memory_map;
 pub mod mirror_memory;
@@ -86,9 +87,7 @@ pub trait MemoryDevice: Debug {
     fn init(&mut self, addr: u16, data: u8);
     fn load(&mut self, data: Box<[u8]>);
 
-    fn snapshot(&self, addr: u16) -> u8 {
-        self.read(addr)
-    }
+    fn snapshot(&self, addr: u16) -> u8 { self.read(addr) }
 }
 
 #[derive(Debug, Clone)]
@@ -102,17 +101,13 @@ impl Ram {
             panic!()
         }
 
-        Self {
-            memory: vec![0; size].into_boxed_slice(),
-        }
+        Self { memory: vec![0; size].into_boxed_slice() }
     }
 }
 
 impl MemoryDevice for Ram {
     #[inline(always)]
-    fn read(&self, addr: u16) -> u8 {
-        self.memory[addr as usize % self.memory.len()]
-    }
+    fn read(&self, addr: u16) -> u8 { self.memory[addr as usize % self.memory.len()] }
 
     #[inline(always)]
     fn write(&mut self, addr: u16, data: u8) {
@@ -124,9 +119,7 @@ impl MemoryDevice for Ram {
         self.memory[addr as usize % self.memory.len()] = data;
     }
 
-    fn load(&mut self, data: Box<[u8]>) {
-        self.memory = data
-    }
+    fn load(&mut self, data: Box<[u8]>) { self.memory = data }
 }
 
 #[derive(Debug, Clone)]
@@ -140,17 +133,13 @@ impl Rom {
             panic!()
         }
 
-        Self {
-            memory: vec![0; size].into_boxed_slice(),
-        }
+        Self { memory: vec![0; size].into_boxed_slice() }
     }
 }
 
 impl MemoryDevice for Rom {
     #[inline(always)]
-    fn read(&self, addr: u16) -> u8 {
-        self.memory[addr as usize % self.memory.len()]
-    }
+    fn read(&self, addr: u16) -> u8 { self.memory[addr as usize % self.memory.len()] }
 
     #[inline(always)]
     fn write(&mut self, _: u16, _: u8) {}
@@ -160,7 +149,5 @@ impl MemoryDevice for Rom {
         self.memory[addr as usize % self.memory.len()] = data;
     }
 
-    fn load(&mut self, data: Box<[u8]>) {
-        self.memory = data
-    }
+    fn load(&mut self, data: Box<[u8]>) { self.memory = data }
 }

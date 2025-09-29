@@ -1,9 +1,10 @@
+use bincode::{Decode, Encode, config};
+use serde::{Deserialize, Serialize};
+
 use crate::emulation::cpu::{Cpu, MicroOp};
 use crate::emulation::emu::{HEIGHT, WIDTH};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::RomFile;
-use bincode::{Decode, Encode, config};
-use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 pub struct CpuState {
@@ -26,23 +27,21 @@ pub struct CpuState {
 
 impl From<&Cpu> for CpuState {
     fn from(cpu: &Cpu) -> Self {
-        Self {
-            program_counter: cpu.program_counter,
-            stack_pointer: cpu.stack_pointer,
-            accumulator: cpu.accumulator,
-            x_register: cpu.x_register,
-            y_register: cpu.y_register,
-            processor_status: cpu.processor_status,
-            additional_cycles: cpu.additional_cycles,
-            memory: cpu.memory.get_memory_debug(Some(0x0..=0x07FF)),
-            master_cycle: cpu.master_cycle,
-            lo: cpu.lo,
-            hi: cpu.hi,
-            current_op: cpu.current_op,
-            op_queue: cpu.op_queue.clone(),
-            current_opcode: cpu.current_opcode.opcode,
-            temp: cpu.temp,
-        }
+        Self { program_counter: cpu.program_counter,
+               stack_pointer: cpu.stack_pointer,
+               accumulator: cpu.accumulator,
+               x_register: cpu.x_register,
+               y_register: cpu.y_register,
+               processor_status: cpu.processor_status,
+               additional_cycles: cpu.additional_cycles,
+               memory: cpu.memory.get_memory_debug(Some(0x0..=0x07FF)),
+               master_cycle: cpu.master_cycle,
+               lo: cpu.lo,
+               hi: cpu.hi,
+               current_op: cpu.current_op,
+               op_queue: cpu.op_queue.clone(),
+               current_opcode: cpu.current_opcode.opcode,
+               temp: cpu.temp }
     }
 }
 
@@ -78,34 +77,32 @@ pub struct PpuState {
 
 impl From<&Ppu> for PpuState {
     fn from(ppu: &Ppu) -> Self {
-        Self {
-            cycle_counter: ppu.dot_counter,
-            master_cycle: ppu.master_cycle,
-            status_register: ppu.status_register,
-            ctrl_register: ppu.ctrl_register,
-            mask_register: ppu.mask_register,
-            nmi_requested: ppu.nmi_requested.get(),
-            memory: ppu.memory.get_memory_debug(Some(0x0..=0x3FFF)),
-            oam_data_register: ppu.oam_data_register,
-            ppu_x_scroll_register: ppu.ppu_x_scroll_register,
-            ppu_y_scroll_register: ppu.ppu_y_scroll_register,
-            ppu_addr_register: ppu.vram_addr_register,
-            ppu_data_register: ppu.ppu_data_register,
-            oam_addr_register: ppu.oam_addr_register,
-            write_latch: ppu.write_latch,
-            oam_dma_register: ppu.oam_dma_register,
-            ppu_data_buffer: ppu.ppu_data_buffer,
-            t_register: ppu.t_register,
-            bg_next_tile_id: ppu.bg_next_tile_id,
-            bg_next_tile_attribute: ppu.bg_next_tile_attribute,
-            bg_next_tile: ppu.bg_next_tile,
-            bg_shifter_pattern: ppu.bg_shifter_pattern,
-            bg_shifter_attribute: ppu.bg_shifter_attribute,
-            fine_x_scroll: ppu.fine_x_scroll,
-            even_frame: ppu.even_frame,
-            reset_signal: ppu.reset_signal,
-            pixel_buffer: vec![0u32; (WIDTH * HEIGHT) as usize],
-        }
+        Self { cycle_counter: ppu.dot_counter,
+               master_cycle: ppu.master_cycle,
+               status_register: ppu.status_register,
+               ctrl_register: ppu.ctrl_register,
+               mask_register: ppu.mask_register,
+               nmi_requested: ppu.nmi_requested.get(),
+               memory: ppu.memory.get_memory_debug(Some(0x0..=0x3FFF)),
+               oam_data_register: ppu.oam_data_register,
+               ppu_x_scroll_register: ppu.ppu_x_scroll_register,
+               ppu_y_scroll_register: ppu.ppu_y_scroll_register,
+               ppu_addr_register: ppu.vram_addr_register,
+               ppu_data_register: ppu.ppu_data_register,
+               oam_addr_register: ppu.oam_addr_register,
+               write_latch: ppu.write_latch,
+               oam_dma_register: ppu.oam_dma_register,
+               ppu_data_buffer: ppu.ppu_data_buffer,
+               t_register: ppu.t_register,
+               bg_next_tile_id: ppu.bg_next_tile_id,
+               bg_next_tile_attribute: ppu.bg_next_tile_attribute,
+               bg_next_tile: ppu.bg_next_tile,
+               bg_shifter_pattern: ppu.bg_shifter_pattern,
+               bg_shifter_attribute: ppu.bg_shifter_attribute,
+               fine_x_scroll: ppu.fine_x_scroll,
+               even_frame: ppu.even_frame,
+               reset_signal: ppu.reset_signal,
+               pixel_buffer: vec![0u32; (WIDTH * HEIGHT) as usize] }
     }
 }
 

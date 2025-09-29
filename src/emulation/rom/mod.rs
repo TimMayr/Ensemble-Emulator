@@ -1,17 +1,19 @@
 mod formats;
 
-use crate::emulation::mem::{Memory, MemoryDevice, Ram, Rom};
-use crate::emulation::rom::formats::archaic_ines::ArchaicInes;
-use crate::emulation::rom::formats::ines::Ines;
-use crate::emulation::rom::formats::ines2::Ines2;
-use crate::emulation::rom::formats::ines_07::Ines07;
-use bincode::{Decode, Encode};
-use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+
+use bincode::{Decode, Encode};
+use serde::{Deserialize, Serialize};
+
+use crate::emulation::mem::{Memory, MemoryDevice, Ram, Rom};
+use crate::emulation::rom::formats::archaic_ines::ArchaicInes;
+use crate::emulation::rom::formats::ines::Ines;
+use crate::emulation::rom::formats::ines_07::Ines07;
+use crate::emulation::rom::formats::ines2::Ines2;
 
 #[derive(Debug, Clone)]
 pub enum ParseError {
@@ -22,10 +24,8 @@ impl Display for ParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ParseError::SizeBiggerThanFile => {
-                write!(
-                    f,
-                    "Rom sizes specified in header are larger than total rom size"
-                )
+                write!(f,
+                       "Rom sizes specified in header are larger than total rom size")
             }
         }
     }
@@ -67,11 +67,9 @@ pub struct PrgMemory {
 
 impl PrgMemory {
     fn new(prg_rom_size: u32, prg_ram_size: u32, prg_nvram_size: u32) -> PrgMemory {
-        Self {
-            prg_rom_size,
-            prg_nvram_size,
-            prg_ram_size,
-        }
+        Self { prg_rom_size,
+               prg_nvram_size,
+               prg_ram_size }
     }
 }
 
@@ -84,11 +82,9 @@ pub struct ChrMemory {
 
 impl ChrMemory {
     fn new(chr_rom_size: u32, chr_ram_size: u32, chr_nvram_size: u32) -> ChrMemory {
-        Self {
-            chr_rom_size,
-            chr_nvram_size,
-            chr_ram_size,
-        }
+        Self { chr_rom_size,
+               chr_nvram_size,
+               chr_ram_size }
     }
 }
 
@@ -113,7 +109,7 @@ impl RomFile {
             let chr_rom_size = Ines2::get_chr_rom_size(chr_rom_size_lsb, chr_rom_size_msb);
 
             if rom[7] & 0b00001100 == 8
-                && (prg_rom_size as usize + chr_rom_size as usize) < rom.len()
+               && (prg_rom_size as usize + chr_rom_size as usize) < rom.len()
             {
                 return Box::new(Ines2);
             }
@@ -178,14 +174,12 @@ impl RomFile {
             start += 512;
         }
 
-        rom.load(
-            self.data[start + self.prg_memory.prg_rom_size as usize
-                ..start
-                    + self.prg_memory.prg_rom_size as usize
-                    + self.chr_memory.chr_rom_size as usize]
-                .to_vec()
-                .into_boxed_slice(),
-        );
+        rom.load(self.data[start + self.prg_memory.prg_rom_size as usize
+                           ..start
+                             + self.prg_memory.prg_rom_size as usize
+                             + self.chr_memory.chr_rom_size as usize]
+                                                                     .to_vec()
+                                                                     .into_boxed_slice());
         Some(Memory::Rom(rom))
     }
 
@@ -208,15 +202,11 @@ impl RomFile {
 }
 
 impl From<&String> for RomFile {
-    fn from(path: &String) -> Self {
-        RomFile::load(path)
-    }
+    fn from(path: &String) -> Self { RomFile::load(path) }
 }
 
 impl From<&RomFile> for RomFile {
-    fn from(rom: &RomFile) -> Self {
-        rom.clone()
-    }
+    fn from(rom: &RomFile) -> Self { rom.clone() }
 }
 
 pub struct RomBuilder {
@@ -243,34 +233,30 @@ pub struct RomBuilder {
 
 impl Default for RomBuilder {
     fn default() -> Self {
-        Self {
-            prg_rom_size: 0,
-            chr_rom_size: 0,
-            mapper_number: 0,
-            default_expansion_device: 0,
-            misc_rom_count: 0,
-            extended_console_type: None,
-            vs_system_hardware_type: None,
-            vs_system_ppu_type: None,
-            cpu_ppu_timing: 0,
-            chr_nvram_size: 0,
-            chr_ram_size: 0,
-            prg_nvram_size: 0,
-            prg_ram_size: 8 * 1024,
-            console_type: 0,
-            hardwired_nametable_layout: false,
-            is_battery_backed: false,
-            trainer_present: false,
-            alternative_nametables: false,
-            submapper_number: 0,
-        }
+        Self { prg_rom_size: 0,
+               chr_rom_size: 0,
+               mapper_number: 0,
+               default_expansion_device: 0,
+               misc_rom_count: 0,
+               extended_console_type: None,
+               vs_system_hardware_type: None,
+               vs_system_ppu_type: None,
+               cpu_ppu_timing: 0,
+               chr_nvram_size: 0,
+               chr_ram_size: 0,
+               prg_nvram_size: 0,
+               prg_ram_size: 8 * 1024,
+               console_type: 0,
+               hardwired_nametable_layout: false,
+               is_battery_backed: false,
+               trainer_present: false,
+               alternative_nametables: false,
+               submapper_number: 0 }
     }
 }
 
 impl RomBuilder {
-    pub fn new() -> Self {
-        Self::default()
-    }
+    pub fn new() -> Self { Self::default() }
 
     pub fn prg_rom_size(mut self, size: u32) -> Self {
         self.prg_rom_size = size;
@@ -368,24 +354,26 @@ impl RomBuilder {
     }
 
     pub fn build(self) -> RomFile {
-        RomFile {
-            prg_memory: PrgMemory::new(self.prg_rom_size, self.prg_ram_size, self.prg_nvram_size),
-            chr_memory: ChrMemory::new(self.chr_rom_size, self.chr_ram_size, self.chr_nvram_size),
-            mapper_number: self.mapper_number,
-            default_expansion_device: self.default_expansion_device,
-            misc_rom_count: self.misc_rom_count,
-            extended_console_type: self.extended_console_type,
-            vs_system_hardware_type: self.vs_system_hardware_type,
-            vs_system_ppu_type: self.vs_system_ppu_type,
-            cpu_ppu_timing: self.cpu_ppu_timing,
-            console_type: self.console_type,
-            hardwired_nametable_layout: self.hardwired_nametable_layout,
-            is_battery_backed: self.is_battery_backed,
-            trainer_present: self.trainer_present,
-            alternative_nametables: self.alternative_nametables,
-            submapper_number: self.submapper_number,
-            data: Vec::new(),
-        }
+        RomFile { prg_memory: PrgMemory::new(self.prg_rom_size,
+                                             self.prg_ram_size,
+                                             self.prg_nvram_size),
+                  chr_memory: ChrMemory::new(self.chr_rom_size,
+                                             self.chr_ram_size,
+                                             self.chr_nvram_size),
+                  mapper_number: self.mapper_number,
+                  default_expansion_device: self.default_expansion_device,
+                  misc_rom_count: self.misc_rom_count,
+                  extended_console_type: self.extended_console_type,
+                  vs_system_hardware_type: self.vs_system_hardware_type,
+                  vs_system_ppu_type: self.vs_system_ppu_type,
+                  cpu_ppu_timing: self.cpu_ppu_timing,
+                  console_type: self.console_type,
+                  hardwired_nametable_layout: self.hardwired_nametable_layout,
+                  is_battery_backed: self.is_battery_backed,
+                  trainer_present: self.trainer_present,
+                  alternative_nametables: self.alternative_nametables,
+                  submapper_number: self.submapper_number,
+                  data: Vec::new() }
     }
 }
 
@@ -394,13 +382,9 @@ pub trait RomFileConvertible {
 }
 
 impl RomFileConvertible for String {
-    fn as_rom_file(&self) -> RomFile {
-        RomFile::from(self)
-    }
+    fn as_rom_file(&self) -> RomFile { RomFile::from(self) }
 }
 
 impl RomFileConvertible for RomFile {
-    fn as_rom_file(&self) -> RomFile {
-        RomFile::from(self)
-    }
+    fn as_rom_file(&self) -> RomFile { RomFile::from(self) }
 }

@@ -1,3 +1,6 @@
+use std::cell::Cell;
+use std::ops::RangeInclusive;
+
 use crate::emulation::emu::{HEIGHT, WIDTH};
 use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
@@ -5,9 +8,7 @@ use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, MemoryDevice, Ram};
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::PpuState;
-use crate::emulation::util;
-use std::cell::Cell;
-use std::ops::RangeInclusive;
+use crate::util;
 
 #[derive(Debug)]
 pub struct Ppu {
@@ -41,21 +42,18 @@ pub struct Ppu {
 }
 
 impl Default for Ppu {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
-const NES_PALETTE: [u32; 64] = [
-    0x545454, 0x001E74, 0x081090, 0x300088, 0x440064, 0x5C0030, 0x540400, 0x3C1800, 0x202A00,
-    0x083A00, 0x004000, 0x003C00, 0x00323C, 0x000000, 0x000000, 0x000000, 0x989698, 0x084CC4,
-    0x3032EC, 0x5C1EE4, 0x8814B0, 0xA01464, 0x982220, 0x783C00, 0x545A00, 0x287200, 0x087C00,
-    0x007628, 0x006678, 0x000000, 0x000000, 0x000000, 0xECEEEC, 0x4C9AEC, 0x787CEC, 0xB062EC,
-    0xE454EC, 0xEC58B4, 0xEC6A64, 0xD48820, 0xA0AA00, 0x74C400, 0x4CD020, 0x38CC6C, 0x38B4CC,
-    0x3C3C3C, 0x000000, 0x000000, 0xECEEEC, 0xA8CCEC, 0xBCBCEC, 0xD4B2EC, 0xECAEEC, 0xECAED4,
-    0xECB4B0, 0xE4C490, 0xCCD278, 0xB4DE78, 0xA8E290, 0x98E2B4, 0xA0D6E4, 0xA0A2A0, 0x000000,
-    0x000000,
-];
+const NES_PALETTE: [u32; 64] =
+    [0x545454, 0x001E74, 0x081090, 0x300088, 0x440064, 0x5C0030, 0x540400, 0x3C1800, 0x202A00,
+     0x083A00, 0x004000, 0x003C00, 0x00323C, 0x000000, 0x000000, 0x000000, 0x989698, 0x084CC4,
+     0x3032EC, 0x5C1EE4, 0x8814B0, 0xA01464, 0x982220, 0x783C00, 0x545A00, 0x287200, 0x087C00,
+     0x007628, 0x006678, 0x000000, 0x000000, 0x000000, 0xECEEEC, 0x4C9AEC, 0x787CEC, 0xB062EC,
+     0xE454EC, 0xEC58B4, 0xEC6A64, 0xD48820, 0xA0AA00, 0x74C400, 0x4CD020, 0x38CC6C, 0x38B4CC,
+     0x3C3C3C, 0x000000, 0x000000, 0xECEEEC, 0xA8CCEC, 0xBCBCEC, 0xD4B2EC, 0xECAEEC, 0xECAED4,
+     0xECB4B0, 0xE4C490, 0xCCD278, 0xB4DE78, 0xA8E290, 0x98E2B4, 0xA0D6E4, 0xA0A2A0, 0x000000,
+     0x000000];
 
 const VBLANK_NMI_BIT: u8 = 0x80;
 const VRAM_ADDR_INC_BIT: u8 = 0x4;
@@ -81,35 +79,33 @@ const VRAM_SIZE: usize = 2048;
 
 impl Ppu {
     pub fn new() -> Self {
-        Self {
-            dot_counter: 0,
-            ctrl_register: 0,
-            mask_register: 0,
-            status_register: 0,
-            oam_addr_register: 0,
-            oam_data_register: 0,
-            ppu_x_scroll_register: 0,
-            ppu_y_scroll_register: 0,
-            vram_addr_register: 0,
-            ppu_data_register: 0,
-            ppu_data_buffer: 0,
-            oam_dma_register: 0,
-            bg_next_tile_id: 0,
-            bg_next_tile_attribute: 0,
-            bg_next_tile: 0,
-            bg_shifter_pattern: 0,
-            bg_shifter_attribute: 0,
-            fine_x_scroll: 0,
-            nmi_requested: Cell::new(false),
-            memory: Box::new(Self::get_default_memory_map()),
-            oam: Box::new(Self::get_default_oam()),
-            write_latch: false,
-            t_register: 0,
-            even_frame: true,
-            reset_signal: true,
-            pixel_buffer: [0u32; (WIDTH * HEIGHT) as usize],
-            master_cycle: 0,
-        }
+        Self { dot_counter: 19,
+               ctrl_register: 0,
+               mask_register: 0,
+               status_register: 0,
+               oam_addr_register: 0,
+               oam_data_register: 0,
+               ppu_x_scroll_register: 0,
+               ppu_y_scroll_register: 0,
+               vram_addr_register: 0,
+               ppu_data_register: 0,
+               ppu_data_buffer: 0,
+               oam_dma_register: 0,
+               bg_next_tile_id: 0,
+               bg_next_tile_attribute: 0,
+               bg_next_tile: 0,
+               bg_shifter_pattern: 0,
+               bg_shifter_attribute: 0,
+               fine_x_scroll: 0,
+               nmi_requested: Cell::new(false),
+               memory: Box::new(Self::get_default_memory_map()),
+               oam: Box::new(Self::get_default_oam()),
+               write_latch: false,
+               t_register: 0,
+               even_frame: true,
+               reset_signal: true,
+               pixel_buffer: [0u32; (WIDTH * HEIGHT) as usize],
+               master_cycle: 0 }
     }
 
     fn get_default_memory_map() -> MemoryMap {
@@ -125,9 +121,7 @@ impl Ppu {
         mem
     }
 
-    fn get_default_oam() -> Ram {
-        Ram::new(0xFF)
-    }
+    fn get_default_oam() -> Ram { Ram::new(0xFF) }
 
     pub fn step(&mut self, master_cycle: u128) {
         self.master_cycle = master_cycle;
@@ -186,9 +180,7 @@ impl Ppu {
         result
     }
 
-    pub fn get_ppu_ctrl(&self) -> u8 {
-        self.ctrl_register
-    }
+    pub fn get_ppu_ctrl(&self) -> u8 { self.ctrl_register }
 
     pub fn set_ppu_ctrl(&mut self, value: u8) {
         if !self.reset_signal {
@@ -196,9 +188,7 @@ impl Ppu {
         }
     }
 
-    pub fn get_mask_register(&self) -> u8 {
-        self.mask_register
-    }
+    pub fn get_mask_register(&self) -> u8 { self.mask_register }
 
     pub fn set_mask_register(&mut self, value: u8) {
         if !self.reset_signal {
@@ -206,13 +196,9 @@ impl Ppu {
         }
     }
 
-    pub fn set_oam_addr_register(&mut self, value: u8) {
-        self.oam_addr_register = value
-    }
+    pub fn set_oam_addr_register(&mut self, value: u8) { self.oam_addr_register = value }
 
-    pub fn get_oam_at_addr(&self) -> u8 {
-        self.oam.read(self.oam_addr_register as u16)
-    }
+    pub fn get_oam_at_addr(&self) -> u8 { self.oam.read(self.oam_addr_register as u16) }
 
     pub fn get_vram_at_addr(&mut self) -> u8 {
         let ret = self.ppu_data_buffer;
@@ -270,21 +256,17 @@ impl Ppu {
         self.mask_register & BACKGROUND_RENDER_BIT != 0
     }
 
-    pub fn is_sprite_rendering(&self) -> bool {
-        self.mask_register & SPRITE_RENDER_BIT != 0
-    }
+    pub fn is_sprite_rendering(&self) -> bool { self.mask_register & SPRITE_RENDER_BIT != 0 }
 
     pub fn get_coarse_x_scroll(&self) -> u8 {
         (self.vram_addr_register & VRAM_ADDR_COARSE_X_SCROLL_MASK) as u8
     }
 
     pub fn set_coarse_x_scroll(&mut self, val: u8) {
-        self.vram_addr_register = util::set_packed(
-            &self.vram_addr_register,
-            &val,
-            &VRAM_ADDR_COARSE_X_SCROLL_MASK,
-            &COARSE_SCROLL_WIDTH,
-        );
+        self.vram_addr_register = util::set_packed(&self.vram_addr_register,
+                                                   &val,
+                                                   &VRAM_ADDR_COARSE_X_SCROLL_MASK,
+                                                   &COARSE_SCROLL_WIDTH);
     }
 
     pub fn get_coarse_y_scroll(&self) -> u8 {
@@ -292,29 +274,23 @@ impl Ppu {
     }
 
     pub fn set_coarse_y_scroll(&mut self, val: u8) {
-        self.vram_addr_register = util::set_packed(
-            &self.vram_addr_register,
-            &val,
-            &VRAM_ADDR_COARSE_Y_SCROLL_MASK,
-            &COARSE_SCROLL_WIDTH,
-        );
+        self.vram_addr_register = util::set_packed(&self.vram_addr_register,
+                                                   &val,
+                                                   &VRAM_ADDR_COARSE_Y_SCROLL_MASK,
+                                                   &COARSE_SCROLL_WIDTH);
     }
 
-    pub fn get_fine_x_scroll(&self) -> u8 {
-        self.fine_x_scroll
-    }
+    pub fn get_fine_x_scroll(&self) -> u8 { self.fine_x_scroll }
 
     pub fn get_fine_y_scroll(&self) -> u8 {
         (self.vram_addr_register & VRAM_ADDR_FINE_Y_SCROLL_MASK) as u8
     }
 
     pub fn set_fine_y_scroll(&mut self, val: u8) {
-        self.vram_addr_register = util::set_packed(
-            &self.vram_addr_register,
-            &val,
-            &VRAM_ADDR_FINE_Y_SCROLL_MASK,
-            &FINE_Y_SCROLL_WIDTH,
-        );
+        self.vram_addr_register = util::set_packed(&self.vram_addr_register,
+                                                   &val,
+                                                   &VRAM_ADDR_FINE_Y_SCROLL_MASK,
+                                                   &FINE_Y_SCROLL_WIDTH);
     }
 
     pub fn get_nametable_x(&self) -> u8 {
@@ -355,21 +331,19 @@ impl Ppu {
         }
     }
 
-    pub fn get_pattern_table_0(&self, buffer: &mut [u8; PATTERN_TABLE_SIZE]) {
+    pub fn get_pattern_table_0(&mut self, buffer: &mut [u8; PATTERN_TABLE_SIZE]) {
         for (i, byte) in buffer.iter_mut().enumerate().take(PATTERN_TABLE_SIZE) {
             *byte = self.mem_read(i as u16);
         }
     }
 
-    pub fn get_pattern_table_1(&self, buffer: &mut [u8; PATTERN_TABLE_SIZE]) {
+    pub fn get_pattern_table_1(&mut self, buffer: &mut [u8; PATTERN_TABLE_SIZE]) {
         for i in PATTERN_TABLE_SIZE..PATTERN_TABLE_SIZE * 2 - 1 {
             buffer[i - PATTERN_TABLE_SIZE] = self.mem_read(i as u16);
         }
     }
 
-    pub fn mem_read(&self, addr: u16) -> u8 {
-        self.memory.mem_read(addr)
-    }
+    pub fn mem_read(&mut self, addr: u16) -> u8 { self.memory.mem_read(addr) }
 
     pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
         let rom_file = rom_get.as_rom_file();
@@ -388,65 +362,31 @@ impl Ppu {
         )
     }
 
-    pub fn reset(&mut self) {
-        self.reset_signal = true;
-
-        let mut table = [0u8; PATTERN_TABLE_SIZE];
-        self.get_pattern_table_0(&mut table);
-        let pattern0 = Self::decode_pattern_table(&table);
-
-        let mut table = [0u8; PATTERN_TABLE_SIZE];
-        self.get_pattern_table_1(&mut table);
-        let pattern1 = Self::decode_pattern_table(&table);
-
-        for (table_index, table) in [pattern0, pattern1].iter().enumerate() {
-            let offset_x = if table_index == 0 { 0 } else { 18 * 8 };
-
-            for tile_index in 0..256 {
-                let tile_start = tile_index * 64;
-                let tile_x = (tile_index % 16) * 8 + offset_x;
-                let tile_y = (tile_index / 16) * 8;
-
-                for y in 0..8 {
-                    for x in 0..8 {
-                        let pixel_index = tile_start + y * 8 + x;
-                        let color_index = table[pixel_index]; // 0..3
-                        let color = self.get_color_for_bits(&color_index);
-
-                        self.pixel_buffer[(tile_y + y) * WIDTH as usize + (tile_x + x)] = color;
-                    }
-                }
-            }
-        }
-    }
+    pub fn reset(&mut self) { self.reset_signal = true; }
 
     pub fn get_color_for_bits(&mut self, color_bits: &u8) -> u32 {
         let mut current_palette: [u8; 4] = [0; 4];
 
         for (i, item) in current_palette.iter_mut().enumerate() {
-            *item = self.mem_read(
-                PALETTE_RAM_START_ADDRESS
-                    + (self.get_selected_palette() as u16 * PALETTE_SIZE)
-                    + i as u16,
-            )
+            *item = self.mem_read(PALETTE_RAM_START_ADDRESS
+                                  + (self.get_selected_palette() as u16 * PALETTE_SIZE)
+                                  + i as u16)
         }
 
         // let palette_index = current_palette[*color_bits as usize] as usize;
 
         let palette_index = match color_bits {
-            0b00 => 0x0f,
+            0b00 => 0x0F,
             0b11 => 0x26,
             0b01 => 0x2A,
             0b10 => 0x21,
-            _ => 0x0f,
+            _ => 0x0F,
         };
 
         NES_PALETTE[palette_index]
     }
 
-    pub fn get_selected_palette(&self) -> u8 {
-        0
-    }
+    pub fn get_selected_palette(&self) -> u8 { 0 }
 
     fn decode_pattern_table(table: &[u8; 0x1000]) -> [u8; 0x4000] {
         let mut buffer = [0u8; 256 * 8 * 8]; // 256 tiles * 64 pixels
@@ -476,46 +416,72 @@ impl Ppu {
         flat_tile
     }
 
-    pub fn get_pixel_buffer(&self) -> &[u32; (WIDTH * HEIGHT) as usize] {
-        &self.pixel_buffer
-    }
+    pub fn get_pixel_buffer(&self) -> &[u32; (WIDTH * HEIGHT) as usize] { &self.pixel_buffer }
 
     pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
         self.memory.get_memory_debug(range)
+    }
+
+    pub fn frame(&mut self) {
+        let mut table = [0u8; PATTERN_TABLE_SIZE];
+        self.get_pattern_table_0(&mut table);
+        let pattern0 = Self::decode_pattern_table(&table);
+
+        let mut table = [0u8; PATTERN_TABLE_SIZE];
+        self.get_pattern_table_1(&mut table);
+        let pattern1 = Self::decode_pattern_table(&table);
+
+        for (table_index, table) in [pattern0, pattern1].iter().enumerate() {
+            let offset_x = if table_index == 0 { 0 } else { 18 * 8 };
+
+            for tile_index in 0..256 {
+                let tile_start = tile_index * 64;
+                let tile_x = (tile_index % 16) * 8 + offset_x;
+                let tile_y = (tile_index / 16) * 8;
+
+                for y in 0..8 {
+                    for x in 0..8 {
+                        let pixel_index = tile_start + y * 8 + x;
+                        let color_index = table[pixel_index]; // 0..3
+                        let color = self.get_color_for_bits(&color_index);
+
+                        self.pixel_buffer[(tile_y + y) * WIDTH as usize + (tile_x + x)] = color;
+                    }
+                }
+            }
+        }
     }
 }
 
 impl Ppu {
     pub fn from(state: &PpuState, rom: &RomFile) -> Self {
-        let mut ppu = Self {
-            dot_counter: state.cycle_counter,
-            ctrl_register: state.ctrl_register,
-            mask_register: state.mask_register,
-            status_register: state.status_register,
-            oam_addr_register: state.oam_addr_register,
-            oam_data_register: state.oam_data_register,
-            ppu_x_scroll_register: state.ppu_x_scroll_register,
-            ppu_y_scroll_register: state.ppu_y_scroll_register,
-            vram_addr_register: state.ppu_addr_register,
-            ppu_data_register: state.ppu_data_register,
-            ppu_data_buffer: state.ppu_data_buffer,
-            nmi_requested: Cell::new(state.nmi_requested),
-            memory: Box::new(Self::get_default_memory_map()),
-            oam: Box::new(Self::get_default_oam()),
-            oam_dma_register: state.oam_dma_register,
-            write_latch: state.write_latch,
-            t_register: state.t_register,
-            bg_next_tile_id: state.bg_next_tile_id,
-            bg_next_tile_attribute: state.bg_next_tile_attribute,
-            bg_next_tile: state.bg_next_tile,
-            bg_shifter_pattern: state.bg_shifter_pattern,
-            bg_shifter_attribute: state.bg_shifter_attribute,
-            fine_x_scroll: state.fine_x_scroll,
-            even_frame: state.even_frame,
-            reset_signal: state.reset_signal,
-            pixel_buffer: state.pixel_buffer.clone().try_into().unwrap(),
-            master_cycle: state.master_cycle,
-        };
+        let mut ppu = Self { dot_counter: state.cycle_counter,
+                             ctrl_register: state.ctrl_register,
+                             mask_register: state.mask_register,
+                             status_register: state.status_register,
+                             oam_addr_register: state.oam_addr_register,
+                             oam_data_register: state.oam_data_register,
+                             ppu_x_scroll_register: state.ppu_x_scroll_register,
+                             ppu_y_scroll_register: state.ppu_y_scroll_register,
+                             vram_addr_register: state.ppu_addr_register,
+                             ppu_data_register: state.ppu_data_register,
+                             ppu_data_buffer: state.ppu_data_buffer,
+                             nmi_requested: Cell::new(state.nmi_requested),
+                             memory: Box::new(Self::get_default_memory_map()),
+                             oam: Box::new(Self::get_default_oam()),
+                             oam_dma_register: state.oam_dma_register,
+                             write_latch: state.write_latch,
+                             t_register: state.t_register,
+                             bg_next_tile_id: state.bg_next_tile_id,
+                             bg_next_tile_attribute: state.bg_next_tile_attribute,
+                             bg_next_tile: state.bg_next_tile,
+                             bg_shifter_pattern: state.bg_shifter_pattern,
+                             bg_shifter_attribute: state.bg_shifter_attribute,
+                             fine_x_scroll: state.fine_x_scroll,
+                             even_frame: state.even_frame,
+                             reset_signal: state.reset_signal,
+                             pixel_buffer: state.pixel_buffer.clone().try_into().unwrap(),
+                             master_cycle: state.master_cycle };
 
         ppu.load_rom(rom);
 

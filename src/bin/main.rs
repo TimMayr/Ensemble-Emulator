@@ -8,7 +8,7 @@ fn main() {
 
     emu.load_rom(&String::from("./tests/nes-test-roms/nestest_headless.nes"));
     emu.reset();
-    emu.run_until(&mut Some(frontend), 116328)
-        .expect("TODO: panic message");
+    emu.run_until(&mut Some(frontend), 116256)
+       .expect("TODO: panic message");
     println!("{:02x?}", emu.get_memory_debug(Some(0x6000..=0x6100))[0]);
 }

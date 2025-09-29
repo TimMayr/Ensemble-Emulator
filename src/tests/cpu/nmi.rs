@@ -5,19 +5,19 @@ use crate::emulation::nes::Nes;
 fn test_nmi_vector() {
     let mut nes = Nes::default();
 
-    //Create and initialize new Rom
+    // Create and initialize new Rom
     let mut rom = Rom::new(0xBFE0);
-    //Set Reset vector to 0x4020
+    // Set Reset vector to 0x4020
     rom.init(0xBFDA, 0x20);
     rom.init(0xBFDB, 0x40);
-    //Load 0x20 to acc from 4020
+    // Load 0x20 to acc from 4020
     rom.init(0x0, 0xA9);
     rom.init(0x1, 0x20);
 
-    //Attach new Rom memory device to cpu
+    // Attach new Rom memory device to cpu
     nes.cpu.memory.add_memory(0x4020..=0xFFFF, Memory::Rom(rom));
 
-    //Manually force an nmi
+    // Manually force an nmi
     nes.ppu.borrow().nmi_requested.set(true);
 
     nes.reset();
