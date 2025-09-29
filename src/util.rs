@@ -9,6 +9,10 @@ use crate::emulation::nes::Nes;
 pub struct TraceLog {
     log: String,
 }
+impl Default for TraceLog {
+    fn default() -> Self { Self::new() }
+}
+
 impl TraceLog {
     pub fn new() -> Self { Self { log: String::from("") } }
 

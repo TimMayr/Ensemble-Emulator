@@ -6,9 +6,9 @@ use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp, MicroOpCallback};
 use crate::emulation::emu::{Console, HEIGHT, WIDTH};
-use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::mem::Memory;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
@@ -41,10 +41,10 @@ impl Console for Nes {
 
         loop {
             self.cycles += 1;
-            if let Err(err) = self.step(frontend, u128::MAX, &mut trace) {
-                if err == "Execution finished" {
-                    return Ok(());
-                }
+            if let Err(err) = self.step(frontend, u128::MAX, &mut trace)
+               && err == "Execution finished"
+            {
+                return Ok(());
             }
         }
     }
@@ -57,10 +57,10 @@ impl Console for Nes {
 
         loop {
             self.cycles += 1;
-            if let Err(err) = self.step(frontend, last_cycle, &mut trace) {
-                if err == "Execution finished" {
-                    return Ok(());
-                }
+            if let Err(err) = self.step(frontend, last_cycle, &mut trace)
+               && err == "Execution finished"
+            {
+                return Ok(());
             }
         }
     }
@@ -141,7 +141,7 @@ impl Nes {
         };
 
         if self.cycles.is_multiple_of(12) {
-            if self.cycles == 121 * 12 {
+            if self.cycles == 9616 * 12 {
                 print!("");
             }
             let mut do_trace = false;
