@@ -3,10 +3,10 @@ use std::sync::OnceLock;
 
 use crate::emulation::cpu::OpType::{
     AbsoluteIndexRMW, AbsoluteIndexRead, AbsoluteIndexWrite, AbsoluteRMW, AbsoluteRead,
-    AbsoluteWrite, AccumulatorOrImplied, BRK, ImmediateAddressing, IndexedIndirectRead,
-    IndexedIndirectWrite, IndirectIndexedRead, IndirectIndexedWrite, JSR, JmpAbsolute, JmpIndirect,
-    PH, PL, RTI, RTS, Relative, ZeroPageIndexRMW, ZeroPageIndexRead, ZeroPageIndexWrite,
-    ZeroPageRMW, ZeroPageRead, ZeroPageWrite,
+    AbsoluteWrite, AccumulatorOrImplied, ImmediateAddressing, IndexedIndirectRead, IndexedIndirectWrite,
+    IndirectIndexedRead, IndirectIndexedWrite, JmpAbsolute, JmpIndirect, Relative, ZeroPageIndexRMW,
+    ZeroPageIndexRead, ZeroPageIndexWrite, ZeroPageRMW, ZeroPageRead, ZeroPageWrite, BRK, JSR, PH,
+    PL, RTI, RTS,
 };
 use crate::emulation::cpu::{Condition, MicroOpCallback, OpType, Source, Target};
 
@@ -292,9 +292,9 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                      OpCode::new(0xA0,
                                  "LDY",
                                  ImmediateAddressing(Target::Y, MicroOpCallback::None)),
-                     OpCode::new(0xA4, "LDX", ZeroPageRead(Target::Y, MicroOpCallback::None)),
+                     OpCode::new(0xA4, "LDY", ZeroPageRead(Target::Y, MicroOpCallback::None)),
                      OpCode::new(0xB4,
-                                 "LDX",
+                                 "LDY",
                                  ZeroPageIndexRead(Source::X, Target::Y, MicroOpCallback::None)),
                      OpCode::new(0xAC, "LDY", AbsoluteRead(Target::Y, MicroOpCallback::None)),
                      OpCode::new(0xBC,
