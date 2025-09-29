@@ -10,7 +10,7 @@ use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::{Memory, Ram};
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OpCode, OPCODES_MAP};
+use crate::emulation::opcode::{OPCODES_MAP, OpCode};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
@@ -50,7 +50,7 @@ pub struct Cpu {
     pub hi: u8,
     pub current_op: MicroOp,
     pub op_queue: Vec<MicroOp>,
-    pub current_opcode: OpCode,
+    pub current_opcode: Option<OpCode>,
     pub temp: u8,
 }
 
@@ -72,7 +72,7 @@ impl Default for Cpu {
                hi: 0,
                current_op: MicroOp::FetchOpcode(MicroOpCallback::None),
                op_queue: vec![],
-               current_opcode: Default::default(),
+               current_opcode: None,
                temp: 0 }
     }
 }
@@ -251,13 +251,18 @@ impl Cpu {
 
     fn add_to_low_byte(val: u16, add: u8) -> u16 {
         let high = val & 0xFF00; // preserve high byte
-        let low = (val & 0x00FF).wrapping_add(add as u16); // add with wrapping
-        high | low
+        let low = ((val & 0x00FF) as u8).wrapping_add(add); // add with wrapping
+        high | low as u16
     }
 
     fn get_instructions_for_op_type(&mut self) -> Vec<MicroOp> {
         let mut instructions = vec![];
-        match self.current_opcode.op_type {
+
+        let Some(op) = self.current_opcode else {
+            return instructions;
+        };
+
+        match op.op_type {
             OpType::AccumulatorOrImplied(callback) => {
                 instructions.push(MicroOp::DummyRead(callback))
             }
@@ -628,6 +633,8 @@ impl Cpu {
             OpType::Relative(callback) => {
                 instructions.push(MicroOp::FetchOperandLo(callback));
             }
+            OpType::IndexedIndirectRMW(_) => {}
+            OpType::IndirectIndexedRMW(_) => {}
         }
 
         instructions
@@ -718,12 +725,13 @@ impl Cpu {
                 let opcode = self.mem_read(self.program_counter);
                 self.program_counter = self.program_counter.wrapping_add(1);
 
-                let _pnc = &OpCode::default();
-                self.current_opcode =
-                    **OPCODES_MAP.get()
-                                 .unwrap()
-                                 .get(&opcode)
-                                 .unwrap_or_else(|| panic!("finished at: {}", self.master_cycle));
+                self.current_opcode = Some(**OPCODES_MAP.get()
+                                                        .unwrap()
+                                                        .get(&opcode)
+                                                        .unwrap_or_else(|| {
+                                                            panic!("finished at: {}",
+                                                                   self.master_cycle)
+                                                        }));
                 self.run_op(*callback);
 
                 MicroOpResult::Sequence(self.get_instructions_for_op_type())
@@ -932,8 +940,6 @@ impl Cpu {
             MicroOpCallback::TXS => txs(self),
             MicroOpCallback::TYA => tya(self),
             MicroOpCallback::DecreaseStackPointer => decrease_stack_pointer(self),
-            MicroOpCallback::None2 => self.op_queue
-                                          .push(MicroOp::DummyRead(MicroOpCallback::None)),
             MicroOpCallback::AND => and(self),
             MicroOpCallback::CMP => cmp(self),
             MicroOpCallback::CPX => cpx(self),
@@ -945,6 +951,25 @@ impl Cpu {
             MicroOpCallback::DEC => dec(self),
             MicroOpCallback::INC => inc(self),
             MicroOpCallback::BRANCH(condition) => branch(self, condition),
+            MicroOpCallback::LAX => {}
+            MicroOpCallback::LXA => {}
+            MicroOpCallback::ALR => {}
+            MicroOpCallback::ANC => {}
+            MicroOpCallback::ANE => {}
+            MicroOpCallback::ARR => {}
+            MicroOpCallback::DCP => {}
+            MicroOpCallback::ISC => {}
+            MicroOpCallback::LAS => {}
+            MicroOpCallback::RLA => {}
+            MicroOpCallback::RRA => {}
+            MicroOpCallback::SAX => {}
+            MicroOpCallback::SBX => {}
+            MicroOpCallback::SHA => {}
+            MicroOpCallback::SHX => {}
+            MicroOpCallback::SHY => {}
+            MicroOpCallback::SLO => {}
+            MicroOpCallback::SRE => {}
+            MicroOpCallback::JAM => {}
         }
     }
 
@@ -1198,7 +1223,6 @@ pub enum MicroOpCallback {
     TXA,
     TXS,
     TYA,
-    None2,
     DecreaseStackPointer,
     AND,
     CMP,
@@ -1211,6 +1235,25 @@ pub enum MicroOpCallback {
     DEC,
     INC,
     BRANCH(Condition),
+    LAX,
+    LXA,
+    ALR,
+    ANC,
+    ANE,
+    ARR,
+    DCP,
+    ISC,
+    LAS,
+    RLA,
+    RRA,
+    SAX,
+    SBX,
+    SHA,
+    SHX,
+    SHY,
+    SLO,
+    SRE,
+    JAM,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
@@ -1254,6 +1297,8 @@ pub enum OpType {
     JmpIndirect(MicroOpCallback),
     IndirectIndexedWrite(Source, MicroOpCallback),
     Relative(MicroOpCallback),
+    IndexedIndirectRMW(MicroOpCallback),
+    IndirectIndexedRMW(MicroOpCallback),
 }
 
 #[cfg(test)]
@@ -1269,6 +1314,13 @@ impl Cpu {
 impl Cpu {
     pub fn from(state: &CpuState, ppu: Rc<RefCell<Ppu>>, rom: &RomFile) -> Self {
         OPCODES_MAP.get_or_init(opcode::init);
+        let mut opcode = None;
+
+        if let Some(opcode_u8) = state.current_opcode {
+            opcode = Some(**OPCODES_MAP.get_or_init(opcode::init)
+                                       .get(&opcode_u8)
+                                       .expect("Invalid State"));
+        }
 
         let mut cpu = Self { program_counter: state.program_counter,
                              stack_pointer: state.stack_pointer,
@@ -1284,9 +1336,7 @@ impl Cpu {
                              hi: state.hi,
                              current_op: state.current_op,
                              op_queue: state.op_queue.clone(),
-                             current_opcode: **OPCODES_MAP.get_or_init(opcode::init)
-                                                          .get(&state.current_opcode)
-                                                          .expect("Error loading savestate"),
+                             current_opcode: opcode,
                              temp: state.temp };
 
         cpu.load_rom(rom);
@@ -1324,7 +1374,7 @@ pub fn adc(cpu: &mut Cpu) {
 }
 
 fn rol(cpu: &mut Cpu) {
-    if discriminant(&cpu.current_opcode.op_type)
+    if discriminant(&cpu.current_opcode.unwrap().op_type)
        != discriminant(&OpType::AccumulatorOrImplied(MicroOpCallback::None))
     {
         let target_value = cpu.temp;
@@ -1337,7 +1387,7 @@ fn rol(cpu: &mut Cpu) {
 }
 
 fn ror(cpu: &mut Cpu) {
-    if discriminant(&cpu.current_opcode.op_type)
+    if discriminant(&cpu.current_opcode.unwrap().op_type)
        != discriminant(&OpType::AccumulatorOrImplied(MicroOpCallback::None))
     {
         let target_value = cpu.temp;
@@ -1350,7 +1400,7 @@ fn ror(cpu: &mut Cpu) {
 }
 
 fn asl(cpu: &mut Cpu) {
-    if discriminant(&cpu.current_opcode.op_type)
+    if discriminant(&cpu.current_opcode.unwrap().op_type)
        != discriminant(&OpType::AccumulatorOrImplied(MicroOpCallback::None))
     {
         let target_value = cpu.temp;
@@ -1363,7 +1413,7 @@ fn asl(cpu: &mut Cpu) {
 }
 
 fn lsr(cpu: &mut Cpu) {
-    if discriminant(&cpu.current_opcode.op_type)
+    if discriminant(&cpu.current_opcode.unwrap().op_type)
        != discriminant(&OpType::AccumulatorOrImplied(MicroOpCallback::None))
     {
         let target_value = cpu.temp;
