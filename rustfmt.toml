@@ -1,7 +1,6 @@
 condense_wildcard_suffixes = true
 fn_single_line = true
 hex_literal_case = 'Upper'
-indent_style = 'Visual'
 imports_granularity = 'Module'
 newline_style = 'Unix'
 normalize_comments = true

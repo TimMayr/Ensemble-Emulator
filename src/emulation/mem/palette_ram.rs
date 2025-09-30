@@ -8,8 +8,10 @@ pub struct PaletteRam {
 
 impl Default for PaletteRam {
     fn default() -> Self {
-        Self { zero_bits: [0; 4],
-               palettes: Ram::new(0x20) }
+        Self {
+            zero_bits: [0; 4],
+            palettes: Ram::new(0x20),
+        }
     }
 }
 

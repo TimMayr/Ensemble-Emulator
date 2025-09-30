@@ -8,8 +8,10 @@ pub struct MirrorMemory {
 
 impl MirrorMemory {
     pub fn new(base: Box<Memory>, mirror_mask: u16) -> Self {
-        Self { base,
-               mirror_mask }
+        Self {
+            base,
+            mirror_mask,
+        }
     }
 }
 

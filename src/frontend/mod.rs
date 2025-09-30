@@ -14,9 +14,10 @@ pub enum Frontends {
 }
 
 impl Frontend for Frontends {
-    fn show_frame(&mut self,
-                  pixel_buffer: &[u32; (WIDTH * HEIGHT) as usize])
-                  -> Result<(), String> {
+    fn show_frame(
+        &mut self,
+        pixel_buffer: &[u32; (WIDTH * HEIGHT) as usize],
+    ) -> Result<(), String> {
         match self {
             Frontends::Sdl2(frontend) => frontend.show_frame(pixel_buffer),
         }
@@ -25,7 +26,7 @@ impl Frontend for Frontends {
 
 pub trait Frontend {
     fn show_frame(&mut self, pixel_buffer: &[u32; (WIDTH * HEIGHT) as usize])
-                  -> Result<(), String>;
+    -> Result<(), String>;
 }
 
 pub struct SdlFrontend {
@@ -51,35 +52,41 @@ impl Default for SdlFrontend {
             .expect("Error initializing windows");
 
         // Create canvas
-        let canvas = window.into_canvas()
-                           .present_vsync()
-                           .build()
-                           .expect("Error initializing canvas");
+        let canvas = window
+            .into_canvas()
+            .present_vsync()
+            .build()
+            .expect("Error initializing canvas");
 
         // Create texture creator
         let texture_creator = canvas.texture_creator();
 
         let event_pump = context.event_pump().expect("Error creating event pump");
 
-        Self { // context,
-               // video_subsystem,
-               texture_creator,
-               event_pump,
-               canvas }
+        Self {
+            // context,
+            // video_subsystem,
+            texture_creator,
+            event_pump,
+            canvas,
+        }
     }
 }
 
 impl Frontend for SdlFrontend {
-    fn show_frame(&mut self,
-                  pixel_buffer: &[u32; (WIDTH * HEIGHT) as usize])
-                  -> Result<(), String> {
-        let mut texture = self.texture_creator
-                              .create_texture_streaming(PixelFormatEnum::RGB888, WIDTH, HEIGHT)
-                              .expect("Error creating Texture");
+    fn show_frame(
+        &mut self,
+        pixel_buffer: &[u32; (WIDTH * HEIGHT) as usize],
+    ) -> Result<(), String> {
+        let mut texture = self
+            .texture_creator
+            .create_texture_streaming(PixelFormatEnum::RGB888, WIDTH, HEIGHT)
+            .expect("Error creating Texture");
 
         let bytes: &[u8] = bytemuck::cast_slice(pixel_buffer);
-        texture.update(None, bytes, (WIDTH * 4) as usize)
-               .map_err(|e| e.to_string())?;
+        texture
+            .update(None, bytes, (WIDTH * 4) as usize)
+            .map_err(|e| e.to_string())?;
 
         // Render
         self.canvas.clear();
@@ -89,9 +96,13 @@ impl Frontend for SdlFrontend {
         // Handle events
         for event in self.event_pump.poll_iter() {
             match event {
-                Event::Quit { .. }
-                | Event::KeyDown { keycode: Some(Keycode::Escape),
-                                 .. } => return Err(String::from("Quit Program")),
+                Event::Quit {
+                    ..
+                }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => return Err(String::from("Quit Program")),
                 _ => {}
             }
         }
