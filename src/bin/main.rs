@@ -1,14 +1,35 @@
+use std::time::Instant;
+
 use nesamabob::emulation::emu::{Console, Consoles};
 use nesamabob::emulation::nes::Nes;
-use nesamabob::frontend::{Frontends, SdlFrontend};
 
 fn main() {
     let mut emu = Consoles::Nes(Nes::default());
-    let frontend = Frontends::Sdl2(SdlFrontend::default());
+    // emu.set_trace_log_path(Some(String::from("./trace-log.log")));
+    // let frontend = Frontends::Sdl2(SdlFrontend::default());
 
-    emu.load_rom(&String::from("./tests/nes-test-roms/nestest_headless.nes"));
-    emu.set_trace_log_path(Some(String::from("./trace-log.log")));
+    emu.load_rom(&String::from(
+        "./tests/nes-test-roms/instr_test-v5/rom_singles/11-stack.nes",
+    ));
     emu.reset();
-    emu.run(&mut Some(frontend)).expect("TODO: panic message");
-    println!("{:02x?}", emu.get_memory_debug(Some(0x6000..=0x6100))[0]);
+
+    let start = Instant::now();
+    emu.run_until(&mut None, 55445521)
+        .expect("TODO: panic message");
+
+    println!("{:?}", start.elapsed());
+
+    let mem = &emu.get_memory_debug(Some(0x6000..=0x6100))[0];
+
+    for (i, n) in mem.iter().enumerate() {
+        // print 16 per row, like `Debug`
+        if i % 32 == 0 {
+            if i > 0 {
+                println!();
+            }
+            print!("    "); // indentation like `Debug`
+        }
+        print!("0x{:02X}, ", n);
+    }
+    println!();
 }

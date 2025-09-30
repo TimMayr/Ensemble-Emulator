@@ -806,6 +806,7 @@ impl Cpu {
     }
 
     pub fn reset(&mut self) {
+        OPCODES_MAP.get_or_init(opcode::init);
         self.program_counter = self.mem_read_u16(RESET_VECTOR_ADDR);
         self.set_interrupt_disable();
         self.stack_pointer = 0xFD
@@ -1083,6 +1084,7 @@ impl Cpu {
             MicroOpCallback::BRANCH(condition) => branch(self, condition),
             MicroOpCallback::ALR => alr(self),
             MicroOpCallback::ANC => anc(self),
+            MicroOpCallback::ANC2 => anc(self),
             MicroOpCallback::ANE => ane(self),
             MicroOpCallback::ARR => arr(self),
             MicroOpCallback::DCP => dcp(self),
@@ -1376,6 +1378,7 @@ pub enum MicroOpCallback {
     SRE,
     JAM,
     TAS,
+    ANC2,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
