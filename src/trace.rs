@@ -114,10 +114,7 @@ impl TraceLog {
             .open(self.output.clone())
             .unwrap_or_else(|e| panic!("Error saving log: {}.\n{}", self.output, e));
 
-        unsafe {
-            file.write_all(self.log.as_mut_vec().as_slice())
-                .expect("error");
-        }
+        file.write_all(self.log.as_bytes()).expect("error");
     }
 }
 

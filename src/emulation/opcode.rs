@@ -736,7 +736,7 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             OpCode::new(
                 0x2B,
                 "*ANC",
-                ImmediateAddressing(Target::TEMP, MicroOpCallback::ANC),
+                ImmediateAddressing(Target::TEMP, MicroOpCallback::ANC2),
             ),
             OpCode::new(
                 0x8B,
@@ -744,7 +744,7 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 ImmediateAddressing(Target::TEMP, MicroOpCallback::ANE),
             ),
             OpCode::new(
-                0x2B,
+                0x6B,
                 "*ARR",
                 ImmediateAddressing(Target::TEMP, MicroOpCallback::ARR),
             ),
