@@ -1,6 +1,6 @@
 use crate::emulation::mem::{Memory, MemoryDevice};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MirrorMemory {
     base: Box<Memory>,
     mirror_mask: u16,

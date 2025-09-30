@@ -10,10 +10,11 @@ use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::{Memory, Ram};
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OpCode, OPCODES_MAP};
+use crate::emulation::opcode::{OPCODES_MAP, OpCode};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
+use crate::util;
 
 pub const INTERNAL_RAM_MEMORY_RANGE: RangeInclusive<u16> = 0x0..=0x1FFF;
 pub const INTERNAL_RAM_SIZE: u16 = 0x800;
@@ -28,13 +29,13 @@ pub const IRQ_BIT: u8 = 0x4;
 pub const UNUSED_BIT: u8 = 0x20;
 pub const BREAK_BIT: u8 = 0x10;
 pub const DECIMAL_BIT: u8 = 0x8;
-const IRQ_VECTOR_ADDR: u16 = 0xFFFE;
-const NMI_HANDLER_ADDR: u16 = 0xFFFA;
-const RESET_VECTOR_ADDR: u16 = 0xFFFC;
-const UPPER_BYTE: u16 = 0xFF00;
-const LOWER_BYTE: u16 = 0x00FF;
+pub const IRQ_VECTOR_ADDR: u16 = 0xFFFE;
+pub const NMI_HANDLER_ADDR: u16 = 0xFFFA;
+pub const RESET_VECTOR_ADDR: u16 = 0xFFFC;
+pub const UPPER_BYTE: u16 = 0xFF00;
+pub const LOWER_BYTE: u16 = 0x00FF;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Cpu {
     pub program_counter: u16,
     pub stack_pointer: u8,
@@ -186,15 +187,6 @@ impl Cpu {
 
     pub fn get_unused_flag(&self) -> bool { (self.processor_status & UNUSED_BIT) != 0 }
 
-    fn crosses_page_boundary_u8(base: u16, offset: u8) -> bool {
-        (base & UPPER_BYTE) != ((base + offset as u16) & UPPER_BYTE)
-    }
-
-    fn crosses_page_boundary_i8(base: u16, offset: i8) -> bool {
-        let target = base.wrapping_add(offset as i16 as u16);
-        (base & UPPER_BYTE) != (target & UPPER_BYTE)
-    }
-
     fn shift_left(&mut self, data: u8) -> u8 {
         let res = data << 1;
 
@@ -254,12 +246,6 @@ impl Cpu {
     }
 
     fn get_addr_latch(&self) -> u16 { ((self.hi as u16) << 8) | (self.lo as u16) }
-
-    fn add_to_low_byte(val: u16, add: u8) -> u16 {
-        let high = val & 0xFF00; // preserve high byte
-        let low = ((val & 0x00FF) as u8).wrapping_add(add); // add with wrapping
-        high | low as u16
-    }
 
     fn get_instructions_for_op_type(&mut self) -> Vec<MicroOp> {
         let mut instructions = vec![];
@@ -494,17 +480,23 @@ impl Cpu {
                     target,
                     MicroOpCallback::None,
                 ));
-                instructions.push(MicroOp::Write(Target::AddressLatch, Source::TEMP, callback));
                 instructions.push(MicroOp::Write(
                     Target::AddressLatch,
                     Source::TEMP,
+                    false,
+                    callback,
+                ));
+                instructions.push(MicroOp::Write(
+                    Target::AddressLatch,
+                    Source::TEMP,
+                    false,
                     MicroOpCallback::None,
                 ))
             }
             OpType::AbsoluteWrite(source, callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
                 instructions.push(MicroOp::FetchOperandHi(MicroOpCallback::None));
-                instructions.push(MicroOp::Write(Target::AddressLatch, source, callback));
+                instructions.push(MicroOp::Write(Target::AddressLatch, source, true, callback));
             }
             OpType::ZeroPageRMW(target, callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
@@ -513,16 +505,22 @@ impl Cpu {
                     target,
                     MicroOpCallback::None,
                 ));
-                instructions.push(MicroOp::Write(Target::LoWrite, Source::TEMP, callback));
                 instructions.push(MicroOp::Write(
                     Target::LoWrite,
                     Source::TEMP,
+                    false,
+                    callback,
+                ));
+                instructions.push(MicroOp::Write(
+                    Target::LoWrite,
+                    Source::TEMP,
+                    true,
                     MicroOpCallback::None,
                 ))
             }
             OpType::ZeroPageWrite(source, callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
-                instructions.push(MicroOp::Write(Target::LoWrite, source, callback));
+                instructions.push(MicroOp::Write(Target::LoWrite, source, true, callback));
             }
             OpType::ZeroPageIndexRMW(index, callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
@@ -541,10 +539,16 @@ impl Cpu {
                     Target::TEMP,
                     MicroOpCallback::None,
                 ));
-                instructions.push(MicroOp::Write(Target::LoWrite, Source::TEMP, callback));
                 instructions.push(MicroOp::Write(
                     Target::LoWrite,
                     Source::TEMP,
+                    false,
+                    callback,
+                ));
+                instructions.push(MicroOp::Write(
+                    Target::LoWrite,
+                    Source::TEMP,
+                    true,
                     MicroOpCallback::None,
                 ));
             }
@@ -560,7 +564,7 @@ impl Cpu {
                     false,
                     MicroOpCallback::None,
                 ));
-                instructions.push(MicroOp::Write(Target::LoWrite, source, callback));
+                instructions.push(MicroOp::Write(Target::LoWrite, source, true, callback));
             }
             OpType::AbsoluteIndexRMW(offset, callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
@@ -586,10 +590,16 @@ impl Cpu {
                     Target::TEMP,
                     MicroOpCallback::None,
                 ));
-                instructions.push(MicroOp::Write(Target::AddressLatch, Source::TEMP, callback));
                 instructions.push(MicroOp::Write(
                     Target::AddressLatch,
                     Source::TEMP,
+                    false,
+                    callback,
+                ));
+                instructions.push(MicroOp::Write(
+                    Target::AddressLatch,
+                    Source::TEMP,
+                    true,
                     MicroOpCallback::None,
                 ));
             }
@@ -612,12 +622,12 @@ impl Cpu {
                     false,
                     MicroOpCallback::None,
                 ));
-                instructions.push(MicroOp::Write(Target::AddressLatch, source, callback));
+                instructions.push(MicroOp::Write(Target::AddressLatch, source, true, callback));
             }
             OpType::IndexedIndirectWrite(source, callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
                 instructions.push(MicroOp::ReadWithOffsetFromZPAndAddSomethingU8(
-                    AddressSource::None,
+                    AddressSource::LO,
                     Source::None,
                     Target::None,
                     Source::LO,
@@ -641,7 +651,7 @@ impl Cpu {
                     false,
                     MicroOpCallback::None,
                 ));
-                instructions.push(MicroOp::Write(Target::AddressLatch, source, callback));
+                instructions.push(MicroOp::Write(Target::AddressLatch, source, true, callback));
             }
             OpType::JmpIndirect(callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
@@ -691,7 +701,7 @@ impl Cpu {
                     false,
                     MicroOpCallback::None,
                 ));
-                instructions.push(MicroOp::Write(Target::AddressLatch, source, callback))
+                instructions.push(MicroOp::Write(Target::AddressLatch, source, true, callback))
             }
             OpType::Relative(callback) => {
                 instructions.push(MicroOp::FetchOperandLo(callback));
@@ -699,7 +709,7 @@ impl Cpu {
             OpType::IndexedIndirectRMW(callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
                 instructions.push(MicroOp::ReadWithOffsetFromZPAndAddSomethingU8(
-                    AddressSource::AddressLatch,
+                    AddressSource::LO,
                     Source::None,
                     Target::None,
                     Source::LO,
@@ -728,22 +738,28 @@ impl Cpu {
                     Target::TEMP,
                     MicroOpCallback::None,
                 ));
-                instructions.push(MicroOp::Write(Target::AddressLatch, Source::TEMP, callback));
                 instructions.push(MicroOp::Write(
                     Target::AddressLatch,
                     Source::TEMP,
+                    false,
+                    callback,
+                ));
+                instructions.push(MicroOp::Write(
+                    Target::AddressLatch,
+                    Source::TEMP,
+                    true,
                     MicroOpCallback::None,
                 ))
             }
             OpType::IndirectIndexedRMW(callback) => {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
                 instructions.push(MicroOp::Read(
-                    AddressSource::AddressLatch,
+                    AddressSource::LO,
                     Target::TEMP,
                     MicroOpCallback::None,
                 ));
                 instructions.push(MicroOp::ReadWithOffsetFromZPAndAddSomethingU8(
-                    AddressSource::AddressLatch,
+                    AddressSource::LO,
                     Source::Constant(1),
                     Target::HI,
                     Source::TEMP,
@@ -764,10 +780,16 @@ impl Cpu {
                     Target::TEMP,
                     MicroOpCallback::None,
                 ));
-                instructions.push(MicroOp::Write(Target::AddressLatch, Source::TEMP, callback));
                 instructions.push(MicroOp::Write(
                     Target::AddressLatch,
                     Source::TEMP,
+                    false,
+                    callback,
+                ));
+                instructions.push(MicroOp::Write(
+                    Target::AddressLatch,
+                    Source::TEMP,
+                    true,
                     MicroOpCallback::None,
                 ))
             }
@@ -793,9 +815,9 @@ impl Cpu {
         self.memory.get_memory_debug(range)
     }
 
-    pub fn step(&mut self, master_cycle: u128) {
+    pub fn step(&mut self, master_cycle: u128) -> Result<(), String> {
         if self.is_halted {
-            return;
+            return Err(String::from("Encountered hlt"));
         }
 
         self.master_cycle = master_cycle;
@@ -813,8 +835,10 @@ impl Cpu {
             // sequence head becomes next, rest get queued
             self.current_op = seq.remove(0);
             self.op_queue = seq;
+            Ok(())
         } else {
             self.current_op = MicroOp::FetchOpcode(MicroOpCallback::None);
+            Ok(())
         }
     }
 
@@ -861,12 +885,21 @@ impl Cpu {
 
                 self.op_queue.clone()
             }
-            MicroOp::Write(target, src, callback) => {
+            // pre_callback denotes whether to call the callback before or after the write. In the
+            // case of a dummy write we write with false so that the value from before the callback
+            // gets written, and in the case of a single write we need to execute the callback
+            // beforehand so that we write the updated value
+            MicroOp::Write(target, src, pre_callback, callback) => {
+                if *pre_callback {
+                    self.run_op(*callback);
+                }
+
                 let val = self.get_src_value(src);
                 self.write_to_target(target, val);
 
-                self.run_op(*callback);
-
+                if !pre_callback {
+                    self.run_op(*callback);
+                }
                 self.op_queue.clone()
             }
             MicroOp::StackPush(source, callback) => {
@@ -900,13 +933,13 @@ impl Cpu {
                     self.write_to_target(target, val);
                     let offset = self.get_src_value(offset);
                     if *schedule_read {
-                        if Self::crosses_page_boundary_u8(address - offset as u16, offset) {
+                        if util::crosses_page_boundary_u8(address - offset as u16, offset) {
                             self.op_queue
                                 .push(MicroOp::Read(*source, *target, *callback));
                         }
 
                         self.hi = self.hi.wrapping_add(1);
-                    } else if Self::crosses_page_boundary_u8(address - offset as u16, offset) {
+                    } else if util::crosses_page_boundary_u8(address - offset as u16, offset) {
                         self.hi = self.hi.wrapping_add(1);
                     }
                 };
@@ -944,7 +977,7 @@ impl Cpu {
             ) => {
                 if let Some(address) = self.get_u16_address(address_source) {
                     let src_value = self.get_src_value(offset);
-                    let offset_address = Self::add_to_low_byte(address as u8 as u16, src_value);
+                    let offset_address = util::add_to_low_byte(address as u8 as u16, src_value);
                     let value = self.mem_read(offset_address);
                     self.write_to_target(target, value);
                 }
@@ -974,7 +1007,7 @@ impl Cpu {
             ) => {
                 if let Some(address) = self.get_u16_address(address_source) {
                     let src_value = self.get_src_value(offset);
-                    let offset_address = Self::add_to_low_byte(address, src_value);
+                    let offset_address = util::add_to_low_byte(address, src_value);
                     let value = self.mem_read(offset_address);
                     self.write_to_target(target, value);
                 }
@@ -998,7 +1031,7 @@ impl Cpu {
                 let value = add_to.wrapping_add(to_add as i16 as u16);
                 self.write_to_target(&Target::PCL, value as u8);
 
-                if Self::crosses_page_boundary_i8(add_to, to_add) {
+                if util::crosses_page_boundary_i8(add_to, to_add) {
                     self.op_queue.push(MicroOp::FixHiBranch(value));
                 }
 
@@ -1142,7 +1175,7 @@ impl Cpu {
         mem
     }
 
-    fn get_src_value(&mut self, src: &Source) -> u8 {
+    pub fn get_src_value(&mut self, src: &Source) -> u8 {
         match src {
             Source::A => self.accumulator,
             Source::X => self.x_register,
@@ -1212,7 +1245,7 @@ pub enum MicroOp {
     FetchOperandLo(MicroOpCallback),
     FetchOperandHi(MicroOpCallback),
     Read(AddressSource, Target, MicroOpCallback),
-    Write(Target, Source, MicroOpCallback),
+    Write(Target, Source, bool, MicroOpCallback),
     StackPush(Source, MicroOpCallback),
     StackPop(Target, MicroOpCallback),
     ReadPageCrossAware(AddressSource, Source, Target, bool, MicroOpCallback),
@@ -1601,7 +1634,7 @@ fn cmp(cpu: &mut Cpu) {
         cpu.clear_carry_flag();
     }
 
-    if (cpu.accumulator.overflowing_sub(target_value).0) & NEGATIVE_BIT != 0 {
+    if cpu.accumulator.wrapping_sub(target_value) & NEGATIVE_BIT != 0 {
         cpu.set_negative_flag();
     } else {
         cpu.clear_negative_flag();
@@ -1623,7 +1656,7 @@ fn cpx(cpu: &mut Cpu) {
         cpu.clear_carry_flag();
     }
 
-    if (cpu.x_register.overflowing_sub(target_value).0) & NEGATIVE_BIT != 0 {
+    if cpu.x_register.wrapping_sub(target_value) & NEGATIVE_BIT != 0 {
         cpu.set_negative_flag();
     } else {
         cpu.clear_negative_flag();
@@ -1645,7 +1678,7 @@ fn cpy(cpu: &mut Cpu) {
         cpu.clear_carry_flag();
     }
 
-    if (cpu.y_register.overflowing_sub(target_value).0) & NEGATIVE_BIT != 0 {
+    if cpu.y_register.wrapping_sub(target_value) & NEGATIVE_BIT != 0 {
         cpu.set_negative_flag();
     } else {
         cpu.clear_negative_flag();
@@ -1747,7 +1780,7 @@ fn isb(cpu: &mut Cpu) {
 
     let acc_check = cpu.accumulator;
 
-    let value = target_value ^ LOWER_BYTE as u8;
+    let value = mod_value ^ LOWER_BYTE as u8;
     let sum = cpu.accumulator as u16 + value as u16 + carry_in as u16;
     let result = sum as u8;
 
@@ -1825,9 +1858,11 @@ fn las(cpu: &mut Cpu) {
     cpu.x_register = res;
     cpu.stack_pointer = res;
 }
+
 fn lax(cpu: &mut Cpu) {
     cpu.accumulator = cpu.temp;
     cpu.x_register = cpu.temp;
+    cpu.update_negative_and_zero_flags(cpu.accumulator)
 }
 
 fn lxa(cpu: &mut Cpu) {
@@ -1851,7 +1886,10 @@ fn rra(cpu: &mut Cpu) {
     adc(cpu);
 }
 
-fn sax(cpu: &mut Cpu) { cpu.temp = cpu.accumulator & cpu.x_register; }
+fn sax(cpu: &mut Cpu) {
+    let res = cpu.accumulator & cpu.x_register;
+    cpu.temp = res;
+}
 
 fn sbx(cpu: &mut Cpu) {
     let res = cpu.accumulator & cpu.x_register;

@@ -10,7 +10,7 @@ struct RegionEntry {
     offset: u16,   // offset into that device
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MemoryMap {
     pub regions: Vec<Memory>,
     open_bus: u8,

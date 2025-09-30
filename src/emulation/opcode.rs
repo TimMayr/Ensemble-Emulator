@@ -897,22 +897,22 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             OpCode::new(0x63, "*RRA", IndexedIndirectRMW(MicroOpCallback::RRA)),
             OpCode::new(0x73, "*RRA", IndirectIndexedRMW(MicroOpCallback::RRA)),
             OpCode::new(
-                0x67,
+                0x87,
                 "*SAX",
                 ZeroPageWrite(Source::TEMP, MicroOpCallback::SAX),
             ),
             OpCode::new(
-                0x77,
+                0x97,
                 "*SAX",
-                ZeroPageIndexWrite(Source::TEMP, Source::X, MicroOpCallback::SAX),
+                ZeroPageIndexWrite(Source::TEMP, Source::Y, MicroOpCallback::SAX),
             ),
             OpCode::new(
-                0x6F,
+                0x8F,
                 "*SAX",
                 AbsoluteWrite(Source::TEMP, MicroOpCallback::SAX),
             ),
             OpCode::new(
-                0x7F,
+                0x83,
                 "*SAX",
                 IndexedIndirectWrite(Source::TEMP, MicroOpCallback::SAX),
             ),
@@ -1084,5 +1084,39 @@ impl OpCode {
             name,
             op_type,
         }
+    }
+}
+
+pub fn get_bytes_for_opcode(op: OpCode) -> u8 {
+    match op.op_type {
+        ImmediateAddressing(..) => 1,
+        AbsoluteRead(..) => 2,
+        AbsoluteIndexRead(..) => 2,
+        ZeroPageRead(..) => 1,
+        ZeroPageIndexRead(..) => 1,
+        AccumulatorOrImplied(_) => 0,
+        IndexedIndirectRead(..) => 1,
+        IndirectIndexedRead(..) => 1,
+        BRK(_) => 0,
+        RTI(_) => 0,
+        RTS(_) => 0,
+        PH(..) => 0,
+        PL(..) => 0,
+        JSR(_) => 2,
+        JmpAbsolute(_) => 2,
+        AbsoluteRMW(..) => 2,
+        AbsoluteWrite(..) => 2,
+        ZeroPageRMW(..) => 1,
+        ZeroPageWrite(..) => 1,
+        ZeroPageIndexRMW(..) => 1,
+        ZeroPageIndexWrite(..) => 1,
+        AbsoluteIndexRMW(..) => 2,
+        AbsoluteIndexWrite(..) => 2,
+        IndexedIndirectWrite(..) => 1,
+        JmpIndirect(_) => 2,
+        IndirectIndexedWrite(..) => 1,
+        Relative(_) => 1,
+        IndexedIndirectRMW(_) => 1,
+        IndirectIndexedRMW(_) => 1,
     }
 }

@@ -9,6 +9,7 @@ pub mod mirror_memory;
 pub mod palette_ram;
 pub mod ppu_registers;
 
+#[derive(Clone)]
 pub enum Memory {
     Ram(Ram),
     Rom(Rom),
