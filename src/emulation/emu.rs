@@ -50,6 +50,12 @@ impl Console for Consoles {
             Consoles::Nes(nes) => nes.get_memory_debug(range),
         }
     }
+
+    fn set_trace_log_path(&mut self, path: Option<String>) {
+        match self {
+            Consoles::Nes(nes) => nes.set_trace_log_path(path),
+        }
+    }
 }
 
 pub trait Console {
@@ -65,4 +71,5 @@ pub trait Console {
     ) -> Result<(), String>;
 
     fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>>;
+    fn set_trace_log_path(&mut self, path: Option<String>);
 }
