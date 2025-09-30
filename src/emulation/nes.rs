@@ -14,7 +14,7 @@ use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
 use crate::emulation::savestate::{CpuState, PpuState, SaveState};
 use crate::frontend::{Frontend, Frontends};
-use crate::util::TraceLog;
+use crate::trace::TraceLog;
 
 pub const CPU_CYCLES_PER_FRAME: u16 = 29780;
 pub const FRAME_DURATION: Duration = Duration::from_nanos(16_666_667);
@@ -25,6 +25,7 @@ pub struct Nes {
     pub ppu: Rc<RefCell<Ppu>>,
     pub cycles: u128,
     pub rom_file: Option<RomFile>,
+    pub trace_log_path: String,
 }
 
 impl Console for Nes {
@@ -37,16 +38,7 @@ impl Console for Nes {
     fn reset(&mut self) { self.reset() }
 
     fn run(&mut self, frontend: &mut Option<Frontends>) -> Result<(), String> {
-        let mut trace = TraceLog::new();
-
-        loop {
-            self.cycles += 1;
-            if let Err(err) = self.step(frontend, u128::MAX, &mut trace)
-                && err == "Execution finished"
-            {
-                return Ok(());
-            }
-        }
+        self.run_until(frontend, u128::MAX)
     }
 
     fn run_until(
@@ -54,13 +46,15 @@ impl Console for Nes {
         frontend: &mut Option<Frontends>,
         last_cycle: u128,
     ) -> Result<(), String> {
-        let mut trace = TraceLog::new();
+        let mut trace = TraceLog::new(self.trace_log_path.clone());
 
         loop {
             self.cycles += 1;
             if let Err(err) = self.step(frontend, last_cycle, &mut trace)
-                && err == "Execution finished"
+                && (err == "Execution finished" || err == "Encountered hlt")
             {
+                trace.flush();
+                println!("{}", err);
                 return Ok(());
             }
         }
@@ -75,12 +69,13 @@ impl Console for Nes {
 }
 
 impl Nes {
-    pub fn new(cpu: Cpu, ppu: Rc<RefCell<Ppu>>) -> Self {
+    pub fn new(cpu: Cpu, ppu: Rc<RefCell<Ppu>>, trace_log_path: String) -> Self {
         Self {
             cpu,
             ppu,
             cycles: 84,
             rom_file: None,
+            trace_log_path,
         }
     }
 
@@ -149,12 +144,13 @@ impl Nes {
         trace: &mut TraceLog,
     ) -> Result<(), String> {
         if self.cycles >= last_cycle {
-            trace.flush();
             return Err(String::from("Execution finished"));
         };
 
+        let mut cpu_res = Ok(());
+
         if self.cycles.is_multiple_of(12) {
-            if self.cycles == 9616 * 12 {
+            if self.cycles == 10429 * 12 {
                 print!("");
             }
             let mut do_trace = false;
@@ -163,7 +159,8 @@ impl Nes {
             {
                 do_trace = true;
             }
-            self.cpu.step(self.cycles);
+
+            cpu_res = self.cpu.step(self.cycles);
 
             if do_trace {
                 trace.trace(self);
@@ -181,7 +178,7 @@ impl Nes {
             frontend.show_frame(&self.get_pixel_buffer())?
         }
 
-        Ok(())
+        cpu_res
     }
 }
 
@@ -189,6 +186,6 @@ impl Default for Nes {
     fn default() -> Self {
         let cpu = Cpu::new();
         let ppu = Rc::new(RefCell::new(Ppu::default()));
-        Nes::new(cpu, ppu)
+        Nes::new(cpu, ppu, String::from("."))
     }
 }

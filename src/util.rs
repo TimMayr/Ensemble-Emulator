@@ -1,103 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
 
-use crate::emulation::cpu::{
-    CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, UNUSED_BIT, ZERO_BIT,
-};
-use crate::emulation::nes::Nes;
-
-pub struct TraceLog {
-    log: String,
-}
-impl Default for TraceLog {
-    fn default() -> Self { Self::new() }
-}
-
-impl TraceLog {
-    pub fn new() -> Self {
-        Self {
-            log: String::from(""),
-        }
-    }
-
-    pub fn trace(&mut self, nes: &Nes) {
-        let cpu = &nes.cpu;
-        let ppu = nes.ppu.borrow();
-        self.log += format!(
-            "{:04X} {:>4} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3},{:3} CYC:{}\n",
-            cpu.program_counter - 1,
-            cpu.current_opcode.unwrap().name,
-            cpu.accumulator,
-            cpu.x_register,
-            cpu.y_register,
-            cpu.processor_status | UNUSED_BIT,
-            cpu.stack_pointer,
-            ppu.dot_counter / 341u128,
-            ppu.dot_counter % 341u128,
-            cpu.master_cycle / 12 - 1
-        )
-        .as_str();
-    }
-
-    #[allow(dead_code)]
-    fn status_as_string(status: u8) -> String {
-        let mut str = String::new();
-
-        if status & NEGATIVE_BIT != 0 {
-            str += "N"
-        } else {
-            str += "n"
-        }
-
-        if status & OVERFLOW_BIT != 0 {
-            str += "V"
-        } else {
-            str += "v"
-        }
-
-        str += "--";
-
-        if status & DECIMAL_BIT != 0 {
-            str += "D"
-        } else {
-            str += "d"
-        }
-
-        if status & IRQ_BIT != 0 {
-            str += "I"
-        } else {
-            str += "i"
-        }
-
-        if status & ZERO_BIT != 0 {
-            str += "Z"
-        } else {
-            str += "z"
-        }
-
-        if status & CARRY_BIT != 0 {
-            str += "C"
-        } else {
-            str += "c"
-        }
-
-        str
-    }
-
-    pub fn flush(&mut self) {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open("./trace-log.txt")
-            .expect("Error saving log");
-
-        unsafe {
-            file.write_all(self.log.as_mut_vec().as_slice())
-                .expect("error");
-        }
-    }
-}
+use crate::emulation::cpu::UPPER_BYTE;
 
 pub fn write_at_offset(path: &str, value: u8, offset: u16) -> std::io::Result<()> {
     let mut file = OpenOptions::new()
@@ -133,7 +37,22 @@ pub fn set_packed(packed: &u16, val: &u8, mask: &u16, val_mask: &u8) -> u16 {
     // 1. packed & !mask == 0b1010_1000_0000_1010
     // 2. (val & val_mask) as u16 = 0b0000_0000_0001_1111
     // 3. mask.bit_with() == 10; mask.count_ones() == 5; 10 - 5 == 5;
-    //      0b0000_0000_0001_1111 << 5 == 0b0000_0011_1110_0000
+    //    0b0000_0000_0001_1111 << 5 == 0b0000_0011_1110_0000
     // 4. 0b1010_1000_0000_1010 | 0b0000_0011_1110_0000 == 0b1010_1011_1110_1010
     (packed & !mask) | (((val & val_mask) as u16) << (mask.bit_width() - mask.count_ones()))
+}
+
+pub fn crosses_page_boundary_u8(base: u16, offset: u8) -> bool {
+    (base & UPPER_BYTE) != ((base + offset as u16) & UPPER_BYTE)
+}
+
+pub fn crosses_page_boundary_i8(base: u16, offset: i8) -> bool {
+    let target = base.wrapping_add(offset as i16 as u16);
+    (base & UPPER_BYTE) != (target & UPPER_BYTE)
+}
+
+pub fn add_to_low_byte(val: u16, add: u8) -> u16 {
+    let high = val & 0xFF00; // preserve high byte
+    let low = ((val & 0x00FF) as u8).wrapping_add(add); // add with wrapping
+    high | low as u16
 }
