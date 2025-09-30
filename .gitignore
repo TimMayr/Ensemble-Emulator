@@ -177,4 +177,5 @@ fabric.properties
 # Android studio 3.1+ serialized cache file
 
 *.etl*
-/states/branch_basic_01-nmi-enabled.bin
+/states/*
+/tests/outputs/*.log
