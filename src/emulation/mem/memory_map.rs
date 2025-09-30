@@ -23,9 +23,11 @@ impl Default for MemoryMap {
 
 impl MemoryMap {
     pub fn new() -> Self {
-        Self { regions: Vec::new(),
-               open_bus: 0,
-               lookup: vec![None; MEMORY_SIZE as usize + 1].into_boxed_slice() }
+        Self {
+            regions: Vec::new(),
+            open_bus: 0,
+            lookup: vec![None; MEMORY_SIZE as usize + 1].into_boxed_slice(),
+        }
     }
 
     pub fn add_memory(&mut self, address_space: RangeInclusive<u16>, memory: Memory) {
@@ -34,8 +36,10 @@ impl MemoryMap {
         let start = *address_space.start();
         for addr in address_space {
             let offset = addr - start;
-            self.lookup[addr as usize] = Some(RegionEntry { device: device_index,
-                                                            offset });
+            self.lookup[addr as usize] = Some(RegionEntry {
+                device: device_index,
+                offset,
+            });
         }
 
         self.regions.push(memory)

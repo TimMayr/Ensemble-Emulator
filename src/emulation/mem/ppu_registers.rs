@@ -10,7 +10,11 @@ pub struct PpuRegisters {
 }
 
 impl PpuRegisters {
-    pub fn new(ppu: Rc<RefCell<Ppu>>) -> Self { Self { ppu } }
+    pub fn new(ppu: Rc<RefCell<Ppu>>) -> Self {
+        Self {
+            ppu,
+        }
+    }
 }
 
 impl MemoryDevice for PpuRegisters {

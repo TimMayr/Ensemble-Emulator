@@ -41,7 +41,7 @@ fn test_rom_non_writeable() {
 
     // Attach new Rom memory device to cpu
     cpu.memory
-       .add_memory(0x4020..=0xFFFF, Memory::Rom(Rom::new(0xBFE0)));
+        .add_memory(0x4020..=0xFFFF, Memory::Rom(Rom::new(0xBFE0)));
 
     cpu.mem_write(0x4030, 0x20);
 

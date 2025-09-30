@@ -101,7 +101,9 @@ impl Ram {
             panic!()
         }
 
-        Self { memory: vec![0; size].into_boxed_slice() }
+        Self {
+            memory: vec![0; size].into_boxed_slice(),
+        }
     }
 }
 
@@ -133,7 +135,9 @@ impl Rom {
             panic!()
         }
 
-        Self { memory: vec![0; size].into_boxed_slice() }
+        Self {
+            memory: vec![0; size].into_boxed_slice(),
+        }
     }
 }
 

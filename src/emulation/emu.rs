@@ -35,10 +35,11 @@ impl Console for Consoles {
         }
     }
 
-    fn run_until(&mut self,
-                 frontend: &mut Option<Frontends>,
-                 last_cycle: u128)
-                 -> Result<(), String> {
+    fn run_until(
+        &mut self,
+        frontend: &mut Option<Frontends>,
+        last_cycle: u128,
+    ) -> Result<(), String> {
         match self {
             Consoles::Nes(nes) => nes.run_until(frontend, last_cycle),
         }
@@ -57,10 +58,11 @@ pub trait Console {
     fn load_rom(&mut self, path: &String);
     fn reset(&mut self);
     fn run(&mut self, option: &mut Option<Frontends>) -> Result<(), String>;
-    fn run_until(&mut self,
-                 frontend: &mut Option<Frontends>,
-                 last_cycle: u128)
-                 -> Result<(), String>;
+    fn run_until(
+        &mut self,
+        frontend: &mut Option<Frontends>,
+        last_cycle: u128,
+    ) -> Result<(), String>;
 
     fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>>;
 }

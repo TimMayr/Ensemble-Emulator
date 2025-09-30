@@ -45,15 +45,16 @@ impl Default for Ppu {
     fn default() -> Self { Self::new() }
 }
 
-const NES_PALETTE: [u32; 64] =
-    [0x545454, 0x001E74, 0x081090, 0x300088, 0x440064, 0x5C0030, 0x540400, 0x3C1800, 0x202A00,
-     0x083A00, 0x004000, 0x003C00, 0x00323C, 0x000000, 0x000000, 0x000000, 0x989698, 0x084CC4,
-     0x3032EC, 0x5C1EE4, 0x8814B0, 0xA01464, 0x982220, 0x783C00, 0x545A00, 0x287200, 0x087C00,
-     0x007628, 0x006678, 0x000000, 0x000000, 0x000000, 0xECEEEC, 0x4C9AEC, 0x787CEC, 0xB062EC,
-     0xE454EC, 0xEC58B4, 0xEC6A64, 0xD48820, 0xA0AA00, 0x74C400, 0x4CD020, 0x38CC6C, 0x38B4CC,
-     0x3C3C3C, 0x000000, 0x000000, 0xECEEEC, 0xA8CCEC, 0xBCBCEC, 0xD4B2EC, 0xECAEEC, 0xECAED4,
-     0xECB4B0, 0xE4C490, 0xCCD278, 0xB4DE78, 0xA8E290, 0x98E2B4, 0xA0D6E4, 0xA0A2A0, 0x000000,
-     0x000000];
+const NES_PALETTE: [u32; 64] = [
+    0x545454, 0x001E74, 0x081090, 0x300088, 0x440064, 0x5C0030, 0x540400, 0x3C1800, 0x202A00,
+    0x083A00, 0x004000, 0x003C00, 0x00323C, 0x000000, 0x000000, 0x000000, 0x989698, 0x084CC4,
+    0x3032EC, 0x5C1EE4, 0x8814B0, 0xA01464, 0x982220, 0x783C00, 0x545A00, 0x287200, 0x087C00,
+    0x007628, 0x006678, 0x000000, 0x000000, 0x000000, 0xECEEEC, 0x4C9AEC, 0x787CEC, 0xB062EC,
+    0xE454EC, 0xEC58B4, 0xEC6A64, 0xD48820, 0xA0AA00, 0x74C400, 0x4CD020, 0x38CC6C, 0x38B4CC,
+    0x3C3C3C, 0x000000, 0x000000, 0xECEEEC, 0xA8CCEC, 0xBCBCEC, 0xD4B2EC, 0xECAEEC, 0xECAED4,
+    0xECB4B0, 0xE4C490, 0xCCD278, 0xB4DE78, 0xA8E290, 0x98E2B4, 0xA0D6E4, 0xA0A2A0, 0x000000,
+    0x000000,
+];
 
 const VBLANK_NMI_BIT: u8 = 0x80;
 const VRAM_ADDR_INC_BIT: u8 = 0x4;
@@ -79,33 +80,35 @@ const VRAM_SIZE: usize = 2048;
 
 impl Ppu {
     pub fn new() -> Self {
-        Self { dot_counter: 19,
-               ctrl_register: 0,
-               mask_register: 0,
-               status_register: 0,
-               oam_addr_register: 0,
-               oam_data_register: 0,
-               ppu_x_scroll_register: 0,
-               ppu_y_scroll_register: 0,
-               vram_addr_register: 0,
-               ppu_data_register: 0,
-               ppu_data_buffer: 0,
-               oam_dma_register: 0,
-               bg_next_tile_id: 0,
-               bg_next_tile_attribute: 0,
-               bg_next_tile: 0,
-               bg_shifter_pattern: 0,
-               bg_shifter_attribute: 0,
-               fine_x_scroll: 0,
-               nmi_requested: Cell::new(false),
-               memory: Box::new(Self::get_default_memory_map()),
-               oam: Box::new(Self::get_default_oam()),
-               write_latch: false,
-               t_register: 0,
-               even_frame: true,
-               reset_signal: true,
-               pixel_buffer: [0u32; (WIDTH * HEIGHT) as usize],
-               master_cycle: 0 }
+        Self {
+            dot_counter: 19,
+            ctrl_register: 0,
+            mask_register: 0,
+            status_register: 0,
+            oam_addr_register: 0,
+            oam_data_register: 0,
+            ppu_x_scroll_register: 0,
+            ppu_y_scroll_register: 0,
+            vram_addr_register: 0,
+            ppu_data_register: 0,
+            ppu_data_buffer: 0,
+            oam_dma_register: 0,
+            bg_next_tile_id: 0,
+            bg_next_tile_attribute: 0,
+            bg_next_tile: 0,
+            bg_shifter_pattern: 0,
+            bg_shifter_attribute: 0,
+            fine_x_scroll: 0,
+            nmi_requested: Cell::new(false),
+            memory: Box::new(Self::get_default_memory_map()),
+            oam: Box::new(Self::get_default_oam()),
+            write_latch: false,
+            t_register: 0,
+            even_frame: true,
+            reset_signal: true,
+            pixel_buffer: [0u32; (WIDTH * HEIGHT) as usize],
+            master_cycle: 0,
+        }
     }
 
     fn get_default_memory_map() -> MemoryMap {
@@ -263,10 +266,12 @@ impl Ppu {
     }
 
     pub fn set_coarse_x_scroll(&mut self, val: u8) {
-        self.vram_addr_register = util::set_packed(&self.vram_addr_register,
-                                                   &val,
-                                                   &VRAM_ADDR_COARSE_X_SCROLL_MASK,
-                                                   &COARSE_SCROLL_WIDTH);
+        self.vram_addr_register = util::set_packed(
+            &self.vram_addr_register,
+            &val,
+            &VRAM_ADDR_COARSE_X_SCROLL_MASK,
+            &COARSE_SCROLL_WIDTH,
+        );
     }
 
     pub fn get_coarse_y_scroll(&self) -> u8 {
@@ -274,10 +279,12 @@ impl Ppu {
     }
 
     pub fn set_coarse_y_scroll(&mut self, val: u8) {
-        self.vram_addr_register = util::set_packed(&self.vram_addr_register,
-                                                   &val,
-                                                   &VRAM_ADDR_COARSE_Y_SCROLL_MASK,
-                                                   &COARSE_SCROLL_WIDTH);
+        self.vram_addr_register = util::set_packed(
+            &self.vram_addr_register,
+            &val,
+            &VRAM_ADDR_COARSE_Y_SCROLL_MASK,
+            &COARSE_SCROLL_WIDTH,
+        );
     }
 
     pub fn get_fine_x_scroll(&self) -> u8 { self.fine_x_scroll }
@@ -287,10 +294,12 @@ impl Ppu {
     }
 
     pub fn set_fine_y_scroll(&mut self, val: u8) {
-        self.vram_addr_register = util::set_packed(&self.vram_addr_register,
-                                                   &val,
-                                                   &VRAM_ADDR_FINE_Y_SCROLL_MASK,
-                                                   &FINE_Y_SCROLL_WIDTH);
+        self.vram_addr_register = util::set_packed(
+            &self.vram_addr_register,
+            &val,
+            &VRAM_ADDR_FINE_Y_SCROLL_MASK,
+            &FINE_Y_SCROLL_WIDTH,
+        );
     }
 
     pub fn get_nametable_x(&self) -> u8 {
@@ -368,9 +377,11 @@ impl Ppu {
         let mut current_palette: [u8; 4] = [0; 4];
 
         for (i, item) in current_palette.iter_mut().enumerate() {
-            *item = self.mem_read(PALETTE_RAM_START_ADDRESS
-                                  + (self.get_selected_palette() as u16 * PALETTE_SIZE)
-                                  + i as u16)
+            *item = self.mem_read(
+                PALETTE_RAM_START_ADDRESS
+                    + (self.get_selected_palette() as u16 * PALETTE_SIZE)
+                    + i as u16,
+            )
         }
 
         // let palette_index = current_palette[*color_bits as usize] as usize;
@@ -455,33 +466,35 @@ impl Ppu {
 
 impl Ppu {
     pub fn from(state: &PpuState, rom: &RomFile) -> Self {
-        let mut ppu = Self { dot_counter: state.cycle_counter,
-                             ctrl_register: state.ctrl_register,
-                             mask_register: state.mask_register,
-                             status_register: state.status_register,
-                             oam_addr_register: state.oam_addr_register,
-                             oam_data_register: state.oam_data_register,
-                             ppu_x_scroll_register: state.ppu_x_scroll_register,
-                             ppu_y_scroll_register: state.ppu_y_scroll_register,
-                             vram_addr_register: state.ppu_addr_register,
-                             ppu_data_register: state.ppu_data_register,
-                             ppu_data_buffer: state.ppu_data_buffer,
-                             nmi_requested: Cell::new(state.nmi_requested),
-                             memory: Box::new(Self::get_default_memory_map()),
-                             oam: Box::new(Self::get_default_oam()),
-                             oam_dma_register: state.oam_dma_register,
-                             write_latch: state.write_latch,
-                             t_register: state.t_register,
-                             bg_next_tile_id: state.bg_next_tile_id,
-                             bg_next_tile_attribute: state.bg_next_tile_attribute,
-                             bg_next_tile: state.bg_next_tile,
-                             bg_shifter_pattern: state.bg_shifter_pattern,
-                             bg_shifter_attribute: state.bg_shifter_attribute,
-                             fine_x_scroll: state.fine_x_scroll,
-                             even_frame: state.even_frame,
-                             reset_signal: state.reset_signal,
-                             pixel_buffer: state.pixel_buffer.clone().try_into().unwrap(),
-                             master_cycle: state.master_cycle };
+        let mut ppu = Self {
+            dot_counter: state.cycle_counter,
+            ctrl_register: state.ctrl_register,
+            mask_register: state.mask_register,
+            status_register: state.status_register,
+            oam_addr_register: state.oam_addr_register,
+            oam_data_register: state.oam_data_register,
+            ppu_x_scroll_register: state.ppu_x_scroll_register,
+            ppu_y_scroll_register: state.ppu_y_scroll_register,
+            vram_addr_register: state.ppu_addr_register,
+            ppu_data_register: state.ppu_data_register,
+            ppu_data_buffer: state.ppu_data_buffer,
+            nmi_requested: Cell::new(state.nmi_requested),
+            memory: Box::new(Self::get_default_memory_map()),
+            oam: Box::new(Self::get_default_oam()),
+            oam_dma_register: state.oam_dma_register,
+            write_latch: state.write_latch,
+            t_register: state.t_register,
+            bg_next_tile_id: state.bg_next_tile_id,
+            bg_next_tile_attribute: state.bg_next_tile_attribute,
+            bg_next_tile: state.bg_next_tile,
+            bg_shifter_pattern: state.bg_shifter_pattern,
+            bg_shifter_attribute: state.bg_shifter_attribute,
+            fine_x_scroll: state.fine_x_scroll,
+            even_frame: state.even_frame,
+            reset_signal: state.reset_signal,
+            pixel_buffer: state.pixel_buffer.clone().try_into().unwrap(),
+            master_cycle: state.master_cycle,
+        };
 
         ppu.load_rom(rom);
 

@@ -15,13 +15,14 @@ impl RomParser for ArchaicInes {
 
         let mapper_number = (rom[6] >> 4) as u16;
 
-        Ok(RomBuilder::default().prg_rom_size(prg_rom_size)
-                                .chr_rom_size(chr_rom_size)
-                                .mapper_number(mapper_number)
-                                .alternative_nametables(alternative_nametables)
-                                .trainer_present(trainer_present)
-                                .battery_backed(is_battery_backed)
-                                .hardwired_nametable_layout(hard_wired_nametable_layout)
-                                .build())
+        Ok(RomBuilder::default()
+            .prg_rom_size(prg_rom_size)
+            .chr_rom_size(chr_rom_size)
+            .mapper_number(mapper_number)
+            .alternative_nametables(alternative_nametables)
+            .trainer_present(trainer_present)
+            .battery_backed(is_battery_backed)
+            .hardwired_nametable_layout(hard_wired_nametable_layout)
+            .build())
     }
 }

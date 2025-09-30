@@ -14,7 +14,11 @@ impl Default for TraceLog {
 }
 
 impl TraceLog {
-    pub fn new() -> Self { Self { log: String::from("") } }
+    pub fn new() -> Self {
+        Self {
+            log: String::from(""),
+        }
+    }
 
     pub fn trace(&mut self, nes: &Nes) {
         let cpu = &nes.cpu;
@@ -81,11 +85,12 @@ impl TraceLog {
     }
 
     pub fn flush(&mut self) {
-        let mut file = OpenOptions::new().write(true)
-                                         .create(true)
-                                         .truncate(true)
-                                         .open("./trace-log.txt")
-                                         .expect("Error saving log");
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open("./trace-log.txt")
+            .expect("Error saving log");
 
         unsafe {
             file.write_all(self.log.as_mut_vec().as_slice())
@@ -95,10 +100,11 @@ impl TraceLog {
 }
 
 pub fn write_at_offset(path: &str, value: u8, offset: u16) -> std::io::Result<()> {
-    let mut file = OpenOptions::new().write(true)
-                                     .create(true)
-                                     .truncate(false)
-                                     .open(path)?;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)?;
 
     // Seek to 0xFFFC (65532 bytes)
     file.seek(SeekFrom::Start(offset as u64))?;

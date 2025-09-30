@@ -42,23 +42,24 @@ impl Console for Nes {
         loop {
             self.cycles += 1;
             if let Err(err) = self.step(frontend, u128::MAX, &mut trace)
-               && err == "Execution finished"
+                && err == "Execution finished"
             {
                 return Ok(());
             }
         }
     }
 
-    fn run_until(&mut self,
-                 frontend: &mut Option<Frontends>,
-                 last_cycle: u128)
-                 -> Result<(), String> {
+    fn run_until(
+        &mut self,
+        frontend: &mut Option<Frontends>,
+        last_cycle: u128,
+    ) -> Result<(), String> {
         let mut trace = TraceLog::new();
 
         loop {
             self.cycles += 1;
             if let Err(err) = self.step(frontend, last_cycle, &mut trace)
-               && err == "Execution finished"
+                && err == "Execution finished"
             {
                 return Ok(());
             }
@@ -66,17 +67,21 @@ impl Console for Nes {
     }
 
     fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>> {
-        vec![self.cpu.get_memory_debug(range.clone()),
-             self.ppu.borrow().get_memory_debug(range.clone()),]
+        vec![
+            self.cpu.get_memory_debug(range.clone()),
+            self.ppu.borrow().get_memory_debug(range.clone()),
+        ]
     }
 }
 
 impl Nes {
     pub fn new(cpu: Cpu, ppu: Rc<RefCell<Ppu>>) -> Self {
-        Self { cpu,
-               ppu,
-               cycles: 84,
-               rom_file: None }
+        Self {
+            cpu,
+            ppu,
+            cycles: 84,
+            rom_file: None,
+        }
     }
 
     pub fn reset(&mut self) {
@@ -107,11 +112,13 @@ impl Nes {
             PpuState::from(ppu_ref.deref())
         };
 
-        let state = SaveState { cpu: CpuState::from(&self.cpu),
-                                ppu: ppu_state,
-                                cycles: self.cycles,
-                                rom_file: self.rom_file.as_ref().unwrap().clone(),
-                                version: 1 };
+        let state = SaveState {
+            cpu: CpuState::from(&self.cpu),
+            ppu: ppu_state,
+            cycles: self.cycles,
+            rom_file: self.rom_file.as_ref().unwrap().clone(),
+            version: 1,
+        };
 
         savestate::save_state(state, path);
     }
@@ -120,21 +127,27 @@ impl Nes {
         let state = savestate::load_state(path);
 
         self.rom_file = Some(state.rom_file);
-        self.ppu = Rc::new(RefCell::new(Ppu::from(&state.ppu, self.rom_file.as_ref().unwrap())));
-        self.cpu = Cpu::from(&state.cpu,
-                             self.ppu.clone(),
-                             self.rom_file.as_ref().unwrap());
+        self.ppu = Rc::new(RefCell::new(Ppu::from(
+            &state.ppu,
+            self.rom_file.as_ref().unwrap(),
+        )));
+        self.cpu = Cpu::from(
+            &state.cpu,
+            self.ppu.clone(),
+            self.rom_file.as_ref().unwrap(),
+        );
         self.cycles = state.cycles;
 
         self.cpu.memory.load(&state.cpu.memory);
         self.ppu.borrow_mut().memory.load(&state.ppu.memory);
     }
 
-    pub fn step(&mut self,
-                frontend: &mut Option<Frontends>,
-                last_cycle: u128,
-                trace: &mut TraceLog)
-                -> Result<(), String> {
+    pub fn step(
+        &mut self,
+        frontend: &mut Option<Frontends>,
+        last_cycle: u128,
+        trace: &mut TraceLog,
+    ) -> Result<(), String> {
         if self.cycles >= last_cycle {
             trace.flush();
             return Err(String::from("Execution finished"));
@@ -146,7 +159,7 @@ impl Nes {
             }
             let mut do_trace = false;
             if discriminant(&self.cpu.current_op)
-               == discriminant(&MicroOp::FetchOpcode(MicroOpCallback::None))
+                == discriminant(&MicroOp::FetchOpcode(MicroOpCallback::None))
             {
                 do_trace = true;
             }
@@ -162,7 +175,7 @@ impl Nes {
         }
 
         if self.cycles.is_multiple_of(MASTER_CYCLES_PER_FRAME as u128)
-           && let Some(frontend) = frontend.as_mut()
+            && let Some(frontend) = frontend.as_mut()
         {
             self.ppu.borrow_mut().frame();
             frontend.show_frame(&self.get_pixel_buffer())?

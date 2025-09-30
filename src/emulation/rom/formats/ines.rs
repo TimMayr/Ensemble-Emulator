@@ -32,16 +32,17 @@ impl RomParser for Ines {
             0
         };
 
-        Ok(RomBuilder::default().prg_rom_size(prg_rom_size)
-                                .prg_ram_size(prg_ram_size)
-                                .chr_rom_size(chr_rom_size)
-                                .mapper_number(mapper_number)
-                                .alternative_nametables(alternative_nametables)
-                                .trainer_present(trainer_present)
-                                .battery_backed(is_battery_backed)
-                                .hardwired_nametable_layout(hard_wired_nametable_layout)
-                                .console_type(console_type)
-                                .cpu_ppu_timing(tv_system)
-                                .build())
+        Ok(RomBuilder::default()
+            .prg_rom_size(prg_rom_size)
+            .prg_ram_size(prg_ram_size)
+            .chr_rom_size(chr_rom_size)
+            .mapper_number(mapper_number)
+            .alternative_nametables(alternative_nametables)
+            .trainer_present(trainer_present)
+            .battery_backed(is_battery_backed)
+            .hardwired_nametable_layout(hard_wired_nametable_layout)
+            .console_type(console_type)
+            .cpu_ppu_timing(tv_system)
+            .build())
     }
 }
