@@ -25,7 +25,7 @@ pub struct Nes {
     pub ppu: Rc<RefCell<Ppu>>,
     pub cycles: u128,
     pub rom_file: Option<RomFile>,
-    pub trace_log_path: String,
+    pub trace_log_path: Option<String>,
 }
 
 impl Console for Nes {
@@ -46,14 +46,20 @@ impl Console for Nes {
         frontend: &mut Option<Frontends>,
         last_cycle: u128,
     ) -> Result<(), String> {
-        let mut trace = TraceLog::new(self.trace_log_path.clone());
+        let mut trace = None;
+
+        if let Some(log_path) = &self.trace_log_path {
+            trace = Some(TraceLog::new(log_path.clone()));
+        }
 
         loop {
             self.cycles += 1;
-            if let Err(err) = self.step(frontend, last_cycle, &mut trace)
+            if let Err(err) = self.step(frontend, last_cycle, trace.as_mut())
                 && (err == "Execution finished" || err == "Encountered hlt")
             {
-                trace.flush();
+                if let Some(ref mut trace) = trace {
+                    trace.flush();
+                }
                 println!("{}", err);
                 return Ok(());
             }
@@ -66,10 +72,12 @@ impl Console for Nes {
             self.ppu.borrow().get_memory_debug(range.clone()),
         ]
     }
+
+    fn set_trace_log_path(&mut self, path: Option<String>) { self.trace_log_path = path; }
 }
 
 impl Nes {
-    pub fn new(cpu: Cpu, ppu: Rc<RefCell<Ppu>>, trace_log_path: String) -> Self {
+    pub fn new(cpu: Cpu, ppu: Rc<RefCell<Ppu>>, trace_log_path: Option<String>) -> Self {
         Self {
             cpu,
             ppu,
@@ -141,7 +149,7 @@ impl Nes {
         &mut self,
         frontend: &mut Option<Frontends>,
         last_cycle: u128,
-        trace: &mut TraceLog,
+        trace: Option<&mut TraceLog>,
     ) -> Result<(), String> {
         if self.cycles >= last_cycle {
             return Err(String::from("Execution finished"));
@@ -153,9 +161,12 @@ impl Nes {
             if self.cycles == 10429 * 12 {
                 print!("");
             }
+
             let mut do_trace = false;
-            if discriminant(&self.cpu.current_op)
-                == discriminant(&MicroOp::FetchOpcode(MicroOpCallback::None))
+
+            if let Some(_) = trace
+                && discriminant(&self.cpu.current_op)
+                    == discriminant(&MicroOp::FetchOpcode(MicroOpCallback::None))
             {
                 do_trace = true;
             }
@@ -163,7 +174,7 @@ impl Nes {
             cpu_res = self.cpu.step(self.cycles);
 
             if do_trace {
-                trace.trace(self);
+                trace.expect("Invalid State").trace(self);
             }
         }
 
@@ -186,6 +197,6 @@ impl Default for Nes {
     fn default() -> Self {
         let cpu = Cpu::new();
         let ppu = Rc::new(RefCell::new(Ppu::default()));
-        Nes::new(cpu, ppu, String::from("."))
+        Nes::new(cpu, ppu, None)
     }
 }
