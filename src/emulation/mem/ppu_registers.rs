@@ -72,7 +72,6 @@ impl MemoryDevice for PpuRegisters {
         }
     }
 
-    #[inline(always)]
     fn init(&mut self, _: u16, _: u8) {}
 
     fn load(&mut self, _: Box<[u8]>) {}

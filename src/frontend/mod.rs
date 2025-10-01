@@ -1,37 +1,43 @@
-use std::time::Duration;
+use std::cell::Ref;
 
-use sdl2::EventPump;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::render::{TextureCreator, WindowCanvas};
 use sdl2::video::WindowContext;
+use sdl2::EventPump;
 
 use crate::emulation::emu::{HEIGHT, WIDTH};
 
 pub enum Frontends {
     Sdl2(SdlFrontend),
+    None(),
+}
+
+impl Default for Frontends {
+    fn default() -> Self { Frontends::None() }
 }
 
 impl Frontend for Frontends {
     fn show_frame(
         &mut self,
-        pixel_buffer: &[u32; (WIDTH * HEIGHT) as usize],
+        pixel_buffer: Ref<'_, [u32; (WIDTH * HEIGHT) as usize]>,
     ) -> Result<(), String> {
         match self {
             Frontends::Sdl2(frontend) => frontend.show_frame(pixel_buffer),
+            Frontends::None() => Ok(()),
         }
     }
 }
 
 pub trait Frontend {
-    fn show_frame(&mut self, pixel_buffer: &[u32; (WIDTH * HEIGHT) as usize])
-    -> Result<(), String>;
+    fn show_frame(
+        &mut self,
+        pixel_buffer: Ref<'_, [u32; (WIDTH * HEIGHT) as usize]>,
+    ) -> Result<(), String>;
 }
 
 pub struct SdlFrontend {
-    // context: Sdl,
-    // video_subsystem: VideoSubsystem,
     texture_creator: TextureCreator<WindowContext>,
     event_pump: EventPump,
     canvas: WindowCanvas,
@@ -76,14 +82,14 @@ impl Default for SdlFrontend {
 impl Frontend for SdlFrontend {
     fn show_frame(
         &mut self,
-        pixel_buffer: &[u32; (WIDTH * HEIGHT) as usize],
+        pixel_buffer: Ref<'_, [u32; (WIDTH * HEIGHT) as usize]>,
     ) -> Result<(), String> {
         let mut texture = self
             .texture_creator
             .create_texture_streaming(PixelFormatEnum::RGB888, WIDTH, HEIGHT)
             .expect("Error creating Texture");
 
-        let bytes: &[u8] = bytemuck::cast_slice(pixel_buffer);
+        let bytes: &[u8] = bytemuck::cast_slice(&*pixel_buffer);
         texture
             .update(None, bytes, (WIDTH * 4) as usize)
             .map_err(|e| e.to_string())?;
@@ -107,8 +113,6 @@ impl Frontend for SdlFrontend {
             }
         }
 
-        // Sleep a bit to avoid 100% CPU
-        std::thread::sleep(Duration::from_millis(16));
         Ok(())
     }
 }

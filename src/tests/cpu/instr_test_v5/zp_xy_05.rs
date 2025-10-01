@@ -1,5 +1,6 @@
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
+use crate::frontend::Frontends;
 
 #[test]
 fn test_05_zp_xy() {
@@ -8,7 +9,7 @@ fn test_05_zp_xy() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/05-zp_xy.nes",
     ));
     emu.reset();
-    emu.run_until(&mut None, 89949793)
+    emu.run_until(&mut Frontends::default(), 89949793)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6016));

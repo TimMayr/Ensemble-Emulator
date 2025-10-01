@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::mem::discriminant;
 use std::ops::{Deref, RangeInclusive};
 use std::rc::Rc;
@@ -6,9 +6,9 @@ use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp, MicroOpCallback};
 use crate::emulation::emu::{Console, HEIGHT, WIDTH};
-use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::mem::Memory;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
@@ -29,23 +29,19 @@ pub struct Nes {
 }
 
 impl Console for Nes {
-    fn get_pixel_buffer(&self) -> [u32; (WIDTH * HEIGHT) as usize] {
-        self.ppu.borrow().pixel_buffer
+    fn get_pixel_buffer(&self) -> Ref<'_, [u32; (WIDTH * HEIGHT) as usize]> {
+        Ref::map(self.ppu.borrow(), |ppu| ppu.get_pixel_buffer())
     }
 
     fn load_rom(&mut self, path: &String) { self.load_rom(path); }
 
     fn reset(&mut self) { self.reset() }
 
-    fn run(&mut self, frontend: &mut Option<Frontends>) -> Result<(), String> {
+    fn run(&mut self, frontend: &mut Frontends) -> Result<(), String> {
         self.run_until(frontend, u128::MAX)
     }
 
-    fn run_until(
-        &mut self,
-        frontend: &mut Option<Frontends>,
-        last_cycle: u128,
-    ) -> Result<(), String> {
+    fn run_until(&mut self, frontend: &mut Frontends, last_cycle: u128) -> Result<(), String> {
         let mut trace = None;
 
         if let Some(log_path) = &self.trace_log_path {
@@ -147,7 +143,7 @@ impl Nes {
 
     pub fn step(
         &mut self,
-        frontend: &mut Option<Frontends>,
+        frontend: &mut Frontends,
         last_cycle: u128,
         trace: Option<&mut TraceLog>,
     ) -> Result<(), String> {
@@ -158,10 +154,6 @@ impl Nes {
         let mut cpu_res = Ok(());
 
         if self.cycles.is_multiple_of(12) {
-            if self.cycles == 10429 * 12 {
-                print!("");
-            }
-
             let mut do_trace = false;
 
             if let Some(_) = trace
@@ -183,10 +175,10 @@ impl Nes {
         }
 
         if self.cycles.is_multiple_of(MASTER_CYCLES_PER_FRAME as u128)
-            && let Some(frontend) = frontend.as_mut()
+            && discriminant(frontend) != discriminant(&Frontends::None())
         {
             self.ppu.borrow_mut().frame();
-            frontend.show_frame(&self.get_pixel_buffer())?
+            frontend.show_frame(self.get_pixel_buffer())?
         }
 
         cpu_res
