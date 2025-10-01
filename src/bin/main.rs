@@ -9,12 +9,12 @@ fn main() {
     // let frontend = Frontends::Sdl2(SdlFrontend::default());
 
     emu.load_rom(&String::from(
-        "./tests/nes-test-roms/instr_test-v5/rom_singles/11-stack.nes",
+        "./tests/nes-test-roms/instr_test-v5/rom_singles/03-immediate.nes",
     ));
     emu.reset();
 
     let start = Instant::now();
-    emu.run_until(&mut None, 55445521)
+    emu.run_until(&mut None, 50145737)
         .expect("TODO: panic message");
 
     println!("{:?}", start.elapsed());
@@ -29,7 +29,7 @@ fn main() {
             }
             print!("    "); // indentation like `Debug`
         }
-        print!("0x{:02X}, ", n);
+        print!("{:02X}, ", n);
     }
     println!();
 }

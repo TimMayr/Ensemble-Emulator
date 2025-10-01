@@ -2,7 +2,7 @@ use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
 
 #[test]
-fn test_05_zp_xy() {
+fn test_10_branches() {
     let mut emu = Consoles::Nes(Nes::default());
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/instr_test-v5/rom_singles/10-branches.nes",
