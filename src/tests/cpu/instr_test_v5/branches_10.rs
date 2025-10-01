@@ -1,5 +1,6 @@
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
+use crate::frontend::Frontends;
 
 #[test]
 fn test_10_branches() {
@@ -8,7 +9,7 @@ fn test_10_branches() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/10-branches.nes",
     ));
     emu.reset();
-    emu.run_until(&mut None, 11653057)
+    emu.run_until(&mut Frontends::default(), 11653057)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6019));

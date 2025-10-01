@@ -1,3 +1,4 @@
+use std::cell::Ref;
 use std::ops::RangeInclusive;
 
 use crate::emulation::nes::Nes;
@@ -11,7 +12,7 @@ pub enum Consoles {
 }
 
 impl Console for Consoles {
-    fn get_pixel_buffer(&self) -> [u32; (WIDTH * HEIGHT) as usize] {
+    fn get_pixel_buffer(&self) -> Ref<'_, [u32; (WIDTH * HEIGHT) as usize]> {
         match self {
             Consoles::Nes(nes) => nes.get_pixel_buffer(),
         }
@@ -29,17 +30,13 @@ impl Console for Consoles {
         }
     }
 
-    fn run(&mut self, frontend: &mut Option<Frontends>) -> Result<(), String> {
+    fn run(&mut self, frontend: &mut Frontends) -> Result<(), String> {
         match self {
             Consoles::Nes(nes) => nes.run(frontend),
         }
     }
 
-    fn run_until(
-        &mut self,
-        frontend: &mut Option<Frontends>,
-        last_cycle: u128,
-    ) -> Result<(), String> {
+    fn run_until(&mut self, frontend: &mut Frontends, last_cycle: u128) -> Result<(), String> {
         match self {
             Consoles::Nes(nes) => nes.run_until(frontend, last_cycle),
         }
@@ -59,16 +56,12 @@ impl Console for Consoles {
 }
 
 pub trait Console {
-    fn get_pixel_buffer(&self) -> [u32; (WIDTH * HEIGHT) as usize];
+    fn get_pixel_buffer(&self) -> Ref<'_, [u32; (WIDTH * HEIGHT) as usize]>;
     #[allow(clippy::ptr_arg)]
     fn load_rom(&mut self, path: &String);
     fn reset(&mut self);
-    fn run(&mut self, option: &mut Option<Frontends>) -> Result<(), String>;
-    fn run_until(
-        &mut self,
-        frontend: &mut Option<Frontends>,
-        last_cycle: u128,
-    ) -> Result<(), String>;
+    fn run(&mut self, option: &mut Frontends) -> Result<(), String>;
+    fn run_until(&mut self, frontend: &mut Frontends, last_cycle: u128) -> Result<(), String>;
 
     fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>>;
     fn set_trace_log_path(&mut self, path: Option<String>);
