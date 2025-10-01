@@ -1843,10 +1843,19 @@ fn arr(cpu: &mut Cpu) {
     }
 
     let res = cpu.rotate_right(target_val);
-    if res & NEGATIVE_BIT != 0 {
+    if res & OVERFLOW_BIT != 0 {
         cpu.set_carry_flag();
     } else {
         cpu.clear_carry_flag();
+    }
+
+    let bit6 = res & OVERFLOW_BIT;
+    let bit5 = res & UNUSED_BIT;
+
+    if bit6 ^ bit5 != 0 {
+        cpu.set_overflow_flag()
+    } else {
+        cpu.clear_overflow_flag()
     }
 }
 
