@@ -10,7 +10,7 @@ use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::{Memory, Ram};
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OpCode, OPCODES_MAP};
+use crate::emulation::opcode::{OPCODES_MAP, OpCode};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
@@ -1834,26 +1834,23 @@ fn ane(cpu: &mut Cpu) {
 fn arr(cpu: &mut Cpu) {
     let target_val = cpu.temp;
     cpu.accumulator &= target_val;
+
+    cpu.accumulator = (cpu.accumulator >> 1)
+        | (match cpu.get_carry_flag() {
+            true => 1,
+            false => 0,
+        } << 7);
+
     cpu.update_negative_and_zero_flags(cpu.accumulator);
 
-    if cpu.accumulator.wrapping_add(target_val) & OVERFLOW_BIT != 0 {
-        cpu.set_overflow_flag();
-    } else {
-        cpu.clear_overflow_flag();
-    }
-
-    let res = cpu.rotate_right(target_val);
-    if res & OVERFLOW_BIT != 0 {
+    if ((cpu.accumulator >> 6) & 1) != 0 {
         cpu.set_carry_flag();
     } else {
         cpu.clear_carry_flag();
     }
 
-    let bit6 = res & OVERFLOW_BIT;
-    let bit5 = res & UNUSED_BIT;
-
-    if bit6 ^ bit5 != 0 {
-        cpu.set_overflow_flag()
+    if (((cpu.accumulator >> 6) & 1) ^ ((cpu.accumulator >> 5) & 1)) != 0 {
+        cpu.set_overflow_flag();
     } else {
         cpu.clear_overflow_flag()
     }
