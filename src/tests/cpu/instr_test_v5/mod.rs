@@ -5,6 +5,8 @@ mod basic_01;
 #[cfg(test)]
 mod branches_10;
 #[cfg(test)]
+mod immediate_03;
+#[cfg(test)]
 mod implied_02;
 #[cfg(test)]
 mod ind_x_08;

@@ -45,7 +45,6 @@ pub struct Cpu {
     pub processor_status: u8,
     pub memory: Box<MemoryMap>,
     pub ppu: Option<Rc<RefCell<Ppu>>>,
-    pub additional_cycles: u8,
     pub master_cycle: u128,
     pub lo: u8,
     pub hi: u8,
@@ -69,7 +68,6 @@ impl Default for Cpu {
             y_register: 0,
             memory: Box::new(mem),
             stack_pointer: STACK_START,
-            additional_cycles: 0,
             ppu: None,
             master_cycle: 0,
             lo: 0,
@@ -78,7 +76,7 @@ impl Default for Cpu {
             op_queue: vec![],
             current_opcode: None,
             temp: 0,
-            ane_constant: 0,
+            ane_constant: 0xEE,
             is_halted: false,
         }
     }
@@ -1459,7 +1457,6 @@ impl Cpu {
             processor_status: state.processor_status,
             memory: Box::new(Self::get_default_memory_map()),
             ppu: Some(ppu),
-            additional_cycles: state.additional_cycles,
             master_cycle: state.master_cycle,
             lo: state.lo,
             hi: state.hi,
@@ -1875,9 +1872,9 @@ fn lax(cpu: &mut Cpu) {
 }
 
 fn lxa(cpu: &mut Cpu) {
-    cpu.accumulator |= cpu.ane_constant;
-    cpu.accumulator &= cpu.temp;
+    cpu.accumulator = (cpu.accumulator | cpu.ane_constant) & cpu.temp;
     cpu.x_register = cpu.accumulator;
+    cpu.update_negative_and_zero_flags(cpu.accumulator)
 }
 
 fn rla(cpu: &mut Cpu) {
@@ -1901,9 +1898,27 @@ fn sax(cpu: &mut Cpu) {
 }
 
 fn sbx(cpu: &mut Cpu) {
-    let res = cpu.accumulator & cpu.x_register;
-    cpu.x_register = res.wrapping_sub(cpu.temp);
-    cmp(cpu);
+    let t = cpu.accumulator & cpu.x_register;
+    let r = t.wrapping_sub(cpu.temp);
+    cpu.x_register = r;
+
+    if t >= cpu.temp {
+        cpu.set_carry_flag();
+    } else {
+        cpu.clear_carry_flag();
+    }
+
+    if r == 0 {
+        cpu.set_zero_flag();
+    } else {
+        cpu.clear_zero_flag();
+    }
+
+    if (r & NEGATIVE_BIT) != 0 {
+        cpu.set_negative_flag();
+    } else {
+        cpu.clear_negative_flag();
+    }
 }
 
 fn sha(cpu: &mut Cpu) { cpu.temp = cpu.accumulator & cpu.x_register & cpu.hi.wrapping_add(1); }
