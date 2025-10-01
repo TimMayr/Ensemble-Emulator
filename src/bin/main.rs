@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use nesamabob::emulation::emu::{Console, Consoles};
 use nesamabob::emulation::nes::Nes;
-use nesamabob::frontend::Frontends;
+use nesamabob::frontend::{Frontends, SdlFrontend};
 
 fn main() {
     let mut emu = Consoles::Nes(Nes::default());
@@ -16,7 +16,7 @@ fn main() {
     emu.reset();
 
     let start = Instant::now();
-    emu.run_until(&mut frontend, 440145737)
+    emu.run_until(&mut frontend, 44145737)
         .expect("TODO: panic message");
 
     println!("{:?}", start.elapsed());
