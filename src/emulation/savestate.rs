@@ -14,7 +14,6 @@ pub struct CpuState {
     pub x_register: u8,
     pub y_register: u8,
     pub processor_status: u8,
-    pub additional_cycles: u8,
     pub memory: Vec<u8>, // PRG RAM + Work RAM
     pub master_cycle: u128,
     pub lo: u8,
@@ -42,7 +41,6 @@ impl From<&Cpu> for CpuState {
             x_register: cpu.x_register,
             y_register: cpu.y_register,
             processor_status: cpu.processor_status,
-            additional_cycles: cpu.additional_cycles,
             memory: cpu.memory.get_memory_debug(Some(0x0..=0x07FF)),
             master_cycle: cpu.master_cycle,
             lo: cpu.lo,

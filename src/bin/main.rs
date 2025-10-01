@@ -1,12 +1,19 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::time::Instant;
 
+use nesamabob::emulation::cpu::Cpu;
 use nesamabob::emulation::emu::{Console, Consoles};
 use nesamabob::emulation::nes::Nes;
+use nesamabob::emulation::ppu::Ppu;
+#[allow(unused_imports)]
 use nesamabob::frontend::{Frontends, SdlFrontend};
 
 fn main() {
-    let mut emu = Consoles::Nes(Nes::default());
-    // emu.set_trace_log_path(Some(String::from("./trace-log.log")));
+    let cpu = Cpu::default();
+    let ppu = Ppu::default();
+    let mut emu = Consoles::Nes(Nes::new(cpu, Rc::new(RefCell::new(ppu)), None));
+
     let mut frontend = Frontends::default();
     // let mut frontend = Frontends::Sdl2(SdlFrontend::default());
 
@@ -16,7 +23,7 @@ fn main() {
     emu.reset();
 
     let start = Instant::now();
-    emu.run_until(&mut frontend, 44145737)
+    emu.run_until(&mut frontend, 27915829)
         .expect("TODO: panic message");
 
     println!("{:?}", start.elapsed());
@@ -30,7 +37,7 @@ fn main() {
             }
             print!("    "); // indentation like `Debug`
         }
-        print!("{:02X}, ", n);
+        print!("0x{:02X}, ", n);
     }
     println!();
 }
