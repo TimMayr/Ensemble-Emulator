@@ -1,9 +1,11 @@
 use std::fmt::{Debug, Formatter};
 
+use crate::emulation::mem::apu_registers::ApuRegisters;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
 
+pub mod apu_registers;
 pub mod memory_map;
 pub mod mirror_memory;
 pub mod palette_ram;
@@ -16,6 +18,7 @@ pub enum Memory {
     MirrorMemory(MirrorMemory),
     PaletteRam(PaletteRam),
     PpuRegisters(PpuRegisters),
+    ApuRegisters(ApuRegisters),
 }
 
 impl Debug for Memory {
@@ -26,18 +29,20 @@ impl Debug for Memory {
             Memory::MirrorMemory(mirror_memory) => mirror_memory.fmt(f),
             Memory::PaletteRam(palette_ram) => palette_ram.fmt(f),
             Memory::PpuRegisters(ppu_registers) => ppu_registers.fmt(f),
+            Memory::ApuRegisters(apu_registers) => apu_registers.fmt(f),
         }
     }
 }
 
 impl MemoryDevice for Memory {
-    fn read(&self, addr: u16) -> u8 {
+    fn read(&self, addr: u16, open_bus: u8) -> u8 {
         match self {
-            Memory::Ram(ram) => ram.read(addr),
-            Memory::Rom(rom) => rom.read(addr),
-            Memory::MirrorMemory(mirror_memory) => mirror_memory.read(addr),
-            Memory::PaletteRam(palette_ram) => palette_ram.read(addr),
-            Memory::PpuRegisters(ppu_registers) => ppu_registers.read(addr),
+            Memory::Ram(ram) => ram.read(addr, open_bus),
+            Memory::Rom(rom) => rom.read(addr, open_bus),
+            Memory::MirrorMemory(mirror_memory) => mirror_memory.read(addr, open_bus),
+            Memory::PaletteRam(palette_ram) => palette_ram.read(addr, open_bus),
+            Memory::PpuRegisters(ppu_registers) => ppu_registers.read(addr, open_bus),
+            Memory::ApuRegisters(apu_registers) => apu_registers.read(addr, open_bus),
         }
     }
 
@@ -48,6 +53,7 @@ impl MemoryDevice for Memory {
             Memory::MirrorMemory(mirror_memory) => mirror_memory.write(addr, data),
             Memory::PaletteRam(palette_ram) => palette_ram.write(addr, data),
             Memory::PpuRegisters(ppu_registers) => ppu_registers.write(addr, data),
+            Memory::ApuRegisters(apu_registers) => apu_registers.write(addr, data),
         }
     }
 
@@ -58,6 +64,7 @@ impl MemoryDevice for Memory {
             Memory::MirrorMemory(mirror_memory) => mirror_memory.init(addr, data),
             Memory::PaletteRam(palette_ram) => palette_ram.init(addr, data),
             Memory::PpuRegisters(ppu_registers) => ppu_registers.init(addr, data),
+            Memory::ApuRegisters(apu_registers) => apu_registers.init(addr, data),
         }
     }
 
@@ -68,27 +75,41 @@ impl MemoryDevice for Memory {
             Memory::MirrorMemory(mirror_memory) => mirror_memory.load(data),
             Memory::PaletteRam(palette_ram) => palette_ram.load(data),
             Memory::PpuRegisters(ppu_registers) => ppu_registers.load(data),
+            Memory::ApuRegisters(apu_registers) => apu_registers.load(data),
         }
     }
 
-    fn snapshot(&self, addr: u16) -> u8 {
+    fn snapshot(&self, addr: u16, open_bus: u8) -> u8 {
         match self {
-            Memory::Ram(ram) => ram.snapshot(addr),
-            Memory::Rom(rom) => rom.snapshot(addr),
-            Memory::MirrorMemory(mirror_memory) => mirror_memory.snapshot(addr),
-            Memory::PaletteRam(palette_ram) => palette_ram.snapshot(addr),
-            Memory::PpuRegisters(ppu_registers) => ppu_registers.snapshot(addr),
+            Memory::Ram(ram) => ram.snapshot(addr, open_bus),
+            Memory::Rom(rom) => rom.snapshot(addr, open_bus),
+            Memory::MirrorMemory(mirror_memory) => mirror_memory.snapshot(addr, open_bus),
+            Memory::PaletteRam(palette_ram) => palette_ram.snapshot(addr, open_bus),
+            Memory::PpuRegisters(ppu_registers) => ppu_registers.snapshot(addr, open_bus),
+            Memory::ApuRegisters(apu_registers) => apu_registers.snapshot(addr, open_bus),
+        }
+    }
+
+    fn is_internal(&self) -> bool {
+        match self {
+            Memory::Ram(ram) => ram.is_internal(),
+            Memory::Rom(rom) => rom.is_internal(),
+            Memory::MirrorMemory(mirror_memory) => mirror_memory.is_internal(),
+            Memory::PaletteRam(palette_ram) => palette_ram.is_internal(),
+            Memory::PpuRegisters(ppu_registers) => ppu_registers.is_internal(),
+            Memory::ApuRegisters(apu_registers) => apu_registers.is_internal(),
         }
     }
 }
 
 pub trait MemoryDevice: Debug {
-    fn read(&self, addr: u16) -> u8;
+    fn read(&self, addr: u16, open_bus: u8) -> u8;
     fn write(&mut self, addr: u16, data: u8);
     fn init(&mut self, addr: u16, data: u8);
     fn load(&mut self, data: Box<[u8]>);
 
-    fn snapshot(&self, addr: u16) -> u8 { self.read(addr) }
+    fn is_internal(&self) -> bool { false }
+    fn snapshot(&self, addr: u16, open_bus: u8) -> u8 { self.read(addr, open_bus) }
 }
 
 #[derive(Debug, Clone)]
@@ -110,7 +131,7 @@ impl Ram {
 
 impl MemoryDevice for Ram {
     #[inline(always)]
-    fn read(&self, addr: u16) -> u8 { self.memory[addr as usize % self.memory.len()] }
+    fn read(&self, addr: u16, _: u8) -> u8 { self.memory[addr as usize % self.memory.len()] }
 
     #[inline(always)]
     fn write(&mut self, addr: u16, data: u8) {
@@ -144,7 +165,7 @@ impl Rom {
 
 impl MemoryDevice for Rom {
     #[inline(always)]
-    fn read(&self, addr: u16) -> u8 { self.memory[addr as usize % self.memory.len()] }
+    fn read(&self, addr: u16, _: u8) -> u8 { self.memory[addr as usize % self.memory.len()] }
 
     #[inline(always)]
     fn write(&mut self, _: u16, _: u8) {}

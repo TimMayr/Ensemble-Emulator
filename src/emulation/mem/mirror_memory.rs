@@ -17,7 +17,9 @@ impl MirrorMemory {
 
 impl MemoryDevice for MirrorMemory {
     #[inline(always)]
-    fn read(&self, addr: u16) -> u8 { self.base.read(addr & self.mirror_mask) }
+    fn read(&self, addr: u16, open_bus: u8) -> u8 {
+        self.base.read(addr & self.mirror_mask, open_bus)
+    }
 
     #[inline(always)]
     fn write(&mut self, addr: u16, data: u8) { self.base.write(addr & self.mirror_mask, data) }
@@ -27,5 +29,7 @@ impl MemoryDevice for MirrorMemory {
 
     fn load(&mut self, data: Box<[u8]>) { self.base.load(data) }
 
-    fn snapshot(&self, addr: u16) -> u8 { self.base.snapshot(addr & self.mirror_mask) }
+    fn snapshot(&self, addr: u16, open_bus: u8) -> u8 {
+        self.base.snapshot(addr & self.mirror_mask, open_bus)
+    }
 }

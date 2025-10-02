@@ -67,9 +67,10 @@ fn test_adc_absolute_x() {
     cpu.accumulator = 0x11;
     cpu.x_register = 0x10;
     cpu.mem_write(0x0, 0x7D);
-    cpu.mem_write_u16(0x1, 0x8333);
-    cpu.mem_write(0x8343, 0x55);
+    cpu.mem_write_u16(0x1, 0x83FF);
+    cpu.mem_write(0x840F, 0x55);
 
+    cpu.step(0);
     cpu.step(0);
     cpu.step(0);
     cpu.step(0);
