@@ -201,7 +201,7 @@ impl Ppu {
 
     pub fn set_oam_addr_register(&mut self, value: u8) { self.oam_addr_register = value }
 
-    pub fn get_oam_at_addr(&self) -> u8 { self.oam.read(self.oam_addr_register as u16) }
+    pub fn get_oam_at_addr(&self) -> u8 { self.oam.read(self.oam_addr_register as u16, 0) }
 
     pub fn get_vram_at_addr(&mut self) -> u8 {
         let ret = self.ppu_data_buffer;

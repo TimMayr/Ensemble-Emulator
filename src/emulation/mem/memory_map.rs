@@ -48,7 +48,12 @@ impl MemoryMap {
     #[inline]
     pub fn mem_read(&mut self, addr: u16) -> u8 {
         if let Some(entry) = self.lookup[addr as usize] {
-            self.open_bus = self.regions[entry.device].read(entry.offset);
+            return if self.regions[entry.device].is_internal() {
+                self.regions[entry.device].read(entry.offset, self.open_bus)
+            } else {
+                self.open_bus = self.regions[entry.device].read(entry.offset, self.open_bus);
+                self.open_bus
+            };
         }
 
         self.open_bus
@@ -57,7 +62,7 @@ impl MemoryMap {
     #[inline]
     pub fn mem_read_debug(&self, addr: u16) -> u8 {
         if let Some(entry) = self.lookup[addr as usize] {
-            self.regions[entry.device].snapshot(entry.offset)
+            self.regions[entry.device].snapshot(entry.offset, self.open_bus)
         } else {
             0
         }

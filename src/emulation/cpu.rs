@@ -6,6 +6,7 @@ use std::rc::Rc;
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
+use crate::emulation::mem::apu_registers::ApuRegisters;
 use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::{Memory, Ram};
@@ -370,7 +371,7 @@ impl Cpu {
                 ));
                 instructions.push(MicroOp::StackPush(Source::PCH, MicroOpCallback::None));
                 instructions.push(MicroOp::StackPush(Source::PCL, MicroOpCallback::None));
-                instructions.push(MicroOp::StackPush(Source::P, MicroOpCallback::None));
+                instructions.push(MicroOp::StackPush(Source::P, MicroOpCallback::SEI));
                 instructions.push(MicroOp::Read(
                     AddressSource::Address(IRQ_VECTOR_ADDR),
                     Target::PCL,
@@ -927,23 +928,28 @@ impl Cpu {
                 self.op_queue.clone()
             }
             MicroOp::ReadPageCrossAware(source, offset, target, schedule_read, callback) => {
+                let mut page_cross = false;
+
                 if let Some(address) = self.get_u16_address(source) {
                     let val = self.mem_read(address);
                     self.write_to_target(target, val);
                     let offset = self.get_src_value(offset);
-                    if *schedule_read {
-                        if util::crosses_page_boundary_u8(address - offset as u16, offset) {
-                            self.op_queue
-                                .push(MicroOp::Read(*source, *target, *callback));
-                        }
 
-                        self.hi = self.hi.wrapping_add(1);
-                    } else if util::crosses_page_boundary_u8(address - offset as u16, offset) {
-                        self.hi = self.hi.wrapping_add(1);
+                    if self.lo.overflowing_sub(offset).1 {
+                        page_cross = true;
                     }
                 };
 
-                self.run_op(*callback);
+                if page_cross {
+                    if *schedule_read {
+                        self.op_queue
+                            .push(MicroOp::Read(*source, *target, *callback));
+                    }
+
+                    self.hi = self.hi.wrapping_add(1);
+                } else {
+                    self.run_op(*callback);
+                }
 
                 self.op_queue.clone()
             }
@@ -1169,7 +1175,7 @@ impl Cpu {
         );
 
         // APU Registers
-        mem.add_memory(0x4000..=0x4017, Memory::Ram(Ram::new(0x18)));
+        mem.add_memory(0x4000..=0x4017, Memory::ApuRegisters(ApuRegisters::new()));
         // Unused APU Registers
         mem.add_memory(0x4018..=0x401F, Memory::Ram(Ram::new(0x8)));
         mem
@@ -1923,9 +1929,25 @@ fn sbx(cpu: &mut Cpu) {
 
 fn sha(cpu: &mut Cpu) { cpu.temp = cpu.accumulator & cpu.x_register & cpu.hi.wrapping_add(1); }
 
-fn shx(cpu: &mut Cpu) { cpu.temp = cpu.x_register & cpu.hi.wrapping_add(1); }
+fn shx(cpu: &mut Cpu) {
+    if !cpu.lo.overflowing_sub(cpu.y_register).1 {
+        cpu.temp = cpu.x_register & cpu.hi.wrapping_add(1);
+    } else {
+        let res = cpu.x_register & cpu.hi;
+        cpu.hi = res;
+        cpu.temp = res;
+    }
+}
 
-fn shy(cpu: &mut Cpu) { cpu.temp = cpu.y_register & cpu.hi.wrapping_add(1); }
+fn shy(cpu: &mut Cpu) {
+    if !cpu.lo.overflowing_sub(cpu.x_register).1 {
+        cpu.temp = cpu.y_register & cpu.hi.wrapping_add(1);
+    } else {
+        let res = cpu.y_register & cpu.hi;
+        cpu.hi = res;
+        cpu.temp = res;
+    }
+}
 
 fn slo(cpu: &mut Cpu) {
     let target_value = cpu.temp;

@@ -19,7 +19,7 @@ impl PpuRegisters {
 
 impl MemoryDevice for PpuRegisters {
     #[inline(always)]
-    fn read(&self, addr: u16) -> u8 {
+    fn read(&self, addr: u16, _: u8) -> u8 {
         match addr {
             0x2 => {
                 let mut ppu = self.ppu.borrow_mut();
@@ -76,7 +76,7 @@ impl MemoryDevice for PpuRegisters {
 
     fn load(&mut self, _: Box<[u8]>) {}
 
-    fn snapshot(&self, addr: u16) -> u8 {
+    fn snapshot(&self, addr: u16, _: u8) -> u8 {
         match addr {
             0x2 => {
                 let ppu = self.ppu.borrow();

@@ -17,10 +17,10 @@ impl Default for PaletteRam {
 
 impl MemoryDevice for PaletteRam {
     #[inline(always)]
-    fn read(&self, addr: u16) -> u8 {
+    fn read(&self, addr: u16, open_bus: u8) -> u8 {
         match addr {
             0x0 | 0x4 | 0x8 | 0xC => self.zero_bits[addr as usize / 4usize],
-            _ => self.palettes.read(addr),
+            _ => self.palettes.read(addr, open_bus),
         }
     }
 
