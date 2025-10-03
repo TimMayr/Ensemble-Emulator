@@ -24,5 +24,21 @@ fn test_nmi_vector() {
 
     nes.cpu.step(0);
     nes.cpu.step(0);
+    nes.cpu.step(0);
+    nes.cpu.step(0);
+    nes.cpu.step(0);
+    nes.cpu.step(0);
+    nes.cpu.step(0);
+    nes.cpu.step(0);
+
+    nes.cpu.step(0);
+    nes.cpu.step(0);
+    nes.cpu.step(0);
+    nes.cpu.step(0);
+    nes.cpu.step(0);
+    nes.cpu.step(0);
+    nes.cpu.step(0);
+
+    nes.cpu.step(0);
     assert_eq!(nes.cpu.accumulator, 0x20)
 }

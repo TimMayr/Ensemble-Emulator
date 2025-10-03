@@ -371,7 +371,7 @@ impl Cpu {
                 ));
                 instructions.push(MicroOp::StackPush(Source::PCH, MicroOpCallback::None));
                 instructions.push(MicroOp::StackPush(Source::PCL, MicroOpCallback::None));
-                instructions.push(MicroOp::StackPush(Source::P, MicroOpCallback::SEI));
+                instructions.push(MicroOp::StackPush(Source::PBrk, MicroOpCallback::SEI));
                 instructions.push(MicroOp::Read(
                     AddressSource::Address(IRQ_VECTOR_ADDR),
                     Target::PCL,
@@ -797,11 +797,47 @@ impl Cpu {
         instructions
     }
 
+    fn get_instructions_for_nmi(&mut self) -> Vec<MicroOp> {
+        vec![
+            MicroOp::ReadWithOffsetFromU16AndAddSomething(
+                AddressSource::PC,
+                Source::None,
+                Target::None,
+                Source::None,
+                Source::None,
+                Target::None,
+                true,
+                MicroOpCallback::None,
+            ),
+            MicroOp::ReadWithOffsetFromU16AndAddSomething(
+                AddressSource::PC,
+                Source::None,
+                Target::None,
+                Source::None,
+                Source::None,
+                Target::None,
+                true,
+                MicroOpCallback::None,
+            ),
+            MicroOp::StackPush(Source::PCH, MicroOpCallback::None),
+            MicroOp::StackPush(Source::PCL, MicroOpCallback::None),
+            MicroOp::StackPush(Source::PNmi, MicroOpCallback::None),
+            MicroOp::Read(
+                AddressSource::Address(NMI_HANDLER_ADDR),
+                Target::PCL,
+                MicroOpCallback::None,
+            ),
+            MicroOp::Read(
+                AddressSource::Address(NMI_HANDLER_ADDR + 1),
+                Target::PCH,
+                MicroOpCallback::None,
+            ),
+        ]
+    }
+
     pub fn trigger_nmi(&mut self) {
-        self.stack_push_u16(self.program_counter);
-        self.stack_push(self.processor_status | UNUSED_BIT);
-        sei(self);
-        self.program_counter = self.mem_read_u16(NMI_HANDLER_ADDR);
+        let mut queue = self.get_instructions_for_nmi();
+        self.op_queue.append(&mut queue);
     }
 
     pub fn reset(&mut self) {
@@ -822,12 +858,6 @@ impl Cpu {
 
         self.master_cycle = master_cycle;
 
-        if let Some(ppu) = &self.ppu
-            && ppu.borrow().poll_nmi()
-        {
-            self.trigger_nmi();
-        }
-
         let op = self.current_op;
         let mut seq = self.execute_micro_op(&op);
 
@@ -835,6 +865,14 @@ impl Cpu {
             // sequence head becomes next, rest get queued
             self.current_op = seq.remove(0);
             self.op_queue = seq;
+
+            if self.op_queue.is_empty()
+                && let Some(ppu) = &self.ppu
+                && ppu.borrow_mut().poll_nmi()
+            {
+                self.trigger_nmi();
+            }
+
             Ok(())
         } else {
             self.current_op = MicroOp::FetchOpcode(MicroOpCallback::None);
@@ -1194,7 +1232,8 @@ impl Cpu {
             Source::TEMP => self.temp,
             Source::Constant(val) => *val,
             Source::None => 0,
-            Source::P => self.processor_status | (UNUSED_BIT | BREAK_BIT),
+            Source::PBrk => self.processor_status | (UNUSED_BIT | BREAK_BIT),
+            Source::PNmi => self.processor_status | UNUSED_BIT,
         }
     }
 
@@ -1301,7 +1340,7 @@ pub enum Target {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
 pub enum Source {
-    P,
+    PBrk,
     A,
     X,
     Y,
@@ -1313,6 +1352,7 @@ pub enum Source {
     TEMP,
     Constant(u8),
     None,
+    PNmi,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]

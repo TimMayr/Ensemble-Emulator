@@ -39,6 +39,7 @@ pub struct Ppu {
     pub reset_signal: bool,
     pub pixel_buffer: [u32; (WIDTH * HEIGHT) as usize],
     pub master_cycle: u128,
+    has_read_last: bool,
 }
 
 impl Default for Ppu {
@@ -108,6 +109,7 @@ impl Ppu {
             reset_signal: true,
             pixel_buffer: [0u32; (WIDTH * HEIGHT) as usize],
             master_cycle: 0,
+            has_read_last: false,
         }
     }
 
@@ -149,7 +151,10 @@ impl Ppu {
             frame_dot = self.dot_counter % DOTS_PER_FRAME as u128;
         }
 
-        if frame_dot >= (240 * 340) + 2 && (self.status_register & VBLANK_NMI_BIT) == 0 {
+        if frame_dot >= (240 * 340) + 2
+            && (self.status_register & VBLANK_NMI_BIT) == 0
+            && !self.has_read_last
+        {
             // Just entered VBlank
             self.status_register |= VBLANK_NMI_BIT;
             if self.ctrl_register & VBLANK_NMI_BIT != 0 {
@@ -162,6 +167,7 @@ impl Ppu {
         }
 
         self.dot_counter += 1;
+        self.has_read_last = false;
     }
 
     pub fn is_rendering(&self) -> bool {
@@ -177,6 +183,7 @@ impl Ppu {
     }
 
     pub fn get_ppu_status(&mut self) -> u8 {
+        self.has_read_last = true;
         let result = self.status_register;
         self.status_register &= !VBLANK_NMI_BIT;
         self.write_latch = false;
@@ -217,6 +224,50 @@ impl Ppu {
 
     pub fn write_vram(&mut self, data: u8) {
         self.memory.mem_write(self.vram_addr_register, data);
+
+        match self.vram_addr_register {
+            0x2400..0x2500 => {
+                println!();
+            }
+            0x2500..0x2600 => {
+                println!();
+            }
+            0x2600..0x2700 => {
+                println!();
+            }
+            0x2700..0x2800 => {
+                println!();
+            }
+            0x2800..0x2900 => {
+                println!();
+            }
+            0x2900..0x2A00 => {
+                println!();
+            }
+            0x2A00..0x2B00 => {
+                println!();
+            }
+            0x2B00..0x2C00 => {
+                println!();
+            }
+            0x2C00..0x2D00 => {
+                println!();
+            }
+            0x2D00..0x2E00 => {
+                println!();
+            }
+            0x2E00..0x2F00 => {
+                println!();
+            }
+            0x2F00..0x3000 => {
+                println!();
+            }
+            0x3F00..0x3F1F => {
+                println!();
+            }
+            _ => {}
+        }
+
         self.vram_addr_register += self.get_vram_addr_step() as u16;
     }
 
@@ -374,9 +425,11 @@ impl Ppu {
     pub fn reset(&mut self) { self.reset_signal = true; }
 
     pub fn get_color_for_bits(&mut self, color_bits: &u8) -> u32 {
-        let mut current_palette: [u8; 4] = [0; 4];
+        let mut current_palette: [u8; 4] = [1; 4];
 
         for (i, item) in current_palette.iter_mut().enumerate() {
+            let _mem = self.get_memory_debug(Some(PALETTE_RAM_START_ADDRESS..=0x3F1F));
+
             *item = self.mem_read(
                 PALETTE_RAM_START_ADDRESS
                     + (self.get_selected_palette() as u16 * PALETTE_SIZE)
@@ -494,6 +547,7 @@ impl Ppu {
             reset_signal: state.reset_signal,
             pixel_buffer: state.pixel_buffer.clone().try_into().unwrap(),
             master_cycle: state.master_cycle,
+            has_read_last: false,
         };
 
         ppu.load_rom(rom);
