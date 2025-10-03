@@ -8,11 +8,19 @@ fn test_nmi_vector() {
     // Create and initialize new Rom
     let mut rom = Rom::new(0xBFE0);
     // Set Reset vector to 0x4020
+    rom.init(0xBFDC, 0x30);
+    rom.init(0xBFDD, 0x40);
+
+    // Set NMI vector to 0x4020
     rom.init(0xBFDA, 0x20);
     rom.init(0xBFDB, 0x40);
+
     // Load 0x20 to acc from 4020
     rom.init(0x0, 0xA9);
     rom.init(0x1, 0x20);
+
+    rom.init(0x10, 0xA9);
+    rom.init(0x11, 0x30);
 
     // Attach new Rom memory device to cpu
     nes.cpu.memory.add_memory(0x4020..=0xFFFF, Memory::Rom(rom));
@@ -29,7 +37,11 @@ fn test_nmi_vector() {
     nes.cpu.step(0);
     nes.cpu.step(0);
     nes.cpu.step(0);
+
     nes.cpu.step(0);
+    nes.cpu.step(0);
+
+    assert_eq!(nes.cpu.accumulator, 0x30);
 
     nes.cpu.step(0);
     nes.cpu.step(0);
@@ -39,6 +51,7 @@ fn test_nmi_vector() {
     nes.cpu.step(0);
     nes.cpu.step(0);
 
+    nes.cpu.step(0);
     nes.cpu.step(0);
     assert_eq!(nes.cpu.accumulator, 0x20)
 }

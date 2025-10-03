@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::mem::discriminant;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
@@ -46,6 +46,7 @@ pub struct Cpu {
     pub processor_status: u8,
     pub memory: Box<MemoryMap>,
     pub ppu: Option<Rc<RefCell<Ppu>>>,
+    pub irq_provider: Cell<bool>,
     pub master_cycle: u128,
     pub lo: u8,
     pub hi: u8,
@@ -55,11 +56,20 @@ pub struct Cpu {
     pub temp: u8,
     pub ane_constant: u8,
     pub is_halted: bool,
+    pub irq_pending: bool,
+    pub nmi_pending: bool,
+    pub nmi_detected: bool,
+    pub irq_detected: bool,
+    pub locked_irq_vec: u16,
+    pub current_irq_vec: u16,
+    pub is_in_irq: bool,
+    pub prev_nmi: bool,
 }
 
 impl Default for Cpu {
     fn default() -> Self {
         let mem = Self::get_default_memory_map();
+        OPCODES_MAP.get_or_init(opcode::init);
 
         Self {
             program_counter: 0,
@@ -68,8 +78,9 @@ impl Default for Cpu {
             x_register: 0,
             y_register: 0,
             memory: Box::new(mem),
-            stack_pointer: STACK_START,
+            stack_pointer: 0,
             ppu: None,
+            irq_provider: Cell::new(false),
             master_cycle: 0,
             lo: 0,
             hi: 0,
@@ -79,6 +90,14 @@ impl Default for Cpu {
             temp: 0,
             ane_constant: 0xEE,
             is_halted: false,
+            irq_pending: false,
+            nmi_pending: false,
+            nmi_detected: false,
+            irq_detected: false,
+            locked_irq_vec: 0,
+            current_irq_vec: IRQ_VECTOR_ADDR,
+            is_in_irq: false,
+            prev_nmi: false,
         }
     }
 }
@@ -367,19 +386,30 @@ impl Cpu {
                     Source::None,
                     Target::None,
                     true,
-                    MicroOpCallback::None,
+                    MicroOpCallback::COPY(
+                        AddressSource::Address(IRQ_VECTOR_ADDR),
+                        Target::IrqVecCandidate,
+                    ),
                 ));
                 instructions.push(MicroOp::StackPush(Source::PCH, MicroOpCallback::None));
                 instructions.push(MicroOp::StackPush(Source::PCL, MicroOpCallback::None));
-                instructions.push(MicroOp::StackPush(Source::PBrk, MicroOpCallback::SEI));
-                instructions.push(MicroOp::Read(
-                    AddressSource::Address(IRQ_VECTOR_ADDR),
-                    Target::PCL,
-                    MicroOpCallback::None,
+                instructions.push(MicroOp::StackPush(
+                    Source::PBrk,
+                    MicroOpCallback::LockIrqVec,
                 ));
                 instructions.push(MicroOp::Read(
-                    AddressSource::Address(IRQ_VECTOR_ADDR + 1),
+                    AddressSource::IrqVec,
+                    Target::PCL,
+                    MicroOpCallback::SEI,
+                ));
+                instructions.push(MicroOp::ReadWithOffsetFromU16AndAddSomething(
+                    AddressSource::IrqVec,
+                    Source::Constant(1),
                     Target::PCH,
+                    Source::None,
+                    Source::None,
+                    Target::None,
+                    false,
                     callback,
                 ));
             }
@@ -806,7 +836,7 @@ impl Cpu {
                 Source::None,
                 Source::None,
                 Target::None,
-                true,
+                false,
                 MicroOpCallback::None,
             ),
             MicroOp::ReadWithOffsetFromU16AndAddSomething(
@@ -816,35 +846,90 @@ impl Cpu {
                 Source::None,
                 Source::None,
                 Target::None,
-                true,
+                false,
                 MicroOpCallback::None,
             ),
             MicroOp::StackPush(Source::PCH, MicroOpCallback::None),
             MicroOp::StackPush(Source::PCL, MicroOpCallback::None),
-            MicroOp::StackPush(Source::PNmi, MicroOpCallback::None),
-            MicroOp::Read(
-                AddressSource::Address(NMI_HANDLER_ADDR),
-                Target::PCL,
+            MicroOp::StackPush(Source::PNmi, MicroOpCallback::LockIrqVec),
+            MicroOp::Read(AddressSource::IrqVec, Target::PCL, MicroOpCallback::SEI),
+            MicroOp::ReadWithOffsetFromU16AndAddSomething(
+                AddressSource::IrqVec,
+                Source::Constant(1),
+                Target::PCH,
+                Source::None,
+                Source::None,
+                Target::None,
+                false,
+                MicroOpCallback::ExitIrq,
+            ),
+        ]
+    }
+
+    fn get_instructions_for_reset(&mut self) -> Vec<MicroOp> {
+        vec![
+            MicroOp::ReadWithOffsetFromU16AndAddSomething(
+                AddressSource::PC,
+                Source::None,
+                Target::None,
+                Source::None,
+                Source::None,
+                Target::None,
+                false,
                 MicroOpCallback::None,
             ),
-            MicroOp::Read(
-                AddressSource::Address(NMI_HANDLER_ADDR + 1),
-                Target::PCH,
+            MicroOp::ReadWithOffsetFromU16AndAddSomething(
+                AddressSource::PC,
+                Source::None,
+                Target::None,
+                Source::None,
+                Source::None,
+                Target::None,
+                false,
                 MicroOpCallback::None,
+            ),
+            MicroOp::StackPush(Source::None, MicroOpCallback::None),
+            MicroOp::StackPush(Source::None, MicroOpCallback::None),
+            MicroOp::StackPush(Source::None, MicroOpCallback::None),
+            MicroOp::Read(
+                AddressSource::Address(RESET_VECTOR_ADDR),
+                Target::PCL,
+                MicroOpCallback::SEI,
+            ),
+            MicroOp::Read(
+                AddressSource::Address(RESET_VECTOR_ADDR + 1),
+                Target::PCH,
+                MicroOpCallback::ExitIrq,
             ),
         ]
     }
 
     pub fn trigger_nmi(&mut self) {
-        let mut queue = self.get_instructions_for_nmi();
-        self.op_queue.append(&mut queue);
+        let mut seq = self.get_instructions_for_nmi();
+        self.nmi_pending = false;
+
+        self.is_in_irq = true;
+
+        self.current_op = seq.remove(0);
+        self.op_queue = seq;
+    }
+
+    pub fn trigger_irq(&mut self) {
+        let mut seq = self.get_instructions_for_nmi();
+
+        self.is_in_irq = true;
+
+        self.current_op = seq.remove(0);
+        self.op_queue = seq;
     }
 
     pub fn reset(&mut self) {
-        OPCODES_MAP.get_or_init(opcode::init);
-        self.program_counter = self.mem_read_u16(RESET_VECTOR_ADDR);
-        self.set_interrupt_disable();
-        self.stack_pointer = 0xFD
+        let mut seq = self.get_instructions_for_reset();
+
+        self.is_in_irq = true;
+
+        self.current_op = seq.remove(0);
+        self.op_queue = seq;
     }
 
     pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
@@ -857,24 +942,56 @@ impl Cpu {
         }
 
         self.master_cycle = master_cycle;
-
         let op = self.current_op;
+
+        if discriminant(&op) != discriminant(&MicroOp::BranchIncrement(Source::None))
+            && !self.is_in_irq
+        {
+            if self.nmi_detected {
+                self.nmi_pending = true;
+                self.nmi_detected = false;
+            }
+
+            self.irq_pending = self.irq_detected;
+        }
+
         let mut seq = self.execute_micro_op(&op);
+
+        if let Some(ppu) = &self.ppu {
+            if ppu.borrow().poll_nmi() && !self.prev_nmi {
+                self.current_irq_vec = NMI_HANDLER_ADDR;
+                self.nmi_detected = true;
+            }
+
+            self.prev_nmi = ppu.borrow().poll_nmi();
+        }
+
+        if self.irq_provider.get() {
+            self.current_irq_vec = IRQ_VECTOR_ADDR;
+            self.irq_detected = true;
+        } else {
+            self.irq_detected = false;
+        }
 
         if !seq.is_empty() {
             // sequence head becomes next, rest get queued
             self.current_op = seq.remove(0);
             self.op_queue = seq;
 
-            if self.op_queue.is_empty()
-                && let Some(ppu) = &self.ppu
-                && ppu.borrow_mut().poll_nmi()
-            {
-                self.trigger_nmi();
-            }
-
             Ok(())
         } else {
+            if self.nmi_pending {
+                self.trigger_nmi();
+                self.nmi_pending = false;
+                self.irq_pending = false;
+                return Ok(());
+            } else if self.irq_pending && !self.get_interrupt_disable_flag() {
+                self.trigger_irq();
+                self.nmi_pending = false;
+                self.irq_pending = false;
+                return Ok(());
+            }
+
             self.current_op = MicroOp::FetchOpcode(MicroOpCallback::None);
             Ok(())
         }
@@ -1145,6 +1262,13 @@ impl Cpu {
             MicroOpCallback::SRE => sre(self),
             MicroOpCallback::TAS => tas(self),
             MicroOpCallback::JAM => jam(self),
+            MicroOpCallback::COPY(source, target) => copy(self, source, target),
+            MicroOpCallback::LockIrqVec => self.locked_irq_vec = self.current_irq_vec,
+            MicroOpCallback::SEIandLockIrqVec => {
+                sei(self);
+                self.locked_irq_vec = self.current_irq_vec
+            }
+            MicroOpCallback::ExitIrq => self.is_in_irq = false,
         }
     }
 
@@ -1157,6 +1281,7 @@ impl Cpu {
             AddressSource::None => None,
             AddressSource::HI => Some(self.hi as u16),
             AddressSource::PC => Some(self.program_counter),
+            AddressSource::IrqVec => Some(self.locked_irq_vec),
         }
     }
 
@@ -1267,6 +1392,7 @@ impl Cpu {
             }
             Target::LoWrite => self.mem_write(self.lo as u16, val),
             Target::None => {}
+            Target::IrqVecCandidate => unreachable!(),
         }
     }
 
@@ -1284,7 +1410,7 @@ impl Cpu {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub enum MicroOp {
     FetchOpcode(MicroOpCallback),
     FetchOperandLo(MicroOpCallback),
@@ -1321,7 +1447,7 @@ pub enum MicroOp {
     FixHiBranch(u16),
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encode, Decode)]
 pub enum Target {
     A,
     X,
@@ -1336,9 +1462,10 @@ pub enum Target {
     P,
     AddressLatch,
     LoWrite,
+    IrqVecCandidate,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encode, Decode)]
 pub enum Source {
     PBrk,
     A,
@@ -1355,7 +1482,7 @@ pub enum Source {
     PNmi,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encode, Decode)]
 pub enum AddressSource {
     AddressLatch,
     Address(u16),
@@ -1364,9 +1491,10 @@ pub enum AddressSource {
     None,
     HI,
     PC,
+    IrqVec,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encode, Decode)]
 pub enum MicroOpCallback {
     None,
     ADC,
@@ -1423,9 +1551,13 @@ pub enum MicroOpCallback {
     JAM,
     TAS,
     ANC2,
+    COPY(AddressSource, Target),
+    LockIrqVec,
+    SEIandLockIrqVec,
+    ExitIrq,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub enum Condition {
     CarrySet,
     CarryClear,
@@ -1476,6 +1608,10 @@ impl Cpu {
         let mut inst = Cpu::new();
         inst.memory
             .add_memory(0x4020..=0xFFFF, Memory::Ram(Ram::new(0xBFE0)));
+
+        //Test instance doesn't get reset, therefore we need to manually fix the stack
+        // pointer
+        inst.stack_pointer = STACK_START;
         inst
     }
 }
@@ -1503,6 +1639,7 @@ impl Cpu {
             processor_status: state.processor_status,
             memory: Box::new(Self::get_default_memory_map()),
             ppu: Some(ppu),
+            irq_provider: Cell::new(false),
             master_cycle: state.master_cycle,
             lo: state.lo,
             hi: state.hi,
@@ -1512,6 +1649,14 @@ impl Cpu {
             temp: state.temp,
             ane_constant: state.ane_constant,
             is_halted: state.is_halted,
+            irq_pending: false,
+            nmi_pending: false,
+            nmi_detected: false,
+            irq_detected: false,
+            locked_irq_vec: 0,
+            current_irq_vec: 0,
+            is_in_irq: false,
+            prev_nmi: false,
         };
 
         cpu.load_rom(rom);
@@ -2013,3 +2158,13 @@ fn tas(cpu: &mut Cpu) {
 }
 
 fn jam(cpu: &mut Cpu) { cpu.is_halted = true }
+
+fn copy(cpu: &mut Cpu, source: AddressSource, target: Target) {
+    let Some(address) = cpu.get_u16_address(&source) else {
+        unreachable!()
+    };
+    match target {
+        Target::IrqVecCandidate => cpu.current_irq_vec = address,
+        _ => {}
+    }
+}

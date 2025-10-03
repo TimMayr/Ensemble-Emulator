@@ -17,13 +17,11 @@ fn main() {
     let mut frontend = Frontends::default();
     // let mut frontend = Frontends::Sdl2(SdlFrontend::default());
 
-    emu.load_rom(&String::from(
-        "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/1.vbl_basics.nes",
-    ));
+    emu.load_rom(&String::from("./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/01-vbl_basics.nes"));
     emu.reset();
 
     let start = Instant::now();
-    emu.run_until(&mut frontend, 500000000)
+    emu.run_until(&mut frontend, 50000000)
         .expect("TODO: panic message");
 
     println!("{:?}", start.elapsed());

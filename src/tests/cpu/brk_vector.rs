@@ -22,7 +22,6 @@ fn test_brk_vector() {
     // Attach new Rom memory device to cpu
     cpu.memory.add_memory(0x4020..=0xFFFF, Memory::Rom(rom));
 
-    cpu.reset();
     cpu.step(0);
     cpu.step(0);
     cpu.step(0);

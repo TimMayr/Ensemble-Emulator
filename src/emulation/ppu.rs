@@ -39,7 +39,6 @@ pub struct Ppu {
     pub reset_signal: bool,
     pub pixel_buffer: [u32; (WIDTH * HEIGHT) as usize],
     pub master_cycle: u128,
-    has_read_last: bool,
 }
 
 impl Default for Ppu {
@@ -82,7 +81,7 @@ const VRAM_SIZE: usize = 2048;
 impl Ppu {
     pub fn new() -> Self {
         Self {
-            dot_counter: 19,
+            dot_counter: 0,
             ctrl_register: 0,
             mask_register: 0,
             status_register: 0,
@@ -109,7 +108,6 @@ impl Ppu {
             reset_signal: true,
             pixel_buffer: [0u32; (WIDTH * HEIGHT) as usize],
             master_cycle: 0,
-            has_read_last: false,
         }
     }
 
@@ -151,10 +149,7 @@ impl Ppu {
             frame_dot = self.dot_counter % DOTS_PER_FRAME as u128;
         }
 
-        if frame_dot >= (240 * 340) + 2
-            && (self.status_register & VBLANK_NMI_BIT) == 0
-            && !self.has_read_last
-        {
+        if frame_dot >= (240 * 340) + 2 && (self.status_register & VBLANK_NMI_BIT) == 0 {
             // Just entered VBlank
             self.status_register |= VBLANK_NMI_BIT;
             if self.ctrl_register & VBLANK_NMI_BIT != 0 {
@@ -167,7 +162,6 @@ impl Ppu {
         }
 
         self.dot_counter += 1;
-        self.has_read_last = false;
     }
 
     pub fn is_rendering(&self) -> bool {
@@ -183,7 +177,6 @@ impl Ppu {
     }
 
     pub fn get_ppu_status(&mut self) -> u8 {
-        self.has_read_last = true;
         let result = self.status_register;
         self.status_register &= !VBLANK_NMI_BIT;
         self.write_latch = false;
@@ -297,14 +290,7 @@ impl Ppu {
         }
     }
 
-    pub fn poll_nmi(&self) -> bool {
-        if self.nmi_requested.get() {
-            self.nmi_requested.set(false);
-            return true;
-        }
-
-        false
-    }
+    pub fn poll_nmi(&self) -> bool { self.nmi_requested.get() }
 
     pub fn is_background_rendering(&self) -> bool {
         self.mask_register & BACKGROUND_RENDER_BIT != 0
@@ -547,7 +533,6 @@ impl Ppu {
             reset_signal: state.reset_signal,
             pixel_buffer: state.pixel_buffer.clone().try_into().unwrap(),
             master_cycle: state.master_cycle,
-            has_read_last: false,
         };
 
         ppu.load_rom(rom);

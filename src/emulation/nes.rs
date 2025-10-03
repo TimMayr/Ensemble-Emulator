@@ -79,7 +79,7 @@ impl Nes {
         Self {
             cpu,
             ppu,
-            cycles: 84,
+            cycles: 0,
             rom_file: None,
             trace_log_path,
         }
@@ -155,7 +155,7 @@ impl Nes {
 
         let mut cpu_res = Ok(());
 
-        if self.cycles.is_multiple_of(4) {
+        if (self.cycles).is_multiple_of(4) {
             self.ppu.borrow_mut().step(self.cycles);
         }
 
