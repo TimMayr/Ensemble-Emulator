@@ -3,7 +3,7 @@ mod abs_xy_07;
 #[cfg(test)]
 mod absolute_06;
 #[cfg(test)]
-mod basic_01;
+mod basics_01;
 #[cfg(test)]
 mod branches_10;
 #[cfg(test)]

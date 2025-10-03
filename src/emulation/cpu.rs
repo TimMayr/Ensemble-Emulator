@@ -118,7 +118,7 @@ impl Cpu {
 
     pub fn stack_pop(&mut self) -> u8 {
         let val = self.mem_read(STACK_START_ADDRESS + self.stack_pointer as u16);
-        self.stack_pointer += 1;
+        self.stack_pointer = self.stack_pointer.wrapping_add(1);
         val
     }
 
@@ -128,7 +128,7 @@ impl Cpu {
 
     pub fn stack_push(&mut self, data: u8) {
         self.mem_write(STACK_START_ADDRESS + self.stack_pointer as u16, data);
-        self.stack_pointer -= 1;
+        self.stack_pointer = self.stack_pointer.wrapping_sub(1);
     }
 
     pub fn stack_pop_u16(&mut self) -> u16 {
@@ -2163,8 +2163,8 @@ fn copy(cpu: &mut Cpu, source: AddressSource, target: Target) {
     let Some(address) = cpu.get_u16_address(&source) else {
         unreachable!()
     };
-    match target {
-        Target::IrqVecCandidate => cpu.current_irq_vec = address,
-        _ => {}
+
+    if target == Target::IrqVecCandidate {
+        cpu.current_irq_vec = address
     }
 }
