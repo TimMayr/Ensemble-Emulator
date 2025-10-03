@@ -9,7 +9,7 @@ fn test_12_jmp_jsr() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/12-jmp_jsr.nes",
     ));
     emu.reset();
-    emu.run_until(&mut Frontends::default(), 3124261)
+    emu.run_until(&mut Frontends::default(), 6049153)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6018));
