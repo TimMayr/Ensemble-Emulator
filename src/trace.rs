@@ -54,8 +54,8 @@ impl TraceLog {
             cpu.y_register,
             cpu.processor_status | UNUSED_BIT,
             cpu.stack_pointer,
-            ppu.dot_counter / 341u128,
-            ppu.dot_counter % 341u128,
+            (ppu.dot_counter -3) / 341u128,
+            (ppu.dot_counter-3) % 341u128,
             cpu.master_cycle / 12 - 1
         )
             .as_str();
@@ -112,7 +112,7 @@ impl TraceLog {
             .create(true)
             .truncate(true)
             .open(self.output.clone())
-            .unwrap_or_else(|e| panic!("Error saving log: {}.\n{}", self.output, e));
+            .unwrap_or_else(|e| panic!("Error saving log: \n{}", e));
 
         file.write_all(self.log.as_bytes()).expect("error");
     }
