@@ -22,7 +22,7 @@ fn test_03_immediate() {
     ));
 
     emu.reset();
-    emu.run_until(&mut Frontends::default(), 27915829)
+    emu.run_until(&mut Frontends::default(), 31064917)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601A));

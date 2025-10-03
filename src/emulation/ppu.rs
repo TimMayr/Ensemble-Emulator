@@ -39,6 +39,7 @@ pub struct Ppu {
     pub reset_signal: bool,
     pub pixel_buffer: [u32; (WIDTH * HEIGHT) as usize],
     pub master_cycle: u128,
+    pub just_read: bool,
 }
 
 impl Default for Ppu {
@@ -108,6 +109,7 @@ impl Ppu {
             reset_signal: true,
             pixel_buffer: [0u32; (WIDTH * HEIGHT) as usize],
             master_cycle: 0,
+            just_read: false,
         }
     }
 
@@ -149,7 +151,14 @@ impl Ppu {
             frame_dot = self.dot_counter % DOTS_PER_FRAME as u128;
         }
 
-        if frame_dot >= (240 * 340) + 2 && (self.status_register & VBLANK_NMI_BIT) == 0 {
+        let scanline = frame_dot / 341;
+        let dot = frame_dot % 341;
+
+        if scanline == 241
+            && dot == 1
+            && !self.just_read
+            && (self.status_register & VBLANK_NMI_BIT == 0)
+        {
             // Just entered VBlank
             self.status_register |= VBLANK_NMI_BIT;
             if self.ctrl_register & VBLANK_NMI_BIT != 0 {
@@ -157,11 +166,14 @@ impl Ppu {
             }
         }
 
-        if frame_dot >= (261 * 340) + 2 {
+        if scanline == 261 && dot == 1 {
             self.status_register &= !VBLANK_NMI_BIT;
+            self.reset_signal = false;
         }
 
         self.dot_counter += 1;
+
+        self.just_read = false;
     }
 
     pub fn is_rendering(&self) -> bool {
@@ -180,6 +192,7 @@ impl Ppu {
         let result = self.status_register;
         self.status_register &= !VBLANK_NMI_BIT;
         self.write_latch = false;
+        self.just_read = true;
         result
     }
 
@@ -217,50 +230,6 @@ impl Ppu {
 
     pub fn write_vram(&mut self, data: u8) {
         self.memory.mem_write(self.vram_addr_register, data);
-
-        match self.vram_addr_register {
-            0x2400..0x2500 => {
-                println!();
-            }
-            0x2500..0x2600 => {
-                println!();
-            }
-            0x2600..0x2700 => {
-                println!();
-            }
-            0x2700..0x2800 => {
-                println!();
-            }
-            0x2800..0x2900 => {
-                println!();
-            }
-            0x2900..0x2A00 => {
-                println!();
-            }
-            0x2A00..0x2B00 => {
-                println!();
-            }
-            0x2B00..0x2C00 => {
-                println!();
-            }
-            0x2C00..0x2D00 => {
-                println!();
-            }
-            0x2D00..0x2E00 => {
-                println!();
-            }
-            0x2E00..0x2F00 => {
-                println!();
-            }
-            0x2F00..0x3000 => {
-                println!();
-            }
-            0x3F00..0x3F1F => {
-                println!();
-            }
-            _ => {}
-        }
-
         self.vram_addr_register += self.get_vram_addr_step() as u16;
     }
 
@@ -423,15 +392,15 @@ impl Ppu {
             )
         }
 
-        // let palette_index = current_palette[*color_bits as usize] as usize;
+        let palette_index = current_palette[*color_bits as usize] as usize;
 
-        let palette_index = match color_bits {
-            0b00 => 0x0F,
-            0b11 => 0x26,
-            0b01 => 0x2A,
-            0b10 => 0x21,
-            _ => 0x0F,
-        };
+        // let palette_index = match color_bits {
+        //     0b00 => 0x0F,
+        //     0b11 => 0x26,
+        //     0b01 => 0x2A,
+        //     0b10 => 0x21,
+        //     _ => 0x0F,
+        // };
 
         NES_PALETTE[palette_index]
     }
@@ -533,6 +502,7 @@ impl Ppu {
             reset_signal: state.reset_signal,
             pixel_buffer: state.pixel_buffer.clone().try_into().unwrap(),
             master_cycle: state.master_cycle,
+            just_read: false,
         };
 
         ppu.load_rom(rom);
