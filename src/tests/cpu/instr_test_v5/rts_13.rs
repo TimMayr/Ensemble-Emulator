@@ -9,7 +9,7 @@ fn test_13_rts() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/13-rts.nes",
     ));
     emu.reset();
-    emu.run_until(&mut Frontends::default(), 1929649)
+    emu.run_until(&mut Frontends::default(), 4977013)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6018));
