@@ -50,14 +50,16 @@ impl Console for Nes {
 
         loop {
             self.cycles += 1;
-            if let Err(err) = self.step(frontend, last_cycle, trace.as_mut())
-                && (err == "Execution finished" || err == "Encountered hlt")
-            {
-                if let Some(ref mut trace) = trace {
-                    trace.flush();
+            if let Err(err) = self.step(frontend, last_cycle, trace.as_mut()) {
+                if err == "Execution finished" || err == "Encountered hlt" {
+                    if let Some(ref mut trace) = trace {
+                        trace.flush();
+                    }
+                    println!("{}", err);
+                    return Ok(());
+                } else {
+                    panic!("{}", err)
                 }
-                println!("{}", err);
-                return Ok(());
             }
         }
     }
@@ -153,6 +155,10 @@ impl Nes {
 
         let mut cpu_res = Ok(());
 
+        if self.cycles.is_multiple_of(4) {
+            self.ppu.borrow_mut().step(self.cycles);
+        }
+
         if self.cycles.is_multiple_of(12) {
             let mut do_trace = false;
 
@@ -168,10 +174,6 @@ impl Nes {
             if do_trace {
                 trace.expect("Invalid State").trace(self);
             }
-        }
-
-        if self.cycles.is_multiple_of(4) {
-            self.ppu.borrow_mut().step(self.cycles);
         }
 
         if self.cycles.is_multiple_of(MASTER_CYCLES_PER_FRAME as u128)

@@ -1,10 +1,10 @@
 use std::cell::Ref;
 
 use sdl2::EventPump;
-use sdl2::event::Event;
+use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
-use sdl2::render::{TextureCreator, WindowCanvas};
+use sdl2::render::{ScaleMode, TextureCreator, WindowCanvas};
 use sdl2::video::WindowContext;
 
 use crate::emulation::emu::{HEIGHT, WIDTH};
@@ -54,6 +54,7 @@ impl Default for SdlFrontend {
             .window("NES Emulator", WIDTH * 3, HEIGHT * 3) // scale x3
             .position_centered()
             .opengl()
+            .resizable()
             .build()
             .expect("Error initializing windows");
 
@@ -70,8 +71,6 @@ impl Default for SdlFrontend {
         let event_pump = context.event_pump().expect("Error creating event pump");
 
         Self {
-            // context,
-            // video_subsystem,
             texture_creator,
             event_pump,
             canvas,
@@ -84,10 +83,31 @@ impl Frontend for SdlFrontend {
         &mut self,
         pixel_buffer: Ref<'_, [u32; (WIDTH * HEIGHT) as usize]>,
     ) -> Result<(), String> {
+        // Handle events
+        for event in self.event_pump.poll_iter() {
+            match event {
+                Event::Quit {
+                    ..
+                }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => {
+                    return Err(String::from("Quit Program"));
+                }
+                Event::Window {
+                    win_event: WindowEvent::Resized(..) | WindowEvent::SizeChanged(..),
+                    ..
+                } => self.canvas.set_logical_size(WIDTH, HEIGHT).expect(""),
+                _ => {}
+            }
+        }
+
         let mut texture = self
             .texture_creator
             .create_texture_streaming(PixelFormatEnum::RGB888, WIDTH, HEIGHT)
             .expect("Error creating Texture");
+        texture.set_scale_mode(ScaleMode::Nearest);
 
         let bytes: &[u8] = bytemuck::cast_slice(&*pixel_buffer);
         texture
@@ -98,20 +118,6 @@ impl Frontend for SdlFrontend {
         self.canvas.clear();
         self.canvas.copy(&texture, None, None)?;
         self.canvas.present();
-
-        // Handle events
-        for event in self.event_pump.poll_iter() {
-            match event {
-                Event::Quit {
-                    ..
-                }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => return Err(String::from("Quit Program")),
-                _ => {}
-            }
-        }
 
         Ok(())
     }

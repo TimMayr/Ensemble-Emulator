@@ -471,7 +471,7 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             // //PHA
             OpCode::new(0x48, "PHA", PH(Source::A, MicroOpCallback::None)),
             // //PHP
-            OpCode::new(0x08, "PHP", PH(Source::P, MicroOpCallback::None)),
+            OpCode::new(0x08, "PHP", PH(Source::PBrk, MicroOpCallback::None)),
             // //PLA
             OpCode::new(0x68, "PLA", PL(Target::A, MicroOpCallback::None)),
             // //PLP
