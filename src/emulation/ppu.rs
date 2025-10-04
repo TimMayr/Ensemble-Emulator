@@ -138,6 +138,7 @@ impl Ppu {
             self.ppu_y_scroll_register = 0;
             self.ppu_x_scroll_register = 0;
             self.ppu_data_buffer = 0;
+            self.t_register = 0;
         }
 
         let mut frame_dot = self.dot_counter % DOTS_PER_FRAME as u128;
@@ -201,6 +202,8 @@ impl Ppu {
     pub fn set_ppu_ctrl(&mut self, value: u8) {
         if !self.reset_signal {
             self.ctrl_register = value;
+
+            self.t_register = (self.t_register & 0xF3FF) | (((value as u16) | 0x03) << 10)
         }
     }
 

@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::emulation::mem::MemoryDevice;
@@ -7,12 +7,14 @@ use crate::emulation::ppu::Ppu;
 #[derive(Debug, Clone)]
 pub struct PpuRegisters {
     ppu: Rc<RefCell<Ppu>>,
+    data_bus: Cell<u8>,
 }
 
 impl PpuRegisters {
     pub fn new(ppu: Rc<RefCell<Ppu>>) -> Self {
         Self {
             ppu,
+            data_bus: 0.into(),
         }
     }
 }
@@ -23,22 +25,26 @@ impl MemoryDevice for PpuRegisters {
         match addr {
             0x2 => {
                 let mut ppu = self.ppu.borrow_mut();
-                ppu.get_ppu_status()
+                let val = ppu.get_ppu_status() | (self.data_bus.get() & 0b0001_1111);
+                self.data_bus.set(val);
             }
             0x4 => {
                 let ppu = self.ppu.borrow();
-                ppu.get_oam_at_addr()
+                self.data_bus.set(ppu.get_oam_at_addr());
             }
             0x7 => {
                 let mut ppu = self.ppu.borrow_mut();
-                ppu.get_vram_at_addr()
+                self.data_bus.set(ppu.get_vram_at_addr());
             }
-            _ => 0,
-        }
+            _ => {}
+        };
+
+        self.data_bus.get()
     }
 
     #[inline(always)]
     fn write(&mut self, addr: u16, data: u8) {
+        self.data_bus.set(data);
         match addr {
             0x0 => {
                 let mut ppu = self.ppu.borrow_mut();
