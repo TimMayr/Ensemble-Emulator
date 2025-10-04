@@ -18,12 +18,12 @@ fn main() {
     // let mut frontend = Frontends::Sdl2(SdlFrontend::default());
 
     emu.load_rom(&String::from(
-        "./tests/nes-test-roms/instr_test-v5/rom_singles/11-stack.nes",
+        "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/05-nmi_timing.nes",
     ));
     emu.reset();
 
     let start = Instant::now();
-    emu.run_until(&mut frontend, 59296933)
+    emu.run_until(&mut frontend, 10000000)
         .expect("TODO: panic message");
 
     println!("{:?}", start.elapsed());

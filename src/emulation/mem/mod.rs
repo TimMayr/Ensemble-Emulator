@@ -79,17 +79,6 @@ impl MemoryDevice for Memory {
         }
     }
 
-    fn snapshot(&self, addr: u16, open_bus: u8) -> u8 {
-        match self {
-            Memory::Ram(ram) => ram.snapshot(addr, open_bus),
-            Memory::Rom(rom) => rom.snapshot(addr, open_bus),
-            Memory::MirrorMemory(mirror_memory) => mirror_memory.snapshot(addr, open_bus),
-            Memory::PaletteRam(palette_ram) => palette_ram.snapshot(addr, open_bus),
-            Memory::PpuRegisters(ppu_registers) => ppu_registers.snapshot(addr, open_bus),
-            Memory::ApuRegisters(apu_registers) => apu_registers.snapshot(addr, open_bus),
-        }
-    }
-
     fn is_internal(&self) -> bool {
         match self {
             Memory::Ram(ram) => ram.is_internal(),
@@ -98,6 +87,17 @@ impl MemoryDevice for Memory {
             Memory::PaletteRam(palette_ram) => palette_ram.is_internal(),
             Memory::PpuRegisters(ppu_registers) => ppu_registers.is_internal(),
             Memory::ApuRegisters(apu_registers) => apu_registers.is_internal(),
+        }
+    }
+
+    fn snapshot(&self, addr: u16, open_bus: u8) -> u8 {
+        match self {
+            Memory::Ram(ram) => ram.snapshot(addr, open_bus),
+            Memory::Rom(rom) => rom.snapshot(addr, open_bus),
+            Memory::MirrorMemory(mirror_memory) => mirror_memory.snapshot(addr, open_bus),
+            Memory::PaletteRam(palette_ram) => palette_ram.snapshot(addr, open_bus),
+            Memory::PpuRegisters(ppu_registers) => ppu_registers.snapshot(addr, open_bus),
+            Memory::ApuRegisters(apu_registers) => apu_registers.snapshot(addr, open_bus),
         }
     }
 }
