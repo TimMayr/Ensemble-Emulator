@@ -25,7 +25,7 @@ pub struct Nes {
     pub ppu: Rc<RefCell<Ppu>>,
     pub cycles: u128,
     pub rom_file: Option<RomFile>,
-    pub trace_log_path: Option<String>,
+    pub trace_log: RefCell<Option<TraceLog>>,
 }
 
 impl Console for Nes {
@@ -46,21 +46,25 @@ impl Console for Nes {
         frontend: &mut Frontends,
         last_cycle: u128,
     ) -> Result<ExecutionFinishedType, String> {
-        let mut trace = None;
-
-        if let Some(log_path) = &self.trace_log_path {
-            trace = Some(TraceLog::new(log_path.clone()));
-        }
-
         loop {
             self.cycles += 1;
-            let res = self.step(frontend, last_cycle, trace.as_mut());
+            let res = self.step(frontend, last_cycle);
             match res {
                 Ok(ExecutionFinishedType::CycleCompleted) => {
                     continue;
                 }
-                Ok(res) => return Ok(res),
+                Ok(res) => {
+                    if let Some(trace) = self.trace_log.borrow_mut().as_mut() {
+                        trace.flush();
+                    }
+
+                    return Ok(res);
+                }
                 Err(err) => {
+                    if let Some(ref mut trace) = self.trace_log.borrow_mut().as_mut() {
+                        trace.flush();
+                    }
+
                     panic!("{}", err)
                 }
             };
@@ -74,29 +78,45 @@ impl Console for Nes {
         ]
     }
 
-    fn set_trace_log_path(&mut self, path: Option<String>) { self.trace_log_path = path; }
+    fn set_trace_log_path(&mut self, path: Option<String>) {
+        if path.is_none() {
+            self.trace_log = RefCell::new(None);
+            return;
+        }
+
+        if self.trace_log.borrow_mut().as_mut().is_none() {
+            self.trace_log
+                .replace(Some(TraceLog::new(path.clone().unwrap())));
+        }
+
+        if let Some(trace) = self.trace_log.borrow_mut().as_mut() {
+            trace.output = path.unwrap();
+        }
+    }
+
+    fn flush_trace_log(&mut self) {
+        if let Some(trace) = self.trace_log.borrow_mut().as_mut() {
+            trace.flush()
+        }
+    }
 
     fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
-        self.step(frontend, u128::MAX, None)
+        self.step(frontend, u128::MAX)
     }
 
     fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
-        self.step(
-            frontend,
-            self.cycles + MASTER_CYCLES_PER_FRAME as u128,
-            None,
-        )
+        self.run_until(frontend, self.cycles + MASTER_CYCLES_PER_FRAME as u128)
     }
 }
 
 impl Nes {
-    pub fn new(cpu: Cpu, ppu: Rc<RefCell<Ppu>>, trace_log_path: Option<String>) -> Self {
+    pub fn new(cpu: Cpu, ppu: Rc<RefCell<Ppu>>) -> Self {
         Self {
             cpu,
             ppu,
             cycles: 0,
             rom_file: None,
-            trace_log_path,
+            trace_log: RefCell::new(None),
         }
     }
 
@@ -162,7 +182,6 @@ impl Nes {
         &mut self,
         frontend: &mut Frontends,
         last_cycle: u128,
-        trace: Option<&mut TraceLog>,
     ) -> Result<ExecutionFinishedType, String> {
         if self.cycles >= last_cycle {
             return Ok(ExecutionFinishedType::ReachedLastCycle);
@@ -177,7 +196,7 @@ impl Nes {
         if self.cycles.is_multiple_of(12) {
             let mut do_trace = false;
 
-            if let Some(_) = trace
+            if let Some(_) = &self.trace_log.get_mut()
                 && discriminant(&self.cpu.current_op)
                     == discriminant(&MicroOp::FetchOpcode(MicroOpCallback::None))
             {
@@ -186,8 +205,8 @@ impl Nes {
 
             cpu_res = self.cpu.step(self.cycles);
 
-            if do_trace {
-                trace.expect("Invalid State").trace(self);
+            if do_trace && let Some(trace) = self.trace_log.borrow_mut().as_mut() {
+                trace.trace(self);
             }
         }
 
@@ -206,10 +225,11 @@ impl Default for Nes {
     fn default() -> Self {
         let cpu = Cpu::new();
         let ppu = Rc::new(RefCell::new(Ppu::default()));
-        Nes::new(cpu, ppu, None)
+        Nes::new(cpu, ppu)
     }
 }
 
+#[derive(Debug)]
 pub enum ExecutionFinishedType {
     ReachedLastCycle,
     ReachedHlt,
