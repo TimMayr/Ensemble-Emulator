@@ -72,6 +72,10 @@ impl Console for Nes {
     }
 
     fn set_trace_log_path(&mut self, path: Option<String>) { self.trace_log_path = path; }
+
+    fn step(&mut self, frontend: &mut Frontends) -> Result<(), String> {
+        self.step(frontend, u128::MAX, None)
+    }
 }
 
 impl Nes {

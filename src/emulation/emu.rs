@@ -53,6 +53,12 @@ impl Console for Consoles {
             Consoles::Nes(nes) => nes.set_trace_log_path(path),
         }
     }
+
+    fn step(&mut self, frontend: &mut Frontends) -> Result<(), String> {
+        match self {
+            Consoles::Nes(nes) => nes.step(frontend, u128::MAX, None),
+        }
+    }
 }
 
 pub trait Console {
@@ -65,4 +71,6 @@ pub trait Console {
 
     fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>>;
     fn set_trace_log_path(&mut self, path: Option<String>);
+
+    fn step(&mut self, frontend: &mut Frontends) -> Result<(), String>;
 }
