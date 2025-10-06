@@ -1,6 +1,4 @@
 #![allow(clippy::missing_safety_doc)]
-
-mod build;
 use std::os::raw::{c_float, c_int, c_void};
 
 use nes_core::emulation::emu::{Console, Consoles, HEIGHT, WIDTH};
@@ -108,7 +106,7 @@ pub unsafe extern "C" fn emu_step_frame(e: *mut FfiWrapper) -> c_int {
     }
 
     let emu = unsafe { &mut *e };
-    match emu.console.step(&mut emu.godot_frontend) {
+    match emu.console.step_frame(&mut emu.godot_frontend) {
         Ok(_) => 0,
         Err(_) => -1,
     }

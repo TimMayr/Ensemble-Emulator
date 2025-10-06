@@ -1,7 +1,7 @@
 use std::cell::Ref;
 use std::ops::RangeInclusive;
 
-use crate::emulation::nes::Nes;
+use crate::emulation::nes::{ExecutionFinishedType, Nes};
 use crate::frontend::Frontends;
 
 pub const WIDTH: u32 = 272;
@@ -30,13 +30,17 @@ impl Console for Consoles {
         }
     }
 
-    fn run(&mut self, frontend: &mut Frontends) -> Result<(), String> {
+    fn run(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
         match self {
             Consoles::Nes(nes) => nes.run(frontend),
         }
     }
 
-    fn run_until(&mut self, frontend: &mut Frontends, last_cycle: u128) -> Result<(), String> {
+    fn run_until(
+        &mut self,
+        frontend: &mut Frontends,
+        last_cycle: u128,
+    ) -> Result<ExecutionFinishedType, String> {
         match self {
             Consoles::Nes(nes) => nes.run_until(frontend, last_cycle),
         }
@@ -54,9 +58,15 @@ impl Console for Consoles {
         }
     }
 
-    fn step(&mut self, frontend: &mut Frontends) -> Result<(), String> {
+    fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
         match self {
             Consoles::Nes(nes) => nes.step(frontend, u128::MAX, None),
+        }
+    }
+
+    fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
+        match self {
+            Consoles::Nes(nes) => nes.step_frame(frontend),
         }
     }
 }
@@ -66,11 +76,16 @@ pub trait Console {
     #[allow(clippy::ptr_arg)]
     fn load_rom(&mut self, path: &String);
     fn reset(&mut self);
-    fn run(&mut self, option: &mut Frontends) -> Result<(), String>;
-    fn run_until(&mut self, frontend: &mut Frontends, last_cycle: u128) -> Result<(), String>;
+    fn run(&mut self, option: &mut Frontends) -> Result<ExecutionFinishedType, String>;
+    fn run_until(
+        &mut self,
+        frontend: &mut Frontends,
+        last_cycle: u128,
+    ) -> Result<ExecutionFinishedType, String>;
 
     fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>>;
     fn set_trace_log_path(&mut self, path: Option<String>);
 
-    fn step(&mut self, frontend: &mut Frontends) -> Result<(), String>;
+    fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String>;
+    fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String>;
 }

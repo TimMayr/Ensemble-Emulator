@@ -6,9 +6,9 @@ use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp, MicroOpCallback};
 use crate::emulation::emu::{Console, HEIGHT, WIDTH};
-use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::mem::Memory;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
@@ -37,11 +37,15 @@ impl Console for Nes {
 
     fn reset(&mut self) { self.reset() }
 
-    fn run(&mut self, frontend: &mut Frontends) -> Result<(), String> {
+    fn run(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
         self.run_until(frontend, u128::MAX)
     }
 
-    fn run_until(&mut self, frontend: &mut Frontends, last_cycle: u128) -> Result<(), String> {
+    fn run_until(
+        &mut self,
+        frontend: &mut Frontends,
+        last_cycle: u128,
+    ) -> Result<ExecutionFinishedType, String> {
         let mut trace = None;
 
         if let Some(log_path) = &self.trace_log_path {
@@ -50,17 +54,16 @@ impl Console for Nes {
 
         loop {
             self.cycles += 1;
-            if let Err(err) = self.step(frontend, last_cycle, trace.as_mut()) {
-                if err == "Execution finished" || err == "Encountered hlt" {
-                    if let Some(ref mut trace) = trace {
-                        trace.flush();
-                    }
-                    println!("{}", err);
-                    return Ok(());
-                } else {
+            let res = self.step(frontend, last_cycle, trace.as_mut());
+            match res {
+                Ok(ExecutionFinishedType::CycleCompleted) => {
+                    continue;
+                }
+                Ok(res) => return Ok(res),
+                Err(err) => {
                     panic!("{}", err)
                 }
-            }
+            };
         }
     }
 
@@ -73,8 +76,16 @@ impl Console for Nes {
 
     fn set_trace_log_path(&mut self, path: Option<String>) { self.trace_log_path = path; }
 
-    fn step(&mut self, frontend: &mut Frontends) -> Result<(), String> {
+    fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
         self.step(frontend, u128::MAX, None)
+    }
+
+    fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
+        self.step(
+            frontend,
+            self.cycles + MASTER_CYCLES_PER_FRAME as u128,
+            None,
+        )
     }
 }
 
@@ -152,16 +163,16 @@ impl Nes {
         frontend: &mut Frontends,
         last_cycle: u128,
         trace: Option<&mut TraceLog>,
-    ) -> Result<(), String> {
+    ) -> Result<ExecutionFinishedType, String> {
         if self.cycles >= last_cycle {
-            return Err(String::from("Execution finished"));
+            return Ok(ExecutionFinishedType::ReachedLastCycle);
         };
 
         if self.cycles.is_multiple_of(4) {
             self.ppu.borrow_mut().step(self.cycles);
         }
 
-        let mut cpu_res = Ok(());
+        let mut cpu_res = Ok(ExecutionFinishedType::CycleCompleted);
 
         if self.cycles.is_multiple_of(12) {
             let mut do_trace = false;
@@ -197,4 +208,10 @@ impl Default for Nes {
         let ppu = Rc::new(RefCell::new(Ppu::default()));
         Nes::new(cpu, ppu, None)
     }
+}
+
+pub enum ExecutionFinishedType {
+    ReachedLastCycle,
+    ReachedHlt,
+    CycleCompleted,
 }
