@@ -6,9 +6,9 @@ use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp, MicroOpCallback};
 use crate::emulation::emu::{Console, HEIGHT, WIDTH};
-use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::mem::Memory;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
@@ -153,11 +153,11 @@ impl Nes {
             return Err(String::from("Execution finished"));
         };
 
-        let mut cpu_res = Ok(());
-
-        if (self.cycles).is_multiple_of(4) {
+        if self.cycles.is_multiple_of(4) {
             self.ppu.borrow_mut().step(self.cycles);
         }
+
+        let mut cpu_res = Ok(());
 
         if self.cycles.is_multiple_of(12) {
             let mut do_trace = false;

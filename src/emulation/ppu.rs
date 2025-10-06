@@ -39,7 +39,9 @@ pub struct Ppu {
     pub reset_signal: bool,
     pub pixel_buffer: [u32; (WIDTH * HEIGHT) as usize],
     pub master_cycle: u128,
-    pub just_read: bool,
+    pub vbl_clear_scheduled: Option<u128>,
+    pub scanline: u16,
+    pub dot: u16,
 }
 
 impl Default for Ppu {
@@ -71,7 +73,7 @@ const VRAM_ADDR_NAMETABLE_X_BIT: u16 = 0x400;
 const VRAM_ADDR_NAMETABLE_Y_BIT: u16 = 0x800;
 const FINE_Y_SCROLL_WIDTH: u8 = 0x7;
 const COARSE_SCROLL_WIDTH: u8 = 0x1F;
-const DOTS_PER_FRAME: u64 = 89342;
+pub const DOTS_PER_FRAME: u64 = 89342;
 const PATTERN_TABLE_SIZE: usize = 0x1000;
 const PALETTE_RAM_START_ADDRESS: u16 = 0x3F00;
 const PALETTE_RAM_END_INDEX: u16 = 0x3FFF;
@@ -109,7 +111,9 @@ impl Ppu {
             reset_signal: true,
             pixel_buffer: [0u32; (WIDTH * HEIGHT) as usize],
             master_cycle: 0,
-            just_read: false,
+            vbl_clear_scheduled: None,
+            scanline: 0,
+            dot: 0,
         }
     }
 
@@ -152,29 +156,36 @@ impl Ppu {
             frame_dot = self.dot_counter % DOTS_PER_FRAME as u128;
         }
 
-        let scanline = frame_dot / 341;
-        let dot = frame_dot % 341;
+        self.scanline = (frame_dot / 341) as u16;
+        self.dot = (frame_dot % 341) as u16;
 
-        if scanline == 241
-            && dot == 1
-            && !self.just_read
-            && (self.status_register & VBLANK_NMI_BIT == 0)
-        {
+        if self.scanline == 241 && self.dot == 1 {
             // Just entered VBlank
             self.status_register |= VBLANK_NMI_BIT;
-            if self.ctrl_register & VBLANK_NMI_BIT != 0 {
-                self.nmi_requested.set(true);
+        }
+
+        if let Some(vbl_clear_cycle) = self.vbl_clear_scheduled {
+            if vbl_clear_cycle >= self.master_cycle {
+                self.clear_vbl_bit();
+            }
+
+            if vbl_clear_cycle <= self.master_cycle {
+                self.vbl_clear_scheduled = None;
             }
         }
 
-        if scanline == 261 && dot == 1 {
+        if self.scanline == 261 && self.dot == 1 {
             self.status_register &= !VBLANK_NMI_BIT;
             self.reset_signal = false;
         }
 
-        self.dot_counter += 1;
+        if self.status_register & self.ctrl_register & VBLANK_NMI_BIT != 0 {
+            self.nmi_requested.set(true);
+        } else {
+            self.nmi_requested.set(false);
+        }
 
-        self.just_read = false;
+        self.dot_counter += 1;
     }
 
     pub fn is_rendering(&self) -> bool {
@@ -189,11 +200,15 @@ impl Ppu {
         }
     }
 
+    pub fn clear_vbl_bit(&mut self) { self.status_register &= !VBLANK_NMI_BIT; }
+
     pub fn get_ppu_status(&mut self) -> u8 {
         let result = self.status_register;
-        self.status_register &= !VBLANK_NMI_BIT;
+        self.nmi_requested.set(false);
+
+        self.vbl_clear_scheduled = Some(self.master_cycle + 7);
+
         self.write_latch = false;
-        self.just_read = true;
         result
     }
 
@@ -228,12 +243,14 @@ impl Ppu {
 
     pub fn write_oam(&mut self, data: u8) {
         self.oam.write(self.oam_addr_register as u16, data);
-        self.oam_addr_register += 1;
+        self.oam_addr_register = self.oam_addr_register.wrapping_add(1);
     }
 
     pub fn write_vram(&mut self, data: u8) {
         self.memory.mem_write(self.vram_addr_register, data);
-        self.vram_addr_register += self.get_vram_addr_step() as u16;
+        self.vram_addr_register = self
+            .vram_addr_register
+            .wrapping_add(self.get_vram_addr_step() as u16);
     }
 
     pub fn write_ppu_scroll(&mut self, data: u8) {
@@ -263,6 +280,8 @@ impl Ppu {
     }
 
     pub fn poll_nmi(&self) -> bool { self.nmi_requested.get() }
+
+    pub fn clear_nmi_requested(&self) { self.nmi_requested.set(false) }
 
     pub fn is_background_rendering(&self) -> bool {
         self.mask_register & BACKGROUND_RENDER_BIT != 0
@@ -408,7 +427,7 @@ impl Ppu {
         NES_PALETTE[palette_index]
     }
 
-    pub fn get_selected_palette(&self) -> u8 { 0 }
+    pub fn get_selected_palette(&self) -> u8 { 2 }
 
     fn decode_pattern_table(table: &[u8; 0x1000]) -> [u8; 0x4000] {
         let mut buffer = [0u8; 256 * 8 * 8]; // 256 tiles * 64 pixels
@@ -505,7 +524,9 @@ impl Ppu {
             reset_signal: state.reset_signal,
             pixel_buffer: state.pixel_buffer.clone().try_into().unwrap(),
             master_cycle: state.master_cycle,
-            just_read: false,
+            vbl_clear_scheduled: None,
+            scanline: 0,
+            dot: 0,
         };
 
         ppu.load_rom(rom);
