@@ -1,16 +1,22 @@
+#[allow(clippy::missing_safety_doc)]
+pub mod ffi_wrapper;
+pub mod godot_frontend;
+
 use std::cell::Ref;
 
-use sdl2::EventPump;
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::render::{ScaleMode, TextureCreator, WindowCanvas};
 use sdl2::video::WindowContext;
+use sdl2::EventPump;
 
 use crate::emulation::emu::{HEIGHT, WIDTH};
+use crate::frontend::godot_frontend::GodotFrontend;
 
 pub enum Frontends {
     Sdl2(SdlFrontend),
+    Godot(GodotFrontend),
     None(),
 }
 
@@ -25,6 +31,7 @@ impl Frontend for Frontends {
     ) -> Result<(), String> {
         match self {
             Frontends::Sdl2(frontend) => frontend.show_frame(pixel_buffer),
+            Frontends::Godot(frontend) => frontend.show_frame(pixel_buffer),
             Frontends::None() => Ok(()),
         }
     }
@@ -105,7 +112,7 @@ impl Frontend for SdlFrontend {
 
         let mut texture = self
             .texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGB888, WIDTH, HEIGHT)
+            .create_texture_streaming(PixelFormatEnum::RGBA8888, WIDTH, HEIGHT)
             .expect("Error creating Texture");
         texture.set_scale_mode(ScaleMode::Nearest);
 
