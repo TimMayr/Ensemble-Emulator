@@ -58,9 +58,15 @@ impl Console for Consoles {
         }
     }
 
+    fn flush_trace_log(&mut self) {
+        match self {
+            Consoles::Nes(nes) => nes.flush_trace_log(),
+        }
+    }
+
     fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
         match self {
-            Consoles::Nes(nes) => nes.step(frontend, u128::MAX, None),
+            Consoles::Nes(nes) => nes.step(frontend, u128::MAX),
         }
     }
 
@@ -85,6 +91,7 @@ pub trait Console {
 
     fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>>;
     fn set_trace_log_path(&mut self, path: Option<String>);
+    fn flush_trace_log(&mut self);
 
     fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String>;
     fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String>;

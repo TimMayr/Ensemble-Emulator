@@ -2,7 +2,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 
 use crate::emulation::cpu::{
-    CARRY_BIT, Cpu, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, OpType, Source, UNUSED_BIT,
+    Cpu, OpType, Source, CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, UNUSED_BIT,
     ZERO_BIT,
 };
 use crate::emulation::nes::Nes;
@@ -11,8 +11,8 @@ use crate::emulation::opcode::OpCode;
 use crate::util::add_to_low_byte;
 
 pub struct TraceLog {
-    log: String,
-    output: String,
+    pub log: String,
+    pub output: String,
 }
 impl Default for TraceLog {
     fn default() -> Self { Self::new(String::from("./trace-log.txt")) }
@@ -54,8 +54,8 @@ impl TraceLog {
             cpu.y_register,
             cpu.processor_status | UNUSED_BIT,
             cpu.stack_pointer,
-            (ppu.dot_counter.wrapping_sub(3)) / 341u128,
-            (ppu.dot_counter.wrapping_sub(3)) % 341u128,
+            ppu.scanline,
+            ppu.dot,
             (cpu.master_cycle / 12 ).wrapping_sub(1)
         )
             .as_str();

@@ -3,10 +3,10 @@ use std::time::Instant;
 
 use nes_core::emulation::emu::{Console, Consoles};
 use nes_core::emulation::nes::Nes;
-#[allow(unused_imports)]
-use nes_core::frontend::Frontends;
 #[cfg(feature = "sdl2")]
 use nes_core::frontend::sdl_frontend::SdlFrontend;
+#[allow(unused_imports)]
+use nes_core::frontend::Frontends;
 
 #[cfg(feature = "sdl2")]
 fn main() {
@@ -14,8 +14,10 @@ fn main() {
     let mut frontend = Frontends::Sdl2(SdlFrontend::default());
 
     emu.load_rom(&String::from("./core/tests/Mario Bros. (World).nes"));
+    emu.set_trace_log_path(Some("./trace_log.log".into()));
     emu.reset();
-    emu.run(&mut frontend).expect("TODO: panic message");
+    emu.run_until(&mut frontend, 1846387 * 12)
+        .expect("TODO: panic message");
 }
 
 #[cfg(not(feature = "sdl2"))]
