@@ -11,7 +11,7 @@ use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::{Memory, Ram};
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OPCODES_MAP, OpCode};
+use crate::emulation::opcode::{OpCode, OPCODES_MAP};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
@@ -108,7 +108,17 @@ impl Cpu {
         Self::default()
     }
 
-    pub fn mem_read(&mut self, addr: u16) -> u8 { self.memory.mem_read(addr) }
+    pub fn mem_read(&mut self, addr: u16) -> u8 {
+        if (0x2000..=0x3FFFu16).contains(&addr) {
+            if (addr - 0x2000) % 0x7 == 0 {
+                if let Some(ppu) = &self.ppu {
+                    ppu.borrow_mut().master_cycle = self.master_cycle;
+                }
+            }
+        }
+
+        self.memory.mem_read(addr)
+    }
 
     pub fn mem_write(&mut self, addr: u16, data: u8) { self.memory.mem_write(addr, data); }
 
@@ -958,12 +968,14 @@ impl Cpu {
         let mut seq = self.execute_micro_op(&op);
 
         if let Some(ppu) = &self.ppu {
-            if ppu.borrow().poll_nmi() && !self.prev_nmi {
+            let curr_nmi = ppu.borrow().poll_nmi();
+
+            if curr_nmi && !self.prev_nmi {
                 self.current_irq_vec = NMI_HANDLER_ADDR;
                 self.nmi_detected = true;
             }
 
-            self.prev_nmi = ppu.borrow().poll_nmi();
+            self.prev_nmi = curr_nmi;
         }
 
         if self.irq_provider.get() {
@@ -987,6 +999,7 @@ impl Cpu {
                 return Ok(());
             } else if self.irq_pending && !self.get_interrupt_disable_flag() {
                 self.trigger_irq();
+                self.irq_provider.set(false);
                 self.nmi_pending = false;
                 self.irq_pending = false;
                 return Ok(());

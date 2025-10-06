@@ -84,6 +84,10 @@ impl MemoryDevice for PpuRegisters {
 
     fn snapshot(&self, addr: u16, _: u8) -> u8 {
         match addr {
+            0x0 => {
+                let ppu = self.ppu.borrow();
+                ppu.get_ppu_ctrl()
+            }
             0x2 => {
                 let ppu = self.ppu.borrow();
                 ppu.status_register
