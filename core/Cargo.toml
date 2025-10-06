@@ -1,0 +1,22 @@
+[package]
+name = "nes_core"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "nes_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nes_main"
+path = "src/bin/main.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+bincode = { version = "2", features = ["serde"] }
+sdl2 = { version = "0.38.0", optional = true }
+bytemuck = "1.23.2"
+
+[features]
+default = []
+sdl2-frontend = ["sdl2"]

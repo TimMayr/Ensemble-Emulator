@@ -1,15 +1,12 @@
-[package]
-name = "nesamabob"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = [
+    "core",
+    "ffi",
+]
+default-members = ["core"]
+resolver = "2"
 
 [profile.profiling]
 inherits = "release"
 debug = true
 split-debuginfo = "unpacked"  # Ensures symbols are separate
-
-[dependencies]
-serde = { version = "1.0", features = ["derive"] }
-bincode = { version = "2", features = ["serde"] }
-sdl2 = "0.38.0"
-bytemuck = "1.23.2"
