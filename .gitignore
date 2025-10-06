@@ -178,4 +178,4 @@ fabric.properties
 
 *.etl*
 /states/*
-/tests/outputs/*.log
+/core/tests/outputs/*.log
