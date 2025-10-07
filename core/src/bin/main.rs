@@ -1,11 +1,9 @@
-#[cfg(not(feature = "sdl2"))]
 use std::time::Instant;
 
 use nes_core::emulation::emu::{Console, Consoles};
 use nes_core::emulation::nes::Nes;
 #[cfg(feature = "sdl2")]
 use nes_core::frontend::sdl_frontend::SdlFrontend;
-#[allow(unused_imports)]
 use nes_core::frontend::Frontends;
 
 #[cfg(feature = "sdl2")]
@@ -14,10 +12,14 @@ fn main() {
     let mut frontend = Frontends::Sdl2(SdlFrontend::default());
 
     emu.load_rom(&String::from("./core/tests/Mario Bros. (World).nes"));
-    emu.set_trace_log_path(Some("./trace_log.log".into()));
     emu.reset();
+
+    let start = Instant::now();
+
     emu.run_until(&mut frontend, 1846387 * 12)
         .expect("TODO: panic message");
+
+    println!("{:?}", start.elapsed());
 }
 
 #[cfg(not(feature = "sdl2"))]
@@ -26,13 +28,11 @@ fn main() {
 
     let mut frontend = Frontends::default();
 
-    emu.load_rom(&String::from(
-        "./core/tests/nes-test-roms/ppu_vbl_nmi/rom_singles/04-nmi_control.nes",
-    ));
+    emu.load_rom(&String::from("./core/tests/Mario Bros. (World).nes"));
     emu.reset();
 
     let start = Instant::now();
-    emu.run_until(&mut frontend, 12523621)
+    emu.run_until(&mut frontend, 1846387 * 120)
         .expect("TODO: panic message");
 
     let Consoles::Nes(ref mut nes) = emu;

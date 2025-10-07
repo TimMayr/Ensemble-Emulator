@@ -1,4 +1,4 @@
-use bincode::{Decode, Encode, config};
+use bincode::{config, Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 use crate::emulation::cpu::{Cpu, MicroOp};
@@ -83,6 +83,8 @@ pub struct PpuState {
     pub even_frame: bool,
     pub reset_signal: bool,
     pub pixel_buffer: Vec<u32>,
+    pub dot: u16,
+    pub scanline: u16,
 }
 
 impl From<&Ppu> for PpuState {
@@ -114,6 +116,8 @@ impl From<&Ppu> for PpuState {
             even_frame: ppu.even_frame,
             reset_signal: ppu.reset_signal,
             pixel_buffer: vec![0u32; (WIDTH * HEIGHT) as usize],
+            dot: ppu.dot,
+            scanline: ppu.scanline,
         }
     }
 }

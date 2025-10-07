@@ -36,7 +36,7 @@ impl Frontend for GodotFrontend {
             return Ok(());
         }
 
-        let src_bytes = bytemuck::cast_slice(&*pixel_buffer);
+        let src_bytes: &[u8] = bytemuck::cast_slice(&*pixel_buffer);
         let expected_len = src_bytes.len();
 
         if expected_len > self.video_len {
@@ -44,11 +44,25 @@ impl Frontend for GodotFrontend {
         }
 
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                src_bytes.as_ptr(),
-                self.video_ptr as *mut u8,
-                expected_len,
-            );
+            let dst = std::slice::from_raw_parts_mut(self.video_ptr as *mut u8, self.video_len);
+
+            for (i, &pix) in pixel_buffer.iter().enumerate() {
+                // Extract color components from the u32 (assuming 0xAARRGGBB)
+                let r = ((pix >> 24) & 0xFF) as u8;
+                let g = ((pix >> 16) & 0xFF) as u8;
+                let b = ((pix >> 8) & 0xFF) as u8;
+                let a = (pix & 0xFF) as u8;
+
+                let base = i * 4;
+                if base + 3 >= dst.len() {
+                    break;
+                }
+
+                dst[base] = r;
+                dst[base + 1] = g;
+                dst[base + 2] = b;
+                dst[base + 3] = a;
+            }
         }
 
         Ok(())

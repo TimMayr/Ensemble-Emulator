@@ -74,6 +74,17 @@ public partial class EmuHost : Node {
 		// Update texture from Rust’s pixel buffer
 		this.image.SetData(this.videoSpec.width, this.videoSpec.height, false, Image.Format.Rgba8, this.videoBuffer);
 		this.texture.Update(this.image);
+
+		Vector2 viewportSize = this.GetViewport().GetVisibleRect().Size;
+		Vector2 textureSize = this.texture.GetSize();
+
+		float scaleX = viewportSize.X / textureSize.X;
+		float scaleY = viewportSize.Y / textureSize.Y;
+		float scale = Math.Min(scaleX, scaleY); // maintain aspect ratio
+
+		this.sprite!.Scale = new Vector2(scale, scale);
+		this.sprite!.Position = viewportSize / 2f;
+		this.sprite!.Centered = true;
 	}
 
 	public override void _ExitTree() {
