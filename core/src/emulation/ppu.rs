@@ -81,6 +81,16 @@ const PALETTE_RAM_SIZE: u16 = 0x20;
 const PALETTE_SIZE: u16 = 0x4;
 const VRAM_SIZE: usize = 2048;
 
+const TILES_PER_ROW: usize = 16;
+const TILE_SIZE: usize = 8;
+const BYTES_PER_TILE: usize = 16; // 8 low plane + 8 high plane
+const TABLE_BYTES: usize = 0x1000; // 256 tiles * 16 bytes
+
+// Optional: space 2 tiles (16px) between the two pattern tables for
+// readability.
+const TABLE_GAP_TILES: usize = 2;
+const TABLE_GAP_PX: usize = TABLE_GAP_TILES * TILE_SIZE;
+
 impl Ppu {
     pub fn new() -> Self {
         Self {
@@ -368,18 +378,6 @@ impl Ppu {
         }
     }
 
-    pub fn get_pattern_table_0(&mut self, buffer: &mut [u8; PATTERN_TABLE_SIZE]) {
-        for (i, byte) in buffer.iter_mut().enumerate().take(PATTERN_TABLE_SIZE) {
-            *byte = self.mem_read(i as u16);
-        }
-    }
-
-    pub fn get_pattern_table_1(&mut self, buffer: &mut [u8; PATTERN_TABLE_SIZE]) {
-        for i in PATTERN_TABLE_SIZE..PATTERN_TABLE_SIZE * 2 - 1 {
-            buffer[i - PATTERN_TABLE_SIZE] = self.mem_read(i as u16);
-        }
-    }
-
     pub fn mem_read(&mut self, addr: u16) -> u8 { self.memory.mem_read(addr) }
 
     pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
@@ -401,61 +399,7 @@ impl Ppu {
 
     pub fn reset(&mut self) { self.reset_signal = true; }
 
-    pub fn get_color_for_bits(&mut self, color_bits: &u8) -> u32 {
-        let mut current_palette: [u8; 4] = [1; 4];
-
-        for (i, item) in current_palette.iter_mut().enumerate() {
-            let _mem = self.get_memory_debug(Some(PALETTE_RAM_START_ADDRESS..=0x3F1F));
-
-            *item = self.mem_read(
-                PALETTE_RAM_START_ADDRESS
-                    + (self.get_selected_palette() as u16 * PALETTE_SIZE)
-                    + i as u16,
-            )
-        }
-
-        let palette_index = current_palette[*color_bits as usize] as usize;
-
-        // let palette_index = match color_bits {
-        //     0b00 => 0x0F,
-        //     0b11 => 0x26,
-        //     0b01 => 0x2A,
-        //     0b10 => 0x21,
-        //     _ => 0x0F,
-        // };
-
-        NES_PALETTE[palette_index]
-    }
-
     pub fn get_selected_palette(&self) -> u8 { 2 }
-
-    fn decode_pattern_table(table: &[u8; 0x1000]) -> [u8; 0x4000] {
-        let mut buffer = [0u8; 256 * 8 * 8]; // 256 tiles * 64 pixels
-        for (tile_index, tile_bytes) in table.chunks_exact(16).enumerate() {
-            let tile_bytes: &[u8; 16] = tile_bytes.try_into().unwrap();
-            let flat_tile = Self::decode_tile_flat(tile_bytes);
-            let start = tile_index * 64;
-            buffer[start..start + 64].copy_from_slice(&flat_tile);
-        }
-        buffer
-    }
-
-    fn decode_tile_flat(tile_bytes: &[u8; 16]) -> [u8; 64] {
-        let mut flat_tile = [0u8; 64];
-
-        for y in 0..8 {
-            let plane0 = tile_bytes[y];
-            let plane1 = tile_bytes[y + 8];
-
-            for x in 0..8 {
-                let bit0 = (plane0 >> (7 - x)) & 1;
-                let bit1 = (plane1 >> (7 - x)) & 1;
-                flat_tile[y * 8 + x] = (bit1 << 1) | bit0;
-            }
-        }
-
-        flat_tile
-    }
 
     pub fn get_pixel_buffer(&self) -> &[u32; (WIDTH * HEIGHT) as usize] { &self.pixel_buffer }
 
@@ -463,30 +407,58 @@ impl Ppu {
         self.memory.get_memory_debug(range)
     }
 
-    pub fn frame(&mut self) {
-        let mut table = [0u8; PATTERN_TABLE_SIZE];
-        self.get_pattern_table_0(&mut table);
-        let pattern0 = Self::decode_pattern_table(&table);
+    pub fn frame(&mut self) { self.render_pattern_tables_fast() }
 
-        let mut table = [0u8; PATTERN_TABLE_SIZE];
-        self.get_pattern_table_1(&mut table);
-        let pattern1 = Self::decode_pattern_table(&table);
+    #[inline]
+    fn load_palette_colors(&mut self) -> [u32; 4] {
+        let mut colors = [0u32; 4];
+        let sel = self.get_selected_palette() as u16;
+        let base = PALETTE_RAM_START_ADDRESS + sel * 4;
 
-        for (table_index, table) in [pattern0, pattern1].iter().enumerate() {
-            let offset_x = if table_index == 0 { 0 } else { 18 * 8 };
+        for (i, color) in colors.iter_mut().enumerate() {
+            let idx = self.mem_read(base + i as u16) as usize;
+            *color = NES_PALETTE[idx];
+        }
+
+        colors
+    }
+
+    pub fn render_pattern_tables_fast(&mut self) {
+        // Build palette→color once
+        let color_lut: [u32; 4] = self.load_palette_colors();
+
+        // Two tables: base 0x0000 and 0x1000
+        for table_ix in 0..2 {
+            let table_base = (table_ix * TABLE_BYTES) as u16;
+
+            // Place table 1 to the right with a gap
+            let offset_x = match table_ix {
+                0 => 0,
+                _ => TILES_PER_ROW * TILE_SIZE + TABLE_GAP_PX,
+            };
 
             for tile_index in 0..256 {
-                let tile_start = tile_index * 64;
-                let tile_x = (tile_index % 16) * 8 + offset_x;
-                let tile_y = (tile_index / 16) * 8;
+                let tile_x = (tile_index % TILES_PER_ROW) * TILE_SIZE + offset_x;
+                let tile_y = (tile_index / TILES_PER_ROW) * TILE_SIZE;
 
-                for y in 0..8 {
-                    for x in 0..8 {
-                        let pixel_index = tile_start + y * 8 + x;
-                        let color_index = table[pixel_index]; // 0..3
-                        let color = self.get_color_for_bits(&color_index);
+                let tile_addr = table_base + (tile_index * BYTES_PER_TILE) as u16;
 
-                        self.pixel_buffer[(tile_y + y) * WIDTH as usize + (tile_x + x)] = color;
+                // Each tile row is two bytes: low-plane at [y], high-plane at [y+8]
+                for y in 0..TILE_SIZE {
+                    // Load both planes once
+                    let mut p0 = self.mem_read(tile_addr + y as u16);
+                    let mut p1 = self.mem_read(tile_addr + y as u16 + 8);
+
+                    // Compute destination row start once
+                    let row_start = (tile_y + y) * WIDTH as usize + tile_x;
+
+                    // Fill pixels right-to-left using bit shifts (avoids (7 - x) indexing)
+                    // This compiles to tight code and avoids variable shift amounts.
+                    for x in (0..TILE_SIZE).rev() {
+                        let idx = ((p0 & 1) | ((p1 & 1) << 1)) as usize;
+                        p0 >>= 1;
+                        p1 >>= 1;
+                        self.pixel_buffer[row_start + x] = color_lut[idx];
                     }
                 }
             }
