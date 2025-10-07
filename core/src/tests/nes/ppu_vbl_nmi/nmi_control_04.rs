@@ -3,13 +3,13 @@ use crate::emulation::nes::Nes;
 use crate::frontend::Frontends;
 
 #[test]
-fn test_03_vbl_clear_time() {
+fn test_04_nmi_control() {
     let mut emu = Consoles::Nes(Nes::default());
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/04-nmi_control.nes",
     ));
     emu.reset();
-    emu.run_until(&mut Frontends::default(), 12523621)
+    emu.run_until(&mut Frontends::default(), 13523621)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x604C));

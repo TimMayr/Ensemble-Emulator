@@ -1,4 +1,4 @@
-use bincode::{config, Decode, Encode};
+use bincode::{Decode, Encode, config};
 use serde::{Deserialize, Serialize};
 
 use crate::emulation::cpu::{Cpu, MicroOp};
@@ -14,7 +14,7 @@ pub struct CpuState {
     pub x_register: u8,
     pub y_register: u8,
     pub processor_status: u8,
-    pub memory: Vec<u8>, // PRG RAM + Work RAM
+    pub memory: Vec<u8>,
     pub master_cycle: u128,
     pub lo: u8,
     pub hi: u8,
@@ -41,7 +41,7 @@ impl From<&Cpu> for CpuState {
             x_register: cpu.x_register,
             y_register: cpu.y_register,
             processor_status: cpu.processor_status,
-            memory: cpu.memory.get_memory_debug(Some(0x0..=0x07FF)),
+            memory: cpu.memory.get_memory_debug(Some(0x0..=0xFFFF)),
             master_cycle: cpu.master_cycle,
             lo: cpu.lo,
             hi: cpu.hi,

@@ -74,12 +74,12 @@ const VRAM_ADDR_NAMETABLE_Y_BIT: u16 = 0x800;
 const FINE_Y_SCROLL_WIDTH: u8 = 0x7;
 const COARSE_SCROLL_WIDTH: u8 = 0x1F;
 pub const DOTS_PER_FRAME: u64 = 89342;
-const PATTERN_TABLE_SIZE: usize = 0x1000;
 const PALETTE_RAM_START_ADDRESS: u16 = 0x3F00;
 const PALETTE_RAM_END_INDEX: u16 = 0x3FFF;
 const PALETTE_RAM_SIZE: u16 = 0x20;
-const PALETTE_SIZE: u16 = 0x4;
 const VRAM_SIZE: usize = 2048;
+pub const DOTS_PER_SCANLINE: u16 = 340;
+pub const SCANLINES_PER_FRAME: u16 = 261;
 
 const TILES_PER_ROW: usize = 16;
 const TILE_SIZE: usize = 8;
@@ -214,8 +214,6 @@ impl Ppu {
 
     pub fn get_ppu_status(&mut self) -> u8 {
         let result = self.status_register;
-        self.nmi_requested.set(false);
-
         self.vbl_clear_scheduled = Some(self.master_cycle + 7);
 
         self.write_latch = false;
