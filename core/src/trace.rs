@@ -2,12 +2,12 @@ use std::fs::OpenOptions;
 use std::io::Write;
 
 use crate::emulation::cpu::{
-    Cpu, OpType, Source, CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, UNUSED_BIT,
+    OpType, Source, CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, UNUSED_BIT,
     ZERO_BIT,
 };
-use crate::emulation::nes::Nes;
 use crate::emulation::opcode;
 use crate::emulation::opcode::OpCode;
+use crate::emulation::savestate::{CpuState, SaveState};
 use crate::util::add_to_low_byte;
 
 pub struct TraceLog {
@@ -26,15 +26,21 @@ impl TraceLog {
         }
     }
 
-    pub fn trace(&mut self, nes: &Nes) {
+    pub fn trace(&mut self, nes: SaveState) {
         let mut cpu = nes.cpu.clone();
-        let ppu = nes.ppu.borrow();
+        let ppu = nes.ppu;
         let current_opcode = cpu.current_opcode.unwrap();
+        let current_opcode = **opcode::OPCODES_MAP
+            .get()
+            .unwrap()
+            .get(&current_opcode)
+            .unwrap();
 
         let relevant_mem_start = cpu.program_counter.wrapping_sub(1);
         let relevant_mem_end =
             relevant_mem_start.wrapping_add(opcode::get_bytes_for_opcode(current_opcode) as u16);
-        let relevant_mem = cpu.get_memory_debug(Some(relevant_mem_start..=relevant_mem_end));
+        let relevant_mem: Vec<u8> =
+            cpu.memory[(relevant_mem_start as usize)..=(relevant_mem_end as usize)].to_vec();
         let mem_formatted = relevant_mem
             .iter()
             .map(|n| format!("{:02X}", n))
@@ -127,15 +133,21 @@ pub fn get_str_for_src(source: Source) -> String {
     }
 }
 
-pub fn get_opcode_descriptor(opcode: OpCode, cpu: &mut Cpu) -> String {
+pub fn get_opcode_descriptor(opcode: OpCode, cpu: &mut CpuState) -> String {
     match opcode.op_type {
         OpType::ImmediateAddressing(..) => {
-            format!("#${:02X}", cpu.memory.mem_read_debug(cpu.program_counter))
+            format!("#${:02X}", cpu.memory[cpu.program_counter as usize])
         }
         OpType::AccumulatorOrImplied(..) => {
-            let Some(opcode) = cpu.current_opcode else {
+            if cpu.current_opcode.is_none() {
                 return String::new();
-            };
+            }
+
+            let opcode = **opcode::OPCODES_MAP
+                .get()
+                .unwrap()
+                .get(&cpu.current_opcode.unwrap())
+                .unwrap();
 
             match opcode {
                 OpCode {
@@ -146,79 +158,66 @@ pub fn get_opcode_descriptor(opcode: OpCode, cpu: &mut Cpu) -> String {
             }
         }
         OpType::AbsoluteRead(..) | OpType::AbsoluteRMW(..) | OpType::AbsoluteWrite(..) => {
-            let address = ((cpu
-                .memory
-                .mem_read_debug(cpu.program_counter.wrapping_add(1))
-                as u16)
-                << 8)
-                | cpu.memory.mem_read_debug(cpu.program_counter) as u16;
-            format!(
-                "${:04X} = {:02X}",
-                address,
-                cpu.memory.mem_read_debug(address)
-            )
+            let address = ((cpu.memory[cpu.program_counter.wrapping_add(1) as usize] as u16) << 8)
+                | cpu.memory[cpu.program_counter as usize] as u16;
+            format!("${:04X} = {:02X}", address, cpu.memory[address as usize])
         }
         OpType::AbsoluteIndexRead(source, ..)
         | OpType::AbsoluteIndexRMW(source, ..)
         | OpType::AbsoluteIndexWrite(_, source, ..) => {
-            let address = ((cpu
-                .memory
-                .mem_read_debug(cpu.program_counter.wrapping_add(1))
-                as u16)
-                << 8)
-                | cpu.memory.mem_read_debug(cpu.program_counter) as u16;
+            let address = ((cpu.memory[cpu.program_counter.wrapping_add(1) as usize] as u16) << 8)
+                | cpu.memory[cpu.program_counter as usize] as u16;
 
             let reg_string = get_str_for_src(source);
 
-            let effective_address = address.wrapping_add(cpu.get_src_value(&source) as u16);
+            let val = match source {
+                Source::X => cpu.x_register,
+                Source::Y => cpu.y_register,
+                _ => 0,
+            };
+
+            let effective_address = address.wrapping_add(val as u16);
 
             format!(
                 "${:04X},{} @ {:04X} = {:02X}",
-                address,
-                reg_string,
-                effective_address,
-                cpu.memory.mem_read_debug(effective_address)
+                address, reg_string, effective_address, cpu.memory[effective_address as usize]
             )
         }
         OpType::ZeroPageRead(..) | OpType::ZeroPageRMW(..) | OpType::ZeroPageWrite(..) => {
-            let address = cpu.memory.mem_read_debug(cpu.program_counter);
-            format!(
-                "${:02X} = {:02X}",
-                address,
-                cpu.memory.mem_read_debug(address as u16)
-            )
+            let address = cpu.memory[cpu.program_counter as usize];
+            format!("${:02X} = {:02X}", address, cpu.memory[address as usize])
         }
         OpType::ZeroPageIndexRead(source, ..)
         | OpType::ZeroPageIndexRMW(source, ..)
         | OpType::ZeroPageIndexWrite(_, source, ..) => {
-            let address = cpu.memory.mem_read_debug(cpu.program_counter);
+            let address = cpu.memory[cpu.program_counter as usize];
 
             let reg_string = get_str_for_src(source);
 
-            let effective_address = address.wrapping_add(cpu.get_src_value(&source));
+            let val = match source {
+                Source::X => cpu.x_register,
+                Source::Y => cpu.y_register,
+                _ => 0,
+            };
+
+            let effective_address = address.wrapping_add(val);
 
             format!(
                 "${:02X},{} @ {:02X} = {:02X}",
-                address,
-                reg_string,
-                effective_address,
-                cpu.memory.mem_read_debug(effective_address as u16)
+                address, reg_string, effective_address, cpu.memory[effective_address as usize]
             )
         }
         OpType::IndexedIndirectRead(..)
         | OpType::IndexedIndirectRMW(_)
         | OpType::IndexedIndirectWrite(..) => {
-            let address = cpu.memory.mem_read_debug(cpu.program_counter);
+            let address = cpu.memory[cpu.program_counter as usize];
 
-            let effective_address = address.wrapping_add(cpu.get_src_value(&Source::X));
-            let lookup_addr = ((cpu
-                .memory
-                .mem_read_debug((effective_address.wrapping_add(1)) as u16)
-                as u16)
+            let effective_address = address.wrapping_add(cpu.x_register);
+            let lookup_addr = ((cpu.memory[effective_address.wrapping_add(1) as usize] as u16)
                 << 8)
-                | cpu.memory.mem_read_debug(effective_address as u16) as u16;
+                | cpu.memory[effective_address as usize] as u16;
 
-            let val = cpu.memory.mem_read_debug(lookup_addr);
+            let val = cpu.memory[lookup_addr as usize];
 
             format!(
                 "(${:02X},X) @ {:02X} = {:04X} = {:02X}",
@@ -228,15 +227,14 @@ pub fn get_opcode_descriptor(opcode: OpCode, cpu: &mut Cpu) -> String {
         OpType::IndirectIndexedRead(..)
         | OpType::IndirectIndexedRMW(_)
         | OpType::IndirectIndexedWrite(..) => {
-            let address = cpu.memory.mem_read_debug(cpu.program_counter);
+            let address = cpu.memory[cpu.program_counter as usize];
 
-            let effective_addr =
-                ((cpu.memory.mem_read_debug((address.wrapping_add(1)) as u16) as u16) << 8)
-                    | cpu.memory.mem_read_debug(address as u16) as u16;
+            let effective_addr = ((cpu.memory[address.wrapping_add(1) as usize] as u16) << 8)
+                | cpu.memory[address as usize] as u16;
 
-            let lookup_addr = effective_addr.wrapping_add(cpu.get_src_value(&Source::Y) as u16);
+            let lookup_addr = effective_addr.wrapping_add(cpu.y_register as u16);
 
-            let val = cpu.memory.mem_read_debug(lookup_addr);
+            let val = cpu.memory[lookup_addr as usize];
 
             format!(
                 "(${:02X}),Y = {:04X} @ {:04X} = {:02X}",
@@ -247,29 +245,21 @@ pub fn get_opcode_descriptor(opcode: OpCode, cpu: &mut Cpu) -> String {
             String::new()
         }
         OpType::JSR(_) | OpType::JmpAbsolute(_) => {
-            let address = ((cpu
-                .memory
-                .mem_read_debug(cpu.program_counter.wrapping_add(1))
-                as u16)
-                << 8)
-                | cpu.memory.mem_read_debug(cpu.program_counter) as u16;
+            let address = ((cpu.memory[cpu.program_counter.wrapping_add(1) as usize] as u16) << 8)
+                | cpu.memory[cpu.program_counter as usize] as u16;
             format!("${:04X}", address)
         }
         OpType::JmpIndirect(_) => {
-            let address = ((cpu
-                .memory
-                .mem_read_debug(cpu.program_counter.wrapping_add(1))
-                as u16)
-                << 8)
-                | cpu.memory.mem_read_debug(cpu.program_counter) as u16;
+            let address = ((cpu.memory[cpu.program_counter.wrapping_add(1) as usize] as u16) << 8)
+                | cpu.memory[cpu.program_counter as usize] as u16;
 
-            let val = ((cpu.memory.mem_read_debug(add_to_low_byte(address, 1)) as u16) << 8)
-                | cpu.memory.mem_read_debug(address) as u16;
+            let val = ((cpu.memory[add_to_low_byte(address, 1) as usize] as u16) << 8)
+                | cpu.memory[address as usize] as u16;
             format!("(${:04X}) = {:04X}", address, val)
         }
         OpType::Relative(..) => {
             let base_address = cpu.program_counter.wrapping_add(1);
-            let offset = cpu.memory.mem_read_debug(cpu.program_counter) as i8;
+            let offset = cpu.memory[cpu.program_counter as usize] as i8;
             let val = base_address.wrapping_add(offset as i16 as u16);
 
             format!("${:04X}", val)

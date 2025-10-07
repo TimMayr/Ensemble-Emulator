@@ -525,8 +525,8 @@ impl Ppu {
             pixel_buffer: state.pixel_buffer.clone().try_into().unwrap(),
             master_cycle: state.master_cycle,
             vbl_clear_scheduled: None,
-            scanline: 0,
-            dot: 0,
+            scanline: state.scanline,
+            dot: state.dot,
         };
 
         ppu.load_rom(rom);

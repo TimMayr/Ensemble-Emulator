@@ -25,7 +25,7 @@ pub struct Nes {
     pub ppu: Rc<RefCell<Ppu>>,
     pub cycles: u128,
     pub rom_file: Option<RomFile>,
-    pub trace_log: RefCell<Option<TraceLog>>,
+    pub trace_log: Option<TraceLog>,
 }
 
 impl Console for Nes {
@@ -54,14 +54,14 @@ impl Console for Nes {
                     continue;
                 }
                 Ok(res) => {
-                    if let Some(trace) = self.trace_log.borrow_mut().as_mut() {
+                    if let Some(ref mut trace) = self.trace_log {
                         trace.flush();
                     }
 
                     return Ok(res);
                 }
                 Err(err) => {
-                    if let Some(ref mut trace) = self.trace_log.borrow_mut().as_mut() {
+                    if let Some(ref mut trace) = self.trace_log {
                         trace.flush();
                     }
 
@@ -80,22 +80,21 @@ impl Console for Nes {
 
     fn set_trace_log_path(&mut self, path: Option<String>) {
         if path.is_none() {
-            self.trace_log = RefCell::new(None);
+            self.trace_log = None;
             return;
         }
 
-        if self.trace_log.borrow_mut().as_mut().is_none() {
-            self.trace_log
-                .replace(Some(TraceLog::new(path.clone().unwrap())));
+        if self.trace_log.is_none() {
+            self.trace_log = Some(TraceLog::new(path.clone().unwrap()));
         }
 
-        if let Some(trace) = self.trace_log.borrow_mut().as_mut() {
+        if let Some(ref mut trace) = self.trace_log {
             trace.output = path.unwrap();
         }
     }
 
     fn flush_trace_log(&mut self) {
-        if let Some(trace) = self.trace_log.borrow_mut().as_mut() {
+        if let Some(ref mut trace) = self.trace_log {
             trace.flush()
         }
     }
@@ -116,7 +115,7 @@ impl Nes {
             ppu,
             cycles: 0,
             rom_file: None,
-            trace_log: RefCell::new(None),
+            trace_log: None,
         }
     }
 
@@ -183,7 +182,8 @@ impl Nes {
         frontend: &mut Frontends,
         last_cycle: u128,
     ) -> Result<ExecutionFinishedType, String> {
-        if self.cycles >= last_cycle {
+        if self.cycles > last_cycle {
+            self.cycles -= 1;
             return Ok(ExecutionFinishedType::ReachedLastCycle);
         };
 
@@ -196,7 +196,7 @@ impl Nes {
         if self.cycles.is_multiple_of(12) {
             let mut do_trace = false;
 
-            if let Some(_) = &self.trace_log.get_mut()
+            if self.trace_log.is_some()
                 && discriminant(&self.cpu.current_op)
                     == discriminant(&MicroOp::FetchOpcode(MicroOpCallback::None))
             {
@@ -205,8 +205,21 @@ impl Nes {
 
             cpu_res = self.cpu.step(self.cycles);
 
-            if do_trace && let Some(trace) = self.trace_log.borrow_mut().as_mut() {
-                trace.trace(self);
+            if do_trace && let Some(ref mut trace) = self.trace_log {
+                let ppu_state = {
+                    let ppu_ref = self.ppu.borrow();
+                    PpuState::from(ppu_ref.deref())
+                };
+
+                let state = SaveState {
+                    cpu: CpuState::from(&self.cpu),
+                    ppu: ppu_state,
+                    cycles: self.cycles,
+                    rom_file: self.rom_file.as_ref().unwrap().clone(),
+                    version: 1,
+                };
+
+                trace.trace(state)
             }
         }
 
