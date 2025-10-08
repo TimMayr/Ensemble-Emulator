@@ -117,7 +117,7 @@ impl Ppu {
             oam: Box::new(Self::get_default_oam()),
             write_latch: false,
             t_register: 0,
-            even_frame: true,
+            even_frame: false,
             reset_signal: true,
             pixel_buffer: [0u32; (WIDTH * HEIGHT) as usize],
             master_cycle: 0,
@@ -161,7 +161,7 @@ impl Ppu {
             self.even_frame = !self.even_frame;
         }
 
-        if frame_dot == 261 * 113 && !self.even_frame && self.is_rendering() {
+        if frame_dot == 0 && self.even_frame {
             self.dot_counter += 1;
             frame_dot = self.dot_counter % DOTS_PER_FRAME as u128;
         }
@@ -189,7 +189,7 @@ impl Ppu {
             self.reset_signal = false;
         }
 
-        if self.status_register & self.ctrl_register & VBLANK_NMI_BIT != 0 {
+        if (self.status_register & self.ctrl_register & VBLANK_NMI_BIT) != 0 {
             self.nmi_requested.set(true);
         } else {
             self.nmi_requested.set(false);
