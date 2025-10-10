@@ -7,8 +7,8 @@ fn test_tay_complete() {
 
     cpu.mem_write(0x0, 0xA8);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
     assert_eq!(cpu.y_register, 0x66);
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -17,8 +17,8 @@ fn test_tay_complete() {
 
     cpu.mem_write(0x1, 0xA8);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
     assert_eq!(cpu.y_register, 0x0);
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -27,8 +27,8 @@ fn test_tay_complete() {
 
     cpu.mem_write(0x2, 0xA8);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
     assert_eq!(cpu.y_register, 0x80);
     assert!(!cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());
@@ -41,8 +41,8 @@ fn test_tay_implied() {
 
     cpu.mem_write(0x0, 0xA8);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
     assert_eq!(cpu.y_register, 0x66)
 }
 
@@ -53,8 +53,8 @@ fn test_tay_flags_none_when_none() {
 
     cpu.mem_write(0x0, 0xA8);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
     assert_eq!(cpu.y_register, 0x66);
     assert!(!cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -68,8 +68,8 @@ fn test_tay_flags_only_zero_when_zero() {
 
     cpu.mem_write(0x0, 0xA8);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
     assert_eq!(cpu.y_register, 0x0);
     assert!(cpu.get_zero_flag());
     assert!(!cpu.get_negative_flag());
@@ -82,8 +82,8 @@ fn test_tay_flags_only_negative_when_negative() {
 
     cpu.mem_write(0x0, 0xA8);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
     assert_eq!(cpu.y_register, 0x80);
     assert!(!cpu.get_zero_flag());
     assert!(cpu.get_negative_flag());

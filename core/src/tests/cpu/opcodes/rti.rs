@@ -10,12 +10,12 @@ fn test_rti() {
 
     cpu.mem_write(0x0, 0x40);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.program_counter, 0x1080)
 }

@@ -7,8 +7,8 @@ fn test_rol_complete() {
 
     cpu.mem_write(0x0, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0b1000_0000);
     assert!(!cpu.get_carry_flag());
@@ -20,11 +20,11 @@ fn test_rol_complete() {
     cpu.mem_write(0x2, 0x20);
     cpu.mem_write(0x20, 0b1000_0000);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.mem_read(0x20), 0);
     assert!(cpu.get_carry_flag());
@@ -37,8 +37,8 @@ fn test_rol_complete() {
 
     cpu.mem_write(0x3, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0b1000_0001);
     assert!(!cpu.get_carry_flag());
@@ -52,11 +52,11 @@ fn test_rol_complete() {
     cpu.mem_write(0x5, 0x30);
     cpu.mem_write(0x30, 0b1000_0001);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.mem_read(0x31), 0);
     assert!(cpu.get_carry_flag());
@@ -70,12 +70,12 @@ fn test_rol_complete() {
     cpu.mem_write(0x7, 0x40);
     cpu.mem_write(0x41, 0b0000_0001);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.mem_read(0x41), 0b0000_0010);
     assert!(!cpu.get_carry_flag());
@@ -87,12 +87,12 @@ fn test_rol_complete() {
     cpu.mem_write_u16(0x9, 0x1234);
     cpu.mem_write(0x1234, 0b0000_0001);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.mem_read(0x1234), 0b0000_0010);
     assert!(!cpu.get_carry_flag());
@@ -105,13 +105,13 @@ fn test_rol_complete() {
     cpu.mem_write_u16(0xC, 0x8000);
     cpu.mem_write(0x8001, 0b1000_0000);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.mem_read(0x8001), 0);
     assert!(cpu.get_carry_flag());
@@ -122,8 +122,8 @@ fn test_rol_complete() {
 
     cpu.mem_write(0xE, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(!cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -133,8 +133,8 @@ fn test_rol_complete() {
 
     cpu.mem_write(0xF, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(!cpu.get_carry_flag());
     assert!(cpu.get_zero_flag());
@@ -144,8 +144,8 @@ fn test_rol_complete() {
 
     cpu.mem_write(0x10, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(!cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -155,8 +155,8 @@ fn test_rol_complete() {
 
     cpu.mem_write(0x11, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_negative_flag());
@@ -166,8 +166,8 @@ fn test_rol_complete() {
 
     cpu.mem_write(0x12, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_carry_flag());
     assert!(cpu.get_zero_flag());
@@ -177,8 +177,8 @@ fn test_rol_complete() {
 
     cpu.mem_write(0x13, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -189,14 +189,14 @@ fn test_rol_complete() {
 
     cpu.mem_write(0x14, 0x2A);
     cpu.mem_write(0x15, 0x2A);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
     assert_eq!(cpu.accumulator, 0);
     assert!(cpu.get_carry_flag());
     assert!(cpu.get_zero_flag());
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
     assert_eq!(cpu.accumulator, 1);
     assert!(!cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -209,8 +209,8 @@ fn test_rol_accumulator() {
 
     cpu.mem_write(0x0, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0b1000_0000);
     assert!(!cpu.get_carry_flag());
@@ -225,11 +225,11 @@ fn test_rol_zero_page() {
     cpu.mem_write(0x1, 0x20);
     cpu.mem_write(0x20, 0b1000_0000);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.mem_read(0x20), 0);
     assert!(cpu.get_carry_flag());
@@ -245,8 +245,8 @@ fn test_rol_accumulator_with_carry() {
 
     cpu.mem_write(0x0, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0b1000_0001);
     assert!(!cpu.get_carry_flag());
@@ -263,11 +263,11 @@ fn test_rol_zero_page_with_carry() {
     cpu.mem_write(0x1, 0x20);
     cpu.mem_write(0x20, 0b1000_0001);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.mem_read(0x21), 0);
     assert!(cpu.get_carry_flag());
@@ -284,12 +284,12 @@ fn test_rol_zero_page_x() {
     cpu.mem_write(0x1, 0x30);
     cpu.mem_write(0x31, 0b0000_0001);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.mem_read(0x31), 0b0000_0010);
     assert!(!cpu.get_carry_flag());
@@ -304,12 +304,12 @@ fn test_rol_absolute() {
     cpu.mem_write_u16(0x1, 0x1234);
     cpu.mem_write(0x1234, 0b0000_0001);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.mem_read(0x1234), 0b0000_0010);
     assert!(!cpu.get_carry_flag());
@@ -326,13 +326,13 @@ fn test_rol_absolute_x() {
     cpu.mem_write_u16(0x1, 0x8000);
     cpu.mem_write(0x8001, 0b1000_0000);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.mem_read(0x8001), 0);
     assert!(cpu.get_carry_flag());
@@ -347,8 +347,8 @@ fn test_rol_flags_none_when_none() {
 
     cpu.mem_write(0x0, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(!cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -362,8 +362,8 @@ fn test_rol_flags_only_zero_when_only_zero() {
 
     cpu.mem_write(0x0, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(!cpu.get_carry_flag());
     assert!(cpu.get_zero_flag());
@@ -377,8 +377,8 @@ fn test_rol_flags_only_negative_when_only_negative() {
 
     cpu.mem_write(0x0, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(!cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -392,8 +392,8 @@ fn test_rol_flags_only_carry_when_only_carry() {
 
     cpu.mem_write(0x0, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_negative_flag());
@@ -407,8 +407,8 @@ fn test_rol_flags_carry_and_zero_when_carry_and_zero() {
 
     cpu.mem_write(0x0, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_carry_flag());
     assert!(cpu.get_zero_flag());
@@ -422,8 +422,8 @@ fn test_rol_flags_carry_and_only_negative_when_carry_and_negative() {
 
     cpu.mem_write(0x0, 0x2A);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -437,8 +437,8 @@ fn test_rol_preserves_overflow_flag() {
     cpu.processor_status |= 0b0100_0000; // set V
 
     cpu.mem_write(0x0, 0x2A); // ROL A
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_overflow_flag()); // should be unchanged
 }
@@ -450,8 +450,8 @@ fn test_rol_preserves_decimal_flag() {
     cpu.processor_status |= 0b0000_1000; // set D
 
     cpu.mem_write(0x0, 0x2A); // ROL A
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_decimal_flag()); // should be unchanged
 }
@@ -463,8 +463,8 @@ fn test_rol_preserves_interrupt_disable_flag() {
     cpu.processor_status |= 0b0000_0100; // set I
 
     cpu.mem_write(0x0, 0x2A); // ROL A
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_interrupt_disable_flag()); // should be unchanged
 }
@@ -476,8 +476,8 @@ fn test_rol_preserves_break_flag() {
     cpu.processor_status |= 0b0001_0000; // set B
 
     cpu.mem_write(0x0, 0x2A); // ROL A
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_break_flag()); // should be unchanged
 }
@@ -489,8 +489,8 @@ fn test_rol_preserves_unused_flag() {
     cpu.processor_status |= 0b0010_0000; // set U (unused bit 5)
 
     cpu.mem_write(0x0, 0x2A); // ROL A
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_unused_flag()); // should be unchanged
 }

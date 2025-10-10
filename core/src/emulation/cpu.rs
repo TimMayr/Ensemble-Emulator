@@ -11,8 +11,9 @@ use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::{Memory, Ram};
 use crate::emulation::nes::ExecutionFinishedType;
+use crate::emulation::nes::ExecutionFinishedType::CycleCompleted;
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OPCODES_MAP, OpCode};
+use crate::emulation::opcode::{OpCode, OPCODES_MAP};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
@@ -109,16 +110,7 @@ impl Cpu {
         Self::default()
     }
 
-    pub fn mem_read(&mut self, addr: u16) -> u8 {
-        if (0x2000..=0x3FFFu16).contains(&addr)
-            && (addr - 0x2000).is_multiple_of(0x7)
-            && let Some(ppu) = &self.ppu
-        {
-            ppu.borrow_mut().master_cycle = self.master_cycle;
-        }
-
-        self.memory.mem_read(addr)
-    }
+    pub fn mem_read(&mut self, addr: u16) -> u8 { self.memory.mem_read(addr) }
 
     pub fn mem_write(&mut self, addr: u16, data: u8) { self.memory.mem_write(addr, data); }
 
@@ -946,12 +938,12 @@ impl Cpu {
         self.memory.get_memory_debug(range)
     }
 
-    pub fn step(&mut self, master_cycle: u128) -> Result<ExecutionFinishedType, String> {
+    #[inline]
+    pub fn step(&mut self) -> Result<ExecutionFinishedType, String> {
         if self.is_halted {
             return Ok(ExecutionFinishedType::ReachedHlt);
         }
 
-        self.master_cycle = master_cycle;
         let op = self.current_op;
 
         if discriminant(&op) != discriminant(&MicroOp::BranchIncrement(Source::None))
@@ -990,23 +982,23 @@ impl Cpu {
             self.current_op = seq.remove(0);
             self.op_queue = seq;
 
-            Ok(ExecutionFinishedType::CycleCompleted)
+            Ok(CycleCompleted)
         } else {
             if self.nmi_pending {
                 self.trigger_nmi();
                 self.nmi_pending = false;
                 self.irq_pending = false;
-                return Ok(ExecutionFinishedType::CycleCompleted);
+                return Ok(CycleCompleted);
             } else if self.irq_pending && !self.get_interrupt_disable_flag() {
                 self.trigger_irq();
                 self.irq_provider.set(false);
                 self.nmi_pending = false;
                 self.irq_pending = false;
-                return Ok(ExecutionFinishedType::CycleCompleted);
+                return Ok(CycleCompleted);
             }
 
             self.current_op = MicroOp::FetchOpcode(MicroOpCallback::None);
-            Ok(ExecutionFinishedType::CycleCompleted)
+            Ok(CycleCompleted)
         }
     }
 

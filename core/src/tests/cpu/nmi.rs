@@ -30,28 +30,28 @@ fn test_nmi_vector() {
 
     nes.reset();
 
-    nes.cpu.step(0);
-    nes.cpu.step(0);
-    nes.cpu.step(0);
-    nes.cpu.step(0);
-    nes.cpu.step(0);
-    nes.cpu.step(0);
-    nes.cpu.step(0);
+    nes.cpu.step();
+    nes.cpu.step();
+    nes.cpu.step();
+    nes.cpu.step();
+    nes.cpu.step();
+    nes.cpu.step();
+    nes.cpu.step();
 
-    nes.cpu.step(0);
-    nes.cpu.step(0);
+    nes.cpu.step();
+    nes.cpu.step();
 
     assert_eq!(nes.cpu.accumulator, 0x30);
 
-    nes.cpu.step(0);
-    nes.cpu.step(0);
-    nes.cpu.step(0);
-    nes.cpu.step(0);
-    nes.cpu.step(0);
-    nes.cpu.step(0);
-    nes.cpu.step(0);
+    nes.cpu.step();
+    nes.cpu.step();
+    nes.cpu.step();
+    nes.cpu.step();
+    nes.cpu.step();
+    nes.cpu.step();
+    nes.cpu.step();
 
-    nes.cpu.step(0);
-    nes.cpu.step(0);
+    nes.cpu.step();
+    nes.cpu.step();
     assert_eq!(nes.cpu.accumulator, 0x20)
 }

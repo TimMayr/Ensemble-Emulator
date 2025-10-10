@@ -18,15 +18,15 @@ fn test_reset_vector() {
     cpu.memory.add_memory(0x4020..=0xFFFF, Memory::Rom(rom));
 
     cpu.reset();
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
     assert_eq!(cpu.accumulator, 0x20)
 }

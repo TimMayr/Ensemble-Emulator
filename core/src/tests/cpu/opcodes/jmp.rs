@@ -6,28 +6,28 @@ fn test_jmp_complete() {
     cpu.mem_write(0x0, 0x4C);
     cpu.mem_write_u16(0x1, 0x1234);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
     assert_eq!(cpu.program_counter, 0x1234);
 
     cpu.mem_write(0x1234, 0x6C);
     cpu.mem_write_u16(0x1235, 0x8345);
     cpu.mem_write_u16(0x8345, 0x9456);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.program_counter, 0x9456);
 
     cpu.mem_write(0x9456, 0xA9);
     cpu.mem_write(0x9457, 0x66);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x66);
 }
@@ -38,15 +38,15 @@ fn test_jmp_absolute() {
     cpu.mem_write(0x0, 0x4C);
     cpu.mem_write_u16(0x1, 0x1234);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
     assert_eq!(cpu.program_counter, 0x1234);
 
     cpu.mem_write(0x1234, 0xA9);
     cpu.mem_write(0x1235, 0x66);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x66);
 }
@@ -58,19 +58,19 @@ fn test_jmp_indirect() {
     cpu.mem_write_u16(0x1, 0x1234);
     cpu.mem_write_u16(0x1234, 0x8345);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.program_counter, 0x8345);
 
     cpu.mem_write(0x8345, 0xA9);
     cpu.mem_write(0x8346, 0x66);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x66);
 }

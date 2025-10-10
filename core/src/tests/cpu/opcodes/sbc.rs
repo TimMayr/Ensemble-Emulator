@@ -7,8 +7,8 @@ fn test_sbc_immediate() {
     cpu.mem_write(0x0, 0xE9);
     cpu.mem_write(0x1, 0x11);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x43);
 }
@@ -21,9 +21,9 @@ fn test_sbc_zero_page() {
     cpu.mem_write(0x1, 0x33);
     cpu.mem_write(0x33, 0x11);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x43);
 }
@@ -37,10 +37,10 @@ fn test_sbc_zero_page_x() {
     cpu.mem_write(0x1, 0x33);
     cpu.mem_write(0x43, 0x11);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x43);
 }
@@ -53,10 +53,10 @@ fn test_sbc_absolute() {
     cpu.mem_write_u16(0x1, 0x8333);
     cpu.mem_write(0x8333, 0x11);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x43);
 }
@@ -70,10 +70,10 @@ fn test_sbc_absolute_x() {
     cpu.mem_write_u16(0x1, 0x8333);
     cpu.mem_write(0x8343, 0x11);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x43);
 }
@@ -87,10 +87,10 @@ fn test_sbc_absolute_y() {
     cpu.mem_write_u16(0x1, 0x8333);
     cpu.mem_write(0x8343, 0x11);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x43);
 }
@@ -105,12 +105,12 @@ fn test_sbc_indirect_x() {
     cpu.mem_write_u16(0x43, 0x8343);
     cpu.mem_write(0x8343, 0x11);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x43);
 }
@@ -125,11 +125,11 @@ fn test_sbc_indirect_y() {
     cpu.mem_write_u16(0x33, 0x8333);
     cpu.mem_write(0x8343, 0x11);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x43);
 }
@@ -143,8 +143,8 @@ fn test_sbc_with_carry() {
     cpu.mem_write(0x0, 0xE9);
     cpu.mem_write(0x1, 0x11);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x44);
 }
@@ -158,8 +158,8 @@ fn test_sbc_flags_none_when_none() {
     cpu.mem_write(0x0, 0xE9);
     cpu.mem_write(0x1, 0x11);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x44);
     assert!(!cpu.get_overflow_flag());
@@ -177,8 +177,8 @@ fn test_sbc_flags_negative_when_negative() {
     cpu.mem_write(0x0, 0xE9);
     cpu.mem_write(0x1, 0x10);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x80);
     assert!(!cpu.get_overflow_flag());
@@ -196,8 +196,8 @@ fn test_sbc_flags_carry_and_negative_when_carry_and_negative() {
     cpu.mem_write(0x0, 0xE9);
     cpu.mem_write(0x1, 0x3);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0xFD);
     assert!(!cpu.get_overflow_flag());
@@ -215,8 +215,8 @@ fn test_sbc_flags_zero_when_zero() {
     cpu.mem_write(0x0, 0xE9);
     cpu.mem_write(0x1, 0x1);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x0);
     assert!(!cpu.get_overflow_flag());
@@ -234,8 +234,8 @@ fn test_sbc_flags_overflow_when_overflow() {
     cpu.mem_write(0x0, 0xE9);
     cpu.mem_write(0x1, 0x10);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x70);
     assert!(cpu.get_overflow_flag());

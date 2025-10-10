@@ -159,8 +159,8 @@ pub unsafe extern "C" fn emu_step_frame(e: *mut FfiWrapper) -> c_int {
                 println!();
                 -1
             }
-            ExecutionFinishedType::CycleCompleted => {
-                panic!()
+            ExecutionFinishedType::CycleCompleted | ExecutionFinishedType::NotStepped => {
+                unreachable!()
             }
         },
         Err(_) => -1,

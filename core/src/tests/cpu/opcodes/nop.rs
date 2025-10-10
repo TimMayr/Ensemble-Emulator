@@ -7,7 +7,7 @@ fn test_nop() {
     cpu.accumulator = 0x66;
 
     cpu.mem_write(0x0, 0xEA);
-    cpu.step(0);
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x66);
     assert_eq!(cpu.processor_status, 0b00000001);
