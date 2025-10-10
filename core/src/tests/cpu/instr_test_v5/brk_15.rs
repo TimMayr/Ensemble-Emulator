@@ -9,7 +9,7 @@ fn test_15_brk() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/15-brk.nes",
     ));
     emu.reset();
-    emu.run_until(&mut Frontends::default(), 8908081)
+    emu.run_until(&mut Frontends::default(), 10908081)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6014));

@@ -9,15 +9,15 @@ fn bcs_fail() {
     cpu.mem_write(0x3, 0xB0);
     cpu.mem_write(0x4, 0x12);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.program_counter, 0x5);
 }
@@ -32,24 +32,24 @@ fn bcs_success() {
     cpu.mem_write(0x3, 0xB0);
     cpu.mem_write(0x4, 0x12);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.program_counter, 0x17);
 
     cpu.mem_write(0x17, 0xA9);
     cpu.mem_write(0x18, 0x66);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert_eq!(cpu.accumulator, 0x66);
 }

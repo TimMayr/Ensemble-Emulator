@@ -2,7 +2,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 
 use crate::emulation::cpu::{
-    CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, OpType, Source, UNUSED_BIT,
+    OpType, Source, CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, UNUSED_BIT,
     ZERO_BIT,
 };
 use crate::emulation::opcode;
@@ -28,7 +28,7 @@ impl TraceLog {
 
     pub fn trace(&mut self, nes: SaveState) {
         let mut cpu = nes.cpu.clone();
-        let ppu = nes.ppu;
+        let _ppu = nes.ppu;
         let current_opcode = cpu.current_opcode.unwrap();
         let current_opcode = **opcode::OPCODES_MAP
             .get()
@@ -50,7 +50,7 @@ impl TraceLog {
         let descriptor_string = get_opcode_descriptor(current_opcode, &mut cpu);
 
         self.log += format!(
-            "{:04X}  {:<8} {:>4} {:<27} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3},{:3} CYC:{}\n",
+            "{:04X}  {:<8} {:>4} {:<27} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{}\n",
             cpu.program_counter.wrapping_sub(1),
             mem_formatted,
             current_opcode.name,
@@ -60,11 +60,11 @@ impl TraceLog {
             cpu.y_register,
             cpu.processor_status | UNUSED_BIT,
             cpu.stack_pointer,
-            ppu.scanline,
-            ppu.dot,
-            (cpu.master_cycle / 12 ).wrapping_sub(1)
+            // ppu.scanline,
+            // ppu.dot,
+            (cpu.master_cycle / 12).wrapping_sub(1)
         )
-            .as_str();
+        .as_str();
     }
 
     #[allow(dead_code)]

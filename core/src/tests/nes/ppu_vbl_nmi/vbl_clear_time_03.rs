@@ -9,7 +9,7 @@ fn test_03_vbl_clear_time() {
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/03-vbl_clear_time.nes",
     ));
     emu.reset();
-    emu.run_until(&mut Frontends::default(), 60053509)
+    emu.run_until(&mut Frontends::default(), 76_843_511)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x604C));

@@ -10,12 +10,12 @@ fn test_php_implied_simple() {
     // Write Processor Status to Stack
     cpu.mem_write(0x2, 0x08);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     // Validate that saved Processor Status has Zero flag set
     assert_eq!(cpu.mem_read(0x01FF), 0b00110010);
@@ -33,12 +33,12 @@ fn test_php_implied_complicated() {
     // Write Processor Status to Stack
     cpu.mem_write(0x2, 0x08);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     // Load 0x80 to acc to trigger Negative flag
     cpu.mem_write(0x3, 0xA9);
@@ -47,12 +47,12 @@ fn test_php_implied_complicated() {
     // Write Processor Status to Stack
     cpu.mem_write(0x5, 0x08);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     // Load 0x66 to acc to reset flags
     cpu.mem_write(0x6, 0xA9);
@@ -61,12 +61,12 @@ fn test_php_implied_complicated() {
     // Write Processor Status to Stack
     cpu.mem_write(0x8, 0x08);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     // Validate that saved Processor Status has Zero flag set
     assert_eq!(cpu.mem_read(0x01FF), 0b00110010);

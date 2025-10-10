@@ -42,6 +42,7 @@ pub struct Ppu {
     pub vbl_clear_scheduled: Option<u128>,
     pub scanline: u16,
     pub dot: u16,
+    pub prev_vbl: u8,
 }
 
 impl Default for Ppu {
@@ -124,6 +125,7 @@ impl Ppu {
             vbl_clear_scheduled: None,
             scanline: 0,
             dot: 0,
+            prev_vbl: 0,
         }
     }
 
@@ -142,8 +144,9 @@ impl Ppu {
 
     fn get_default_oam() -> Ram { Ram::new(0xFF) }
 
-    pub fn step(&mut self, master_cycle: u128) {
-        self.master_cycle = master_cycle;
+    #[inline]
+    pub fn step(&mut self) {
+        self.prev_vbl = self.status_register & VBLANK_NMI_BIT;
 
         if self.reset_signal {
             self.ctrl_register = 0;
@@ -155,44 +158,43 @@ impl Ppu {
             self.t_register = 0;
         }
 
-        let mut frame_dot = self.dot_counter % DOTS_PER_FRAME as u128;
+        let frame_dot = self.dot_counter % DOTS_PER_FRAME as u128;
 
         if frame_dot == 0 {
             self.even_frame = !self.even_frame;
         }
 
-        if frame_dot == 0 && self.even_frame {
-            self.dot_counter += 1;
-            frame_dot = self.dot_counter % DOTS_PER_FRAME as u128;
-        }
-
         self.scanline = (frame_dot / 341) as u16;
         self.dot = (frame_dot % 341) as u16;
+
+        // if self.scanline < 240 {
+        //     if self.dot > 0 && self.dot < 257 {
+        //         if (self.dot - 1) % DOTS_PER_SCANLINE == 0 {}
+        //     }
+        // }
 
         if self.scanline == 241 && self.dot == 1 {
             // Just entered VBlank
             self.status_register |= VBLANK_NMI_BIT;
         }
 
-        if let Some(vbl_clear_cycle) = self.vbl_clear_scheduled {
-            if vbl_clear_cycle >= self.master_cycle {
-                self.clear_vbl_bit();
-            }
+        self.step_vbl_clear();
 
-            if vbl_clear_cycle <= self.master_cycle {
-                self.vbl_clear_scheduled = None;
-            }
-        }
-
-        if self.scanline == 261 && self.dot == 1 {
+        if self.scanline == 261 && self.dot == 2 {
             self.status_register &= !VBLANK_NMI_BIT;
             self.reset_signal = false;
         }
 
-        if (self.status_register & self.ctrl_register & VBLANK_NMI_BIT) != 0 {
+        if ((self.status_register & self.ctrl_register & VBLANK_NMI_BIT) != 0)
+            || ((self.scanline == 241 && self.dot == 1) && self.ctrl_register & VBLANK_NMI_BIT != 0)
+        {
             self.nmi_requested.set(true);
         } else {
             self.nmi_requested.set(false);
+        }
+
+        if self.dot == 339 && self.scanline == 261 && !self.even_frame && self.is_rendering() {
+            self.dot_counter += 1;
         }
 
         self.dot_counter += 1;
@@ -213,7 +215,7 @@ impl Ppu {
     pub fn clear_vbl_bit(&mut self) { self.status_register &= !VBLANK_NMI_BIT; }
 
     pub fn get_ppu_status(&mut self) -> u8 {
-        let result = self.status_register;
+        let result = (self.status_register & !VBLANK_NMI_BIT) | self.prev_vbl;
         self.vbl_clear_scheduled = Some(self.master_cycle + 7);
 
         self.write_latch = false;
@@ -405,6 +407,18 @@ impl Ppu {
         self.memory.get_memory_debug(range)
     }
 
+    pub fn step_vbl_clear(&mut self) {
+        if let Some(vbl_clear_cycle) = self.vbl_clear_scheduled {
+            if vbl_clear_cycle >= self.master_cycle {
+                self.clear_vbl_bit();
+            }
+
+            if vbl_clear_cycle <= self.master_cycle {
+                self.vbl_clear_scheduled = None;
+            }
+        }
+    }
+
     pub fn frame(&mut self) { self.render_pattern_tables_fast() }
 
     #[inline]
@@ -497,6 +511,7 @@ impl Ppu {
             vbl_clear_scheduled: None,
             scanline: state.scanline,
             dot: state.dot,
+            prev_vbl: 0,
         };
 
         ppu.load_rom(rom);

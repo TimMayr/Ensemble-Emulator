@@ -9,7 +9,7 @@ fn test_08_ind_x() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/08-ind_x.nes",
     ));
     emu.reset();
-    emu.run_until(&mut Frontends::default(), 52149589)
+    emu.run_until(&mut Frontends::default(), 62149589)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6016));

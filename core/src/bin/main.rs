@@ -36,7 +36,7 @@ fn main() {
     emu.reset();
 
     let start = Instant::now();
-    emu.run_until(&mut frontend, 120_000_000)
+    emu.run_until(&mut frontend, 606_843_511)
         .expect("TODO: panic message");
 
     let Consoles::Nes(ref mut nes) = emu;

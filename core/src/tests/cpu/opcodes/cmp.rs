@@ -7,8 +7,8 @@ fn test_cmp_immediate() {
     cpu.mem_write(0x0, 0xC9);
     cpu.mem_write(0x1, 0x10);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -23,9 +23,9 @@ fn test_cmp_zero_page() {
     cpu.mem_write(0x1, 0xC5);
     cpu.mem_write(0xC5, 0x10);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -40,10 +40,10 @@ fn test_cmp_zero_page_x() {
     cpu.mem_write(0x0, 0xD5);
     cpu.mem_write(0xD5, 0xC5);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -58,10 +58,10 @@ fn test_cmp_absolute() {
     cpu.mem_write_u16(0x1, 0xCDCD);
     cpu.mem_write(0xCDCD, 0x10);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -78,10 +78,10 @@ fn test_cmp_absolute_x() {
     cpu.mem_write_u16(0x1, 0xDDCD);
     cpu.mem_write(0xDDDD, 0x10);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -98,10 +98,10 @@ fn test_cmp_absolute_y() {
     cpu.mem_write_u16(0x1, 0xDDCD);
     cpu.mem_write(0xDDDD, 0x10);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -118,12 +118,12 @@ fn test_cmp_indirect_x() {
     cpu.mem_write_u16(0x43, 0x8343);
     cpu.mem_write(0x8343, 0x10);
 
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -139,11 +139,11 @@ fn test_cmp_indirect_y() {
     cpu.mem_write(0x1, 0x33);
     cpu.mem_write_u16(0x33, 0x8333);
     cpu.mem_write(0x8343, 0x10);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
@@ -157,8 +157,8 @@ fn test_cmp_zero_when_equal() {
     cpu.mem_write(0x0, 0xC9);
     cpu.mem_write(0x1, 0x20);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(cpu.get_carry_flag());
     assert!(cpu.get_zero_flag());
@@ -172,8 +172,8 @@ fn test_cmp_negative_when_negative() {
     cpu.mem_write(0x0, 0xC9);
     cpu.mem_write(0x1, 0x30);
 
-    cpu.step(0);
-    cpu.step(0);
+    cpu.step();
+    cpu.step();
 
     assert!(!cpu.get_carry_flag());
     assert!(!cpu.get_zero_flag());
