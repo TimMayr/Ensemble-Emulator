@@ -2,9 +2,9 @@ use std::time::Instant;
 
 use nes_core::emulation::emu::{Console, Consoles};
 use nes_core::emulation::nes::Nes;
+use nes_core::frontend::Frontends;
 #[cfg(feature = "sdl2")]
 use nes_core::frontend::sdl_frontend::SdlFrontend;
-use nes_core::frontend::Frontends;
 
 #[cfg(feature = "sdl2")]
 fn main() {
@@ -29,12 +29,12 @@ fn main() {
     let mut frontend = Frontends::default();
 
     emu.load_rom(&String::from(
-        "./core/tests/nes-test-roms/ppu_vbl_nmi/rom_singles/05-nmi_timing.nes",
+        "./core/tests/nes-test-roms/ppu_vbl_nmi/rom_singles/06-suppression.nes",
     ));
     emu.reset();
 
     let start = Instant::now();
-    emu.run_until(&mut frontend, 606_843_511)
+    emu.run_until(&mut frontend, 306_843_511)
         .expect("TODO: panic message");
 
     let Consoles::Nes(ref mut nes) = emu;

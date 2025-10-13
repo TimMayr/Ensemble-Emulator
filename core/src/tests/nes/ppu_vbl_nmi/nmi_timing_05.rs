@@ -9,7 +9,7 @@ fn test_05_nmi_timing() {
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/05-nmi_timing.nes",
     ));
     emu.reset();
-    emu.run_until(&mut Frontends::default(), 105341973)
+    emu.run_until(&mut Frontends::default(), 85341973)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x604D));
