@@ -8,7 +8,7 @@ fn test_02_vbl_set_time() {
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/02-vbl_set_time.nes",
     ));
-    emu.reset();
+    emu.power();
     emu.run_until(&mut Frontends::default(), 85341973)
         .expect("Error while running test");
 

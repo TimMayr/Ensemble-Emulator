@@ -8,7 +8,7 @@ fn test_01_vbl_basics() {
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/01-vbl_basics.nes",
     ));
-    emu.reset();
+    emu.power();
     emu.run_until(&mut Frontends::default(), 51119365)
         .expect("Error while running test");
 

@@ -12,7 +12,7 @@ fn nestest() {
     emu.set_trace_log_path(Some(String::from("./tests/outputs/nestest_headless.log")));
 
     emu.load_rom(&String::from("./tests/nes-test-roms/nestest_headless.nes"));
-    emu.reset();
+    emu.power();
     emu.run(&mut Frontends::default())
         .expect("Error running test");
 

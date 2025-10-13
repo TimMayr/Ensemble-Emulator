@@ -31,22 +31,25 @@ fn main() {
     emu.load_rom(&String::from(
         "./core/tests/nes-test-roms/cpu_reset/registers.nes",
     ));
+    emu.power();
 
     let start = Instant::now();
 
-    for i in 0..u128::MAX {
-        emu.step(&mut frontend).expect("TODO: panic message");
+    let Consoles::Nes(ref mut emu) = emu;
 
+    for i in 0..u128::MAX {
+        emu.step(&mut frontend, u128::MAX).expect("panic message");
         let val = emu.get_memory_debug(Some(0x6000..=0x6000))[0][0];
 
         if val == 0x81 {
-            for _ in 0..4_000_000 {
-                emu.step(&mut frontend).expect("TODO: panic message");
+            for _ in 0..8_000_000 {
+                emu.step(&mut frontend, u128::MAX).expect("panic message");
             }
+
             emu.reset();
         }
 
-        if i > 80_000_000 && val != 0x80 && val != 0x81 {
+        if i > 4_000_000 && val != 0x80 && val != 0x81 {
             break;
         }
     }
@@ -54,11 +57,9 @@ fn main() {
     // emu.run_until(&mut frontend, 750_000_000)
     //     .expect("panic message");
 
-    let Consoles::Nes(ref mut nes) = emu;
-
     println!("{:?}", start.elapsed());
 
-    let mem = &nes.get_memory_debug(Some(0x6000..=0x6100))[0];
+    let mem = &emu.get_memory_debug(Some(0x6000..=0x6100))[0];
 
     for (i, n) in mem.iter().enumerate() {
         if i % 32 == 0 {
@@ -67,7 +68,7 @@ fn main() {
             }
             print!("    ");
         }
-        print!("{:02X}, ", n);
+        print!("0x{:02X}, ", n);
     }
     println!();
 }

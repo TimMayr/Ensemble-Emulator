@@ -8,7 +8,7 @@ fn test_03_vbl_clear_time() {
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/03-vbl_clear_time.nes",
     ));
-    emu.reset();
+    emu.power();
     emu.run_until(&mut Frontends::default(), 76_843_511)
         .expect("Error while running test");
 
