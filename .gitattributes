@@ -1,2 +1,2 @@
 # Ignore everything in the "third_party" folder
-tests/** linguist-vendored
+core/tests/** linguist-vendored
