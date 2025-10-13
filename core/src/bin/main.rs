@@ -29,12 +29,12 @@ fn main() {
     let mut frontend = Frontends::default();
 
     emu.load_rom(&String::from(
-        "./core/tests/nes-test-roms/ppu_vbl_nmi/rom_singles/06-suppression.nes",
+        "./core/tests/nes-test-roms/instr_test-v5/all_instrs.nes",
     ));
     emu.reset();
 
     let start = Instant::now();
-    emu.run_until(&mut frontend, 306_843_511)
+    emu.run_until(&mut frontend, 900_000_000)
         .expect("TODO: panic message");
 
     let Consoles::Nes(ref mut nes) = emu;

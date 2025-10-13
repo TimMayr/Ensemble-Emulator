@@ -74,7 +74,7 @@ const VRAM_ADDR_NAMETABLE_X_BIT: u16 = 0x400;
 const VRAM_ADDR_NAMETABLE_Y_BIT: u16 = 0x800;
 const FINE_Y_SCROLL_WIDTH: u8 = 0x7;
 const COARSE_SCROLL_WIDTH: u8 = 0x1F;
-pub const DOTS_PER_FRAME: u64 = 89342;
+pub const DOTS_PER_FRAME: u128 = 89342;
 const PALETTE_RAM_START_ADDRESS: u16 = 0x3F00;
 const PALETTE_RAM_END_INDEX: u16 = 0x3FFF;
 const PALETTE_RAM_SIZE: u16 = 0x20;
@@ -160,7 +160,7 @@ impl Ppu {
             self.t_register = 0;
         }
 
-        let frame_dot = self.dot_counter % DOTS_PER_FRAME as u128;
+        let frame_dot = self.dot_counter % DOTS_PER_FRAME;
 
         if frame_dot == 0 {
             self.even_frame = !self.even_frame;
@@ -246,6 +246,8 @@ impl Ppu {
 
             self.t_register = (self.t_register & 0xF3FF) | (((value as u16) | 0x03) << 10)
         }
+
+        self.update_nmi();
     }
 
     pub fn get_mask_register(&self) -> u8 { self.mask_register }
