@@ -91,6 +91,8 @@ const TABLE_BYTES: usize = 0x1000; // 256 tiles * 16 bytes
 // readability.
 const TABLE_GAP_TILES: usize = 2;
 const TABLE_GAP_PX: usize = TABLE_GAP_TILES * TILE_SIZE;
+const VBL_START_SCANLINE: u16 = 241;
+const VBL_CLEAR_STARTLINE: u16 = 261;
 
 impl Ppu {
     pub fn new() -> Self {
@@ -164,8 +166,8 @@ impl Ppu {
             self.even_frame = !self.even_frame;
         }
 
-        self.scanline = (frame_dot / 341) as u16;
-        self.dot = (frame_dot % 341) as u16;
+        self.scanline = (frame_dot / (DOTS_PER_SCANLINE + 1) as u128) as u16;
+        self.dot = (frame_dot % (DOTS_PER_SCANLINE + 1) as u128) as u16;
 
         // if self.scanline < 240 {
         //     if self.dot > 0 && self.dot < 257 {
@@ -173,27 +175,28 @@ impl Ppu {
         //     }
         // }
 
-        if self.scanline == 241 && self.dot == 1 {
-            // Just entered VBlank
-            self.status_register |= VBLANK_NMI_BIT;
+        if self.scanline == VBL_START_SCANLINE && self.dot == 1 {
+            self.set_vbl_bit();
         }
 
-        self.step_vbl_clear();
+        self.process_vbl_clear_scheduled(self.master_cycle);
 
-        if self.scanline == 261 && self.dot == 2 {
-            self.status_register &= !VBLANK_NMI_BIT;
+        if self.scanline == VBL_CLEAR_STARTLINE && self.dot == 1 {
+            self.clear_vbl_bit();
             self.reset_signal = false;
         }
 
-        if ((self.status_register & self.ctrl_register & VBLANK_NMI_BIT) != 0)
-            || ((self.scanline == 241 && self.dot == 1) && self.ctrl_register & VBLANK_NMI_BIT != 0)
-        {
+        if (self.status_register & self.ctrl_register & VBLANK_NMI_BIT) != 0 {
             self.nmi_requested.set(true);
         } else {
             self.nmi_requested.set(false);
         }
 
-        if self.dot == 339 && self.scanline == 261 && !self.even_frame && self.is_rendering() {
+        if self.dot == DOTS_PER_SCANLINE - 1
+            && self.scanline == VBL_CLEAR_STARTLINE
+            && !self.even_frame
+            && self.is_rendering()
+        {
             self.dot_counter += 1;
         }
 
@@ -214,9 +217,12 @@ impl Ppu {
 
     pub fn clear_vbl_bit(&mut self) { self.status_register &= !VBLANK_NMI_BIT; }
 
+    pub fn set_vbl_bit(&mut self) { self.status_register |= VBLANK_NMI_BIT; }
+
     pub fn get_ppu_status(&mut self) -> u8 {
         let result = (self.status_register & !VBLANK_NMI_BIT) | self.prev_vbl;
-        self.vbl_clear_scheduled = Some(self.master_cycle + 7);
+        self.vbl_clear_scheduled = Some(self.master_cycle + 2);
+        self.process_vbl_clear_scheduled(self.master_cycle);
 
         self.write_latch = false;
         result
@@ -407,7 +413,8 @@ impl Ppu {
         self.memory.get_memory_debug(range)
     }
 
-    pub fn step_vbl_clear(&mut self) {
+    pub fn process_vbl_clear_scheduled(&mut self, master_cycle: u128) {
+        self.master_cycle = master_cycle;
         if let Some(vbl_clear_cycle) = self.vbl_clear_scheduled {
             if vbl_clear_cycle >= self.master_cycle {
                 self.clear_vbl_bit();

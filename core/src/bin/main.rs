@@ -11,14 +11,12 @@ fn main() {
     let mut emu = Consoles::Nes(Nes::default());
     let mut frontend = Frontends::Sdl2(SdlFrontend::default());
 
-    emu.load_rom(&String::from(
-        "./core/tests/nes-test-roms/ppu_vbl_nmi/rom_singles/05-nmi_timing.nes",
-    ));
+    emu.load_rom(&String::from("./core/tests/Mario Bros. (World).nes"));
     emu.reset();
 
     let start = Instant::now();
 
-    emu.run_until(&mut frontend, 120_000_000)
+    emu.run_until(&mut frontend, u128::MAX)
         .expect("TODO: panic message");
 
     println!("{:?}", start.elapsed());
@@ -52,7 +50,7 @@ fn main() {
             }
             print!("    ");
         }
-        print!("{:02X}, ", n);
+        print!("0x{:02X}, ", n);
     }
     println!();
 }
