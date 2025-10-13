@@ -30,3 +30,51 @@ mod stack_11;
 mod zero_page_04;
 #[cfg(test)]
 mod zp_xy_05;
+
+use crate::emulation::emu::{Console, Consoles};
+use crate::emulation::nes::Nes;
+use crate::frontend::Frontends;
+
+#[test]
+fn test_official_only() {
+    let mut emu = Consoles::Nes(Nes::default());
+    emu.load_rom(&String::from(
+        "./tests/nes-test-roms/instr_test-v5/official_only.nes",
+    ));
+    emu.reset();
+    emu.run_until(&mut Frontends::default(), 750_000_000)
+        .expect("Error while running test");
+
+    let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601C));
+    let cpu_mem = whole_mem[0].as_slice();
+
+    let expected = [
+        0x00, 0xDE, 0xB0, 0x61, 0x41, 0x6C, 0x6C, 0x20, 0x31, 0x36, 0x20, 0x74, 0x65, 0x73, 0x74,
+        0x73, 0x20, 0x70, 0x61, 0x73, 0x73, 0x65, 0x64, 0x0A, 0x0A, 0x0A, 0x00, 0x0A, 0x00,
+    ];
+
+    assert_eq!(cpu_mem[0], 0);
+    assert_eq!(&cpu_mem[..expected.len()], &expected);
+}
+
+#[test]
+fn test_all_instrs() {
+    let mut emu = Consoles::Nes(Nes::default());
+    emu.load_rom(&String::from(
+        "./tests/nes-test-roms/instr_test-v5/all_instrs.nes",
+    ));
+    emu.reset();
+    emu.run_until(&mut Frontends::default(), 900_000_000)
+        .expect("Error while running test");
+
+    let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601C));
+    let cpu_mem = whole_mem[0].as_slice();
+
+    let expected = [
+        0x00, 0xDE, 0xB0, 0x61, 0x41, 0x6C, 0x6C, 0x20, 0x31, 0x36, 0x20, 0x74, 0x65, 0x73, 0x74,
+        0x73, 0x20, 0x70, 0x61, 0x73, 0x73, 0x65, 0x64, 0x0A, 0x0A, 0x0A, 0x00, 0x0A, 0x00,
+    ];
+
+    assert_eq!(cpu_mem[0], 0);
+    assert_eq!(&cpu_mem[..expected.len()], &expected);
+}
