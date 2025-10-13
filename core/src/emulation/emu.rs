@@ -30,6 +30,12 @@ impl Console for Consoles {
         }
     }
 
+    fn power(&mut self) {
+        match self {
+            Consoles::Nes(nes) => nes.power(),
+        }
+    }
+
     fn run(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
         match self {
             Consoles::Nes(nes) => nes.run(frontend),
@@ -82,6 +88,7 @@ pub trait Console {
     #[allow(clippy::ptr_arg)]
     fn load_rom(&mut self, path: &String);
     fn reset(&mut self);
+    fn power(&mut self);
     fn run(&mut self, option: &mut Frontends) -> Result<ExecutionFinishedType, String>;
     fn run_until(
         &mut self,

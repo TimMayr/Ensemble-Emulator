@@ -13,7 +13,7 @@ fn test_jsr_absolute() {
     cpu.step();
     cpu.step();
     assert_eq!(cpu.program_counter, 0x1234);
-    assert_eq!(cpu.mem_read_u16(0x01FE), 0x2u16);
+    assert_eq!(cpu.mem_read_u16(0x01FC), 0x2u16);
 
     cpu.mem_write(0x1234, 0xA9);
     cpu.mem_write(0x1235, 0x66);

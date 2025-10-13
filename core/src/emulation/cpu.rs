@@ -75,12 +75,12 @@ impl Default for Cpu {
 
         Self {
             program_counter: 0,
-            processor_status: 0,
+            processor_status: 0x4,
             accumulator: 0,
             x_register: 0,
             y_register: 0,
             memory: Box::new(mem),
-            stack_pointer: 0,
+            stack_pointer: 0xFD,
             ppu: None,
             irq_provider: Cell::new(false),
             master_cycle: 0,
@@ -281,7 +281,7 @@ impl Cpu {
             OpType::ImmediateAddressing(target, callback) => {
                 instructions.push(MicroOp::ReadWithOffsetFromU16AndAddSomething(
                     AddressSource::PC,
-                    Source::None,
+                    Source::Constant(0),
                     target,
                     Source::None,
                     Source::None,
@@ -299,7 +299,7 @@ impl Cpu {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
                 instructions.push(MicroOp::ReadWithOffsetFromU16AndAddSomething(
                     AddressSource::PC,
-                    Source::None,
+                    Source::Constant(0),
                     Target::HI,
                     Source::LO,
                     index,
@@ -382,7 +382,7 @@ impl Cpu {
             OpType::BRK(callback) => {
                 instructions.push(MicroOp::ReadWithOffsetFromU16AndAddSomething(
                     AddressSource::PC,
-                    Source::None,
+                    Source::Constant(0),
                     Target::None,
                     Source::None,
                     Source::None,
@@ -481,10 +481,10 @@ impl Cpu {
                 instructions.push(MicroOp::StackPush(Source::PCL, MicroOpCallback::None));
                 instructions.push(MicroOp::ReadWithOffsetFromU16AndAddSomething(
                     AddressSource::PC,
-                    Source::None,
+                    Source::Constant(0),
                     Target::PCH,
                     Source::LO,
-                    Source::None,
+                    Source::Constant(0),
                     Target::PCL,
                     false,
                     callback,
@@ -494,10 +494,10 @@ impl Cpu {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
                 instructions.push(MicroOp::ReadWithOffsetFromU16AndAddSomething(
                     AddressSource::PC,
-                    Source::None,
+                    Source::Constant(0),
                     Target::PCH,
                     Source::LO,
-                    Source::None,
+                    Source::Constant(0),
                     Target::PCL,
                     false,
                     callback,
@@ -601,7 +601,7 @@ impl Cpu {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
                 instructions.push(MicroOp::ReadWithOffsetFromU16AndAddSomething(
                     AddressSource::PC,
-                    Source::None,
+                    Source::Constant(0),
                     Target::HI,
                     Source::LO,
                     offset,
@@ -638,7 +638,7 @@ impl Cpu {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
                 instructions.push(MicroOp::ReadWithOffsetFromU16AndAddSomething(
                     AddressSource::PC,
-                    Source::None,
+                    Source::Constant(0),
                     Target::HI,
                     Source::LO,
                     offset,
@@ -659,7 +659,7 @@ impl Cpu {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
                 instructions.push(MicroOp::ReadWithOffsetFromZPAndAddSomethingU8(
                     AddressSource::LO,
-                    Source::None,
+                    Source::Constant(0),
                     Target::None,
                     Source::LO,
                     Source::X,
@@ -697,7 +697,7 @@ impl Cpu {
                     Source::Constant(1),
                     Target::PCH,
                     Source::TEMP,
-                    Source::None,
+                    Source::Constant(0),
                     Target::PCL,
                     false,
                     callback,
@@ -707,7 +707,7 @@ impl Cpu {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
                 instructions.push(MicroOp::ReadWithOffsetFromZPAndAddSomethingU8(
                     AddressSource::LO,
-                    Source::None,
+                    Source::Constant(0),
                     Target::TEMP,
                     Source::None,
                     Source::None,
@@ -741,7 +741,7 @@ impl Cpu {
                 instructions.push(MicroOp::FetchOperandLo(MicroOpCallback::None));
                 instructions.push(MicroOp::ReadWithOffsetFromZPAndAddSomethingU8(
                     AddressSource::LO,
-                    Source::None,
+                    Source::Constant(0),
                     Target::None,
                     Source::LO,
                     Source::X,
@@ -833,7 +833,7 @@ impl Cpu {
         vec![
             MicroOp::ReadWithOffsetFromU16AndAddSomething(
                 AddressSource::PC,
-                Source::None,
+                Source::Constant(0),
                 Target::None,
                 Source::None,
                 Source::None,
@@ -843,7 +843,7 @@ impl Cpu {
             ),
             MicroOp::ReadWithOffsetFromU16AndAddSomething(
                 AddressSource::PC,
-                Source::None,
+                Source::Constant(0),
                 Target::None,
                 Source::None,
                 Source::None,
@@ -872,7 +872,7 @@ impl Cpu {
         vec![
             MicroOp::ReadWithOffsetFromU16AndAddSomething(
                 AddressSource::PC,
-                Source::None,
+                Source::Constant(0),
                 Target::None,
                 Source::None,
                 Source::None,
@@ -882,7 +882,7 @@ impl Cpu {
             ),
             MicroOp::ReadWithOffsetFromU16AndAddSomething(
                 AddressSource::PC,
-                Source::None,
+                Source::Constant(0),
                 Target::None,
                 Source::None,
                 Source::None,
@@ -1055,7 +1055,10 @@ impl Cpu {
                 }
 
                 let val = self.get_src_value(src);
-                self.write_to_target(target, val);
+
+                if let Some(val) = val {
+                    self.write_to_target(target, val);
+                }
 
                 if !pre_callback {
                     self.run_op(*callback);
@@ -1064,7 +1067,10 @@ impl Cpu {
             }
             MicroOp::StackPush(source, callback) => {
                 let src_value = self.get_src_value(source);
-                self.stack_push(src_value);
+
+                if let Some(src_value) = src_value {
+                    self.stack_push(src_value);
+                }
 
                 self.run_op(*callback);
 
@@ -1095,7 +1101,9 @@ impl Cpu {
                     self.write_to_target(target, val);
                     let offset = self.get_src_value(offset);
 
-                    if self.lo.overflowing_sub(offset).1 {
+                    if let Some(offset) = offset
+                        && self.lo.overflowing_sub(offset).1
+                    {
                         page_cross = true;
                     }
                 };
@@ -1116,8 +1124,11 @@ impl Cpu {
             MicroOp::DummyReadAddOffsetWriteToTarget(source, offset, target, callback) => {
                 if let Some(address) = self.get_u16_address(source) {
                     self.mem_read(address);
-                    let src_value = self.get_src_value(offset) as u16;
-                    self.write_to_target(target, address.wrapping_add(src_value) as u8);
+                    let src_value = self.get_src_value(offset);
+
+                    if let Some(src_value) = src_value {
+                        self.write_to_target(target, address.wrapping_add(src_value as u16) as u8);
+                    }
                 }
 
                 self.run_op(*callback);
@@ -1142,15 +1153,23 @@ impl Cpu {
             ) => {
                 if let Some(address) = self.get_u16_address(address_source) {
                     let src_value = self.get_src_value(offset);
-                    let offset_address = util::add_to_low_byte(address as u8 as u16, src_value);
-                    let value = self.mem_read(offset_address);
-                    self.write_to_target(target, value);
+
+                    if let Some(src_value) = src_value {
+                        let offset_address = util::add_to_low_byte(address as u8 as u16, src_value);
+                        let value = self.mem_read(offset_address);
+                        self.write_to_target(target, value);
+                    }
                 }
 
                 let add_to = self.get_src_value(add_to_src);
                 let to_add = self.get_src_value(to_add);
-                let value = add_to.wrapping_add(to_add);
-                self.write_to_target(to_save, value);
+
+                if let Some(add_to) = add_to
+                    && let Some(to_add) = to_add
+                {
+                    let value = add_to.wrapping_add(to_add);
+                    self.write_to_target(to_save, value);
+                }
 
                 if *inc_pc {
                     self.program_counter = self.program_counter.wrapping_add(1);
@@ -1172,15 +1191,23 @@ impl Cpu {
             ) => {
                 if let Some(address) = self.get_u16_address(address_source) {
                     let src_value = self.get_src_value(offset);
-                    let offset_address = util::add_to_low_byte(address, src_value);
-                    let value = self.mem_read(offset_address);
-                    self.write_to_target(target, value);
+
+                    if let Some(src_value) = src_value {
+                        let offset_address = util::add_to_low_byte(address, src_value);
+                        let value = self.mem_read(offset_address);
+                        self.write_to_target(target, value);
+                    }
                 }
 
                 let add_to = self.get_src_value(add_to_src);
                 let to_add = self.get_src_value(to_add);
-                let value = add_to.wrapping_add(to_add);
-                self.write_to_target(to_save, value);
+
+                if let Some(add_to) = add_to
+                    && let Some(to_add) = to_add
+                {
+                    let value = add_to.wrapping_add(to_add);
+                    self.write_to_target(to_save, value);
+                }
 
                 if *inc_pc {
                     self.program_counter = self.program_counter.wrapping_add(1);
@@ -1192,12 +1219,15 @@ impl Cpu {
             }
             MicroOp::BranchIncrement(to_add) => {
                 let add_to = self.program_counter;
-                let to_add = self.get_src_value(to_add) as i8;
-                let value = add_to.wrapping_add(to_add as i16 as u16);
-                self.write_to_target(&Target::PCL, value as u8);
+                let to_add = self.get_src_value(to_add);
 
-                if util::crosses_page_boundary_i8(add_to, to_add) {
-                    self.op_queue.push(MicroOp::FixHiBranch(value));
+                if let Some(to_add) = to_add {
+                    let value = add_to.wrapping_add(to_add as i8 as i16 as u16);
+                    self.write_to_target(&Target::PCL, value as u8);
+
+                    if util::crosses_page_boundary_i8(add_to, to_add as i8) {
+                        self.op_queue.push(MicroOp::FixHiBranch(value));
+                    }
                 }
 
                 self.op_queue.clone()
@@ -1331,6 +1361,11 @@ impl Cpu {
         }
     }
 
+    pub fn power(&mut self) {
+        self.program_counter = ((self.mem_read(RESET_VECTOR_ADDR + 1) as u16) << 8)
+            | (self.mem_read(RESET_VECTOR_ADDR) as u16);
+    }
+
     fn get_default_memory_map() -> MemoryMap {
         let mut mem = MemoryMap::default();
         // Internal Ram
@@ -1349,21 +1384,21 @@ impl Cpu {
         mem
     }
 
-    pub fn get_src_value(&mut self, src: &Source) -> u8 {
+    pub fn get_src_value(&mut self, src: &Source) -> Option<u8> {
         match src {
-            Source::A => self.accumulator,
-            Source::X => self.x_register,
-            Source::Y => self.y_register,
-            Source::SP => self.stack_pointer,
-            Source::PCL => (self.program_counter & LOWER_BYTE) as u8,
-            Source::PCH => ((self.program_counter & UPPER_BYTE) >> 8) as u8,
-            Source::LO => self.lo,
-            Source::HI => self.hi,
-            Source::TEMP => self.temp,
-            Source::Constant(val) => *val,
-            Source::None => 0,
-            Source::PBrk => self.processor_status | (UNUSED_BIT | BREAK_BIT),
-            Source::PNmi => self.processor_status | UNUSED_BIT,
+            Source::A => Option::from(self.accumulator),
+            Source::X => Option::from(self.x_register),
+            Source::Y => Option::from(self.y_register),
+            Source::SP => Option::from(self.stack_pointer),
+            Source::PCL => Option::from((self.program_counter & LOWER_BYTE) as u8),
+            Source::PCH => Option::from(((self.program_counter & UPPER_BYTE) >> 8) as u8),
+            Source::LO => Option::from(self.lo),
+            Source::HI => Option::from(self.hi),
+            Source::TEMP => Option::from(self.temp),
+            Source::Constant(val) => Option::from(*val),
+            Source::None => None,
+            Source::PBrk => Option::from(self.processor_status | (UNUSED_BIT | BREAK_BIT)),
+            Source::PNmi => Option::from(self.processor_status | UNUSED_BIT),
         }
     }
 
@@ -1613,10 +1648,6 @@ impl Cpu {
         let mut inst = Cpu::new();
         inst.memory
             .add_memory(0x4020..=0xFFFF, Memory::Ram(Ram::new(0xBFE0)));
-
-        //Test instance doesn't get reset, therefore we need to manually fix the stack
-        // pointer
-        inst.stack_pointer = STACK_START;
         inst
     }
 }
@@ -1967,34 +1998,37 @@ fn branch(cpu: &mut Cpu, condition: Condition) {
 fn isb(cpu: &mut Cpu) {
     // Inc
     let target_value = cpu.get_src_value(&Source::TEMP);
-    let mod_value = target_value.wrapping_add(1);
-    cpu.write_to_target(&Target::TEMP, mod_value);
-    cpu.update_negative_and_zero_flags(mod_value);
 
-    // SBC
-    let carry_in = cpu.processor_status & CARRY_BIT;
+    if let Some(target_value) = target_value {
+        let mod_value = target_value.wrapping_add(1);
+        cpu.write_to_target(&Target::TEMP, mod_value);
+        cpu.update_negative_and_zero_flags(mod_value);
 
-    let acc_check = cpu.accumulator;
+        // SBC
+        let carry_in = cpu.processor_status & CARRY_BIT;
 
-    let value = mod_value ^ LOWER_BYTE as u8;
-    let sum = cpu.accumulator as u16 + value as u16 + carry_in as u16;
-    let result = sum as u8;
+        let acc_check = cpu.accumulator;
 
-    cpu.accumulator = result;
+        let value = mod_value ^ LOWER_BYTE as u8;
+        let sum = cpu.accumulator as u16 + value as u16 + carry_in as u16;
+        let result = sum as u8;
 
-    if sum > LOWER_BYTE {
-        cpu.set_carry_flag();
-    } else {
-        cpu.clear_carry_flag();
+        cpu.accumulator = result;
+
+        if sum > LOWER_BYTE {
+            cpu.set_carry_flag();
+        } else {
+            cpu.clear_carry_flag();
+        }
+
+        if ((acc_check ^ result) & (value ^ result) & NEGATIVE_BIT) != 0 {
+            cpu.set_overflow_flag();
+        } else {
+            cpu.clear_overflow_flag();
+        }
+
+        cpu.update_negative_and_zero_flags(cpu.accumulator);
     }
-
-    if ((acc_check ^ result) & (value ^ result) & NEGATIVE_BIT) != 0 {
-        cpu.set_overflow_flag();
-    } else {
-        cpu.clear_overflow_flag();
-    }
-
-    cpu.update_negative_and_zero_flags(cpu.accumulator);
 }
 
 fn alr(cpu: &mut Cpu) {
