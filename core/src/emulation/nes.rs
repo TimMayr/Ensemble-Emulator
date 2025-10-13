@@ -183,20 +183,22 @@ impl Nes {
     ) -> Result<ExecutionFinishedType, String> {
         self.cycles += 1;
         self.cpu.master_cycle = self.cycles;
-
-        let mut ppu = self.ppu.borrow_mut();
-        ppu.master_cycle = self.cycles;
-        ppu.step_vbl_clear();
+        self.ppu
+            .borrow_mut()
+            .process_vbl_clear_scheduled(self.cycles);
 
         if self.cycles > last_cycle {
             self.cycles -= 1;
             return Ok(ExecutionFinishedType::ReachedLastCycle);
         };
 
-        drop(ppu);
         let mut cpu_res = Ok(ExecutionFinishedType::CycleCompleted);
 
-        if self.cycles.is_multiple_of(12) {
+        if self.cycles.is_multiple_of(4) {
+            self.ppu.borrow_mut().step();
+        }
+
+        if self.cycles.wrapping_add(2).is_multiple_of(12) {
             let mut do_trace = false;
 
             if self.trace_log.is_some()
@@ -224,10 +226,6 @@ impl Nes {
 
                 trace.trace(state)
             }
-        }
-
-        if self.cycles.is_multiple_of(4) {
-            self.ppu.borrow_mut().step();
         }
 
         if self.cycles.is_multiple_of(MASTER_CYCLES_PER_FRAME as u128)
