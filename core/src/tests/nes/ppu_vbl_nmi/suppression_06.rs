@@ -8,7 +8,7 @@ fn test_06_suppression() {
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/06-suppression.nes",
     ));
-    emu.reset();
+    emu.power();
     emu.run_until(&mut Frontends::default(), 85341973)
         .expect("Error while running test");
 

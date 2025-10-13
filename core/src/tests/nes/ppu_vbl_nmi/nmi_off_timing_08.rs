@@ -8,7 +8,7 @@ fn test_08_nmi_off_timing() {
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/08-nmi_off_timing.nes",
     ));
-    emu.reset();
+    emu.power();
     emu.run_until(&mut Frontends::default(), 85341973)
         .expect("Error while running test");
 

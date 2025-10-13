@@ -37,7 +37,19 @@ impl Console for Nes {
 
     fn reset(&mut self) { self.reset() }
 
-    fn power(&mut self) { self.cpu.power(); }
+    fn power(&mut self) {
+        self.cpu.ppu = Some(self.ppu.clone());
+
+        self.cpu.memory.add_memory(
+            0x2000..=0x3FFF,
+            Memory::MirrorMemory(MirrorMemory::new(
+                Box::new(Memory::PpuRegisters(PpuRegisters::new(self.ppu.clone()))),
+                0x0007,
+            )),
+        );
+
+        self.cpu.reset();
+    }
 
     fn run(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
         self.run_until(frontend, u128::MAX)
@@ -121,16 +133,6 @@ impl Nes {
     }
 
     pub fn reset(&mut self) {
-        self.cpu.memory.add_memory(
-            0x2000..=0x3FFF,
-            Memory::MirrorMemory(MirrorMemory::new(
-                Box::new(Memory::PpuRegisters(PpuRegisters::new(self.ppu.clone()))),
-                0x0007,
-            )),
-        );
-
-        self.cpu.ppu = Some(self.ppu.clone());
-
         self.cpu.reset();
         self.ppu.borrow_mut().reset();
     }

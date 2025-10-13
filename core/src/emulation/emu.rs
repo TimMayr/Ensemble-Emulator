@@ -89,6 +89,7 @@ pub trait Console {
     fn load_rom(&mut self, path: &String);
     fn reset(&mut self);
     fn power(&mut self);
+
     fn run(&mut self, option: &mut Frontends) -> Result<ExecutionFinishedType, String>;
     fn run_until(
         &mut self,

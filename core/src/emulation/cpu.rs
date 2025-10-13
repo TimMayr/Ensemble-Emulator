@@ -80,7 +80,7 @@ impl Default for Cpu {
             x_register: 0,
             y_register: 0,
             memory: Box::new(mem),
-            stack_pointer: 0xFD,
+            stack_pointer: 0,
             ppu: None,
             irq_provider: Cell::new(false),
             master_cycle: 0,
@@ -128,8 +128,11 @@ impl Cpu {
         self.mem_read(STACK_START_ADDRESS + self.stack_pointer as u16)
     }
 
-    pub fn stack_push(&mut self, data: u8) {
-        self.mem_write(STACK_START_ADDRESS + self.stack_pointer as u16, data);
+    pub fn stack_push(&mut self, data: Option<u8>) {
+        if let Some(data) = data {
+            self.mem_write(STACK_START_ADDRESS + self.stack_pointer as u16, data);
+        }
+
         self.stack_pointer = self.stack_pointer.wrapping_sub(1);
     }
 
@@ -142,8 +145,8 @@ impl Cpu {
     pub fn stack_push_u16(&mut self, data: u16) {
         let hi = (data >> 8) as u8;
         let lo = (data & 0xFF) as u8;
-        self.stack_push(hi);
-        self.stack_push(lo);
+        self.stack_push(Option::from(hi));
+        self.stack_push(Option::from(lo));
     }
 
     fn set_zero_flag(&mut self) { self.processor_status |= ZERO_BIT; }
@@ -829,7 +832,7 @@ impl Cpu {
         instructions
     }
 
-    fn get_instructions_for_nmi(&mut self) -> Vec<MicroOp> {
+    fn get_instructions_for_irq(&mut self) -> Vec<MicroOp> {
         vec![
             MicroOp::ReadWithOffsetFromU16AndAddSomething(
                 AddressSource::PC,
@@ -853,7 +856,7 @@ impl Cpu {
             ),
             MicroOp::StackPush(Source::PCH, MicroOpCallback::None),
             MicroOp::StackPush(Source::PCL, MicroOpCallback::None),
-            MicroOp::StackPush(Source::PNmi, MicroOpCallback::LockIrqVec),
+            MicroOp::StackPush(Source::PIrq, MicroOpCallback::LockIrqVec),
             MicroOp::Read(AddressSource::IrqVec, Target::PCL, MicroOpCallback::SEI),
             MicroOp::ReadWithOffsetFromU16AndAddSomething(
                 AddressSource::IrqVec,
@@ -907,7 +910,7 @@ impl Cpu {
     }
 
     pub fn trigger_nmi(&mut self) {
-        let mut seq = self.get_instructions_for_nmi();
+        let mut seq = self.get_instructions_for_irq();
         self.nmi_pending = false;
 
         self.is_in_irq = true;
@@ -917,7 +920,7 @@ impl Cpu {
     }
 
     pub fn trigger_irq(&mut self) {
-        let mut seq = self.get_instructions_for_nmi();
+        let mut seq = self.get_instructions_for_irq();
 
         self.is_in_irq = true;
 
@@ -926,12 +929,14 @@ impl Cpu {
     }
 
     pub fn reset(&mut self) {
-        let mut seq = self.get_instructions_for_reset();
+        if !self.is_in_irq {
+            let mut seq = self.get_instructions_for_reset();
 
-        self.is_in_irq = true;
+            self.is_in_irq = true;
 
-        self.current_op = seq.remove(0);
-        self.op_queue = seq;
+            self.current_op = seq.remove(0);
+            self.op_queue = seq;
+        }
     }
 
     pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
@@ -1068,16 +1073,13 @@ impl Cpu {
             MicroOp::StackPush(source, callback) => {
                 let src_value = self.get_src_value(source);
 
-                if let Some(src_value) = src_value {
-                    self.stack_push(src_value);
-                }
+                self.stack_push(src_value);
 
                 self.run_op(*callback);
 
                 self.op_queue.clone()
             }
             MicroOp::StackPop(target, callback) => {
-                let _stack = self.get_memory_debug(Some(0x0100..=0x01FF));
                 let val = self.stack_pop();
                 self.write_to_target(target, val);
 
@@ -1361,11 +1363,6 @@ impl Cpu {
         }
     }
 
-    pub fn power(&mut self) {
-        self.program_counter = ((self.mem_read(RESET_VECTOR_ADDR + 1) as u16) << 8)
-            | (self.mem_read(RESET_VECTOR_ADDR) as u16);
-    }
-
     fn get_default_memory_map() -> MemoryMap {
         let mut mem = MemoryMap::default();
         // Internal Ram
@@ -1398,7 +1395,7 @@ impl Cpu {
             Source::Constant(val) => Option::from(*val),
             Source::None => None,
             Source::PBrk => Option::from(self.processor_status | (UNUSED_BIT | BREAK_BIT)),
-            Source::PNmi => Option::from(self.processor_status | UNUSED_BIT),
+            Source::PIrq => Option::from(self.processor_status | UNUSED_BIT),
         }
     }
 
@@ -1519,7 +1516,7 @@ pub enum Source {
     TEMP,
     Constant(u8),
     None,
-    PNmi,
+    PIrq,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encode, Decode)]
@@ -1648,6 +1645,10 @@ impl Cpu {
         let mut inst = Cpu::new();
         inst.memory
             .add_memory(0x4020..=0xFFFF, Memory::Ram(Ram::new(0xBFE0)));
+
+        //Test instance doesn't get reset, therefore we need to manually fix the stack
+        // pointer
+        inst.stack_pointer = 0xFD;
         inst
     }
 }

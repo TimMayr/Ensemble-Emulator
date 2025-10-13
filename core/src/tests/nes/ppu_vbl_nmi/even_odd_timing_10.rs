@@ -8,7 +8,7 @@ fn test_10_even_odd_timing() {
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/10-even_odd_timing.nes",
     ));
-    emu.reset();
+    emu.power();
     emu.run_until(&mut Frontends::default(), 75341973)
         .expect("Error while running test");
 

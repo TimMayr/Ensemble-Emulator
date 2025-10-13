@@ -29,7 +29,7 @@ fn test_ppu_vbl_nmi() {
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/ppu_vbl_nmi/ppu_vbl_nmi.nes",
     ));
-    emu.reset();
+    emu.power();
     emu.run_until(&mut Frontends::default(), 650_000_000)
         .expect("Error while running test");
 

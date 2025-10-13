@@ -1,9 +1,11 @@
+use crate::emulation::emu::Console;
 use crate::emulation::mem::{Memory, MemoryDevice, Rom};
 use crate::emulation::nes::Nes;
 
 #[test]
 fn test_nmi_vector() {
     let mut nes = Nes::default();
+    nes.power();
 
     // Create and initialize new Rom
     let mut rom = Rom::new(0xBFE0);

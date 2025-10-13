@@ -8,8 +8,8 @@ fn test_09_even_odd_frames() {
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/09-even_odd_frames.nes",
     ));
-    emu.reset();
-    emu.run_until(&mut Frontends::default(), 25341973)
+    emu.power();
+    emu.run_until(&mut Frontends::default(), 36342973)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x602D));

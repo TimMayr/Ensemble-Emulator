@@ -8,7 +8,7 @@ fn test_04_nmi_control() {
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/04-nmi_control.nes",
     ));
-    emu.reset();
+    emu.power();
     emu.run_until(&mut Frontends::default(), 13523621)
         .expect("Error while running test");
 
