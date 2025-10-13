@@ -186,11 +186,7 @@ impl Ppu {
             self.reset_signal = false;
         }
 
-        if (self.status_register & self.ctrl_register & VBLANK_NMI_BIT) != 0 {
-            self.nmi_requested.set(true);
-        } else {
-            self.nmi_requested.set(false);
-        }
+        self.update_nmi();
 
         if self.dot == DOTS_PER_SCANLINE - 1
             && self.scanline == VBL_CLEAR_STARTLINE
@@ -215,9 +211,23 @@ impl Ppu {
         }
     }
 
-    pub fn clear_vbl_bit(&mut self) { self.status_register &= !VBLANK_NMI_BIT; }
+    pub fn update_nmi(&self) {
+        if (self.status_register & self.ctrl_register & VBLANK_NMI_BIT) != 0 {
+            self.nmi_requested.set(true);
+        } else {
+            self.nmi_requested.set(false);
+        }
+    }
 
-    pub fn set_vbl_bit(&mut self) { self.status_register |= VBLANK_NMI_BIT; }
+    pub fn clear_vbl_bit(&mut self) {
+        self.status_register &= !VBLANK_NMI_BIT;
+        self.update_nmi()
+    }
+
+    pub fn set_vbl_bit(&mut self) {
+        self.status_register |= VBLANK_NMI_BIT;
+        self.update_nmi()
+    }
 
     pub fn get_ppu_status(&mut self) -> u8 {
         let result = (self.status_register & !VBLANK_NMI_BIT) | self.prev_vbl;
