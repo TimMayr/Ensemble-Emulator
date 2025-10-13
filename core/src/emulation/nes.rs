@@ -37,6 +37,8 @@ impl Console for Nes {
 
     fn reset(&mut self) { self.reset() }
 
+    fn power(&mut self) { self.cpu.power(); }
+
     fn run(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
         self.run_until(frontend, u128::MAX)
     }

@@ -10,5 +10,5 @@ fn test_nop() {
     cpu.step();
 
     assert_eq!(cpu.accumulator, 0x66);
-    assert_eq!(cpu.processor_status, 0b00000001);
+    assert_eq!(cpu.processor_status, 0b00000101);
 }

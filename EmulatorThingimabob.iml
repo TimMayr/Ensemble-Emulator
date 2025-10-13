@@ -6,11 +6,11 @@
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/core/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ffi/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/core/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/.idea/dictionaries" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/trace.etl.NGENPDB" />
       <excludeFolder url="file://$MODULE_DIR$/.idea/dataSources" />
+      <excludeFolder url="file://$MODULE_DIR$/core/tests" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
