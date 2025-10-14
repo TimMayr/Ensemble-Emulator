@@ -210,19 +210,24 @@ impl Nes {
 
         let mut cpu_res = Ok(ExecutionFinishedType::CycleCompleted);
 
+        let mut frame_ready = false;
         if self.ppu_cycle_counter == 4 {
-            let frame_ready = ppu.step();
+            frame_ready = ppu.step();
             self.ppu_cycle_counter = 0;
+        }
 
-            if frame_ready && discriminant(frontend) != discriminant(&Frontends::None()) {
-                ppu.frame();
-                frontend.show_frame(self.get_pixel_buffer())?;
-            }
+        if frame_ready && discriminant(frontend) != discriminant(&Frontends::None()) {
+            ppu.frame();
         }
 
         drop(ppu);
 
-        if self.cpu_cycle_counter.wrapping_add(2) == 12 {
+        if frame_ready && discriminant(frontend) != discriminant(&Frontends::None()) {
+            frontend.show_frame(self.get_pixel_buffer())?;
+        }
+
+        if self.cpu_cycle_counter.wrapping_add(3) == 12 {
+            self.ppu.borrow_mut().tick_open_bus(12);
             let mut do_trace = false;
 
             if self.trace_log.is_some()

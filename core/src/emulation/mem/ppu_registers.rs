@@ -23,25 +23,35 @@ impl MemoryDevice for PpuRegisters {
         let mut ppu = self.ppu.borrow_mut();
         match addr {
             0x2 => {
-                let val = ppu.get_ppu_status() | (ppu.data_bus & 0b0001_1111);
-                ppu.data_bus = val;
+                let val = ppu.get_ppu_status();
+                ppu.open_bus.set_masked(val, 0b1110_0000);
             }
             0x4 => {
-                ppu.data_bus = ppu.get_oam_at_addr();
+                let val = ppu.get_oam_at_addr();
+                ppu.open_bus.set_masked(val, 0xFF);
             }
             0x7 => {
-                ppu.data_bus = ppu.get_vram_at_addr();
+                let val = ppu.get_vram_at_addr();
+
+                match ppu.vram_addr_register {
+                    0x3F00..=0x3FFF => {
+                        ppu.open_bus.set_masked(val, 0b0011_1111);
+                    }
+                    _ => {
+                        ppu.open_bus.set_masked(val, 0xFF);
+                    }
+                }
             }
             _ => {}
         };
 
-        ppu.data_bus
+        ppu.open_bus.read()
     }
 
     #[inline(always)]
     fn write(&mut self, addr: u16, data: u8) {
         let mut ppu = self.ppu.borrow_mut();
-        ppu.data_bus = data;
+        ppu.open_bus.set_masked(data, 0xFF);
         match addr {
             0x0 => {
                 ppu.set_ppu_ctrl(data);

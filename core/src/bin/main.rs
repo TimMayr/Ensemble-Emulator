@@ -12,7 +12,7 @@ fn main() {
     let mut frontend = Frontends::Sdl2(SdlFrontend::default());
 
     emu.load_rom(&String::from("./core/tests/Mario Bros. (World).nes"));
-    emu.reset();
+    emu.power();
 
     let start = Instant::now();
 
@@ -29,7 +29,7 @@ fn main() {
     let mut frontend = Frontends::default();
 
     emu.load_rom(&String::from(
-        "./core/tests/nes-test-roms/ppu_open_bus/ppu_open_bus.nes",
+        "./core/tests/nes-test-roms/oam_read/oam_read.nes",
     ));
     emu.power();
 
@@ -54,7 +54,7 @@ fn main() {
     //     }
     // }
 
-    emu.run_until(&mut frontend, 400_000_000)
+    emu.run_until(&mut frontend, 300_000_000)
         .expect("panic message");
 
     println!("{:?}", start.elapsed());

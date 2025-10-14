@@ -19,7 +19,9 @@ impl MemoryDevice for PaletteRam {
     #[inline(always)]
     fn read(&self, addr: u16, open_bus: u8) -> u8 {
         match addr {
-            0x0 | 0x4 | 0x8 | 0xC => self.zero_bits[addr as usize / 4usize],
+            0x0 | 0x4 | 0x8 | 0xC | 0x10 | 0x14 | 0x18 | 0x1C => {
+                self.zero_bits[(addr % 0x10) as usize / 4usize]
+            }
             _ => self.palettes.read(addr, open_bus),
         }
     }
@@ -27,7 +29,9 @@ impl MemoryDevice for PaletteRam {
     #[inline(always)]
     fn write(&mut self, addr: u16, data: u8) {
         match addr {
-            0x0 | 0x4 | 0x8 | 0xC => self.zero_bits[addr as usize / 4usize] = data,
+            0x0 | 0x4 | 0x8 | 0xC | 0x10 | 0x14 | 0x18 | 0x1C => {
+                self.zero_bits[(addr % 0x10) as usize / 4usize] = data
+            }
             _ => self.palettes.write(addr, data),
         }
     }
