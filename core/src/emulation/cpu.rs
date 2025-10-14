@@ -13,7 +13,7 @@ use crate::emulation::mem::{Memory, Ram};
 use crate::emulation::nes::ExecutionFinishedType;
 use crate::emulation::nes::ExecutionFinishedType::CycleCompleted;
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OPCODES_MAP, OpCode};
+use crate::emulation::opcode::{OpCode, OPCODES_MAP};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
@@ -49,7 +49,6 @@ pub struct Cpu {
     pub memory: Box<MemoryMap>,
     pub ppu: Option<Rc<RefCell<Ppu>>>,
     pub irq_provider: Cell<bool>,
-    pub master_cycle: u128,
     pub lo: u8,
     pub hi: u8,
     pub current_op: MicroOp,
@@ -83,7 +82,6 @@ impl Default for Cpu {
             stack_pointer: 0,
             ppu: None,
             irq_provider: Cell::new(false),
-            master_cycle: 0,
             lo: 0,
             hi: 0,
             current_op: MicroOp::FetchOpcode(MicroOpCallback::None),
@@ -1013,13 +1011,7 @@ impl Cpu {
                 let opcode = self.mem_read(self.program_counter);
                 self.program_counter = self.program_counter.wrapping_add(1);
 
-                self.current_opcode = Some(
-                    **OPCODES_MAP
-                        .get()
-                        .unwrap()
-                        .get(&opcode)
-                        .unwrap_or_else(|| panic!("finished at: {}", self.master_cycle)),
-                );
+                self.current_opcode = Some(**OPCODES_MAP.get().unwrap().get(&opcode).unwrap());
                 self.run_op(*callback);
 
                 self.get_instructions_for_op_type()
@@ -1677,7 +1669,6 @@ impl Cpu {
             memory: Box::new(Self::get_default_memory_map()),
             ppu: Some(ppu),
             irq_provider: Cell::new(false),
-            master_cycle: state.master_cycle,
             lo: state.lo,
             hi: state.hi,
             current_op: state.current_op,
