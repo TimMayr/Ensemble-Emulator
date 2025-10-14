@@ -1,4 +1,4 @@
-use bincode::{Decode, Encode, config};
+use bincode::{config, Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 use crate::emulation::cpu::{Cpu, MicroOp};
@@ -15,7 +15,6 @@ pub struct CpuState {
     pub y_register: u8,
     pub processor_status: u8,
     pub memory: Vec<u8>,
-    pub master_cycle: u128,
     pub lo: u8,
     pub hi: u8,
     pub current_op: MicroOp,
@@ -42,7 +41,6 @@ impl From<&Cpu> for CpuState {
             y_register: cpu.y_register,
             processor_status: cpu.processor_status,
             memory: cpu.memory.get_memory_debug(Some(0x0..=0xFFFF)),
-            master_cycle: cpu.master_cycle,
             lo: cpu.lo,
             hi: cpu.hi,
             current_op: cpu.current_op,
@@ -58,7 +56,7 @@ impl From<&Cpu> for CpuState {
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 pub struct PpuState {
     pub cycle_counter: u128,
-    pub master_cycle: u128,
+    pub vbl_reset_counter: u8,
     pub status_register: u8,
     pub ctrl_register: u8,
     pub mask_register: u8,
@@ -91,7 +89,7 @@ impl From<&Ppu> for PpuState {
     fn from(ppu: &Ppu) -> Self {
         Self {
             cycle_counter: ppu.dot_counter,
-            master_cycle: ppu.master_cycle,
+            vbl_reset_counter: ppu.vbl_reset_counter,
             status_register: ppu.status_register,
             ctrl_register: ppu.ctrl_register,
             mask_register: ppu.mask_register,
@@ -126,9 +124,10 @@ impl From<&Ppu> for PpuState {
 pub struct SaveState {
     pub cpu: CpuState,
     pub ppu: PpuState,
-    pub cycles: u128,
     pub rom_file: RomFile,
     pub version: u16,
+    pub total_cycles: u128,
+    pub cycle: u8,
 }
 
 pub fn save_state(state: SaveState, path: &str) {

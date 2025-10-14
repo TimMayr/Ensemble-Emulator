@@ -38,8 +38,8 @@ pub struct Ppu {
     pub even_frame: bool,
     pub reset_signal: bool,
     pub pixel_buffer: [u32; (WIDTH * HEIGHT) as usize],
-    pub master_cycle: u128,
-    pub vbl_clear_scheduled: Option<u128>,
+    pub vbl_reset_counter: u8,
+    pub vbl_clear_scheduled: Option<u8>,
     pub scanline: u16,
     pub dot: u16,
     pub prev_vbl: u8,
@@ -123,7 +123,7 @@ impl Ppu {
             even_frame: false,
             reset_signal: true,
             pixel_buffer: [0u32; (WIDTH * HEIGHT) as usize],
-            master_cycle: 0,
+            vbl_reset_counter: 0,
             vbl_clear_scheduled: None,
             scanline: 0,
             dot: 0,
@@ -147,7 +147,7 @@ impl Ppu {
     fn get_default_oam() -> Ram { Ram::new(0xFF) }
 
     #[inline]
-    pub fn step(&mut self) {
+    pub fn step(&mut self) -> bool {
         self.prev_vbl = self.status_register & VBLANK_NMI_BIT;
 
         if self.reset_signal {
@@ -179,7 +179,7 @@ impl Ppu {
             self.set_vbl_bit();
         }
 
-        self.process_vbl_clear_scheduled(self.master_cycle);
+        self.process_vbl_clear_scheduled();
 
         if self.scanline == VBL_CLEAR_STARTLINE && self.dot == 1 {
             self.clear_vbl_bit();
@@ -197,6 +197,8 @@ impl Ppu {
         }
 
         self.dot_counter += 1;
+
+        frame_dot == DOTS_PER_FRAME
     }
 
     pub fn is_rendering(&self) -> bool {
@@ -231,8 +233,8 @@ impl Ppu {
 
     pub fn get_ppu_status(&mut self) -> u8 {
         let result = (self.status_register & !VBLANK_NMI_BIT) | self.prev_vbl;
-        self.vbl_clear_scheduled = Some(self.master_cycle + 2);
-        self.process_vbl_clear_scheduled(self.master_cycle);
+        self.vbl_clear_scheduled = Some(2);
+        self.process_vbl_clear_scheduled();
 
         self.write_latch = false;
         result
@@ -425,15 +427,15 @@ impl Ppu {
         self.memory.get_memory_debug(range)
     }
 
-    pub fn process_vbl_clear_scheduled(&mut self, master_cycle: u128) {
-        self.master_cycle = master_cycle;
+    pub fn process_vbl_clear_scheduled(&mut self) {
         if let Some(vbl_clear_cycle) = self.vbl_clear_scheduled {
-            if vbl_clear_cycle >= self.master_cycle {
+            if vbl_clear_cycle >= self.vbl_reset_counter {
                 self.clear_vbl_bit();
             }
 
-            if vbl_clear_cycle <= self.master_cycle {
+            if vbl_clear_cycle <= self.vbl_reset_counter {
                 self.vbl_clear_scheduled = None;
+                self.vbl_reset_counter = 0;
             }
         }
     }
@@ -526,7 +528,7 @@ impl Ppu {
             even_frame: state.even_frame,
             reset_signal: state.reset_signal,
             pixel_buffer: state.pixel_buffer.clone().try_into().unwrap(),
-            master_cycle: state.master_cycle,
+            vbl_reset_counter: 0,
             vbl_clear_scheduled: None,
             scanline: state.scanline,
             dot: state.dot,

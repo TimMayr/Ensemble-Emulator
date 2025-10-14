@@ -6,9 +6,9 @@ use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp, MicroOpCallback};
 use crate::emulation::emu::{Console, HEIGHT, WIDTH};
-use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::mem::Memory;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
@@ -23,9 +23,11 @@ pub const MASTER_CYCLES_PER_FRAME: u32 = 357366;
 pub struct Nes {
     pub cpu: Cpu,
     pub ppu: Rc<RefCell<Ppu>>,
-    pub cycles: u128,
+    pub total_cycles: u128,
     pub rom_file: Option<RomFile>,
     pub trace_log: Option<TraceLog>,
+    pub cpu_cycle_counter: u8,
+    pub ppu_cycle_counter: u8,
 }
 
 impl Console for Nes {
@@ -117,7 +119,10 @@ impl Console for Nes {
     }
 
     fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
-        self.run_until(frontend, self.cycles + MASTER_CYCLES_PER_FRAME as u128)
+        self.run_until(
+            frontend,
+            self.total_cycles + MASTER_CYCLES_PER_FRAME as u128,
+        )
     }
 }
 
@@ -126,9 +131,11 @@ impl Nes {
         Self {
             cpu,
             ppu,
-            cycles: 0,
             rom_file: None,
             trace_log: None,
+            total_cycles: 0,
+            cpu_cycle_counter: 0,
+            ppu_cycle_counter: 0,
         }
     }
 
@@ -153,7 +160,8 @@ impl Nes {
         let state = SaveState {
             cpu: CpuState::from(&self.cpu),
             ppu: ppu_state,
-            cycles: self.cycles,
+            cycle: self.cpu_cycle_counter,
+            total_cycles: self.total_cycles,
             rom_file: self.rom_file.as_ref().unwrap().clone(),
             version: 1,
         };
@@ -174,7 +182,7 @@ impl Nes {
             self.ppu.clone(),
             self.rom_file.as_ref().unwrap(),
         );
-        self.cycles = state.cycles;
+        self.cpu_cycle_counter = state.cycle;
 
         self.cpu.memory.load(&state.cpu.memory);
         self.ppu.borrow_mut().memory.load(&state.ppu.memory);
@@ -185,24 +193,36 @@ impl Nes {
         frontend: &mut Frontends,
         last_cycle: u128,
     ) -> Result<ExecutionFinishedType, String> {
-        self.cycles += 1;
-        self.cpu.master_cycle = self.cycles;
-        self.ppu
-            .borrow_mut()
-            .process_vbl_clear_scheduled(self.cycles);
+        self.total_cycles += 1;
+        self.cpu_cycle_counter += 1;
+        self.ppu_cycle_counter += 1;
 
-        if self.cycles > last_cycle {
-            self.cycles -= 1;
+        let mut ppu = self.ppu.borrow_mut();
+        if ppu.vbl_clear_scheduled.is_some() {
+            ppu.vbl_reset_counter += 1;
+            ppu.process_vbl_clear_scheduled();
+        }
+
+        if self.total_cycles > last_cycle {
+            self.total_cycles -= 1;
             return Ok(ExecutionFinishedType::ReachedLastCycle);
         };
 
         let mut cpu_res = Ok(ExecutionFinishedType::CycleCompleted);
 
-        if self.cycles.is_multiple_of(4) {
-            self.ppu.borrow_mut().step();
+        if self.ppu_cycle_counter == 4 {
+            let frame_ready = ppu.step();
+            self.ppu_cycle_counter = 0;
+
+            if frame_ready && discriminant(frontend) != discriminant(&Frontends::None()) {
+                ppu.frame();
+                frontend.show_frame(self.get_pixel_buffer())?;
+            }
         }
 
-        if self.cycles.wrapping_add(2).is_multiple_of(12) {
+        drop(ppu);
+
+        if self.cpu_cycle_counter.wrapping_add(2) == 12 {
             let mut do_trace = false;
 
             if self.trace_log.is_some()
@@ -223,7 +243,8 @@ impl Nes {
                 let state = SaveState {
                     cpu: CpuState::from(&self.cpu),
                     ppu: ppu_state,
-                    cycles: self.cycles,
+                    cycle: self.cpu_cycle_counter,
+                    total_cycles: self.total_cycles,
                     rom_file: self.rom_file.as_ref().unwrap().clone(),
                     version: 1,
                 };
@@ -232,11 +253,8 @@ impl Nes {
             }
         }
 
-        if self.cycles.is_multiple_of(MASTER_CYCLES_PER_FRAME as u128)
-            && discriminant(frontend) != discriminant(&Frontends::None())
-        {
-            self.ppu.borrow_mut().frame();
-            frontend.show_frame(self.get_pixel_buffer())?
+        if self.cpu_cycle_counter == 12 {
+            self.cpu_cycle_counter = 0;
         }
 
         cpu_res
