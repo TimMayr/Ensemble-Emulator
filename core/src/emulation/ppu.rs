@@ -5,7 +5,7 @@ use crate::emulation::emu::{HEIGHT, WIDTH};
 use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
-use crate::emulation::mem::{Memory, MemoryDevice, Ram};
+use crate::emulation::mem::{Memory, MemoryDevice, OpenBus, Ram};
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::PpuState;
 use crate::util;
@@ -26,6 +26,7 @@ pub struct Ppu {
     pub oam_dma_register: u8,
     pub nmi_requested: Cell<bool>,
     pub memory: Box<MemoryMap>,
+    pub palette_ram: Box<MemoryMap>,
     pub oam: Box<Ram>,
     pub write_latch: bool,
     pub t_register: u16,
@@ -43,7 +44,7 @@ pub struct Ppu {
     pub scanline: u16,
     pub dot: u16,
     pub prev_vbl: u8,
-    pub data_bus: u8,
+    pub open_bus: OpenBus,
 }
 
 impl Default for Ppu {
@@ -61,40 +62,42 @@ const NES_PALETTE: [u32; 64] = [
     0xCCD278FF, 0xB4DE78FF, 0xA8E290FF, 0x98E2B4FF, 0xA0D6E4FF, 0xA0A2A0FF, 0x000000FF, 0x000000FF,
 ];
 
-const VBLANK_NMI_BIT: u8 = 0x80;
-const VRAM_ADDR_INC_BIT: u8 = 0x4;
-const UPPER_BYTE: u16 = 0xFF00;
-const LOWER_BYTE: u16 = 0x00FF;
-const BIT_14: u16 = 0x2000;
-const BACKGROUND_RENDER_BIT: u8 = 0x8;
-const SPRITE_RENDER_BIT: u8 = 0x10;
-const VRAM_ADDR_COARSE_X_SCROLL_MASK: u16 = 0x1F;
-const VRAM_ADDR_COARSE_Y_SCROLL_MASK: u16 = 0x3E0;
-const VRAM_ADDR_FINE_Y_SCROLL_MASK: u16 = 0x7000;
-const VRAM_ADDR_NAMETABLE_X_BIT: u16 = 0x400;
-const VRAM_ADDR_NAMETABLE_Y_BIT: u16 = 0x800;
-const FINE_Y_SCROLL_WIDTH: u8 = 0x7;
-const COARSE_SCROLL_WIDTH: u8 = 0x1F;
+pub const VBLANK_NMI_BIT: u8 = 0x80;
+pub const VRAM_ADDR_INC_BIT: u8 = 0x4;
+pub const UPPER_BYTE: u16 = 0xFF00;
+pub const LOWER_BYTE: u16 = 0x00FF;
+pub const BIT_14: u16 = 0x2000;
+pub const BACKGROUND_RENDER_BIT: u8 = 0x8;
+pub const SPRITE_RENDER_BIT: u8 = 0x10;
+pub const VRAM_ADDR_COARSE_X_SCROLL_MASK: u16 = 0x1F;
+pub const VRAM_ADDR_COARSE_Y_SCROLL_MASK: u16 = 0x3E0;
+pub const VRAM_ADDR_FINE_Y_SCROLL_MASK: u16 = 0x7000;
+pub const VRAM_ADDR_NAMETABLE_X_BIT: u16 = 0x400;
+pub const VRAM_ADDR_NAMETABLE_Y_BIT: u16 = 0x800;
+pub const FINE_Y_SCROLL_WIDTH: u8 = 0x7;
+pub const COARSE_SCROLL_WIDTH: u8 = 0x1F;
 pub const DOTS_PER_FRAME: u128 = 89342;
-const PALETTE_RAM_START_ADDRESS: u16 = 0x3F00;
-const PALETTE_RAM_END_INDEX: u16 = 0x3FFF;
-const PALETTE_RAM_SIZE: u16 = 0x20;
-const VRAM_SIZE: usize = 2048;
+pub const PALETTE_RAM_START_ADDRESS: u16 = 0x3F00;
+pub const PALETTE_RAM_END_INDEX: u16 = 0x3FFF;
+pub const PALETTE_RAM_SIZE: u16 = 0x20;
+pub const VRAM_SIZE: usize = 2048;
 pub const DOTS_PER_SCANLINE: u16 = 340;
 pub const SCANLINES_PER_FRAME: u16 = 261;
+pub const OPEN_BUS_DECAY_DELAY: u32 = 420_000;
 
-const TILES_PER_ROW: usize = 16;
-const TILE_SIZE: usize = 8;
-const BYTES_PER_TILE: usize = 16; // 8 low plane + 8 high plane
-const TABLE_BYTES: usize = 0x1000; // 256 tiles * 16 bytes
+pub const TILES_PER_ROW: usize = 16;
+pub const TILE_SIZE: usize = 8;
+pub const BYTES_PER_TILE: usize = 16; // 8 low plane + 8 high plane
+pub const TABLE_BYTES: usize = 0x1000; // 256 tiles * 16 bytes
 
 // Optional: space 2 tiles (16px) between the two pattern tables for
 // readability.
-const TABLE_GAP_TILES: usize = 2;
-const TABLE_GAP_PX: usize = TABLE_GAP_TILES * TILE_SIZE;
-const VBL_START_SCANLINE: u16 = 241;
-const VBL_CLEAR_STARTLINE: u16 = 261;
-const VISIBLE_SCANLINES: u16 = 239;
+pub const TABLE_GAP_TILES: usize = 2;
+pub const TABLE_GAP_PX: usize = TABLE_GAP_TILES * TILE_SIZE;
+pub const VBL_START_SCANLINE: u16 = 241;
+pub const VISIBLE_SCANLINES: u16 = 239;
+pub const PRE_RENDER_SCANLINE: u16 = 261;
+pub const OAM_SIZE: usize = 0x100;
 
 impl Ppu {
     pub fn new() -> Self {
@@ -119,6 +122,7 @@ impl Ppu {
             fine_x_scroll: 0,
             nmi_requested: Cell::new(false),
             memory: Box::new(Self::get_default_memory_map()),
+            palette_ram: Box::new(Self::get_palette_memory_map()),
             oam: Box::new(Self::get_default_oam()),
             write_latch: false,
             t_register: 0,
@@ -130,10 +134,13 @@ impl Ppu {
             scanline: 0,
             dot: 0,
             prev_vbl: 0,
+            open_bus: OpenBus::new(OPEN_BUS_DECAY_DELAY),
         }
     }
 
-    fn get_default_memory_map() -> MemoryMap {
+    fn get_default_memory_map() -> MemoryMap { MemoryMap::default() }
+
+    fn get_palette_memory_map() -> MemoryMap {
         let mut mem = MemoryMap::default();
 
         mem.add_memory(
@@ -143,10 +150,11 @@ impl Ppu {
                 PALETTE_RAM_SIZE - 1,
             )),
         );
+
         mem
     }
 
-    fn get_default_oam() -> Ram { Ram::new(0xFF) }
+    fn get_default_oam() -> Ram { Ram::new(OAM_SIZE - 1) }
 
     #[inline]
     pub fn step(&mut self) -> bool {
@@ -171,11 +179,7 @@ impl Ppu {
         self.scanline = (frame_dot / (DOTS_PER_SCANLINE + 1) as u128) as u16;
         self.dot = (frame_dot % (DOTS_PER_SCANLINE + 1) as u128) as u16;
 
-        if self.scanline < VISIBLE_SCANLINES + 1 {
-            if self.dot > 0 && self.dot < 257 {
-                if (self.dot - 1) % DOTS_PER_SCANLINE == 0 {}
-            }
-
+        if self.scanline < VISIBLE_SCANLINES + 1 || self.scanline == PRE_RENDER_SCANLINE {
             if self.dot >= 257 && self.dot <= 320 {
                 self.oam_addr_register = 0;
             }
@@ -187,7 +191,7 @@ impl Ppu {
 
         self.process_vbl_clear_scheduled();
 
-        if self.scanline == VBL_CLEAR_STARTLINE && self.dot == 1 {
+        if self.scanline == PRE_RENDER_SCANLINE && self.dot == 1 {
             self.clear_vbl_bit();
             self.reset_signal = false;
         }
@@ -195,7 +199,7 @@ impl Ppu {
         self.update_nmi();
 
         if self.dot == DOTS_PER_SCANLINE - 1
-            && self.scanline == VBL_CLEAR_STARTLINE
+            && self.scanline == PRE_RENDER_SCANLINE
             && !self.even_frame
             && self.is_rendering()
         {
@@ -204,7 +208,7 @@ impl Ppu {
 
         self.dot_counter += 1;
 
-        frame_dot == DOTS_PER_FRAME
+        frame_dot == DOTS_PER_FRAME - 1
     }
 
     pub fn is_rendering(&self) -> bool {
@@ -227,6 +231,7 @@ impl Ppu {
         }
     }
 
+    #[inline(always)]
     pub fn clear_vbl_bit(&mut self) {
         self.status_register &= !VBLANK_NMI_BIT;
         self.update_nmi()
@@ -271,19 +276,33 @@ impl Ppu {
     pub fn get_oam_at_addr(&self) -> u8 { self.oam.read(self.oam_addr_register as u16, 0) }
 
     pub fn get_vram_at_addr(&mut self) -> u8 {
-        let ret = self.ppu_data_buffer;
+        let mut ret = self.ppu_data_buffer;
+
         self.ppu_data_buffer = self.memory.mem_read(self.vram_addr_register);
+
+        if (0x3F00u16..=0x3FFFu16).contains(&self.vram_addr_register) {
+            ret = self.mem_read(self.vram_addr_register);
+        }
+
         self.vram_addr_register += self.get_vram_addr_step() as u16;
         ret
     }
 
-    pub fn write_oam(&mut self, data: u8) {
-        self.oam.write(self.oam_addr_register as u16, data);
-        self.oam_addr_register = self.oam_addr_register.wrapping_add(1);
+    pub fn write_oam(&mut self, mut data: u8) {
+        if self.oam_addr_register % 4 == 2 {
+            data &= 0xE3;
+        }
+
+        if !(self.scanline < VISIBLE_SCANLINES + 1 || self.scanline == PRE_RENDER_SCANLINE)
+            || !self.is_rendering()
+        {
+            self.oam.write(self.oam_addr_register as u16, data);
+            self.oam_addr_register = self.oam_addr_register.wrapping_add(1);
+        }
     }
 
     pub fn write_vram(&mut self, data: u8) {
-        self.memory.mem_write(self.vram_addr_register, data);
+        self.mem_write(self.vram_addr_register, data);
         self.vram_addr_register = self
             .vram_addr_register
             .wrapping_add(self.get_vram_addr_step() as u16);
@@ -315,6 +334,7 @@ impl Ppu {
         }
     }
 
+    #[inline(always)]
     pub fn poll_nmi(&self) -> bool { self.nmi_requested.get() }
 
     pub fn clear_nmi_requested(&self) { self.nmi_requested.set(false) }
@@ -404,7 +424,25 @@ impl Ppu {
         }
     }
 
-    pub fn mem_read(&mut self, addr: u16) -> u8 { self.memory.mem_read(addr) }
+    pub fn mem_read(&mut self, addr: u16) -> u8 {
+        match addr {
+            0x0000..0x3F00 => self.memory.mem_read(addr),
+            0x3F00..0x3FFF => self.palette_ram.mem_read(addr),
+            _ => {
+                unreachable!()
+            }
+        }
+    }
+
+    pub fn mem_write(&mut self, addr: u16, data: u8) {
+        match addr {
+            0x0000..0x3F00 => self.memory.mem_write(addr, data),
+            0x3F00..0x3FFF => self.palette_ram.mem_write(addr, data),
+            _ => {
+                unreachable!()
+            }
+        }
+    }
 
     pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
         let rom_file = rom_get.as_rom_file();
@@ -415,7 +453,7 @@ impl Ppu {
         }
 
         self.memory.add_memory(
-            0x2000..=0x3EFF,
+            0x2000..=0x3FFF,
             Memory::MirrorMemory(MirrorMemory::new(
                 Box::new(Memory::Ram(Ram::new(VRAM_SIZE))),
                 (VRAM_SIZE - 1) as u16,
@@ -433,6 +471,7 @@ impl Ppu {
         self.memory.get_memory_debug(range)
     }
 
+    #[inline(always)]
     pub fn process_vbl_clear_scheduled(&mut self) {
         if let Some(vbl_clear_cycle) = self.vbl_clear_scheduled {
             if vbl_clear_cycle >= self.vbl_reset_counter {
@@ -503,9 +542,10 @@ impl Ppu {
             }
         }
     }
-}
 
-impl Ppu {
+    #[inline(always)]
+    pub fn tick_open_bus(&mut self, times: u8) { self.open_bus.tick(times); }
+
     pub fn from(state: &PpuState, rom: &RomFile) -> Self {
         let mut ppu = Self {
             dot_counter: state.cycle_counter,
@@ -521,6 +561,7 @@ impl Ppu {
             ppu_data_buffer: state.ppu_data_buffer,
             nmi_requested: Cell::new(state.nmi_requested),
             memory: Box::new(Self::get_default_memory_map()),
+            palette_ram: Default::default(),
             oam: Box::new(Self::get_default_oam()),
             oam_dma_register: state.oam_dma_register,
             write_latch: state.write_latch,
@@ -539,6 +580,7 @@ impl Ppu {
             scanline: state.scanline,
             dot: state.dot,
             prev_vbl: 0,
+            open_bus: OpenBus::new(OPEN_BUS_DECAY_DELAY),
         };
 
         ppu.load_rom(rom);

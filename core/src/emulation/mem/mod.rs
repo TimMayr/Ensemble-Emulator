@@ -35,6 +35,7 @@ impl Debug for Memory {
 }
 
 impl MemoryDevice for Memory {
+    #[inline(always)]
     fn read(&self, addr: u16, open_bus: u8) -> u8 {
         match self {
             Memory::Ram(ram) => ram.read(addr, open_bus),
@@ -46,6 +47,7 @@ impl MemoryDevice for Memory {
         }
     }
 
+    #[inline(always)]
     fn write(&mut self, addr: u16, data: u8) {
         match self {
             Memory::Ram(ram) => ram.write(addr, data),
@@ -57,6 +59,7 @@ impl MemoryDevice for Memory {
         }
     }
 
+    #[inline(always)]
     fn init(&mut self, addr: u16, data: u8) {
         match self {
             Memory::Ram(ram) => ram.init(addr, data),
@@ -68,6 +71,7 @@ impl MemoryDevice for Memory {
         }
     }
 
+    #[inline(always)]
     fn load(&mut self, data: Box<[u8]>) {
         match self {
             Memory::Ram(ram) => ram.load(data),
@@ -79,6 +83,7 @@ impl MemoryDevice for Memory {
         }
     }
 
+    #[inline(always)]
     fn is_internal(&self) -> bool {
         match self {
             Memory::Ram(ram) => ram.is_internal(),
@@ -90,6 +95,7 @@ impl MemoryDevice for Memory {
         }
     }
 
+    #[inline(always)]
     fn snapshot(&self, addr: u16, open_bus: u8) -> u8 {
         match self {
             Memory::Ram(ram) => ram.snapshot(addr, open_bus),
@@ -176,4 +182,59 @@ impl MemoryDevice for Rom {
     }
 
     fn load(&mut self, data: Box<[u8]>) { self.memory = data }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct OpenBus {
+    bits: [BitState; 8],
+    decay_time: u32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct BitState {
+    set: bool,
+    decay_timer: u32,
+}
+
+impl OpenBus {
+    pub fn new(decay_time: u32) -> Self {
+        Self {
+            bits: [BitState {
+                set: false,
+                decay_timer: 0,
+            }; 8],
+            decay_time,
+        }
+    }
+
+    #[inline(always)]
+    pub fn set_masked(&mut self, value: u8, mask: u8) {
+        for bit in 0..8 {
+            let bit_mask = 1 << bit;
+            if mask & bit_mask != 0 {
+                let val = (value & bit_mask) != 0;
+                self.bits[bit].set = val;
+                self.bits[bit].decay_timer = 0;
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub fn tick(&mut self, times: u8) {
+        for bit in &mut self.bits {
+            bit.decay_timer += times as u32;
+            if bit.decay_timer > self.decay_time {
+                bit.set = false;
+                bit.decay_timer = 0
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub fn read(&self) -> u8 {
+        self.bits
+            .iter()
+            .enumerate()
+            .fold(0u8, |acc, (i, b)| acc | ((b.set as u8) << i))
+    }
 }
