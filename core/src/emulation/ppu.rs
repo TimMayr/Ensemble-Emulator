@@ -43,6 +43,7 @@ pub struct Ppu {
     pub scanline: u16,
     pub dot: u16,
     pub prev_vbl: u8,
+    pub data_bus: u8,
 }
 
 impl Default for Ppu {
@@ -93,6 +94,7 @@ const TABLE_GAP_TILES: usize = 2;
 const TABLE_GAP_PX: usize = TABLE_GAP_TILES * TILE_SIZE;
 const VBL_START_SCANLINE: u16 = 241;
 const VBL_CLEAR_STARTLINE: u16 = 261;
+const VISIBLE_SCANLINES: u16 = 239;
 
 impl Ppu {
     pub fn new() -> Self {
@@ -169,11 +171,15 @@ impl Ppu {
         self.scanline = (frame_dot / (DOTS_PER_SCANLINE + 1) as u128) as u16;
         self.dot = (frame_dot % (DOTS_PER_SCANLINE + 1) as u128) as u16;
 
-        // if self.scanline < 240 {
-        //     if self.dot > 0 && self.dot < 257 {
-        //         if (self.dot - 1) % DOTS_PER_SCANLINE == 0 {}
-        //     }
-        // }
+        if self.scanline < VISIBLE_SCANLINES + 1 {
+            if self.dot > 0 && self.dot < 257 {
+                if (self.dot - 1) % DOTS_PER_SCANLINE == 0 {}
+            }
+
+            if self.dot >= 257 && self.dot <= 320 {
+                self.oam_addr_register = 0;
+            }
+        }
 
         if self.scanline == VBL_START_SCANLINE && self.dot == 1 {
             self.set_vbl_bit();
