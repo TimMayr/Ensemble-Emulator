@@ -29,7 +29,7 @@ fn main() {
     let mut frontend = Frontends::default();
 
     emu.load_rom(&String::from(
-        "./core/tests/nes-test-roms/ppu_vbl_nmi/rom_singles/01-vbl_basics.nes",
+        "./core/tests/nes-test-roms/ppu_open_bus/ppu_open_bus.nes",
     ));
     emu.power();
 
@@ -54,12 +54,12 @@ fn main() {
     //     }
     // }
 
-    emu.run_until(&mut frontend, 300_000_000)
+    emu.run_until(&mut frontend, 400_000_000)
         .expect("panic message");
 
     println!("{:?}", start.elapsed());
 
-    let mem = &emu.get_memory_debug(Some(0x6000..=0x6100))[0];
+    let mem = &emu.get_memory_debug(Some(0x6000..=0x6200))[0];
 
     for (i, n) in mem.iter().enumerate() {
         if i % 32 == 0 {
