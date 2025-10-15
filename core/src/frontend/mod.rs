@@ -2,9 +2,7 @@ pub mod godot_frontend;
 #[cfg(feature = "sdl2")]
 pub mod sdl_frontend;
 
-use std::cell::Ref;
-
-use crate::emulation::emu::{HEIGHT, WIDTH};
+use crate::emulation::emu::{Console, HEIGHT, WIDTH};
 use crate::frontend::godot_frontend::GodotFrontend;
 #[cfg(feature = "sdl2")]
 use crate::frontend::sdl_frontend::SdlFrontend;
@@ -23,12 +21,13 @@ impl Default for Frontends {
 impl Frontend for Frontends {
     fn show_frame(
         &mut self,
-        pixel_buffer: Ref<'_, [u32; (WIDTH * HEIGHT) as usize]>,
+        pixel_buffer: &[u32; (WIDTH * HEIGHT) as usize],
+        console: &mut dyn Console,
     ) -> Result<(), String> {
         match self {
             #[cfg(feature = "sdl2")]
-            Frontends::Sdl2(frontend) => frontend.show_frame(pixel_buffer),
-            Frontends::Godot(frontend) => frontend.show_frame(pixel_buffer),
+            Frontends::Sdl2(frontend) => frontend.show_frame(pixel_buffer, console),
+            Frontends::Godot(frontend) => frontend.show_frame(pixel_buffer, console),
             Frontends::None() => Ok(()),
         }
     }
@@ -37,6 +36,7 @@ impl Frontend for Frontends {
 pub trait Frontend {
     fn show_frame(
         &mut self,
-        pixel_buffer: Ref<'_, [u32; (WIDTH * HEIGHT) as usize]>,
+        pixel_buffer: &[u32; (WIDTH * HEIGHT) as usize],
+        console: &mut dyn Console,
     ) -> Result<(), String>;
 }

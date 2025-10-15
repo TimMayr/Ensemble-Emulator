@@ -124,6 +124,8 @@ impl Console for Nes {
             self.total_cycles + MASTER_CYCLES_PER_FRAME as u128,
         )
     }
+
+    fn inc_current_palette(&mut self) { self.ppu.borrow_mut().inc_current_palette(); }
 }
 
 impl Nes {
@@ -223,7 +225,11 @@ impl Nes {
         drop(ppu);
 
         if frame_ready && discriminant(frontend) != discriminant(&Frontends::None()) {
-            frontend.show_frame(self.get_pixel_buffer())?;
+            let pixel_buffer = self.get_pixel_buffer();
+            let pixels = *pixel_buffer;
+            drop(pixel_buffer);
+
+            frontend.show_frame(&pixels, self)?;
         }
 
         if self.cpu_cycle_counter.wrapping_add(3) == 12 {

@@ -81,6 +81,12 @@ impl Console for Consoles {
             Consoles::Nes(nes) => nes.step_frame(frontend),
         }
     }
+
+    fn inc_current_palette(&mut self) {
+        match self {
+            Consoles::Nes(nes) => nes.inc_current_palette(),
+        }
+    }
 }
 
 pub trait Console {
@@ -103,4 +109,6 @@ pub trait Console {
 
     fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String>;
     fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String>;
+
+    fn inc_current_palette(&mut self);
 }

@@ -139,7 +139,7 @@ pub unsafe extern "C" fn emu_step_frame(e: *mut FfiWrapper) -> c_int {
                 println!(
                     "[EmuBackend] {:?} after {}",
                     res,
-                    nes.cycles / MASTER_CYCLES_PER_FRAME as u128
+                    nes.total_cycles / MASTER_CYCLES_PER_FRAME as u128
                 );
                 0
             }

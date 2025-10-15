@@ -1940,7 +1940,7 @@ fn sbc(cpu: &mut Cpu) {
         cpu.clear_carry_flag();
     }
 
-    if ((acc_check ^ result) & (value ^ result) & NEGATIVE_BIT) != 0 {
+    if ((value ^ result) & (acc_check ^ result) & NEGATIVE_BIT) != 0 {
         cpu.set_overflow_flag();
     } else {
         cpu.clear_overflow_flag();
