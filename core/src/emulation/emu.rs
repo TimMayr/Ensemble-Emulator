@@ -4,8 +4,8 @@ use std::ops::RangeInclusive;
 use crate::emulation::nes::{ExecutionFinishedType, Nes};
 use crate::frontend::Frontends;
 
-pub const WIDTH: u32 = 272;
-pub const HEIGHT: u32 = 128;
+pub const WIDTH: u32 = 512;
+pub const HEIGHT: u32 = 480;
 
 pub enum Consoles {
     Nes(Nes),
