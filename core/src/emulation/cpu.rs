@@ -13,7 +13,7 @@ use crate::emulation::mem::{Memory, Ram};
 use crate::emulation::nes::ExecutionFinishedType;
 use crate::emulation::nes::ExecutionFinishedType::CycleCompleted;
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OpCode, OPCODES_MAP};
+use crate::emulation::opcode::{OPCODES_MAP, OpCode};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
@@ -37,6 +37,8 @@ pub const NMI_HANDLER_ADDR: u16 = 0xFFFA;
 pub const RESET_VECTOR_ADDR: u16 = 0xFFFC;
 pub const UPPER_BYTE: u16 = 0xFF00;
 pub const LOWER_BYTE: u16 = 0x00FF;
+pub const DMA_ADDRESS: u16 = 0x4014;
+pub const OAM_REG_ADDRESS: u16 = 0x2004;
 
 #[derive(Debug, Clone)]
 pub struct Cpu {
@@ -65,6 +67,11 @@ pub struct Cpu {
     pub current_irq_vec: u16,
     pub is_in_irq: bool,
     pub prev_nmi: bool,
+    pub cpu_read_cycle: bool,
+    pub dma_read: bool,
+    pub dma_triggered: bool,
+    pub dma_page: u8,
+    pub dma_temp: u8,
 }
 
 impl Default for Cpu {
@@ -98,6 +105,11 @@ impl Default for Cpu {
             current_irq_vec: IRQ_VECTOR_ADDR,
             is_in_irq: false,
             prev_nmi: false,
+            cpu_read_cycle: true,
+            dma_read: true,
+            dma_triggered: false,
+            dma_page: 0,
+            dma_temp: 0,
         }
     }
 }
@@ -108,9 +120,21 @@ impl Cpu {
         Self::default()
     }
 
-    pub fn mem_read(&mut self, addr: u16) -> u8 { self.memory.mem_read(addr) }
+    pub fn mem_read(&mut self, addr: u16) -> u8 {
+        self.cpu_read_cycle = true;
+        self.memory.mem_read(addr)
+    }
 
-    pub fn mem_write(&mut self, addr: u16, data: u8) { self.memory.mem_write(addr, data); }
+    pub fn mem_write(&mut self, addr: u16, data: u8) {
+        self.cpu_read_cycle = false;
+
+        if addr == DMA_ADDRESS {
+            self.dma_triggered = true;
+            self.dma_page = data;
+        }
+
+        self.memory.mem_write(addr, data);
+    }
 
     pub fn mem_read_u16(&mut self, addr: u16) -> u16 { self.memory.mem_read_u16(addr) }
 
@@ -947,10 +971,13 @@ impl Cpu {
             return Ok(ExecutionFinishedType::ReachedHlt);
         }
 
+        self.dma_read = !self.dma_read;
+
         let op = self.current_op;
 
-        if discriminant(&op) != discriminant(&MicroOp::BranchIncrement(Source::None))
+        if !matches!(op, MicroOp::BranchIncrement(Source::None))
             && !self.is_in_irq
+            && !self.dma_triggered
         {
             if self.nmi_detected {
                 self.nmi_pending = true;
@@ -961,6 +988,11 @@ impl Cpu {
         }
 
         let mut seq = self.execute_micro_op(&op);
+
+        if self.dma_triggered && self.cpu_read_cycle {
+            self.trigger_oam_dma();
+            return Ok(CycleCompleted);
+        }
 
         if let Some(ppu) = &self.ppu {
             let curr_nmi = ppu.borrow().poll_nmi();
@@ -1388,6 +1420,7 @@ impl Cpu {
             Source::None => None,
             Source::PBrk => Option::from(self.processor_status | (UNUSED_BIT | BREAK_BIT)),
             Source::PIrq => Option::from(self.processor_status | UNUSED_BIT),
+            Source::DmaTemp => Option::from(self.dma_temp),
         }
     }
 
@@ -1421,6 +1454,8 @@ impl Cpu {
             }
             Target::LoWrite => self.mem_write(self.lo as u16, val),
             Target::None => {}
+            Target::DmaTemp => self.dma_temp = val,
+            Target::OamWrite => self.mem_write(OAM_REG_ADDRESS, val),
             Target::IrqVecCandidate => unreachable!(),
         }
     }
@@ -1436,6 +1471,55 @@ impl Cpu {
             Condition::OverflowSet => self.get_overflow_flag(),
             Condition::OverflowClear => !self.get_overflow_flag(),
         }
+    }
+
+    pub fn trigger_oam_dma(&mut self) {
+        self.dma_triggered = false;
+        self.is_in_irq = true;
+        let mut instr = Vec::new();
+
+        instr.push(MicroOp::Read(
+            AddressSource::None,
+            Target::None,
+            MicroOpCallback::None,
+        ));
+
+        if !self.dma_read {
+            instr.push(MicroOp::Read(
+                AddressSource::AddressLatch,
+                Target::None,
+                MicroOpCallback::None,
+            ))
+        }
+
+        for oam_addr in 0x00u8..0xFFu8 {
+            instr.push(MicroOp::Read(
+                AddressSource::Address((self.dma_page as u16) << 8 | oam_addr as u16),
+                Target::DmaTemp,
+                MicroOpCallback::None,
+            ));
+            instr.push(MicroOp::Write(
+                Target::OamWrite,
+                Source::DmaTemp,
+                false,
+                MicroOpCallback::None,
+            ))
+        }
+
+        instr.push(MicroOp::Read(
+            AddressSource::Address((self.dma_page as u16) << 8 | 0xFFu16),
+            Target::DmaTemp,
+            MicroOpCallback::None,
+        ));
+        instr.push(MicroOp::Write(
+            Target::OamWrite,
+            Source::DmaTemp,
+            false,
+            MicroOpCallback::ExitIrq,
+        ));
+
+        instr.append(&mut self.op_queue);
+        self.op_queue = instr;
     }
 }
 
@@ -1492,6 +1576,8 @@ pub enum Target {
     AddressLatch,
     LoWrite,
     IrqVecCandidate,
+    DmaTemp,
+    OamWrite,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encode, Decode)]
@@ -1509,6 +1595,7 @@ pub enum Source {
     Constant(u8),
     None,
     PIrq,
+    DmaTemp,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encode, Decode)]
@@ -1685,6 +1772,11 @@ impl Cpu {
             current_irq_vec: 0,
             is_in_irq: false,
             prev_nmi: false,
+            cpu_read_cycle: true,
+            dma_read: true,
+            dma_triggered: false,
+            dma_page: 0,
+            dma_temp: 0,
         };
 
         cpu.load_rom(rom);

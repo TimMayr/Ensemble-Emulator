@@ -181,10 +181,12 @@ impl Ppu {
         self.scanline = (frame_dot / (DOTS_PER_SCANLINE + 1) as u128) as u16;
         self.dot = (frame_dot % (DOTS_PER_SCANLINE + 1) as u128) as u16;
 
-        if self.scanline < VISIBLE_SCANLINES + 1 || self.scanline == PRE_RENDER_SCANLINE {
-            if self.dot >= 257 && self.dot <= 320 {
-                self.oam_addr_register = 0;
-            }
+        if (self.scanline < VISIBLE_SCANLINES + 1 || self.scanline == PRE_RENDER_SCANLINE)
+            && self.is_rendering()
+            && self.dot >= 257
+            && self.dot <= 320
+        {
+            self.oam_addr_register = 0;
         }
 
         if self.scanline == VBL_START_SCANLINE && self.dot == 1 {
@@ -283,7 +285,7 @@ impl Ppu {
         self.ppu_data_buffer = self.memory.mem_read(self.vram_addr_register);
 
         if (0x3F00u16..=0x3FFFu16).contains(&self.vram_addr_register) {
-            ret = self.mem_read(self.vram_addr_register);
+            ret = self.palette_ram.mem_read(self.vram_addr_register);
         }
 
         self.vram_addr_register += self.get_vram_addr_step() as u16;
@@ -428,21 +430,15 @@ impl Ppu {
 
     pub fn mem_read(&mut self, addr: u16) -> u8 {
         match addr {
-            0x0000..0x3F00 => self.memory.mem_read(addr),
             0x3F00..0x3FFF => self.palette_ram.mem_read(addr),
-            _ => {
-                unreachable!()
-            }
+            _ => self.memory.mem_read(addr),
         }
     }
 
     pub fn mem_write(&mut self, addr: u16, data: u8) {
         match addr {
-            0x0000..0x3F00 => self.memory.mem_write(addr, data),
             0x3F00..0x3FFF => self.palette_ram.mem_write(addr, data),
-            _ => {
-                unreachable!()
-            }
+            _ => self.memory.mem_write(addr, data),
         }
     }
 
