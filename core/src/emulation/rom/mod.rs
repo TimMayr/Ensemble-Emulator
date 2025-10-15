@@ -9,11 +9,12 @@ use std::path::Path;
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
+use crate::emulation::mem::nametable_memory::{NametableMemory, NametableMirroring};
 use crate::emulation::mem::{Memory, MemoryDevice, Ram, Rom};
 use crate::emulation::rom::formats::archaic_ines::ArchaicInes;
 use crate::emulation::rom::formats::ines::Ines;
-use crate::emulation::rom::formats::ines_07::Ines07;
 use crate::emulation::rom::formats::ines2::Ines2;
+use crate::emulation::rom::formats::ines_07::Ines07;
 
 #[derive(Debug, Clone)]
 pub enum ParseError {
@@ -205,7 +206,16 @@ impl RomFile {
                 .to_vec()
                 .into_boxed_slice(),
         );
+
         Memory::Ram(ram)
+    }
+
+    pub fn get_nametable_memory(&self) -> Memory {
+        let mirroring = match self.hardwired_nametable_layout {
+            true => NametableMirroring::Horizontal,
+            false => NametableMirroring::Vertical,
+        };
+        Memory::NametableMemory(NametableMemory::new(mirroring))
     }
 }
 

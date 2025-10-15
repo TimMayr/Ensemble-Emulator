@@ -2,12 +2,14 @@ use std::fmt::{Debug, Formatter};
 
 use crate::emulation::mem::apu_registers::ApuRegisters;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
+use crate::emulation::mem::nametable_memory::NametableMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
 
 pub mod apu_registers;
 pub mod memory_map;
 pub mod mirror_memory;
+pub mod nametable_memory;
 pub mod palette_ram;
 pub mod ppu_registers;
 
@@ -19,6 +21,7 @@ pub enum Memory {
     PaletteRam(PaletteRam),
     PpuRegisters(PpuRegisters),
     ApuRegisters(ApuRegisters),
+    NametableMemory(NametableMemory),
 }
 
 impl Debug for Memory {
@@ -30,6 +33,7 @@ impl Debug for Memory {
             Memory::PaletteRam(palette_ram) => palette_ram.fmt(f),
             Memory::PpuRegisters(ppu_registers) => ppu_registers.fmt(f),
             Memory::ApuRegisters(apu_registers) => apu_registers.fmt(f),
+            Memory::NametableMemory(nametable_memory) => nametable_memory.fmt(f),
         }
     }
 }
@@ -44,6 +48,7 @@ impl MemoryDevice for Memory {
             Memory::PaletteRam(palette_ram) => palette_ram.read(addr, open_bus),
             Memory::PpuRegisters(ppu_registers) => ppu_registers.read(addr, open_bus),
             Memory::ApuRegisters(apu_registers) => apu_registers.read(addr, open_bus),
+            Memory::NametableMemory(nametable_memory) => nametable_memory.read(addr, open_bus),
         }
     }
 
@@ -56,6 +61,7 @@ impl MemoryDevice for Memory {
             Memory::PaletteRam(palette_ram) => palette_ram.write(addr, data),
             Memory::PpuRegisters(ppu_registers) => ppu_registers.write(addr, data),
             Memory::ApuRegisters(apu_registers) => apu_registers.write(addr, data),
+            Memory::NametableMemory(nametable_memory) => nametable_memory.write(addr, data),
         }
     }
 
@@ -68,6 +74,7 @@ impl MemoryDevice for Memory {
             Memory::PaletteRam(palette_ram) => palette_ram.init(addr, data),
             Memory::PpuRegisters(ppu_registers) => ppu_registers.init(addr, data),
             Memory::ApuRegisters(apu_registers) => apu_registers.init(addr, data),
+            Memory::NametableMemory(nametable_memory) => nametable_memory.init(addr, data),
         }
     }
 
@@ -80,6 +87,7 @@ impl MemoryDevice for Memory {
             Memory::PaletteRam(palette_ram) => palette_ram.load(data),
             Memory::PpuRegisters(ppu_registers) => ppu_registers.load(data),
             Memory::ApuRegisters(apu_registers) => apu_registers.load(data),
+            Memory::NametableMemory(nametable_memory) => nametable_memory.load(data),
         }
     }
 
@@ -92,6 +100,7 @@ impl MemoryDevice for Memory {
             Memory::PaletteRam(palette_ram) => palette_ram.is_internal(),
             Memory::PpuRegisters(ppu_registers) => ppu_registers.is_internal(),
             Memory::ApuRegisters(apu_registers) => apu_registers.is_internal(),
+            Memory::NametableMemory(nametable_memory) => nametable_memory.is_internal(),
         }
     }
 
@@ -104,6 +113,7 @@ impl MemoryDevice for Memory {
             Memory::PaletteRam(palette_ram) => palette_ram.snapshot(addr, open_bus),
             Memory::PpuRegisters(ppu_registers) => ppu_registers.snapshot(addr, open_bus),
             Memory::ApuRegisters(apu_registers) => apu_registers.snapshot(addr, open_bus),
+            Memory::NametableMemory(nametable_memory) => nametable_memory.snapshot(addr, open_bus),
         }
     }
 }
