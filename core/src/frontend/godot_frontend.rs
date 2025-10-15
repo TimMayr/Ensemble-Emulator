@@ -1,6 +1,7 @@
+use std::cell::Ref;
 use std::ffi::c_void;
 
-use crate::emulation::emu::{Console, HEIGHT, WIDTH};
+use crate::emulation::emu::{InputEvent, HEIGHT, WIDTH};
 use crate::frontend::Frontend;
 
 pub struct GodotFrontend {
@@ -29,8 +30,7 @@ impl GodotFrontend {
 impl Frontend for GodotFrontend {
     fn show_frame(
         &mut self,
-        pixel_buffer: &[u32; (WIDTH * HEIGHT) as usize],
-        console: &mut dyn Console,
+        pixel_buffer: Ref<'_, [u32; (WIDTH * HEIGHT) as usize]>,
     ) -> Result<(), String> {
         if self.video_ptr.is_null() || self.video_len == 0 {
             return Ok(());
@@ -67,4 +67,6 @@ impl Frontend for GodotFrontend {
 
         Ok(())
     }
+
+    fn poll_input_events(&mut self) -> Result<Vec<InputEvent>, String> { todo!() }
 }

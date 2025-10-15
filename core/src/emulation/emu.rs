@@ -112,3 +112,7 @@ pub trait Console {
 
     fn inc_current_palette(&mut self);
 }
+
+pub enum InputEvent {
+    IncPalette,
+}

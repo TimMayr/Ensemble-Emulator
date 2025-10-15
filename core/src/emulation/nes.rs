@@ -1,11 +1,10 @@
 use std::cell::{Ref, RefCell};
-use std::mem::discriminant;
 use std::ops::{Deref, RangeInclusive};
 use std::rc::Rc;
 use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp, MicroOpCallback};
-use crate::emulation::emu::{Console, HEIGHT, WIDTH};
+use crate::emulation::emu::{Console, InputEvent, HEIGHT, WIDTH};
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
 use crate::emulation::mem::Memory;
@@ -218,18 +217,24 @@ impl Nes {
             self.ppu_cycle_counter = 0;
         }
 
-        if frame_ready && discriminant(frontend) != discriminant(&Frontends::None()) {
+        if frame_ready && !matches!(frontend, Frontends::None()) {
             ppu.frame();
         }
 
         drop(ppu);
 
-        if frame_ready && discriminant(frontend) != discriminant(&Frontends::None()) {
+        if frame_ready && !matches!(frontend, Frontends::None()) {
             let pixel_buffer = self.get_pixel_buffer();
-            let pixels = *pixel_buffer;
-            drop(pixel_buffer);
+            frontend.show_frame(pixel_buffer)?;
 
-            frontend.show_frame(&pixels, self)?;
+            let res = frontend.poll_input_events();
+            if let Ok(events) = res {
+                for event in events {
+                    self.handle_input_event(event);
+                }
+            } else if let Err(s) = res {
+                panic!("{s}")
+            }
         }
 
         if self.cpu_cycle_counter.wrapping_add(3) == 12 {
@@ -237,8 +242,10 @@ impl Nes {
             let mut do_trace = false;
 
             if self.trace_log.is_some()
-                && discriminant(&self.cpu.current_op)
-                    == discriminant(&MicroOp::FetchOpcode(MicroOpCallback::None))
+                && matches!(
+                    &self.cpu.current_op,
+                    &MicroOp::FetchOpcode(MicroOpCallback::None)
+                )
             {
                 do_trace = true;
             }
@@ -269,6 +276,14 @@ impl Nes {
         }
 
         cpu_res
+    }
+
+    pub fn handle_input_event(&mut self, input_event: InputEvent) {
+        match input_event {
+            InputEvent::IncPalette => {
+                self.inc_current_palette();
+            }
+        }
     }
 }
 

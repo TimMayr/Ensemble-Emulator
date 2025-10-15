@@ -29,7 +29,7 @@ fn main() {
     let mut frontend = Frontends::default();
 
     emu.load_rom(&String::from(
-        "./core/tests/nes-test-roms/oam_read/oam_read.nes",
+        "./core/tests/nes-test-roms/ppu_read_buffer/test_ppu_read_buffer.nes",
     ));
     emu.power();
 
