@@ -4,7 +4,7 @@ pub mod sdl_frontend;
 
 use std::cell::Ref;
 
-use crate::emulation::emu::{Console, InputEvent, HEIGHT, WIDTH};
+use crate::emulation::emu::{HEIGHT, InputEvent, WIDTH};
 use crate::frontend::godot_frontend::GodotFrontend;
 #[cfg(feature = "sdl2")]
 use crate::frontend::sdl_frontend::SdlFrontend;

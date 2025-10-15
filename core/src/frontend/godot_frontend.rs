@@ -1,7 +1,7 @@
 use std::cell::Ref;
 use std::ffi::c_void;
 
-use crate::emulation::emu::{InputEvent, HEIGHT, WIDTH};
+use crate::emulation::emu::{HEIGHT, InputEvent, WIDTH};
 use crate::frontend::Frontend;
 
 pub struct GodotFrontend {

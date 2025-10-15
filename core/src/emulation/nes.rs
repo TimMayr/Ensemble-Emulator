@@ -4,10 +4,10 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp, MicroOpCallback};
-use crate::emulation::emu::{Console, InputEvent, HEIGHT, WIDTH};
+use crate::emulation::emu::{Console, HEIGHT, InputEvent, WIDTH};
+use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
-use crate::emulation::mem::Memory;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
@@ -237,7 +237,7 @@ impl Nes {
             }
         }
 
-        if self.cpu_cycle_counter.wrapping_add(3) == 12 {
+        if self.cpu_cycle_counter.wrapping_add(2) == 12 {
             self.ppu.borrow_mut().tick_open_bus(12);
             let mut do_trace = false;
 

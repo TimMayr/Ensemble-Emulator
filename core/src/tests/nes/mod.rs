@@ -7,4 +7,6 @@ mod oam_read;
 // #[cfg(test)]
 // mod oam_stress;
 #[cfg(test)]
+mod ppu_open_bus;
+#[cfg(test)]
 mod ppu_vbl_nmi;

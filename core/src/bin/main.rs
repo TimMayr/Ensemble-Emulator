@@ -2,9 +2,9 @@ use std::time::Instant;
 
 use nes_core::emulation::emu::{Console, Consoles};
 use nes_core::emulation::nes::Nes;
+use nes_core::frontend::Frontends;
 #[cfg(feature = "sdl2")]
 use nes_core::frontend::sdl_frontend::SdlFrontend;
-use nes_core::frontend::Frontends;
 
 #[cfg(feature = "sdl2")]
 fn main() {
@@ -59,7 +59,7 @@ fn main() {
 
     println!("{:?}", start.elapsed());
 
-    let mem = &emu.get_memory_debug(Some(0x6000..=0x6200))[0];
+    let mem = &emu.get_memory_debug(Some(0x6000..=0x6500))[0];
 
     for (i, n) in mem.iter().enumerate() {
         if i % 32 == 0 {
