@@ -99,6 +99,8 @@ pub const VBL_START_SCANLINE: u16 = 241;
 pub const VISIBLE_SCANLINES: u16 = 239;
 pub const PRE_RENDER_SCANLINE: u16 = 261;
 pub const OAM_SIZE: usize = 0x100;
+pub const NAMETABLE_MAIN_SIZE: u16 = 0x3C0;
+pub const NAMETABLE_SIZE: u16 = 0x400;
 
 impl Ppu {
     pub fn new() -> Self {
@@ -183,10 +185,10 @@ impl Ppu {
 
         if (self.scanline < VISIBLE_SCANLINES + 1 || self.scanline == PRE_RENDER_SCANLINE)
             && self.is_rendering()
-            && self.dot >= 257
-            && self.dot <= 320
         {
-            self.oam_addr_register = 0;
+            if self.dot >= 257 && self.dot <= 320 {
+                self.oam_addr_register = 0;
+            }
         }
 
         if self.scanline == VBL_START_SCANLINE && self.dot == 1 {
@@ -483,7 +485,7 @@ impl Ppu {
         }
     }
 
-    pub fn frame(&mut self) { self.render_pattern_tables_fast() }
+    pub fn frame(&mut self) { self.render_nametables() }
 
     #[inline]
     fn load_palette_colors(&mut self) -> [u32; 4] {
@@ -499,7 +501,41 @@ impl Ppu {
         colors
     }
 
-    pub fn render_pattern_tables_fast(&mut self) {
+    pub fn render_nametables(&mut self) {
+        let pattern_table_base_address = ((self.ctrl_register & 0b0001_0000) as u16) << 8;
+        let color_lut: [u32; 4] = self.load_palette_colors();
+
+        for nametable_idx in 0..4 {
+            let nametable_start_addr = 0x2000 + nametable_idx * 0x0400;
+
+            for entry_idx in 0..0x400 {
+                let nametable_entry = self.mem_read(nametable_start_addr + nametable_idx);
+                let attr_table_addr = nametable_start_addr + nametable_idx + NAMETABLE_MAIN_SIZE;
+                let attr_table_entry = self.mem_read(attr_table_addr);
+                let row_number = (entry_idx / 32) % 8;
+
+                let low_pattern_addr =
+                    pattern_table_base_address + ((nametable_entry as u16) << 4) + row_number;
+
+                let mut low_pattern_byte = self.mem_read(low_pattern_addr);
+                let mut high_pattern_byte = self.mem_read(low_pattern_addr + 8);
+
+                let row = (entry_idx / 32) as usize
+                    + ((nametable_idx >> 1) * (HEIGHT / 2) as u16) as usize;
+                let col = (entry_idx % 32) as usize
+                    + ((nametable_idx & 0x1) * (WIDTH / 2) as u16) as usize;
+
+                for x in (0..TILE_SIZE).rev() {
+                    let idx = ((low_pattern_byte & 1) | ((high_pattern_byte & 1) << 1)) as usize;
+                    low_pattern_byte >>= 1;
+                    high_pattern_byte >>= 1;
+                    self.pixel_buffer[(row * WIDTH as usize) + col + x] = color_lut[idx];
+                }
+            }
+        }
+    }
+
+    pub fn render_pattern_tables(&mut self) {
         // Build palette→color once
         let color_lut: [u32; 4] = self.load_palette_colors();
 
