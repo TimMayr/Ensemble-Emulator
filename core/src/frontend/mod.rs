@@ -2,7 +2,9 @@ pub mod godot_frontend;
 #[cfg(feature = "sdl2")]
 pub mod sdl_frontend;
 
-use crate::emulation::emu::{Console, HEIGHT, WIDTH};
+use std::cell::Ref;
+
+use crate::emulation::emu::{Console, InputEvent, HEIGHT, WIDTH};
 use crate::frontend::godot_frontend::GodotFrontend;
 #[cfg(feature = "sdl2")]
 use crate::frontend::sdl_frontend::SdlFrontend;
@@ -21,14 +23,22 @@ impl Default for Frontends {
 impl Frontend for Frontends {
     fn show_frame(
         &mut self,
-        pixel_buffer: &[u32; (WIDTH * HEIGHT) as usize],
-        console: &mut dyn Console,
+        pixel_buffer: Ref<'_, [u32; (WIDTH * HEIGHT) as usize]>,
     ) -> Result<(), String> {
         match self {
             #[cfg(feature = "sdl2")]
-            Frontends::Sdl2(frontend) => frontend.show_frame(pixel_buffer, console),
-            Frontends::Godot(frontend) => frontend.show_frame(pixel_buffer, console),
+            Frontends::Sdl2(frontend) => frontend.show_frame(pixel_buffer),
+            Frontends::Godot(frontend) => frontend.show_frame(pixel_buffer),
             Frontends::None() => Ok(()),
+        }
+    }
+
+    fn poll_input_events(&mut self) -> Result<Vec<InputEvent>, String> {
+        match self {
+            #[cfg(feature = "sdl2")]
+            Frontends::Sdl2(frontend) => frontend.poll_input_events(),
+            Frontends::Godot(frontend) => frontend.poll_input_events(),
+            Frontends::None() => Ok(Vec::new()),
         }
     }
 }
@@ -36,7 +46,8 @@ impl Frontend for Frontends {
 pub trait Frontend {
     fn show_frame(
         &mut self,
-        pixel_buffer: &[u32; (WIDTH * HEIGHT) as usize],
-        console: &mut dyn Console,
+        pixel_buffer: Ref<'_, [u32; (WIDTH * HEIGHT) as usize]>,
     ) -> Result<(), String>;
+
+    fn poll_input_events(&mut self) -> Result<Vec<InputEvent>, String>;
 }

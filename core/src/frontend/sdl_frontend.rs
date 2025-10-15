@@ -1,3 +1,5 @@
+use std::cell::Ref;
+
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
@@ -5,7 +7,7 @@ use sdl2::render::{ScaleMode, TextureCreator, UpdateTextureError, WindowCanvas};
 use sdl2::video::WindowContext;
 use sdl2::EventPump;
 
-use crate::emulation::emu::{Console, HEIGHT, WIDTH};
+use crate::emulation::emu::{InputEvent, HEIGHT, WIDTH};
 use crate::frontend::Frontend;
 
 pub struct SdlFrontend {
@@ -52,35 +54,8 @@ impl Default for SdlFrontend {
 impl Frontend for SdlFrontend {
     fn show_frame(
         &mut self,
-        pixel_buffer: &[u32; (WIDTH * HEIGHT) as usize],
-        console: &mut dyn Console,
+        pixel_buffer: Ref<'_, [u32; (WIDTH * HEIGHT) as usize]>,
     ) -> Result<(), String> {
-        // Handle events
-        for event in self.event_pump.poll_iter() {
-            match event {
-                Event::Quit {
-                    ..
-                }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => {
-                    return Err(String::from("Quit Program"));
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::Space),
-                    ..
-                } => {
-                    console.inc_current_palette();
-                }
-                Event::Window {
-                    win_event: WindowEvent::Resized(..) | WindowEvent::SizeChanged(..),
-                    ..
-                } => self.canvas.set_logical_size(WIDTH, HEIGHT).expect(""),
-                _ => {}
-            }
-        }
-
         let mut texture = self
             .texture_creator
             .create_texture_streaming(PixelFormatEnum::RGBA8888, WIDTH, HEIGHT)
@@ -98,5 +73,37 @@ impl Frontend for SdlFrontend {
         self.canvas.present();
 
         Ok(())
+    }
+
+    fn poll_input_events(&mut self) -> Result<Vec<InputEvent>, String> {
+        let mut events = Vec::new();
+
+        // Handle events
+        for event in self.event_pump.poll_iter() {
+            match event {
+                Event::Quit {
+                    ..
+                }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => {
+                    return Err(String::from("Quit Program"));
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Space),
+                    ..
+                } => {
+                    events.push(InputEvent::IncPalette);
+                }
+                Event::Window {
+                    win_event: WindowEvent::Resized(..) | WindowEvent::SizeChanged(..),
+                    ..
+                } => self.canvas.set_logical_size(WIDTH, HEIGHT).expect(""),
+                _ => {}
+            }
+        }
+
+        Ok(events)
     }
 }
