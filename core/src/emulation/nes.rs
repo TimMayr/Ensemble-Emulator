@@ -3,7 +3,7 @@ use std::ops::{Deref, RangeInclusive};
 use std::rc::Rc;
 use std::time::Duration;
 
-use crate::emulation::cpu::{Cpu, MicroOp, MicroOpCallback};
+use crate::emulation::cpu::{Cpu, MicroOp};
 use crate::emulation::emu::{Console, HEIGHT, InputEvent, WIDTH};
 use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
@@ -244,7 +244,7 @@ impl Nes {
             if self.trace_log.is_some()
                 && matches!(
                     &self.cpu.current_op,
-                    &MicroOp::FetchOpcode(MicroOpCallback::None)
+                    &MicroOp::FetchOpcode(..)
                 )
             {
                 do_trace = true;

@@ -13,7 +13,7 @@ use crate::emulation::mem::{Memory, Ram};
 use crate::emulation::nes::ExecutionFinishedType;
 use crate::emulation::nes::ExecutionFinishedType::CycleCompleted;
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OPCODES_MAP, OpCode};
+use crate::emulation::opcode::{OpCode, OPCODES_MAP};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
@@ -975,10 +975,7 @@ impl Cpu {
 
         let op = self.current_op;
 
-        if !matches!(op, MicroOp::BranchIncrement(Source::None))
-            && !self.is_in_irq
-            && !self.dma_triggered
-        {
+        if !matches!(op, MicroOp::BranchIncrement(..)) && !self.is_in_irq && !self.dma_triggered {
             if self.nmi_detected {
                 self.nmi_pending = true;
                 self.nmi_detected = false;
@@ -990,8 +987,7 @@ impl Cpu {
         let mut seq = self.execute_micro_op(&op);
 
         if self.dma_triggered && self.cpu_read_cycle {
-            self.trigger_oam_dma();
-            return Ok(CycleCompleted);
+            seq = self.trigger_oam_dma(&mut seq);
         }
 
         if let Some(ppu) = &self.ppu {
@@ -1016,8 +1012,6 @@ impl Cpu {
             // sequence head becomes next, rest get queued
             self.current_op = seq.remove(0);
             self.op_queue = seq;
-
-            Ok(CycleCompleted)
         } else {
             if self.nmi_pending {
                 self.trigger_nmi();
@@ -1033,8 +1027,9 @@ impl Cpu {
             }
 
             self.current_op = MicroOp::FetchOpcode(MicroOpCallback::None);
-            Ok(CycleCompleted)
         }
+
+        Ok(CycleCompleted)
     }
 
     fn execute_micro_op(&mut self, micro_op: &MicroOp) -> Vec<MicroOp> {
@@ -1473,7 +1468,7 @@ impl Cpu {
         }
     }
 
-    pub fn trigger_oam_dma(&mut self) {
+    pub fn trigger_oam_dma(&mut self, seq: &mut Vec<MicroOp>) -> Vec<MicroOp> {
         self.dma_triggered = false;
         self.is_in_irq = true;
         let mut instr = Vec::new();
@@ -1518,8 +1513,8 @@ impl Cpu {
             MicroOpCallback::ExitIrq,
         ));
 
-        instr.append(&mut self.op_queue);
-        self.op_queue = instr;
+        instr.append(seq);
+        instr
     }
 }
 
