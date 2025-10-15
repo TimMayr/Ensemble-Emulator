@@ -45,6 +45,7 @@ pub struct Ppu {
     pub dot: u16,
     pub prev_vbl: u8,
     pub open_bus: OpenBus,
+    current_palette: u8,
 }
 
 impl Default for Ppu {
@@ -135,6 +136,7 @@ impl Ppu {
             dot: 0,
             prev_vbl: 0,
             open_bus: OpenBus::new(OPEN_BUS_DECAY_DELAY),
+            current_palette: 0,
         }
     }
 
@@ -463,7 +465,7 @@ impl Ppu {
 
     pub fn reset(&mut self) { self.reset_signal = true; }
 
-    pub fn get_selected_palette(&self) -> u8 { 2 }
+    pub fn get_selected_palette(&self) -> u8 { self.current_palette }
 
     pub fn get_pixel_buffer(&self) -> &[u32; (WIDTH * HEIGHT) as usize] { &self.pixel_buffer }
 
@@ -581,10 +583,13 @@ impl Ppu {
             dot: state.dot,
             prev_vbl: 0,
             open_bus: OpenBus::new(OPEN_BUS_DECAY_DELAY),
+            current_palette: 0,
         };
 
         ppu.load_rom(rom);
 
         ppu
     }
+
+    pub fn inc_current_palette(&mut self) { self.current_palette = (self.current_palette + 1) % 7 }
 }
