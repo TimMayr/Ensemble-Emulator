@@ -81,7 +81,7 @@ pub const DOTS_PER_FRAME: u128 = 89342;
 pub const PALETTE_RAM_START_ADDRESS: u16 = 0x3F00;
 pub const PALETTE_RAM_END_INDEX: u16 = 0x3FFF;
 pub const PALETTE_RAM_SIZE: u16 = 0x20;
-pub const VRAM_SIZE: usize = 2048;
+pub const VRAM_SIZE: usize = 0x800;
 pub const DOTS_PER_SCANLINE: u16 = 340;
 pub const SCANLINES_PER_FRAME: u16 = 261;
 pub const OPEN_BUS_DECAY_DELAY: u32 = 420_000;
@@ -99,7 +99,7 @@ pub const VBL_START_SCANLINE: u16 = 241;
 pub const VISIBLE_SCANLINES: u16 = 239;
 pub const PRE_RENDER_SCANLINE: u16 = 261;
 pub const OAM_SIZE: usize = 0x100;
-pub const NAMETABLE_MAIN_SIZE: u16 = 0x3C0;
+pub const NAMETABLE_TILE_AREA_SIZE: u16 = 0x3C0;
 pub const NAMETABLE_SIZE: u16 = 0x400;
 
 impl Ppu {
@@ -455,8 +455,8 @@ impl Ppu {
         self.memory.add_memory(
             0x2000..=0x3FFF,
             Memory::MirrorMemory(MirrorMemory::new(
-                Box::new(Memory::Ram(Ram::new(VRAM_SIZE))),
-                (VRAM_SIZE - 1) as u16,
+                Box::new(rom_file.get_nametable_memory()),
+                (VRAM_SIZE * 2 - 1) as u16,
             )),
         )
     }
@@ -502,12 +502,16 @@ impl Ppu {
     }
 
     pub fn render_nametables(&mut self) {
-        let pattern_table_base_address = ((self.ctrl_register & 0b0001_0000) as u16) << 8;
+        let pattern_table_base_address = if self.ctrl_register & 0b0001_0000 != 0 {
+            0x1000
+        } else {
+            0x0000
+        };
 
         for nametable_idx in 0..4 {
             let nametable_start_addr = 0x2000 + nametable_idx * 0x0400;
 
-            for entry_idx in 0..NAMETABLE_MAIN_SIZE {
+            for entry_idx in 0..NAMETABLE_TILE_AREA_SIZE {
                 let tile_index = self.mem_read(nametable_start_addr + entry_idx);
 
                 let nametable_row = entry_idx / 32;
@@ -516,7 +520,7 @@ impl Ppu {
                 let attr_addr = nametable_start_addr
                     + ((nametable_row / 4) * 8)
                     + (nametable_col / 4)
-                    + NAMETABLE_MAIN_SIZE;
+                    + NAMETABLE_TILE_AREA_SIZE;
                 let attr_byte = self.mem_read(attr_addr);
 
                 let tile_x = nametable_col + ((nametable_idx & 0x1) * 32);
@@ -531,18 +535,22 @@ impl Ppu {
                     let low = self.mem_read(patter_addr + row_in_tile as u16);
                     let high = self.mem_read(patter_addr + row_in_tile as u16 + 8);
 
+                    let quad_x = (nametable_col % 4) / 2;
+                    let quad_y = (nametable_row % 4) / 2;
+                    let attr_shift = (quad_y * 4 + quad_x * 2) as u8;
+                    let palette_select = (attr_byte >> attr_shift) & 0b11;
+
                     for col_in_tile in 0..TILE_SIZE {
                         let bit0 = (low >> (7 - col_in_tile)) & 1;
                         let bit1 = (high >> (7 - col_in_tile)) & 1;
                         let pixel_value = (bit1 << 1) | bit0;
 
-                        let quad_x = (tile_x % 4) / 2;
-                        let quad_y = (tile_y % 4) / 2;
-                        let attr_shift = (quad_y * 4 + quad_x * 2) as u8;
-                        let palette_select = (attr_byte >> attr_shift) & 0b11;
+                        let palette_addr = if pixel_value == 0 {
+                            PALETTE_RAM_START_ADDRESS
+                        } else {
+                            PALETTE_RAM_START_ADDRESS + (palette_select * 4 + pixel_value) as u16
+                        };
 
-                        let palette_addr =
-                            PALETTE_RAM_START_ADDRESS + (palette_select * 4 + pixel_value) as u16;
                         let color_idx = self.mem_read(palette_addr);
 
                         let x = base_x as usize + col_in_tile;

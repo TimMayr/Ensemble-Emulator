@@ -1359,18 +1359,14 @@ impl Cpu {
             2048 => self.memory.add_memory(
                 0x6000..=0x7FFF,
                 Memory::MirrorMemory(MirrorMemory::new(
-                    Box::new(Memory::Ram(Ram::new(
-                        rom_file.prg_memory.prg_ram_size as usize,
-                    ))),
+                    Box::new(Memory::Ram(Ram::new(rom_file.prg_memory.prg_ram_size as usize))),
                     0x7FF,
                 )),
             ),
             4096 => self.memory.add_memory(
                 0x6000..=0x7FFF,
                 Memory::MirrorMemory(MirrorMemory::new(
-                    Box::new(Memory::Ram(Ram::new(
-                        rom_file.prg_memory.prg_ram_size as usize,
-                    ))),
+                    Box::new(Memory::Ram(Ram::new(rom_file.prg_memory.prg_ram_size as usize))),
                     0xFFF,
                 )),
             ),
