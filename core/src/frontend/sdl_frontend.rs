@@ -1,13 +1,13 @@
 use std::cell::Ref;
 
-use sdl2::EventPump;
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::render::{ScaleMode, TextureCreator, UpdateTextureError, WindowCanvas};
 use sdl2::video::WindowContext;
+use sdl2::EventPump;
 
-use crate::emulation::emu::{HEIGHT, InputEvent, WIDTH};
+use crate::emulation::emu::{InputEvent, HEIGHT, WIDTH};
 use crate::frontend::Frontend;
 
 pub struct SdlFrontend {
@@ -24,7 +24,7 @@ impl Default for SdlFrontend {
 
         // Create window
         let window = video_subsystem
-            .window("NES Emulator", WIDTH * 3, HEIGHT * 3) // scale x3
+            .window("NES Emulator", WIDTH, HEIGHT) 
             .position_centered()
             .opengl()
             .resizable()

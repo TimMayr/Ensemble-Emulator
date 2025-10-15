@@ -38,7 +38,7 @@ pub struct Ppu {
     pub fine_x_scroll: u8,
     pub even_frame: bool,
     pub reset_signal: bool,
-    pub pixel_buffer: [u32; (WIDTH * HEIGHT) as usize],
+    pub pixel_buffer: Box<[u32; (WIDTH * HEIGHT) as usize]>,
     pub vbl_reset_counter: u8,
     pub vbl_clear_scheduled: Option<u8>,
     pub scanline: u16,
@@ -131,7 +131,7 @@ impl Ppu {
             t_register: 0,
             even_frame: false,
             reset_signal: true,
-            pixel_buffer: [0u32; (WIDTH * HEIGHT) as usize],
+            pixel_buffer: Box::from([0u32; (WIDTH * HEIGHT) as usize]),
             vbl_reset_counter: 0,
             vbl_clear_scheduled: None,
             scanline: 0,
@@ -503,33 +503,54 @@ impl Ppu {
 
     pub fn render_nametables(&mut self) {
         let pattern_table_base_address = ((self.ctrl_register & 0b0001_0000) as u16) << 8;
-        let color_lut: [u32; 4] = self.load_palette_colors();
 
         for nametable_idx in 0..4 {
             let nametable_start_addr = 0x2000 + nametable_idx * 0x0400;
 
-            for entry_idx in 0..0x400 {
-                let nametable_entry = self.mem_read(nametable_start_addr + nametable_idx);
-                let attr_table_addr = nametable_start_addr + nametable_idx + NAMETABLE_MAIN_SIZE;
-                let attr_table_entry = self.mem_read(attr_table_addr);
-                let row_number = (entry_idx / 32) % 8;
+            for entry_idx in 0..NAMETABLE_MAIN_SIZE {
+                let tile_index = self.mem_read(nametable_start_addr + entry_idx);
 
-                let low_pattern_addr =
-                    pattern_table_base_address + ((nametable_entry as u16) << 4) + row_number;
+                let nametable_row = entry_idx / 32;
+                let nametable_col = entry_idx % 32;
 
-                let mut low_pattern_byte = self.mem_read(low_pattern_addr);
-                let mut high_pattern_byte = self.mem_read(low_pattern_addr + 8);
+                let attr_addr = nametable_start_addr
+                    + ((nametable_row / 4) * 8)
+                    + (nametable_col / 4)
+                    + NAMETABLE_MAIN_SIZE;
+                let attr_byte = self.mem_read(attr_addr);
 
-                let row = (entry_idx / 32) as usize
-                    + ((nametable_idx >> 1) * (HEIGHT / 2) as u16) as usize;
-                let col = (entry_idx % 32) as usize
-                    + ((nametable_idx & 0x1) * (WIDTH / 2) as u16) as usize;
+                let tile_x = nametable_col + ((nametable_idx & 0x1) * 32);
+                let tile_y = nametable_row + ((nametable_idx >> 1) * 30);
 
-                for x in (0..TILE_SIZE).rev() {
-                    let idx = ((low_pattern_byte & 1) | ((high_pattern_byte & 1) << 1)) as usize;
-                    low_pattern_byte >>= 1;
-                    high_pattern_byte >>= 1;
-                    self.pixel_buffer[(row * WIDTH as usize) + col + x] = color_lut[idx];
+                let base_x = tile_x * 8;
+                let base_y = tile_y * 8;
+
+                let patter_addr = pattern_table_base_address + (tile_index as u16) * 16;
+
+                for row_in_tile in 0..TILE_SIZE {
+                    let low = self.mem_read(patter_addr + row_in_tile as u16);
+                    let high = self.mem_read(patter_addr + row_in_tile as u16 + 8);
+
+                    for col_in_tile in 0..TILE_SIZE {
+                        let bit0 = (low >> (7 - col_in_tile)) & 1;
+                        let bit1 = (high >> (7 - col_in_tile)) & 1;
+                        let pixel_value = (bit1 << 1) | bit0;
+
+                        let quad_x = (tile_x % 4) / 2;
+                        let quad_y = (tile_y % 4) / 2;
+                        let attr_shift = (quad_y * 4 + quad_x * 2) as u8;
+                        let palette_select = (attr_byte >> attr_shift) & 0b11;
+
+                        let palette_addr =
+                            PALETTE_RAM_START_ADDRESS + (palette_select * 4 + pixel_value) as u16;
+                        let color_idx = self.mem_read(palette_addr);
+
+                        let x = base_x as usize + col_in_tile;
+                        let y = base_y as usize + row_in_tile;
+
+                        self.pixel_buffer[(y * WIDTH as usize) + x] =
+                            NES_PALETTE[color_idx as usize]
+                    }
                 }
             }
         }
