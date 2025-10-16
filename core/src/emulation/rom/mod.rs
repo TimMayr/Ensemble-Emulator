@@ -9,7 +9,7 @@ use std::path::Path;
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-use crate::emulation::mem::nametable_memory::{NametableMemory, NametableMirroring};
+use crate::emulation::mem::nametable_memory::{NametableArrangement, NametableMemory};
 use crate::emulation::mem::{Memory, MemoryDevice, Ram, Rom};
 use crate::emulation::rom::formats::archaic_ines::ArchaicInes;
 use crate::emulation::rom::formats::ines::Ines;
@@ -212,8 +212,8 @@ impl RomFile {
 
     pub fn get_nametable_memory(&self) -> Memory {
         let mirroring = match self.hardwired_nametable_layout {
-            true => NametableMirroring::Horizontal,
-            false => NametableMirroring::Vertical,
+            true => NametableArrangement::Vertical,
+            false => NametableArrangement::Horizontal,
         };
         Memory::NametableMemory(NametableMemory::new(mirroring))
     }
