@@ -7,7 +7,7 @@ use sdl2::render::{ScaleMode, TextureCreator, UpdateTextureError, WindowCanvas};
 use sdl2::video::WindowContext;
 use sdl2::EventPump;
 
-use crate::emulation::emu::{InputEvent, HEIGHT, WIDTH};
+use crate::emulation::emu::{InputEvent, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::frontend::Frontend;
 
 pub struct SdlFrontend {
@@ -24,7 +24,7 @@ impl Default for SdlFrontend {
 
         // Create window
         let window = video_subsystem
-            .window("NES Emulator", WIDTH, HEIGHT) 
+            .window("NES Emulator", TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT)
             .position_centered()
             .opengl()
             .resizable()
@@ -54,17 +54,21 @@ impl Default for SdlFrontend {
 impl Frontend for SdlFrontend {
     fn show_frame(
         &mut self,
-        pixel_buffer: Ref<'_, [u32; (WIDTH * HEIGHT) as usize]>,
+        pixel_buffer: Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
     ) -> Result<(), String> {
         let mut texture = self
             .texture_creator
-            .create_texture_streaming(PixelFormatEnum::RGBA8888, WIDTH, HEIGHT)
+            .create_texture_streaming(
+                PixelFormatEnum::RGBA8888,
+                TOTAL_OUTPUT_WIDTH,
+                TOTAL_OUTPUT_HEIGHT,
+            )
             .expect("Error creating Texture");
         texture.set_scale_mode(ScaleMode::Nearest);
 
         let bytes: &[u8] = bytemuck::cast_slice(&*pixel_buffer);
         texture
-            .update(None, bytes, (WIDTH * 4) as usize)
+            .update(None, bytes, (TOTAL_OUTPUT_WIDTH * 4) as usize)
             .map_err(|e: UpdateTextureError| e.to_string())?;
 
         // Render
@@ -87,9 +91,7 @@ impl Frontend for SdlFrontend {
                 | Event::KeyDown {
                     keycode: Some(Keycode::Escape),
                     ..
-                } => {
-                    return Err(String::from("Quit Program"));
-                }
+                } => events.push(InputEvent::Quit),
                 Event::KeyDown {
                     keycode: Some(Keycode::Space),
                     ..
@@ -99,7 +101,10 @@ impl Frontend for SdlFrontend {
                 Event::Window {
                     win_event: WindowEvent::Resized(..) | WindowEvent::SizeChanged(..),
                     ..
-                } => self.canvas.set_logical_size(WIDTH, HEIGHT).expect(""),
+                } => self
+                    .canvas
+                    .set_logical_size(TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT)
+                    .expect(""),
                 _ => {}
             }
         }
