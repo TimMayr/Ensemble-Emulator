@@ -4,10 +4,10 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp};
-use crate::emulation::emu::{Console, HEIGHT, InputEvent, WIDTH};
-use crate::emulation::mem::Memory;
+use crate::emulation::emu::{Console, InputEvent, HEIGHT, WIDTH};
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::mem::Memory;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
@@ -123,8 +123,6 @@ impl Console for Nes {
             self.total_cycles + MASTER_CYCLES_PER_FRAME as u128,
         )
     }
-
-    fn inc_current_palette(&mut self) { self.ppu.borrow_mut().inc_current_palette(); }
 }
 
 impl Nes {
@@ -217,9 +215,9 @@ impl Nes {
             self.ppu_cycle_counter = 0;
         }
 
-        if frame_ready && !matches!(frontend, Frontends::None()) {
-            ppu.frame();
-        }
+        // if frame_ready && !matches!(frontend, Frontends::None()) {
+        //     ppu.frame();
+        // }
 
         drop(ppu);
 
@@ -241,11 +239,7 @@ impl Nes {
             self.ppu.borrow_mut().tick_open_bus(12);
             let mut do_trace = false;
 
-            if self.trace_log.is_some()
-                && matches!(
-                    &self.cpu.current_op,
-                    &MicroOp::FetchOpcode(..)
-                )
+            if self.trace_log.is_some() && matches!(&self.cpu.current_op, &MicroOp::FetchOpcode(..))
             {
                 do_trace = true;
             }
@@ -285,6 +279,8 @@ impl Nes {
             }
         }
     }
+
+    pub fn inc_current_palette(&mut self) { self.ppu.borrow_mut().inc_current_palette(); }
 }
 
 impl Default for Nes {

@@ -4,8 +4,8 @@ use std::ops::RangeInclusive;
 use crate::emulation::nes::{ExecutionFinishedType, Nes};
 use crate::frontend::Frontends;
 
-pub const WIDTH: u32 = 512;
-pub const HEIGHT: u32 = 480;
+pub const WIDTH: u32 = 256;
+pub const HEIGHT: u32 = 240;
 
 pub enum Consoles {
     Nes(Nes),
@@ -81,12 +81,6 @@ impl Console for Consoles {
             Consoles::Nes(nes) => nes.step_frame(frontend),
         }
     }
-
-    fn inc_current_palette(&mut self) {
-        match self {
-            Consoles::Nes(nes) => nes.inc_current_palette(),
-        }
-    }
 }
 
 pub trait Console {
@@ -109,8 +103,6 @@ pub trait Console {
 
     fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String>;
     fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String>;
-
-    fn inc_current_palette(&mut self);
 }
 
 pub enum InputEvent {
