@@ -2,7 +2,7 @@ use crate::emulation::mem::{MemoryDevice, Ram};
 use crate::emulation::ppu::{NAMETABLE_SIZE, VRAM_SIZE};
 
 #[derive(Debug, Clone, Copy)]
-pub enum NametableMirroring {
+pub enum NametableArrangement {
     Vertical,
     Horizontal,
     SingleScreenLower,
@@ -13,11 +13,11 @@ pub enum NametableMirroring {
 #[derive(Debug, Clone)]
 pub struct NametableMemory {
     vram: Ram,
-    mirroring: NametableMirroring,
+    mirroring: NametableArrangement,
 }
 
 impl NametableMemory {
-    pub fn new(mirroring: NametableMirroring) -> Self {
+    pub fn new(mirroring: NametableArrangement) -> Self {
         Self {
             vram: Ram::new(VRAM_SIZE), // 2KB of VRAM
             mirroring,
@@ -31,19 +31,19 @@ impl NametableMemory {
         let offset = addr % NAMETABLE_SIZE;
 
         match self.mirroring {
-            NametableMirroring::Vertical => match table {
+            NametableArrangement::Vertical => match table {
                 0 | 2 => 0x000 + offset,
                 1 | 3 => 0x400 + offset,
                 _ => unreachable!(),
             },
-            NametableMirroring::Horizontal => match table {
+            NametableArrangement::Horizontal => match table {
                 0 | 1 => 0x000 + offset,
                 2 | 3 => 0x400 + offset,
                 _ => unreachable!(),
             },
-            NametableMirroring::SingleScreenLower => 0x000 + offset,
-            NametableMirroring::SingleScreenUpper => 0x400 + offset,
-            NametableMirroring::FourScreen => addr,
+            NametableArrangement::SingleScreenLower => 0x000 + offset,
+            NametableArrangement::SingleScreenUpper => 0x400 + offset,
+            NametableArrangement::FourScreen => addr,
         }
     }
 }
