@@ -1,4 +1,4 @@
-use bincode::{Decode, Encode, config};
+use bincode::{config, Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 use crate::emulation::cpu::{Cpu, MicroOp};
@@ -98,7 +98,7 @@ impl From<&Ppu> for PpuState {
             oam_data_register: ppu.oam_data_register,
             ppu_x_scroll_register: ppu.ppu_x_scroll_register,
             ppu_y_scroll_register: ppu.ppu_y_scroll_register,
-            ppu_addr_register: ppu.vram_addr_register,
+            ppu_addr_register: ppu.v_register,
             ppu_data_register: ppu.ppu_data_register,
             oam_addr_register: ppu.oam_addr_register,
             write_latch: ppu.write_latch,

@@ -33,7 +33,7 @@ impl MemoryDevice for PpuRegisters {
             0x7 => {
                 let val = ppu.get_vram_at_addr();
 
-                match ppu.vram_addr_register {
+                match ppu.v_register {
                     0x3F00..=0x3FFF => {
                         ppu.open_bus.set_masked(val, 0b0011_1111);
                     }
