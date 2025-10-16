@@ -3,7 +3,7 @@
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_float, c_int, c_void};
 
-use nes_core::emulation::emu::{Console, Consoles, HEIGHT, WIDTH};
+use nes_core::emulation::emu::{Console, Consoles, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use nes_core::emulation::nes::{ExecutionFinishedType, Nes, MASTER_CYCLES_PER_FRAME};
 use nes_core::frontend::godot_frontend::GodotFrontend;
 use nes_core::frontend::Frontends;
@@ -83,9 +83,9 @@ pub unsafe extern "C" fn emu_get_video_spec(e: *mut FfiWrapper, out: *mut EmuVid
 
     let _emu = unsafe { &mut *e };
     let spec = EmuVidSpecs {
-        width: WIDTH as c_int,
-        height: HEIGHT as c_int,
-        stride: (WIDTH * 4u32) as c_int,
+        width: TOTAL_OUTPUT_WIDTH as c_int,
+        height: TOTAL_OUTPUT_HEIGHT as c_int,
+        stride: (TOTAL_OUTPUT_WIDTH * 4u32) as c_int,
         format: 0 as c_int,
         pixel_aspect_x: 1 as c_int,
         pixel_aspect_y: 1 as c_int,

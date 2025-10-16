@@ -2,7 +2,7 @@ use bincode::{config, Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 use crate::emulation::cpu::{Cpu, MicroOp};
-use crate::emulation::emu::{HEIGHT, WIDTH};
+use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::RomFile;
 
@@ -63,8 +63,6 @@ pub struct PpuState {
     pub nmi_requested: bool,
     pub memory: Vec<u8>,
     pub oam_data_register: u8,
-    pub ppu_x_scroll_register: u8,
-    pub ppu_y_scroll_register: u8,
     pub ppu_addr_register: u16,
     pub ppu_data_register: u8,
     pub oam_addr_register: u8,
@@ -96,8 +94,6 @@ impl From<&Ppu> for PpuState {
             nmi_requested: ppu.nmi_requested.get(),
             memory: ppu.memory.get_memory_debug(Some(0x0..=0x3FFF)),
             oam_data_register: ppu.oam_data_register,
-            ppu_x_scroll_register: ppu.ppu_x_scroll_register,
-            ppu_y_scroll_register: ppu.ppu_y_scroll_register,
             ppu_addr_register: ppu.v_register,
             ppu_data_register: ppu.ppu_data_register,
             oam_addr_register: ppu.oam_addr_register,
@@ -113,7 +109,7 @@ impl From<&Ppu> for PpuState {
             fine_x_scroll: ppu.fine_x_scroll,
             even_frame: ppu.even_frame,
             reset_signal: ppu.reset_signal,
-            pixel_buffer: vec![0u32; (WIDTH * HEIGHT) as usize],
+            pixel_buffer: vec![0u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize],
             dot: ppu.dot,
             scanline: ppu.scanline,
         }

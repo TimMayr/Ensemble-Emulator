@@ -4,15 +4,17 @@ use std::ops::RangeInclusive;
 use crate::emulation::nes::{ExecutionFinishedType, Nes};
 use crate::frontend::Frontends;
 
-pub const WIDTH: u32 = 256;
-pub const HEIGHT: u32 = 240;
+pub const TOTAL_OUTPUT_WIDTH: u32 = 256 * 1;
+pub const TOTAL_OUTPUT_HEIGHT: u32 = 240 * 1;
 
 pub enum Consoles {
     Nes(Nes),
 }
 
 impl Console for Consoles {
-    fn get_pixel_buffer(&self) -> Ref<'_, [u32; (WIDTH * HEIGHT) as usize]> {
+    fn get_pixel_buffer(
+        &self,
+    ) -> Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]> {
         match self {
             Consoles::Nes(nes) => nes.get_pixel_buffer(),
         }
@@ -84,7 +86,9 @@ impl Console for Consoles {
 }
 
 pub trait Console {
-    fn get_pixel_buffer(&self) -> Ref<'_, [u32; (WIDTH * HEIGHT) as usize]>;
+    fn get_pixel_buffer(
+        &self,
+    ) -> Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>;
     #[allow(clippy::ptr_arg)]
     fn load_rom(&mut self, path: &String);
     fn reset(&mut self);
@@ -107,4 +111,5 @@ pub trait Console {
 
 pub enum InputEvent {
     IncPalette,
+    Quit,
 }

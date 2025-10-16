@@ -4,7 +4,7 @@ pub mod sdl_frontend;
 
 use std::cell::Ref;
 
-use crate::emulation::emu::{HEIGHT, InputEvent, WIDTH};
+use crate::emulation::emu::{InputEvent, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::frontend::godot_frontend::GodotFrontend;
 #[cfg(feature = "sdl2")]
 use crate::frontend::sdl_frontend::SdlFrontend;
@@ -23,7 +23,7 @@ impl Default for Frontends {
 impl Frontend for Frontends {
     fn show_frame(
         &mut self,
-        pixel_buffer: Ref<'_, [u32; (WIDTH * HEIGHT) as usize]>,
+        pixel_buffer: Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
     ) -> Result<(), String> {
         match self {
             #[cfg(feature = "sdl2")]
@@ -46,7 +46,7 @@ impl Frontend for Frontends {
 pub trait Frontend {
     fn show_frame(
         &mut self,
-        pixel_buffer: Ref<'_, [u32; (WIDTH * HEIGHT) as usize]>,
+        pixel_buffer: Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
     ) -> Result<(), String>;
 
     fn poll_input_events(&mut self) -> Result<Vec<InputEvent>, String>;
