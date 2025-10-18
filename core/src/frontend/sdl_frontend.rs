@@ -1,8 +1,8 @@
 use std::cell::Ref;
 
-use sdl2::event::{Event, WindowEvent};
+use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::pixels::PixelFormatEnum;
+use sdl2::pixels::{Color, PixelFormatEnum};
 use sdl2::render::{ScaleMode, TextureCreator, UpdateTextureError, WindowCanvas};
 use sdl2::video::WindowContext;
 use sdl2::EventPump;
@@ -32,11 +32,18 @@ impl Default for SdlFrontend {
             .expect("Error initializing windows");
 
         // Create canvas
-        let canvas = window
+        let mut canvas = window
             .into_canvas()
             .present_vsync()
             .build()
             .expect("Error initializing canvas");
+        canvas.set_draw_color(Color::RGB(255, 255, 255));
+        canvas
+            .set_logical_size(TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT)
+            .expect("Error setting canvas size");
+        canvas
+            .set_integer_scale(true)
+            .expect("Error forcing integer scaling");
 
         // Create texture creator
         let texture_creator = canvas.texture_creator();
@@ -98,13 +105,6 @@ impl Frontend for SdlFrontend {
                 } => {
                     events.push(InputEvent::IncPalette);
                 }
-                Event::Window {
-                    win_event: WindowEvent::Resized(..) | WindowEvent::SizeChanged(..),
-                    ..
-                } => self
-                    .canvas
-                    .set_logical_size(TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT)
-                    .expect(""),
                 _ => {}
             }
         }

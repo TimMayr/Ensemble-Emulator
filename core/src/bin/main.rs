@@ -11,7 +11,7 @@ fn main() {
     let mut emu = Consoles::Nes(Nes::default());
     let mut frontend = Frontends::Sdl2(SdlFrontend::default());
 
-    emu.load_rom(&String::from("./core/tests/Pac-Man (USA) (Namco).nes"));
+    emu.load_rom(&String::from("./core/tests/Mario Bros. (World).nes"));
     emu.power();
 
     let start = Instant::now();
