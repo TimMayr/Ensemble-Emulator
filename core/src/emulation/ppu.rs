@@ -103,7 +103,6 @@ pub struct Ppu {
     pub bg_next_tile_id: u8,
     pub bg_next_tile_attribute: u8,
     pub bg_next_tile_lsb: u8,
-    pub bg_next_tile_msb: u8,
     pub current_palette: u8,
 }
 
@@ -138,7 +137,7 @@ impl Ppu {
             write_latch: false,
             t_register: 0,
             even_frame: false,
-            reset_signal: true,
+            reset_signal: false,
             pixel_buffer: Box::from([0u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]),
             vbl_reset_counter: 0,
             vbl_clear_scheduled: None,
@@ -152,7 +151,6 @@ impl Ppu {
             shift_pattern_hi: 0,
             shift_attr_lo: 0,
             shift_attr_hi: 0,
-            bg_next_tile_msb: 0,
             current_palette: 0,
         }
     }
@@ -199,223 +197,82 @@ impl Ppu {
         if (self.scanline < VISIBLE_SCANLINES + 1 || self.scanline == PRE_RENDER_SCANLINE)
             && self.is_rendering()
         {
-            self.shift_pattern_lo <<= 1;
-            self.shift_pattern_hi <<= 1;
-            self.shift_attr_lo <<= 1;
-            self.shift_attr_hi <<= 1;
+            if (1..=256).contains(&self.dot) || (321..=336).contains(&self.dot) {
+                self.shift_pattern_lo <<= 1;
+                self.shift_pattern_hi <<= 1;
+                self.shift_attr_lo <<= 1;
+                self.shift_attr_hi <<= 1;
 
-            if self.dot >= 257 && self.dot <= 320 {
-                self.oam_addr_register = 0;
-            }
+                self.do_dot_fetch();
 
-            // println!("0x{:02X}", self.ctrl_register);
+                if self.scanline != PRE_RENDER_SCANLINE && (0x01..=256).contains(&self.dot) {
+                    let mux = 0x80 >> self.fine_x_scroll;
+                    // pattern shifters (16-bit)
+                    let bit0 = ((self.shift_pattern_lo & (mux as u16) << 8) != 0) as u8;
+                    let bit1 = ((self.shift_pattern_hi & (mux as u16) << 8) != 0) as u8;
 
-            if (self.dot >= 1 && self.dot <= 256) || (self.dot >= 321 && self.dot <= 336) {
-                match (self.dot - 1) % 8 {
-                    0 => {
-                        self.bg_next_tile_msb = self.address_latch;
-                        self.reload_shifters();
-                        // println!("Dot X Scanline: {}x{}", self.dot, self.scanline);
-                        // println!("Reloading shifters");
-                        // println!("Pattern Shifter lo: 0b{:016b}", self.shift_pattern_lo);
-                        // println!("Pattern Shifter hi: 0b{:016b}", self.shift_pattern_hi);
+                    // attribute shifters (8-bit)
+                    let attr0 = ((self.shift_attr_lo & mux) != 0) as u8;
+                    let attr1 = ((self.shift_attr_hi & mux) != 0) as u8;
 
-                        // println!("Attribute Shifter lo: 0b{:08b}", self.shift_attr_lo);
-                        // println!("Attribute Shifter hi: 0b{:08b}", self.shift_attr_hi);
-                        // println!()
-                    }
-                    1 => {
-                        // println!("Dot X Scanline: {}x{}", self.dot, self.scanline);
-                        self.address_bus = 0x2000 | (self.v_register & 0x0FFF);
-                        // println!("Reading from Nametable @ 0x{:04X}", self.address_bus);
-                        // println!(
-                        //     "Address Calculation: 0x2000 | ({} (v_register) & 0x0FFF)",
-                        //     self.v_register
-                        // );
-                        // println!()
-                    }
-                    2 => {
-                        // println!("Dot X Scanline: {}x{}", self.dot, self.scanline);
-                        self.bg_next_tile_id = self.address_latch;
+                    let pattern_index = (bit1 << 1) | bit0;
+                    let palette_index = (attr1 << 1) | attr0;
 
-                        // if self.bg_next_tile_attribute != 0 {
-                        //     println!("Dot X Scanline: {}x{}", self.dot, self.scanline);
-                        //     println!("Next Tile Id: {}", self.bg_next_tile_id);
-                        //     println!();
-                        // }
+                    let color_addr = if pattern_index == 0 {
+                        0x3F00
+                    } else {
+                        0x3F00 + ((palette_index as u16) << 2) + (pattern_index as u16)
+                    };
 
-                        // println!(
-                        //     "Read 0x{:02X} from 0x{:04X}",
-                        //     self.bg_next_tile_id, self.address_bus
-                        // );
-                        // println!();
-                    }
-                    3 => {
-                        self.address_bus = ATTRIBUTE_TABLE_BASE_ADDRESS
-                            + (self.v_register & 0x0C00)
-                            + ((self.v_register >> 4) & 0x38)
-                            + ((self.v_register >> 2) & 0x7);
+                    let color_idx = self.mem_read(color_addr) & 0x3F;
 
-                        // if self.bg_next_tile_id != 0x2D {
-                        //     println!("Dot X Scanline: {}x{}", self.dot, self.scanline);
-                        //     println!("Reading from Attributes @ 0x{:04X}", self.address_bus);
-                        //
-                        //     println!(
-                        //         "Address Calculation: {ATTRIBUTE_TABLE_BASE_ADDRESS} (Attribute Table Base Address) + ({} (v_register) & 0x0C00) + (({} (v_register) >> 4) & 0x38) + (({} (v_register) >> 2) & 0x7);",
-                        //         self.v_register, self.v_register, self.v_register
-                        //     );
-                        //     println!();
-                        // }
-                    }
-                    4 => {
-                        let coarse_x = self.get_coarse_x_scroll();
-                        let coarse_y = self.get_coarse_y_scroll() >> 5;
-
-                        let attr_byte = self.address_latch;
-                        let shift = ((coarse_y & 2) << 1) | (coarse_x & 2); // gives 0,2,4,6
-                        let palette_bits = (attr_byte >> shift) & 0b11;
-                        self.bg_next_tile_attribute = palette_bits;
-
-                        // if self.bg_next_tile_attribute != 0 {
-                        //     println!("Dot X Scanline: {}x{}", self.dot, self.scanline);
-                        //
-                        //     println!(
-                        //         "Read 0x{:02X} from 0x{:04X} and shifting by {shift} => Tile Attribute: {}",
-                        //         self.address_latch, self.address_bus, self.bg_next_tile_attribute
-                        //     );
-                        //
-                        //     println!("Shift Calculation:",);
-                        //
-                        //     println!(
-                        //         "    Coarse_x: ({} (v_register) & {VRAM_ADDR_COARSE_X_SCROLL_MASK} (VRAM_ADDR_COARSE_X_SCROLL_MASK)) as u8 => {coarse_x}",
-                        //         self.v_register
-                        //     );
-                        //
-                        //     println!(
-                        //         "    Coarse_y: ({} (v_register) & {VRAM_ADDR_COARSE_Y_SCROLL_MASK} (VRAM_ADDR_COARSE_Y_SCROLL_MASK)) >> 5 as u8 => {coarse_y}",
-                        //         self.v_register
-                        //     );
-                        //
-                        //     println!(
-                        //         "    Shift: (({coarse_y} (coarse_y) & 2) << 1) | ({coarse_x} (coarse_x) & 2)"
-                        //     );
-                        //
-                        //     println!(
-                        //         "Tile Attribute Calculation: ({} (address_latch) >> {shift} (shift)) & 0x03",
-                        //         self.address_latch
-                        //     );
-                        //     println!();
-                        // }
-                    }
-                    5 => {
-                        // println!("Dot X Scanline: {}x{}", self.dot, self.scanline);
-
-                        let fine_y = self.get_fine_y_scroll();
-
-                        let table_base = if self.ctrl_register & 0x10 != 0 {
-                            0x1000
-                        } else {
-                            0x0000
-                        };
-
-                        self.address_bus =
-                            table_base + ((self.bg_next_tile_id as u16) * 16) + fine_y as u16;
-
-                        // println!(
-                        //     "Reading from Pattern Table low @ 0x{:04X}",
-                        //     self.address_bus
-                        // );
-                        // println!(
-                        //     "Address Calculation: {table_base} (table_base) + (({} (Next Tile ID) as u16) * 16) + {fine_y} (Fine Y Scroll) as u16",
-                        //     self.bg_next_tile_id
-                        // );
-                        // println!();
-                    }
-                    6 => {
-                        self.bg_next_tile_lsb = self.address_latch;
-
-                        // if self.bg_next_tile_lsb != 0 {
-                        //     println!("Dot X Scanline: {}x{}", self.dot, self.scanline);
-                        //     println!("Next Tile lsb Pattern: {}", self.bg_next_tile_lsb);
-                        //     println!();
-                        // }
-
-                        // println!("Dot X Scanline: {}x{}", self.dot, self.scanline);
-                        // println!("Read 0x{:02X} from Pattern Table low", self.address_latch);
-                        // println!();
-                    }
-                    7 => {
-                        // println!("Dot X Scanline: {}x{}", self.dot, self.scanline);
-                        let fine_y = self.get_fine_y_scroll();
-                        let table_base = if self.ctrl_register & 0x10 != 0 {
-                            0x1000
-                        } else {
-                            0x0000
-                        };
-
-                        self.address_bus =
-                            table_base + ((self.bg_next_tile_id as u16) * 16) + (fine_y + 8) as u16;
-
-                        // if self.bg_next_tile_lsb != 0 {
-                        //     println!("Dot X Scanline: {}x{}", self.dot, self.scanline);
-                        //     println!("Next Tile msb Pattern: {}", self.bg_next_tile_msb);
-                        //     println!();
-                        // }
-
-                        // println!("Reading from Pattern Table hi @ 0x{:04X}", self.address_bus);
-                        // println!(
-                        //     "Address Calculation: {table_base} (table_base) + (({} (Next Tile ID) as u16) * 16) + ({fine_y} (Fine Y Scroll) + 8) as u16",
-                        //     self.bg_next_tile_id
-                        // );
-                    }
-                    _ => unreachable!(),
-                }
-
-                // pattern shifters (16-bit)
-                let mux16 = 0x8000 >> self.fine_x_scroll;
-                let bit0 = ((self.shift_pattern_lo & mux16) != 0) as u8;
-                let bit1 = ((self.shift_pattern_hi & mux16) != 0) as u8;
-
-                // attribute shifters (8-bit)
-                let mux8 = 0x80 >> self.fine_x_scroll;
-                let attr0 = ((self.shift_attr_lo & mux8) != 0) as u8;
-                let attr1 = ((self.shift_attr_hi & mux8) != 0) as u8;
-
-                let pattern_index = ((bit1 << 1) | bit0) as u8;
-                let palette_index = (attr1 << 1) | attr0;
-
-                let color_addr = if pattern_index == 0 {
-                    0x3F00
-                } else {
-                    0x3F00 + ((palette_index as u16) << 2) + (pattern_index as u16)
-                };
-
-                let color_idx = self.mem_read(color_addr) & 0x3F;
-
-                if self.scanline != PRE_RENDER_SCANLINE && (0x01..=0xFF).contains(&self.dot) {
                     self.pixel_buffer
                         [self.scanline as usize * SCREEN_RENDER_WIDTH + (self.dot - 1) as usize] =
                         NES_PALETTE[color_idx as usize];
                 }
 
-                if self.dot == 257 {
-                    self.reload_shifters();
+                if (self.dot - 1) % 8 == 7 {
+                    self.inc_coarse_x_scroll();
+                }
+
+                if self.dot == 256 {
+                    self.inc_y_scroll()
                 }
             }
 
-            if self.dot == 256 {
-                self.inc_y_scroll()
-            }
-
-            if (self.dot >= 328 || self.dot <= 256) && self.dot % 8 == 0 {
-                self.inc_coarse_x_scroll();
+            if (257..=260).contains(&self.dot) || (337..=340).contains(&self.dot) {
+                match (self.dot - 1) % 8 {
+                    0 => {
+                        self.shift_pattern_lo <<= 1;
+                        self.shift_pattern_hi <<= 1;
+                        self.shift_attr_lo <<= 1;
+                        self.shift_attr_hi <<= 1;
+                        self.reload_shifters();
+                    }
+                    1 => {
+                        self.address_bus = 0x2000 | (self.v_register & 0x0FFF);
+                    }
+                    2 => {
+                        self.bg_next_tile_id = self.address_latch;
+                    }
+                    3 => {
+                        self.address_bus = 0x2000 | (self.v_register & 0x0FFF);
+                    }
+                    _ => {
+                        unreachable!()
+                    }
+                }
             }
 
             if self.dot == 257 {
                 self.v_register = (self.v_register & !0x041F) | (self.t_register & 0x041F);
             }
 
-            if self.dot >= 280 && self.dot <= 304 && self.scanline == PRE_RENDER_SCANLINE {
+            if self.dot >= 257 && self.dot <= 320 {
+                self.oam_addr_register = 0;
+            }
+
+            if (280..=304).contains(&self.dot) && self.scanline == PRE_RENDER_SCANLINE {
                 self.v_register = (self.v_register & !0x7BE0) | (self.t_register & 0x7BE0);
             }
         }
@@ -442,9 +299,68 @@ impl Ppu {
         }
 
         self.address_latch = self.mem_read(self.address_bus);
+
         self.dot_counter += 1;
 
         frame_dot == DOTS_PER_FRAME - 1
+    }
+
+    pub fn do_dot_fetch(&mut self) {
+        match (self.dot - 1) % 8 {
+            0 => {
+                if self.dot != 1 {
+                    self.reload_shifters();
+                }
+            }
+            1 => {
+                self.address_bus = 0x2000 | (self.v_register & 0x0FFF);
+            }
+            2 => {
+                self.bg_next_tile_id = self.address_latch;
+            }
+            3 => {
+                self.address_bus = ATTRIBUTE_TABLE_BASE_ADDRESS
+                    | (self.v_register & 0x0C00)
+                    | ((self.v_register >> 4) & 0x38)
+                    | ((self.v_register >> 2) & 0x7);
+            }
+            4 => {
+                let coarse_x = self.get_coarse_x_scroll();
+                let coarse_y = self.get_coarse_y_scroll() >> 5;
+
+                let attr_byte = self.address_latch;
+                let shift = ((coarse_y & 2) << 1) | (coarse_x & 2);
+                let palette_bits = (attr_byte >> shift) & 0b11;
+                self.bg_next_tile_attribute = palette_bits;
+            }
+            5 => {
+                let fine_y = self.get_fine_y_scroll();
+
+                let table_base = if self.ctrl_register & 0x10 != 0 {
+                    0x1000
+                } else {
+                    0x0000
+                };
+
+                self.address_bus =
+                    table_base + ((self.bg_next_tile_id as u16) * 16) + fine_y as u16;
+            }
+            6 => {
+                self.bg_next_tile_lsb = self.address_latch;
+            }
+            7 => {
+                let fine_y = self.get_fine_y_scroll();
+                let table_base = if self.ctrl_register & 0x10 != 0 {
+                    0x1000
+                } else {
+                    0x0000
+                };
+
+                self.address_bus =
+                    table_base + ((self.bg_next_tile_id as u16) * 16) + (fine_y + 8) as u16;
+            }
+            _ => unreachable!(),
+        }
     }
 
     pub fn is_rendering(&self) -> bool {
@@ -674,7 +590,7 @@ impl Ppu {
         )
     }
 
-    pub fn reset(&mut self) { self.reset_signal = true; }
+    pub fn reset(&mut self) { self.reset_signal = false; }
 
     pub fn get_pixel_buffer(&self) -> &[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize] {
         &self.pixel_buffer
@@ -699,8 +615,10 @@ impl Ppu {
     }
 
     fn reload_shifters(&mut self) {
+        // println!("Reloading Shifters @ {}x{}", self.dot, self.scanline);
+
         self.shift_pattern_lo = (self.shift_pattern_lo & 0xFF00) | self.bg_next_tile_lsb as u16;
-        self.shift_pattern_hi = (self.shift_pattern_hi & 0xFF00) | self.bg_next_tile_msb as u16;
+        self.shift_pattern_hi = (self.shift_pattern_hi & 0xFF00) | self.address_latch as u16;
 
         // Decode the attribute bits for this tile (2 bits)
         let attr_low_bit = if self.bg_next_tile_attribute & 0b01 != 0 {
@@ -719,7 +637,7 @@ impl Ppu {
         self.shift_attr_hi = attr_high_bit;
     }
 
-    pub fn frame(&mut self) { self.render_nametables() }
+    pub fn frame(&mut self) { self.render_pattern_tables() }
 
     pub fn inc_current_palette(&mut self) { self.current_palette += 1; }
 
@@ -885,7 +803,6 @@ impl Ppu {
             shift_pattern_hi: 0,
             shift_attr_lo: 0,
             shift_attr_hi: 0,
-            bg_next_tile_msb: 0,
             current_palette: 0,
         };
 
