@@ -4,6 +4,7 @@ use crate::emulation::rom::{ParseError, RomBuilder, RomFile, RomParser};
 pub struct Ines2;
 
 impl RomParser for Ines2 {
+    #[inline(always)]
     fn parse(&self, rom: &[u8]) -> Result<RomFile, ParseError> {
         let prg_rom_size_lsb = rom[4] as u16;
         let prg_rom_size_msb = (rom[9] & 0xF) as u16;
@@ -105,6 +106,7 @@ impl RomParser for Ines2 {
 }
 
 impl Ines2 {
+    #[inline(always)]
     pub fn get_prg_rom_size(prg_rom_size_lsb: u16, prg_rom_size_msb: u16) -> u32 {
         if prg_rom_size_msb <= 0xE {
             (((prg_rom_size_msb << 8) | prg_rom_size_lsb) as u32) * 16 * 1024
@@ -115,6 +117,7 @@ impl Ines2 {
         }
     }
 
+    #[inline(always)]
     pub fn get_chr_rom_size(chr_rom_size_lsb: u16, chr_rom_size_msb: u16) -> u32 {
         if chr_rom_size_msb <= 0xE {
             (((chr_rom_size_msb << 8) | chr_rom_size_lsb) as u32) * 8 * 1024

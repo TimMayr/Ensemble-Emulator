@@ -8,7 +8,7 @@ fn test_oam_read() {
     emu.load_rom(&String::from("./tests/nes-test-roms/oam_read/oam_read.nes"));
     emu.power();
 
-    emu.run_until(&mut Frontends::default(), 400_000_000)
+    emu.run_until(&mut Frontends::default(), &400_000_000)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6127));

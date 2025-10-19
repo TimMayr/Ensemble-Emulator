@@ -25,6 +25,7 @@ pub enum Memory {
 }
 
 impl Debug for Memory {
+    #[inline(always)]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Memory::Ram(ram) => ram.fmt(f),
@@ -124,7 +125,10 @@ pub trait MemoryDevice: Debug {
     fn init(&mut self, addr: u16, data: u8);
     fn load(&mut self, data: Box<[u8]>);
 
+    #[inline(always)]
     fn is_internal(&self) -> bool { false }
+
+    #[inline(always)]
     fn snapshot(&self, addr: u16, open_bus: u8) -> u8 { self.read(addr, open_bus) }
 }
 
@@ -134,6 +138,7 @@ pub struct Ram {
 }
 
 impl Ram {
+    #[inline(always)]
     pub fn new(size: usize) -> Self {
         if size == 0 {
             panic!()
@@ -159,6 +164,7 @@ impl MemoryDevice for Ram {
         self.memory[addr as usize % self.memory.len()] = data;
     }
 
+    #[inline(always)]
     fn load(&mut self, data: Box<[u8]>) { self.memory = data }
 }
 
@@ -168,6 +174,7 @@ pub struct Rom {
 }
 
 impl Rom {
+    #[inline(always)]
     pub fn new(size: usize) -> Self {
         if size == 0 {
             panic!()
@@ -191,6 +198,7 @@ impl MemoryDevice for Rom {
         self.memory[addr as usize % self.memory.len()] = data;
     }
 
+    #[inline(always)]
     fn load(&mut self, data: Box<[u8]>) { self.memory = data }
 }
 
@@ -207,6 +215,7 @@ pub struct BitState {
 }
 
 impl OpenBus {
+    #[inline(always)]
     pub fn new(decay_time: u32) -> Self {
         Self {
             bits: [BitState {

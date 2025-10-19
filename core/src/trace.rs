@@ -2,7 +2,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 
 use crate::emulation::cpu::{
-    CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, OpType, Source, UNUSED_BIT,
+    OpType, Source, CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, UNUSED_BIT,
     ZERO_BIT,
 };
 use crate::emulation::opcode;
@@ -15,10 +15,12 @@ pub struct TraceLog {
     pub output: String,
 }
 impl Default for TraceLog {
+    #[inline(always)]
     fn default() -> Self { Self::new(String::from("./trace-log.txt")) }
 }
 
 impl TraceLog {
+    #[inline(always)]
     pub fn new(path: String) -> Self {
         Self {
             log: String::from(""),
@@ -26,6 +28,7 @@ impl TraceLog {
         }
     }
 
+    #[inline(always)]
     pub fn trace(&mut self, nes: SaveState) {
         let mut cpu = nes.cpu.clone();
         let _ppu = nes.ppu;
@@ -67,6 +70,7 @@ impl TraceLog {
         .as_str();
     }
 
+    #[inline(always)]
     #[allow(dead_code)]
     fn status_as_string(status: u8) -> String {
         let mut str = String::new();
@@ -112,6 +116,7 @@ impl TraceLog {
         str
     }
 
+    #[inline(always)]
     pub fn flush(&mut self) {
         let mut file = OpenOptions::new()
             .write(true)
@@ -124,6 +129,7 @@ impl TraceLog {
     }
 }
 
+#[inline(always)]
 pub fn get_str_for_src(source: Source) -> String {
     match source {
         Source::X => String::from("X"),
@@ -133,6 +139,7 @@ pub fn get_str_for_src(source: Source) -> String {
     }
 }
 
+#[inline(always)]
 pub fn get_opcode_descriptor(opcode: OpCode, cpu: &mut CpuState) -> String {
     match opcode.op_type {
         OpType::ImmediateAddressing(..) => {

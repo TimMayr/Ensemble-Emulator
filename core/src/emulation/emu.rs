@@ -53,7 +53,7 @@ impl Console for Consoles {
     fn run_until(
         &mut self,
         frontend: &mut Frontends,
-        last_cycle: u128,
+        last_cycle: &u128,
     ) -> Result<ExecutionFinishedType, String> {
         match self {
             Consoles::Nes(nes) => nes.run_until(frontend, last_cycle),
@@ -84,7 +84,7 @@ impl Console for Consoles {
     #[inline(always)]
     fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
         match self {
-            Consoles::Nes(nes) => nes.step(frontend, u128::MAX),
+            Consoles::Nes(nes) => nes.step(frontend, &u128::MAX),
         }
     }
 
@@ -109,7 +109,7 @@ pub trait Console {
     fn run_until(
         &mut self,
         frontend: &mut Frontends,
-        last_cycle: u128,
+        last_cycle: &u128,
     ) -> Result<ExecutionFinishedType, String>;
 
     fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>>;

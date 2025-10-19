@@ -42,7 +42,7 @@ fn test_official_only() {
         "./tests/nes-test-roms/instr_test-v5/official_only.nes",
     ));
     emu.reset();
-    emu.run_until(&mut Frontends::default(), 750_000_000)
+    emu.run_until(&mut Frontends::default(), &750_000_000)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601C));
@@ -64,7 +64,7 @@ fn test_all_instrs() {
         "./tests/nes-test-roms/instr_test-v5/all_instrs.nes",
     ));
     emu.reset();
-    emu.run_until(&mut Frontends::default(), 900_000_000)
+    emu.run_until(&mut Frontends::default(), &900_000_000)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601C));
