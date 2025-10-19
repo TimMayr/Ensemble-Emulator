@@ -17,7 +17,6 @@ pub struct NametableMemory {
 }
 
 impl NametableMemory {
-    #[inline(always)]
     pub fn new(mirroring: NametableArrangement) -> Self {
         Self {
             vram: Ram::new(VRAM_SIZE), // 2KB of VRAM
@@ -61,6 +60,5 @@ impl MemoryDevice for NametableMemory {
     #[inline(always)]
     fn init(&mut self, addr: u16, data: u8) { self.vram.init(self.mirror_addr(addr), data) }
 
-    #[inline(always)]
     fn load(&mut self, data: Box<[u8]>) { self.vram.load(data) }
 }

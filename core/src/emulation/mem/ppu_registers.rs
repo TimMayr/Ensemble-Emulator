@@ -91,13 +91,10 @@ impl MemoryDevice for PpuRegisters {
         ppu.open_bus.set(bus);
     }
 
-    #[inline(always)]
     fn init(&mut self, _: u16, _: u8) {}
 
-    #[inline(always)]
     fn load(&mut self, _: Box<[u8]>) {}
 
-    #[inline(always)]
     fn snapshot(&self, addr: u16, _: u8) -> u8 {
         match addr {
             0x0 => {

@@ -30,20 +30,17 @@ pub struct Nes {
 }
 
 impl Console for Nes {
-    #[inline(always)]
+    #[inline]
     fn get_pixel_buffer(
         &self,
     ) -> Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]> {
         Ref::map(self.ppu.borrow(), |ppu| ppu.get_pixel_buffer())
     }
 
-    #[inline(always)]
     fn load_rom(&mut self, path: &String) { self.load_rom(path); }
 
-    #[inline(always)]
     fn reset(&mut self) { self.reset() }
 
-    #[inline(always)]
     fn power(&mut self) {
         self.cpu.ppu = Some(self.ppu.clone());
 
@@ -58,16 +55,14 @@ impl Console for Nes {
         self.cpu.reset();
     }
 
-    #[inline(always)]
     fn run(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
-        self.run_until(frontend, &u128::MAX)
+        self.run_until(frontend, u128::MAX)
     }
 
-    #[inline(always)]
     fn run_until(
         &mut self,
         frontend: &mut Frontends,
-        last_cycle: &u128,
+        last_cycle: u128,
     ) -> Result<ExecutionFinishedType, String> {
         loop {
             let res = self.step(frontend, last_cycle);
@@ -93,7 +88,6 @@ impl Console for Nes {
         }
     }
 
-    #[inline(always)]
     fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>> {
         vec![
             self.cpu.get_memory_debug(range.clone()),
@@ -101,7 +95,6 @@ impl Console for Nes {
         ]
     }
 
-    #[inline(always)]
     fn set_trace_log_path(&mut self, path: Option<String>) {
         if path.is_none() {
             self.trace_log = None;
@@ -117,29 +110,27 @@ impl Console for Nes {
         }
     }
 
-    #[inline(always)]
     fn flush_trace_log(&mut self) {
         if let Some(ref mut trace) = self.trace_log {
             trace.flush()
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
-        self.step(frontend, &u128::MAX)
+        self.step(frontend, u128::MAX)
     }
 
-    #[inline(always)]
+    #[inline]
     fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
         self.run_until(
             frontend,
-            &(self.total_cycles + MASTER_CYCLES_PER_FRAME as u128),
+            self.total_cycles + MASTER_CYCLES_PER_FRAME as u128,
         )
     }
 }
 
 impl Nes {
-    #[inline(always)]
     pub fn new(cpu: Cpu, ppu: Rc<RefCell<Ppu>>) -> Self {
         Self {
             cpu,
@@ -152,13 +143,11 @@ impl Nes {
         }
     }
 
-    #[inline(always)]
     pub fn reset(&mut self) {
         self.cpu.reset();
         self.ppu.borrow_mut().reset();
     }
 
-    #[inline(always)]
     pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
         let rom_file = rom_get.as_rom_file();
         self.cpu.load_rom(&rom_file);
@@ -166,7 +155,6 @@ impl Nes {
         self.rom_file = Some(rom_file);
     }
 
-    #[inline(always)]
     pub fn save_state(&self, path: &str) {
         let ppu_state = {
             let ppu_ref = self.ppu.borrow();
@@ -185,7 +173,6 @@ impl Nes {
         savestate::save_state(state, path);
     }
 
-    #[inline(always)]
     pub fn load_state(&mut self, path: &str) {
         let state = savestate::load_state(path);
 
@@ -205,11 +192,11 @@ impl Nes {
         self.ppu.borrow_mut().memory.load(&state.ppu.memory);
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn step(
         &mut self,
         frontend: &mut Frontends,
-        last_cycle: &u128,
+        last_cycle: u128,
     ) -> Result<ExecutionFinishedType, String> {
         self.total_cycles += 1;
         self.cpu_cycle_counter += 1;
@@ -222,7 +209,7 @@ impl Nes {
         }
         drop(ppu);
 
-        if self.total_cycles > *last_cycle {
+        if self.total_cycles > last_cycle {
             self.total_cycles -= 1;
             return Ok(ExecutionFinishedType::ReachedLastCycle);
         };
@@ -289,7 +276,6 @@ impl Nes {
         cpu_res
     }
 
-    #[inline(always)]
     pub fn handle_input_event(&mut self, input_event: InputEvent) {
         match input_event {
             InputEvent::IncPalette => {
@@ -301,12 +287,10 @@ impl Nes {
         }
     }
 
-    #[inline(always)]
     pub fn inc_current_palette(&mut self) { self.ppu.borrow_mut().inc_current_palette(); }
 }
 
 impl Default for Nes {
-    #[inline(always)]
     fn default() -> Self {
         let cpu = Cpu::new();
         let ppu = Rc::new(RefCell::new(Ppu::default()));

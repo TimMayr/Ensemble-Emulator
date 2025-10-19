@@ -9,7 +9,7 @@ fn test_02_implied() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/02-implied.nes",
     ));
     emu.reset();
-    emu.run_until(&mut Frontends::default(), &44638541)
+    emu.run_until(&mut Frontends::default(), 44638541)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6018));

@@ -9,7 +9,7 @@ fn test_01_vbl_basics() {
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/01-vbl_basics.nes",
     ));
     emu.power();
-    emu.run_until(&mut Frontends::default(), &51119365)
+    emu.run_until(&mut Frontends::default(), 51119365)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601B));
