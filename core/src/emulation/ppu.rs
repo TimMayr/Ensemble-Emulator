@@ -121,7 +121,7 @@ impl Ppu {
             oam_data_register: 0,
             v_register: 0,
             ppu_data_register: 0,
-            ppu_data_buffer: 0.into(),
+            ppu_data_buffer: 0,
             oam_dma_register: 0,
             bg_next_tile_id: 0,
             bg_next_tile_attribute: 0,
