@@ -237,7 +237,6 @@ impl Nes {
         }
 
         if self.cpu_cycle_counter.wrapping_add(2) == 12 {
-            self.ppu.borrow_mut().tick_open_bus(12);
             let mut do_trace = false;
 
             if self.trace_log.is_some() && matches!(&self.cpu.current_op, &MicroOp::FetchOpcode(..))

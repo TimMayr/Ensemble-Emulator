@@ -991,7 +991,9 @@ impl Cpu {
         }
 
         if let Some(ppu) = &self.ppu {
-            let curr_nmi = ppu.borrow().poll_nmi();
+            let ppu = ppu.borrow();
+            ppu.tick_open_bus(12);
+            let curr_nmi = ppu.poll_nmi();
 
             if curr_nmi && !self.prev_nmi {
                 self.current_irq_vec = NMI_HANDLER_ADDR;

@@ -756,7 +756,7 @@ impl Ppu {
     }
 
     #[inline(always)]
-    pub fn tick_open_bus(&mut self, times: u8) {
+    pub fn tick_open_bus(&self, times: u8) {
         let mut bus = self.open_bus.get();
         bus.tick(times);
         self.open_bus.set(bus);
