@@ -48,7 +48,7 @@ pub struct Cpu {
     pub x_register: u8,
     pub y_register: u8,
     pub processor_status: u8,
-    pub memory: Box<MemoryMap>,
+    pub memory: MemoryMap,
     pub ppu: Option<Rc<RefCell<Ppu>>>,
     pub irq_provider: Cell<bool>,
     pub lo: u8,
@@ -76,7 +76,6 @@ pub struct Cpu {
 
 impl Default for Cpu {
     fn default() -> Self {
-        let mem = Self::get_default_memory_map();
         OPCODES_MAP.get_or_init(opcode::init);
 
         Self {
@@ -85,7 +84,7 @@ impl Default for Cpu {
             accumulator: 0,
             x_register: 0,
             y_register: 0,
-            memory: Box::new(mem),
+            memory: Self::get_default_memory_map(),
             stack_pointer: 0,
             ppu: None,
             irq_provider: Cell::new(false),
@@ -1800,7 +1799,7 @@ impl Cpu {
             x_register: state.x_register,
             y_register: state.y_register,
             processor_status: state.processor_status,
-            memory: Box::new(Self::get_default_memory_map()),
+            memory: Self::get_default_memory_map(),
             ppu: Some(ppu),
             irq_provider: Cell::new(false),
             lo: state.lo,

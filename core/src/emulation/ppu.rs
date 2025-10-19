@@ -76,9 +76,10 @@ pub struct Ppu {
     pub ppu_data_buffer: u8,
     pub oam_dma_register: u8,
     pub nmi_requested: Cell<bool>,
-    pub memory: Box<MemoryMap>,
-    pub palette_ram: Box<MemoryMap>,
-    pub oam: Box<Ram>,
+    pub memory: MemoryMap,
+    pub palette_ram: MemoryMap,
+    pub oam: Ram,
+    pub secondary_oam: Ram,
     pub write_latch: Cell<bool>,
     pub t_register: u16,
     pub bg_next_tile: u16,
@@ -106,6 +107,12 @@ pub struct Ppu {
     pub bg_next_tile_attribute: u8,
     pub bg_next_tile_lsb: u8,
     pub current_palette: u8,
+    pub oam_fetch: u8,
+    is_secondary_oam_clear_active: bool,
+    sprite_index: u8,
+    sprite_counter: u8,
+    sprite_eval_phase: SpriteEvalState,
+    is_sprite_in_range: bool,
 }
 
 impl Default for Ppu {
@@ -133,9 +140,10 @@ impl Ppu {
             bg_shifter_attribute: 0,
             fine_x_scroll: 0,
             nmi_requested: Cell::new(false),
-            memory: Box::new(Self::get_default_memory_map()),
-            palette_ram: Box::new(Self::get_palette_memory_map()),
-            oam: Box::new(Self::get_default_oam()),
+            memory: Self::get_default_memory_map(),
+            palette_ram: Self::get_palette_memory_map(),
+            oam: Self::get_default_oam(),
+            secondary_oam: Self::get_default_secondary_oam(),
             write_latch: false.into(),
             t_register: 0,
             even_frame: false,
@@ -156,6 +164,12 @@ impl Ppu {
             current_palette: 0,
             shift_in_attr_lo: false,
             shift_in_attr_hi: false,
+            oam_fetch: 0,
+            is_secondary_oam_clear_active: false,
+            sprite_index: 0,
+            sprite_counter: 0,
+            sprite_eval_phase: SpriteEvalState::CopyY,
+            is_sprite_in_range: false,
         }
     }
 
@@ -176,6 +190,17 @@ impl Ppu {
     }
 
     fn get_default_oam() -> Ram { Ram::new(OAM_SIZE - 1) }
+
+    fn get_default_secondary_oam() -> Ram { Ram::new((OAM_SIZE / 8) - 1) }
+
+    #[inline]
+    pub fn get_sprite_height(&mut self) -> u8 {
+        if self.ctrl_register & 0x20 != 0 {
+            8
+        } else {
+            16
+        }
+    }
 
     #[inline]
     pub fn step(&mut self) -> bool {
@@ -198,44 +223,58 @@ impl Ppu {
         self.scanline = (frame_dot / (DOTS_PER_SCANLINE + 1) as u128) as u16;
         self.dot = (frame_dot % (DOTS_PER_SCANLINE + 1) as u128) as u16;
 
+        let mut res = false;
+
         if (self.scanline < VISIBLE_SCANLINES + 1 || self.scanline == PRE_RENDER_SCANLINE)
             && self.is_rendering()
         {
+            if (1..=64).contains(&self.dot) {
+                self.is_secondary_oam_clear_active = true;
+                match (self.dot - 1) % 2 {
+                    0 => {
+                        self.oam_fetch = self.oam_read((self.dot - 1) as u8);
+                    }
+                    1 => {
+                        self.secondary_oam_write((self.dot - 1) as u8, self.oam_fetch);
+                    }
+                    _ => {
+                        unreachable!()
+                    }
+                }
+            } else {
+                self.is_secondary_oam_clear_active = false
+            }
+
+            if (65..=256).contains(&self.dot) {
+                match self.sprite_eval_phase {
+                    SpriteEvalState::FetchY => {
+                        self.oam_fetch = self.oam_read(self.sprite_index * 4);
+                        let mut scanline = self.scanline + 1;
+                        if scanline == PRE_RENDER_SCANLINE + 1 {
+                            scanline = 0;
+                        }
+
+                        self.is_sprite_in_range = (scanline >= self.oam_fetch as u16)
+                            && (scanline < self.oam_fetch as u16 + self.get_sprite_height() as u16);
+                        self.sprite_eval_phase = SpriteEvalState::CopyY;
+                    }
+                    SpriteEvalState::CopyY => if self.is_sprite_in_range {},
+                    _ => todo!(),
+                }
+            }
+
             if (1..=256).contains(&self.dot) || (321..=336).contains(&self.dot) {
                 self.do_dot_fetch();
 
                 if self.scanline != PRE_RENDER_SCANLINE && (0x01..=256).contains(&self.dot) {
-                    let mux = 0x80 >> self.fine_x_scroll;
-                    // pattern shifters (16-bit)
-                    let bit0 = ((self.shift_pattern_lo & (mux as u16) << 8) != 0) as u8;
-                    let bit1 = ((self.shift_pattern_hi & (mux as u16) << 8) != 0) as u8;
-
-                    // attribute shifters (8-bit)
-                    let attr0 = ((self.shift_attr_lo & mux) != 0) as u8;
-                    let attr1 = ((self.shift_attr_hi & mux) != 0) as u8;
-
-                    let pattern_index = (bit1 << 1) | bit0;
-                    let palette_index = (attr1 << 1) | attr0;
-
-                    let background_color_idx = if pattern_index == 0 {
-                        0x3F00
-                    } else {
-                        0x3F00 + ((palette_index as u16) << 2) + (pattern_index as u16)
-                    };
-
-                    let color_idx = self.mem_read(background_color_idx) & 0x3F;
+                    let bg_color_index = self.get_bg_pixel();
 
                     self.pixel_buffer
                         [self.scanline as usize * SCREEN_RENDER_WIDTH + (self.dot - 1) as usize] =
-                        NES_PALETTE[color_idx as usize];
+                        NES_PALETTE[bg_color_index as usize];
                 }
 
-                self.shift_pattern_lo <<= 1;
-                self.shift_pattern_hi <<= 1;
-                self.shift_attr_lo <<= 1;
-                self.shift_attr_lo |= self.shift_in_attr_lo as u8;
-                self.shift_attr_hi <<= 1;
-                self.shift_attr_hi |= self.shift_in_attr_hi as u8;
+                self.shift_bg_shifters();
 
                 if (self.dot - 1) % 8 == 7 {
                     self.inc_coarse_x_scroll();
@@ -249,9 +288,7 @@ impl Ppu {
 
             if (257..=260).contains(&self.dot) || (337..=340).contains(&self.dot) {
                 match (self.dot - 1) % 8 {
-                    0 => {
-                        // self.reload_shifters();
-                    }
+                    0 => {}
                     1 => {
                         self.address_bus = 0x2000 | (self.v_register & 0x0FFF);
                     }
@@ -305,7 +342,40 @@ impl Ppu {
 
         self.dot_counter += 1;
 
-        frame_dot == DOTS_PER_FRAME - 1
+        frame_dot == DOTS_PER_FRAME - 1 || res
+    }
+
+    #[inline]
+    pub fn shift_bg_shifters(&mut self) {
+        self.shift_pattern_lo <<= 1;
+        self.shift_pattern_hi <<= 1;
+        self.shift_attr_lo <<= 1;
+        self.shift_attr_lo |= self.shift_in_attr_lo as u8;
+        self.shift_attr_hi <<= 1;
+        self.shift_attr_hi |= self.shift_in_attr_hi as u8;
+    }
+
+    #[inline]
+    pub fn get_bg_pixel(&mut self) -> u8 {
+        let mux = 0x80 >> self.fine_x_scroll;
+        // pattern shifters (16-bit)
+        let bit0 = ((self.shift_pattern_lo & (mux as u16) << 8) != 0) as u8;
+        let bit1 = ((self.shift_pattern_hi & (mux as u16) << 8) != 0) as u8;
+
+        // attribute shifters (8-bit)
+        let attr0 = ((self.shift_attr_lo & mux) != 0) as u8;
+        let attr1 = ((self.shift_attr_hi & mux) != 0) as u8;
+
+        let pattern_index = (bit1 << 1) | bit0;
+        let palette_index = (attr1 << 1) | attr0;
+
+        let background_color_idx = if pattern_index == 0 {
+            0x3F00
+        } else {
+            0x3F00 + ((palette_index as u16) << 2) + (pattern_index as u16)
+        };
+
+        self.mem_read(background_color_idx) & 0x3F
     }
 
     #[inline]
@@ -592,6 +662,28 @@ impl Ppu {
         }
     }
 
+    #[inline(always)]
+    pub fn oam_read(&mut self, addr: u8) -> u8 {
+        let mut res = self.oam.read(addr as u16, 0);
+
+        if self.is_secondary_oam_clear_active {
+            res = 0xFF;
+        }
+
+        res
+    }
+
+    #[inline(always)]
+    pub fn oam_write(&mut self, addr: u8, data: u8) { self.oam.write(addr as u16, data) }
+
+    #[inline(always)]
+    pub fn secondary_oam_read(&mut self, addr: u8) -> u8 { self.secondary_oam.read(addr as u16, 0) }
+
+    #[inline(always)]
+    pub fn secondary_oam_write(&mut self, addr: u8, data: u8) {
+        self.secondary_oam.write(addr as u16, data)
+    }
+
     pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
         let rom_file = rom_get.as_rom_file();
         let chr_rom = rom_file.get_chr_rom();
@@ -790,9 +882,9 @@ impl Ppu {
             ppu_data_register: state.ppu_data_register,
             ppu_data_buffer: state.ppu_data_buffer,
             nmi_requested: Cell::new(state.nmi_requested),
-            memory: Box::new(Self::get_default_memory_map()),
+            memory: Self::get_default_memory_map(),
             palette_ram: Default::default(),
-            oam: Box::new(Self::get_default_oam()),
+            oam: Self::get_default_oam(),
             oam_dma_register: state.oam_dma_register,
             write_latch: state.write_latch.into(),
             t_register: state.t_register,
@@ -821,10 +913,29 @@ impl Ppu {
             current_palette: 0,
             shift_in_attr_lo: false,
             shift_in_attr_hi: false,
+            secondary_oam: Self::get_default_secondary_oam(),
+            oam_fetch: 0,
+            is_secondary_oam_clear_active: false,
+            sprite_index: 0,
+            sprite_counter: 0,
+            sprite_eval_phase: SpriteEvalState::FetchY,
+            is_sprite_in_range: false,
         };
 
         ppu.load_rom(rom);
 
         ppu
     }
+}
+
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+pub enum SpriteEvalState {
+    FetchY,
+    CopyY,
+    FetchTile,
+    CopyTile,
+    FetchAttr,
+    CopyAttr,
+    FetchX,
+    CopyX,
 }
