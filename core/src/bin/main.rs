@@ -18,7 +18,6 @@ fn main() {
 
     emu.run_until(&mut Frontends::default(), &(357366 * 3600))
         .expect("TODO: panic message");
-
     println!("{:?}", start.elapsed());
 }
 
