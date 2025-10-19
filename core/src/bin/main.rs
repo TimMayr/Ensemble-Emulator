@@ -3,6 +3,8 @@ use std::time::Instant;
 use nes_core::emulation::emu::{Console, Consoles};
 use nes_core::emulation::nes::Nes;
 #[cfg(feature = "sdl2")]
+use nes_core::emulation::nes::MASTER_CYCLES_PER_FRAME;
+#[cfg(feature = "sdl2")]
 use nes_core::frontend::sdl_frontend::SdlFrontend;
 use nes_core::frontend::Frontends;
 
@@ -16,8 +18,11 @@ fn main() {
 
     let start = Instant::now();
 
-    emu.run_until(&mut frontend, u128::MAX)
-        .expect("TODO: panic message");
+    emu.run_until(
+        &mut Frontends::default(),
+        (MASTER_CYCLES_PER_FRAME * 3600) as u128,
+    )
+    .expect("TODO: panic message");
 
     println!("{:?}", start.elapsed());
 }

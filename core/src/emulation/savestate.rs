@@ -87,8 +87,8 @@ impl From<&Ppu> for PpuState {
     fn from(ppu: &Ppu) -> Self {
         Self {
             cycle_counter: ppu.dot_counter,
-            vbl_reset_counter: ppu.vbl_reset_counter,
-            status_register: ppu.status_register,
+            vbl_reset_counter: ppu.vbl_reset_counter.get(),
+            status_register: ppu.status_register.get(),
             ctrl_register: ppu.ctrl_register,
             mask_register: ppu.mask_register,
             nmi_requested: ppu.nmi_requested.get(),
@@ -97,7 +97,7 @@ impl From<&Ppu> for PpuState {
             ppu_addr_register: ppu.v_register,
             ppu_data_register: ppu.ppu_data_register,
             oam_addr_register: ppu.oam_addr_register,
-            write_latch: ppu.write_latch,
+            write_latch: ppu.write_latch.get(),
             oam_dma_register: ppu.oam_dma_register,
             ppu_data_buffer: ppu.ppu_data_buffer,
             t_register: ppu.t_register,

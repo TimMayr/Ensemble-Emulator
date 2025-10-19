@@ -68,7 +68,7 @@ pub struct Ppu {
     pub dot_counter: u128,
     pub ctrl_register: u8,
     pub mask_register: u8,
-    pub status_register: u8,
+    pub status_register: Cell<u8>,
     pub oam_addr_register: u8,
     pub oam_data_register: u8,
     pub v_register: u16,
@@ -79,7 +79,7 @@ pub struct Ppu {
     pub memory: Box<MemoryMap>,
     pub palette_ram: Box<MemoryMap>,
     pub oam: Box<Ram>,
-    pub write_latch: bool,
+    pub write_latch: Cell<bool>,
     pub t_register: u16,
     pub bg_next_tile: u16,
     pub bg_shifter_pattern: u16,
@@ -88,12 +88,12 @@ pub struct Ppu {
     pub even_frame: bool,
     pub reset_signal: bool,
     pub pixel_buffer: Box<[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
-    pub vbl_reset_counter: u8,
-    pub vbl_clear_scheduled: Option<u8>,
+    pub vbl_reset_counter: Cell<u8>,
+    pub vbl_clear_scheduled: Cell<Option<u8>>,
     pub scanline: u16,
     pub dot: u16,
     pub prev_vbl: u8,
-    pub open_bus: OpenBus,
+    pub open_bus: Cell<OpenBus>,
     pub address_bus: u16,
     pub address_latch: u8,
     pub shift_pattern_lo: u16,
@@ -116,12 +116,12 @@ impl Ppu {
             dot_counter: 0,
             ctrl_register: 0,
             mask_register: 0,
-            status_register: 0,
+            status_register: 0.into(),
             oam_addr_register: 0,
             oam_data_register: 0,
             v_register: 0,
             ppu_data_register: 0,
-            ppu_data_buffer: 0,
+            ppu_data_buffer: 0.into(),
             oam_dma_register: 0,
             bg_next_tile_id: 0,
             bg_next_tile_attribute: 0,
@@ -134,17 +134,17 @@ impl Ppu {
             memory: Box::new(Self::get_default_memory_map()),
             palette_ram: Box::new(Self::get_palette_memory_map()),
             oam: Box::new(Self::get_default_oam()),
-            write_latch: false,
+            write_latch: false.into(),
             t_register: 0,
             even_frame: false,
             reset_signal: false,
             pixel_buffer: Box::from([0u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]),
-            vbl_reset_counter: 0,
-            vbl_clear_scheduled: None,
+            vbl_reset_counter: 0.into(),
+            vbl_clear_scheduled: None.into(),
             scanline: 0,
             dot: 0,
             prev_vbl: 0,
-            open_bus: OpenBus::new(OPEN_BUS_DECAY_DELAY),
+            open_bus: OpenBus::new(OPEN_BUS_DECAY_DELAY).into(),
             address_bus: 0,
             address_latch: 0,
             shift_pattern_lo: 0,
@@ -175,12 +175,12 @@ impl Ppu {
 
     #[inline]
     pub fn step(&mut self) -> bool {
-        self.prev_vbl = self.status_register & VBLANK_NMI_BIT;
+        self.prev_vbl = self.status_register.get() & VBLANK_NMI_BIT;
 
         if self.reset_signal {
             self.ctrl_register = 0;
             self.mask_register = 0;
-            self.write_latch = false;
+            self.write_latch.set(false);
             self.ppu_data_buffer = 0;
             self.t_register = 0;
         }
@@ -198,11 +198,6 @@ impl Ppu {
             && self.is_rendering()
         {
             if (1..=256).contains(&self.dot) || (321..=336).contains(&self.dot) {
-                self.shift_pattern_lo <<= 1;
-                self.shift_pattern_hi <<= 1;
-                self.shift_attr_lo <<= 1;
-                self.shift_attr_hi <<= 1;
-
                 self.do_dot_fetch();
 
                 if self.scanline != PRE_RENDER_SCANLINE && (0x01..=256).contains(&self.dot) {
@@ -231,8 +226,14 @@ impl Ppu {
                         NES_PALETTE[color_idx as usize];
                 }
 
+                self.shift_pattern_lo <<= 1;
+                self.shift_pattern_hi <<= 1;
+                self.shift_attr_lo <<= 1;
+                self.shift_attr_hi <<= 1;
+
                 if (self.dot - 1) % 8 == 7 {
                     self.inc_coarse_x_scroll();
+                    self.reload_shifters();
                 }
 
                 if self.dot == 256 {
@@ -243,11 +244,7 @@ impl Ppu {
             if (257..=260).contains(&self.dot) || (337..=340).contains(&self.dot) {
                 match (self.dot - 1) % 8 {
                     0 => {
-                        self.shift_pattern_lo <<= 1;
-                        self.shift_pattern_hi <<= 1;
-                        self.shift_attr_lo <<= 1;
-                        self.shift_attr_hi <<= 1;
-                        self.reload_shifters();
+                        // self.reload_shifters();
                     }
                     1 => {
                         self.address_bus = 0x2000 | (self.v_register & 0x0FFF);
@@ -308,23 +305,18 @@ impl Ppu {
     pub fn do_dot_fetch(&mut self) {
         match (self.dot - 1) % 8 {
             0 => {
-                if self.dot != 1 {
-                    self.reload_shifters();
-                }
-            }
-            1 => {
                 self.address_bus = 0x2000 | (self.v_register & 0x0FFF);
             }
-            2 => {
+            1 => {
                 self.bg_next_tile_id = self.address_latch;
             }
-            3 => {
+            2 => {
                 self.address_bus = ATTRIBUTE_TABLE_BASE_ADDRESS
                     | (self.v_register & 0x0C00)
                     | ((self.v_register >> 4) & 0x38)
                     | ((self.v_register >> 2) & 0x7);
             }
-            4 => {
+            3 => {
                 let coarse_x = self.get_coarse_x_scroll();
                 let coarse_y = self.get_coarse_y_scroll() >> 5;
 
@@ -333,7 +325,7 @@ impl Ppu {
                 let palette_bits = (attr_byte >> shift) & 0b11;
                 self.bg_next_tile_attribute = palette_bits;
             }
-            5 => {
+            4 => {
                 let fine_y = self.get_fine_y_scroll();
 
                 let table_base = if self.ctrl_register & 0x10 != 0 {
@@ -345,10 +337,10 @@ impl Ppu {
                 self.address_bus =
                     table_base + ((self.bg_next_tile_id as u16) * 16) + fine_y as u16;
             }
-            6 => {
+            5 => {
                 self.bg_next_tile_lsb = self.address_latch;
             }
-            7 => {
+            6 => {
                 let fine_y = self.get_fine_y_scroll();
                 let table_base = if self.ctrl_register & 0x10 != 0 {
                     0x1000
@@ -359,6 +351,7 @@ impl Ppu {
                 self.address_bus =
                     table_base + ((self.bg_next_tile_id as u16) * 16) + (fine_y + 8) as u16;
             }
+            7 => {}
             _ => unreachable!(),
         }
     }
@@ -376,7 +369,7 @@ impl Ppu {
     }
 
     pub fn update_nmi(&self) {
-        if (self.status_register & self.ctrl_register & VBLANK_NMI_BIT) != 0 {
+        if (self.status_register.get() & self.ctrl_register & VBLANK_NMI_BIT) != 0 {
             self.nmi_requested.set(true);
         } else {
             self.nmi_requested.set(false);
@@ -384,22 +377,24 @@ impl Ppu {
     }
 
     #[inline(always)]
-    pub fn clear_vbl_bit(&mut self) {
-        self.status_register &= !VBLANK_NMI_BIT;
+    pub fn clear_vbl_bit(&self) {
+        self.status_register
+            .set(self.status_register.get() & !VBLANK_NMI_BIT);
         self.update_nmi()
     }
 
     pub fn set_vbl_bit(&mut self) {
-        self.status_register |= VBLANK_NMI_BIT;
+        self.status_register
+            .set(self.status_register.get() | VBLANK_NMI_BIT);
         self.update_nmi()
     }
 
-    pub fn get_ppu_status(&mut self) -> u8 {
-        let result = (self.status_register & !VBLANK_NMI_BIT) | self.prev_vbl;
-        self.vbl_clear_scheduled = Some(2);
+    pub fn get_ppu_status(&self) -> u8 {
+        let result = (self.status_register.get() & !VBLANK_NMI_BIT) | self.prev_vbl;
+        self.vbl_clear_scheduled.set(Some(2));
         self.process_vbl_clear_scheduled();
 
-        self.write_latch = false;
+        self.write_latch.set(false);
         result
     }
 
@@ -472,7 +467,7 @@ impl Ppu {
             return;
         }
 
-        if !self.write_latch {
+        if !self.write_latch.get() {
             // First write to $2005 (horizontal)
             // coarse X = bits 3–7, fine X = bits 0–2
             self.t_register = (self.t_register & !0b1_1111) | ((data >> 3) as u16);
@@ -486,11 +481,11 @@ impl Ppu {
                 | ((data as u16 & !0b1111_1000) << 12); // bits 0–2 → bits 12–14
         }
 
-        self.write_latch = !self.write_latch;
+        self.write_latch.set(!self.write_latch.get());
     }
 
     pub fn write_vram_addr(&mut self, data: u8) {
-        if !self.write_latch {
+        if !self.write_latch.get() {
             // First write: upper byte (but only lower 6 bits valid)
             self.t_register = (self.t_register & 0x00FF) | ((data as u16 & 0b00111111) << 8);
         } else {
@@ -499,7 +494,7 @@ impl Ppu {
             self.v_register = self.t_register;
         }
 
-        self.write_latch = !self.write_latch;
+        self.write_latch.set(!self.write_latch.get());
     }
 
     #[inline(always)]
@@ -601,15 +596,15 @@ impl Ppu {
     }
 
     #[inline(always)]
-    pub fn process_vbl_clear_scheduled(&mut self) {
-        if let Some(vbl_clear_cycle) = self.vbl_clear_scheduled {
-            if vbl_clear_cycle >= self.vbl_reset_counter {
+    pub fn process_vbl_clear_scheduled(&self) {
+        if let Some(vbl_clear_cycle) = self.vbl_clear_scheduled.get() {
+            if vbl_clear_cycle >= self.vbl_reset_counter.get() {
                 self.clear_vbl_bit();
             }
 
-            if vbl_clear_cycle <= self.vbl_reset_counter {
-                self.vbl_clear_scheduled = None;
-                self.vbl_reset_counter = 0;
+            if vbl_clear_cycle <= self.vbl_reset_counter.get() {
+                self.vbl_clear_scheduled.set(None);
+                self.vbl_reset_counter.set(0);
             }
         }
     }
@@ -761,14 +756,14 @@ impl Ppu {
     }
 
     #[inline(always)]
-    pub fn tick_open_bus(&mut self, times: u8) { self.open_bus.tick(times); }
+    pub fn tick_open_bus(&mut self, times: u8) { self.open_bus.get().tick(times); }
 
     pub fn from(state: &PpuState, rom: &RomFile) -> Self {
         let mut ppu = Self {
             dot_counter: state.cycle_counter,
             ctrl_register: state.ctrl_register,
             mask_register: state.mask_register,
-            status_register: state.status_register,
+            status_register: state.status_register.into(),
             oam_addr_register: state.oam_addr_register,
             oam_data_register: state.oam_data_register,
             v_register: state.ppu_addr_register,
@@ -779,7 +774,7 @@ impl Ppu {
             palette_ram: Default::default(),
             oam: Box::new(Self::get_default_oam()),
             oam_dma_register: state.oam_dma_register,
-            write_latch: state.write_latch,
+            write_latch: state.write_latch.into(),
             t_register: state.t_register,
             bg_next_tile_id: state.bg_next_tile_id,
             bg_next_tile_attribute: state.bg_next_tile_attribute,
@@ -791,12 +786,12 @@ impl Ppu {
             even_frame: state.even_frame,
             reset_signal: state.reset_signal,
             pixel_buffer: state.pixel_buffer.clone().try_into().unwrap(),
-            vbl_reset_counter: 0,
-            vbl_clear_scheduled: None,
+            vbl_reset_counter: 0.into(),
+            vbl_clear_scheduled: None.into(),
             scanline: state.scanline,
             dot: state.dot,
             prev_vbl: 0,
-            open_bus: OpenBus::new(OPEN_BUS_DECAY_DELAY),
+            open_bus: OpenBus::new(OPEN_BUS_DECAY_DELAY).into(),
             address_bus: 0,
             address_latch: 0,
             shift_pattern_lo: 0,
