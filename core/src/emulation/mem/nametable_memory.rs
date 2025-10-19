@@ -32,16 +32,16 @@ impl NametableMemory {
 
         match self.mirroring {
             NametableArrangement::Vertical => match table {
-                0 | 2 => 0x000 + offset,
+                0 | 2 => offset,
                 1 | 3 => 0x400 + offset,
                 _ => unreachable!(),
             },
             NametableArrangement::Horizontal => match table {
-                0 | 1 => 0x000 + offset,
+                0 | 1 => offset,
                 2 | 3 => 0x400 + offset,
                 _ => unreachable!(),
             },
-            NametableArrangement::SingleScreenLower => 0x000 + offset,
+            NametableArrangement::SingleScreenLower => offset,
             NametableArrangement::SingleScreenUpper => 0x400 + offset,
             NametableArrangement::FourScreen => addr,
         }
