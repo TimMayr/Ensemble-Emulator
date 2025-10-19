@@ -10,12 +10,10 @@ pub struct GodotFrontend {
 }
 
 impl Default for GodotFrontend {
-    #[inline(always)]
     fn default() -> Self { Self::new() }
 }
 
 impl GodotFrontend {
-    #[inline(always)]
     pub fn new() -> Self {
         Self {
             video_ptr: std::ptr::null_mut(),
@@ -23,7 +21,6 @@ impl GodotFrontend {
         }
     }
 
-    #[inline(always)]
     pub fn set_buffer(&mut self, ptr: *mut c_void, len: usize) {
         self.video_ptr = ptr;
         self.video_len = len;
@@ -31,7 +28,6 @@ impl GodotFrontend {
 }
 
 impl Frontend for GodotFrontend {
-    #[inline(always)]
     fn show_frame(
         &mut self,
         pixel_buffer: Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
@@ -72,6 +68,5 @@ impl Frontend for GodotFrontend {
         Ok(())
     }
 
-    #[inline(always)]
     fn poll_input_events(&mut self) -> Result<Vec<InputEvent>, String> { todo!() }
 }

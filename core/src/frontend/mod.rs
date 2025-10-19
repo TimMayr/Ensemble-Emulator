@@ -17,7 +17,6 @@ pub enum Frontends {
 }
 
 impl Default for Frontends {
-    #[inline(always)]
     fn default() -> Self { Frontends::None() }
 }
 

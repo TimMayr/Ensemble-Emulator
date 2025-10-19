@@ -9,12 +9,10 @@ pub struct ApuRegisters {
 }
 
 impl Default for ApuRegisters {
-    #[inline(always)]
     fn default() -> Self { Self::new() }
 }
 
 impl ApuRegisters {
-    #[inline(always)]
     pub fn new() -> Self {
         Self {
             status: RefCell::new(0xFF),
@@ -43,16 +41,12 @@ impl MemoryDevice for ApuRegisters {
     #[inline(always)]
     fn write(&mut self, _: u16, _: u8) {}
 
-    #[inline(always)]
     fn init(&mut self, _: u16, _: u8) {}
 
-    #[inline(always)]
     fn load(&mut self, _: Box<[u8]>) {}
 
-    #[inline(always)]
     fn is_internal(&self) -> bool { true }
 
-    #[inline(always)]
     fn snapshot(&self, addr: u16, open_bus: u8) -> u8 {
         match addr {
             0x00..=0x14 => open_bus,

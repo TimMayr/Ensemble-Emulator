@@ -1079,7 +1079,6 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
 }
 
 impl OpCode {
-    #[inline(always)]
     pub fn new(opcode: u8, name: &'static str, op_type: OpType) -> Self {
         Self {
             opcode,
@@ -1089,7 +1088,6 @@ impl OpCode {
     }
 }
 
-#[inline(always)]
 pub fn get_bytes_for_opcode(op: OpCode) -> u8 {
     match op.op_type {
         ImmediateAddressing(..) => 1,

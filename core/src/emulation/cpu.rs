@@ -75,7 +75,6 @@ pub struct Cpu {
 }
 
 impl Default for Cpu {
-    #[inline(always)]
     fn default() -> Self {
         let mem = Self::get_default_memory_map();
         OPCODES_MAP.get_or_init(opcode::init);
@@ -116,7 +115,6 @@ impl Default for Cpu {
 }
 
 impl Cpu {
-    #[inline(always)]
     pub fn new() -> Self {
         OPCODES_MAP.get_or_init(opcode::init);
         Self::default()
@@ -1006,12 +1004,11 @@ impl Cpu {
         }
     }
 
-    #[inline(always)]
     pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
         self.memory.get_memory_debug(range)
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn step(&mut self) -> Result<ExecutionFinishedType, String> {
         if self.is_halted {
             return Ok(ExecutionFinishedType::ReachedHlt);
@@ -1021,7 +1018,7 @@ impl Cpu {
 
         let op = self.current_op;
 
-        if !self.is_in_irq && !self.dma_triggered && !matches!(op, MicroOp::BranchIncrement(..)) {
+        if !matches!(op, MicroOp::BranchIncrement(..)) && !self.is_in_irq && !self.dma_triggered {
             if self.nmi_detected {
                 self.nmi_pending = true;
                 self.nmi_detected = false;
@@ -1392,7 +1389,6 @@ impl Cpu {
         }
     }
 
-    #[inline(always)]
     pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
         let rom_file = rom_get.as_rom_file();
         let prg_rom = rom_file.get_prg_rom();
@@ -1434,7 +1430,6 @@ impl Cpu {
         }
     }
 
-    #[inline(always)]
     fn get_default_memory_map() -> MemoryMap {
         let mut mem = MemoryMap::default();
         // Internal Ram
@@ -1772,7 +1767,6 @@ pub enum OpType {
 
 #[cfg(test)]
 impl Cpu {
-    #[inline(always)]
     pub fn test_instance() -> Self {
         let mut inst = Cpu::new();
         inst.memory
@@ -1786,7 +1780,6 @@ impl Cpu {
 }
 
 impl Cpu {
-    #[inline(always)]
     pub fn from(state: &CpuState, ppu: Rc<RefCell<Ppu>>, rom: &RomFile) -> Self {
         OPCODES_MAP.get_or_init(opcode::init);
         let mut opcode = None;

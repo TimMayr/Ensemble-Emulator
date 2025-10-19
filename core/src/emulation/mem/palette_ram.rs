@@ -7,7 +7,6 @@ pub struct PaletteRam {
 }
 
 impl Default for PaletteRam {
-    #[inline(always)]
     fn default() -> Self {
         Self {
             zero_bits: [0; 4],
@@ -37,10 +36,8 @@ impl MemoryDevice for PaletteRam {
         }
     }
 
-    #[inline(always)]
     fn init(&mut self, addr: u16, data: u8) { self.write(addr, data) }
 
-    #[inline(always)]
     fn load(&mut self, data: Box<[u8]>) {
         for (i, value) in data.iter().enumerate() {
             match i {

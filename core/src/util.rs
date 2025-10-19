@@ -3,7 +3,6 @@ use std::io::{Seek, SeekFrom, Write};
 
 use crate::emulation::cpu::UPPER_BYTE;
 
-#[inline(always)]
 pub fn write_at_offset(path: &str, value: u8, offset: u16) -> std::io::Result<()> {
     let mut file = OpenOptions::new()
         .write(true)
@@ -20,7 +19,6 @@ pub fn write_at_offset(path: &str, value: u8, offset: u16) -> std::io::Result<()
     Ok(())
 }
 
-#[inline(always)]
 pub fn write_to_file(path: &str, data: Vec<u8>) {
     let mut file = File::create(path).expect("Error creating file");
     file.write_all(&data).expect("Error writing to file")

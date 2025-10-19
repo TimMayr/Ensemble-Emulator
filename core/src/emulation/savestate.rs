@@ -26,7 +26,6 @@ pub struct CpuState {
 }
 
 impl From<&Cpu> for CpuState {
-    #[inline(always)]
     fn from(cpu: &Cpu) -> Self {
         let mut current_opcode = None;
 
@@ -85,7 +84,6 @@ pub struct PpuState {
 }
 
 impl From<&Ppu> for PpuState {
-    #[inline(always)]
     fn from(ppu: &Ppu) -> Self {
         Self {
             cycle_counter: ppu.dot_counter,
@@ -128,14 +126,12 @@ pub struct SaveState {
     pub cycle: u8,
 }
 
-#[inline(always)]
 pub fn save_state(state: SaveState, path: &str) {
     let serialized =
         bincode::encode_to_vec(state, config::standard()).expect("Failed to serialize SaveState");
     std::fs::write(path, &serialized).expect("Failed to write save file");
 }
 
-#[inline(always)]
 pub fn load_state(path: &str) -> SaveState {
     let encoded = std::fs::read(path).expect("Failed to read save file");
 
