@@ -17,6 +17,7 @@ pub struct SdlFrontend {
 }
 
 impl Default for SdlFrontend {
+    #[inline(always)]
     fn default() -> Self {
         // Initialize SDL2
         let context = sdl2::init().expect("Error initializing SDL");
@@ -59,6 +60,7 @@ impl Default for SdlFrontend {
 }
 
 impl Frontend for SdlFrontend {
+    #[inline(always)]
     fn show_frame(
         &mut self,
         pixel_buffer: Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
@@ -86,6 +88,7 @@ impl Frontend for SdlFrontend {
         Ok(())
     }
 
+    #[inline(always)]
     fn poll_input_events(&mut self) -> Result<Vec<InputEvent>, String> {
         let mut events = Vec::new();
 

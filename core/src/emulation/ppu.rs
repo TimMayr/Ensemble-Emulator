@@ -109,10 +109,12 @@ pub struct Ppu {
 }
 
 impl Default for Ppu {
+    #[inline(always)]
     fn default() -> Self { Self::new() }
 }
 
 impl Ppu {
+    #[inline(always)]
     pub fn new() -> Self {
         Self {
             dot_counter: 0,
@@ -159,8 +161,10 @@ impl Ppu {
         }
     }
 
+    #[inline(always)]
     fn get_default_memory_map() -> MemoryMap { MemoryMap::default() }
 
+    #[inline(always)]
     fn get_palette_memory_map() -> MemoryMap {
         let mut mem = MemoryMap::default();
 
@@ -175,9 +179,10 @@ impl Ppu {
         mem
     }
 
+    #[inline(always)]
     fn get_default_oam() -> Ram { Ram::new(OAM_SIZE - 1) }
 
-    #[inline]
+    #[inline(always)]
     pub fn step(&mut self) -> bool {
         self.prev_vbl = self.status_register.get() & VBLANK_NMI_BIT;
 
@@ -308,7 +313,7 @@ impl Ppu {
         frame_dot == DOTS_PER_FRAME - 1
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn do_dot_fetch(&mut self) {
         match (self.dot - 1) % 8 {
             0 => {
@@ -363,12 +368,12 @@ impl Ppu {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn is_rendering(&self) -> bool {
         self.is_background_rendering() || self.is_sprite_rendering()
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_vram_addr_step(&self) -> u8 {
         if self.ctrl_register & VRAM_ADDR_INC_BIT == 0 {
             1
@@ -377,7 +382,7 @@ impl Ppu {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn update_nmi(&self) {
         if (self.status_register.get() & self.ctrl_register & VBLANK_NMI_BIT) != 0 {
             self.nmi_requested.set(true);
@@ -393,14 +398,14 @@ impl Ppu {
         self.update_nmi()
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn set_vbl_bit(&mut self) {
         self.status_register
             .set(self.status_register.get() | VBLANK_NMI_BIT);
         self.update_nmi()
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_ppu_status(&self) -> u8 {
         let result = (self.status_register.get() & !VBLANK_NMI_BIT) | self.prev_vbl;
         self.vbl_clear_scheduled.set(Some(2));
@@ -410,10 +415,10 @@ impl Ppu {
         result
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_ppu_ctrl(&self) -> u8 { self.ctrl_register }
 
-    #[inline]
+    #[inline(always)]
     pub fn set_ppu_ctrl(&mut self, value: u8) {
         if !self.reset_signal {
             self.ctrl_register = value;
@@ -424,23 +429,23 @@ impl Ppu {
         self.update_nmi();
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_mask_register(&self) -> u8 { self.mask_register }
 
-    #[inline]
+    #[inline(always)]
     pub fn set_mask_register(&mut self, value: u8) {
         if !self.reset_signal {
             self.mask_register = value;
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn set_oam_addr_register(&mut self, value: u8) { self.oam_addr_register = value }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_oam_at_addr(&self) -> u8 { self.oam.read(self.oam_addr_register as u16, 0) }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_vram_at_addr(&mut self) -> u8 {
         let mut ret = self.ppu_data_buffer;
 
@@ -461,7 +466,7 @@ impl Ppu {
         ret
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn write_oam(&mut self, mut data: u8) {
         if self.oam_addr_register % 4 == 2 {
             data &= 0xE3;
@@ -475,7 +480,7 @@ impl Ppu {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn write_vram(&mut self, data: u8) {
         self.mem_write(self.v_register, data);
         self.v_register = self
@@ -483,7 +488,7 @@ impl Ppu {
             .wrapping_add(self.get_vram_addr_step() as u16);
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn write_ppu_scroll(&mut self, data: u8) {
         if self.reset_signal {
             return;
@@ -506,7 +511,7 @@ impl Ppu {
         self.write_latch.set(!self.write_latch.get());
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn write_vram_addr(&mut self, data: u8) {
         if !self.write_latch.get() {
             // First write: upper byte (but only lower 6 bits valid)
@@ -523,30 +528,30 @@ impl Ppu {
     #[inline(always)]
     pub fn poll_nmi(&self) -> bool { self.nmi_requested.get() }
 
-    #[inline]
+    #[inline(always)]
     pub fn is_background_rendering(&self) -> bool {
         self.mask_register & BACKGROUND_RENDER_BIT != 0
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn is_sprite_rendering(&self) -> bool { self.mask_register & SPRITE_RENDER_BIT != 0 }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_coarse_x_scroll(&self) -> u8 {
         (self.v_register & VRAM_ADDR_COARSE_X_SCROLL_MASK) as u8
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_coarse_y_scroll(&self) -> u8 {
         (self.v_register & VRAM_ADDR_COARSE_Y_SCROLL_MASK) as u8
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_fine_y_scroll(&self) -> u8 {
         ((self.v_register & VRAM_ADDR_FINE_Y_SCROLL_MASK) >> 12) as u8
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn inc_coarse_x_scroll(&mut self) {
         if self.get_coarse_x_scroll() == 31 {
             self.v_register &= !VRAM_ADDR_COARSE_X_SCROLL_MASK;
@@ -556,7 +561,7 @@ impl Ppu {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn inc_y_scroll(&mut self) {
         if (self.v_register & VRAM_ADDR_FINE_Y_SCROLL_MASK) != VRAM_ADDR_FINE_Y_SCROLL_MASK {
             self.v_register += 0x1000;
@@ -592,6 +597,7 @@ impl Ppu {
         }
     }
 
+    #[inline(always)]
     pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
         let rom_file = rom_get.as_rom_file();
         let chr_rom = rom_file.get_chr_rom();
@@ -609,13 +615,15 @@ impl Ppu {
         )
     }
 
+    #[inline(always)]
     pub fn reset(&mut self) { self.reset_signal = false; }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_pixel_buffer(&self) -> &[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize] {
         &self.pixel_buffer
     }
 
+    #[inline(always)]
     pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
         self.memory.get_memory_debug(range)
     }
@@ -634,7 +642,7 @@ impl Ppu {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn reload_shifters(&mut self) {
         self.shift_pattern_lo = (self.shift_pattern_lo & 0xFF00) | self.bg_next_tile_lsb as u16;
         self.shift_pattern_hi = (self.shift_pattern_hi & 0xFF00) | self.address_latch as u16;
@@ -648,11 +656,13 @@ impl Ppu {
         self.shift_in_attr_hi = attr_high_bit;
     }
 
+    #[inline(always)]
     pub fn frame(&mut self) { self.render_pattern_tables() }
 
+    #[inline(always)]
     pub fn inc_current_palette(&mut self) { self.current_palette += 1; }
 
-    #[inline]
+    #[inline(always)]
     fn load_palette_colors(&mut self) -> [u32; 4] {
         let mut colors = [0u32; 4];
         let sel = self.current_palette as u16;
@@ -666,6 +676,7 @@ impl Ppu {
         colors
     }
 
+    #[inline(always)]
     pub fn render_nametables(&mut self) {
         let pattern_table_base_address = if self.ctrl_register & 0b0001_0000 != 0 {
             0x1000
@@ -729,6 +740,7 @@ impl Ppu {
         }
     }
 
+    #[inline(always)]
     pub fn render_pattern_tables(&mut self) {
         // Build palette→color once
         let color_lut: [u32; 4] = self.load_palette_colors();
@@ -778,6 +790,7 @@ impl Ppu {
         self.open_bus.set(bus);
     }
 
+    #[inline(always)]
     pub fn from(state: &PpuState, rom: &RomFile) -> Self {
         let mut ppu = Self {
             dot_counter: state.cycle_counter,

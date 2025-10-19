@@ -16,7 +16,7 @@ fn main() {
 
     let start = Instant::now();
 
-    emu.run_until(&mut frontend, u128::MAX)
+    emu.run_until(&mut Frontends::default(), &(357366 * 3600))
         .expect("TODO: panic message");
 
     println!("{:?}", start.elapsed());
@@ -54,7 +54,7 @@ fn main() {
     //     }
     // }
 
-    emu.run_until(&mut frontend, 100_119_365)
+    emu.run_until(&mut frontend, &100_119_365)
         .expect("panic message");
 
     println!("{:?}", start.elapsed());

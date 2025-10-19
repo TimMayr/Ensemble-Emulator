@@ -9,7 +9,7 @@ fn test_instr_misc() {
         "./tests/nes-test-roms/instr_misc/instr_misc.nes",
     ));
     emu.reset();
-    emu.run_until(&mut Frontends::default(), 20_000_000)
+    emu.run_until(&mut Frontends::default(), &20_000_000)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6031));

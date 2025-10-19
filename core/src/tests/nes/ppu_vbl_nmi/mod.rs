@@ -30,7 +30,7 @@ fn test_ppu_vbl_nmi() {
         "./tests/nes-test-roms/ppu_vbl_nmi/ppu_vbl_nmi.nes",
     ));
     emu.power();
-    emu.run_until(&mut Frontends::default(), 650_000_000)
+    emu.run_until(&mut Frontends::default(), &650_000_000)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6079));
