@@ -30,6 +30,7 @@ pub struct Nes {
 }
 
 impl Console for Nes {
+    #[inline]
     fn get_pixel_buffer(
         &self,
     ) -> Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]> {
@@ -115,10 +116,12 @@ impl Console for Nes {
         }
     }
 
+    #[inline]
     fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
         self.step(frontend, u128::MAX)
     }
 
+    #[inline]
     fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
         self.run_until(
             frontend,
@@ -189,6 +192,7 @@ impl Nes {
         self.ppu.borrow_mut().memory.load(&state.ppu.memory);
     }
 
+    #[inline]
     pub fn step(
         &mut self,
         frontend: &mut Frontends,

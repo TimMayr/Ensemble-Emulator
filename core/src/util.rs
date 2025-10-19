@@ -24,15 +24,18 @@ pub fn write_to_file(path: &str, data: Vec<u8>) {
     file.write_all(&data).expect("Error writing to file")
 }
 
+#[inline(always)]
 pub fn crosses_page_boundary_u8(base: u16, offset: u8) -> bool {
     (base & UPPER_BYTE) != ((base + offset as u16) & UPPER_BYTE)
 }
 
+#[inline(always)]
 pub fn crosses_page_boundary_i8(base: u16, offset: i8) -> bool {
     let target = base.wrapping_add(offset as i16 as u16);
     (base & UPPER_BYTE) != (target & UPPER_BYTE)
 }
 
+#[inline(always)]
 pub fn add_to_low_byte(val: u16, add: u8) -> u16 {
     let high = val & 0xFF00; // preserve high byte
     let low = ((val & 0x00FF) as u8).wrapping_add(add); // add with wrapping

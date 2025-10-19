@@ -12,6 +12,7 @@ pub enum Consoles {
 }
 
 impl Console for Consoles {
+    #[inline(always)]
     fn get_pixel_buffer(
         &self,
     ) -> Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]> {
@@ -20,30 +21,35 @@ impl Console for Consoles {
         }
     }
 
+    #[inline(always)]
     fn load_rom(&mut self, path: &String) {
         match self {
             Consoles::Nes(nes) => nes.load_rom(path),
         }
     }
 
+    #[inline(always)]
     fn reset(&mut self) {
         match self {
             Consoles::Nes(nes) => nes.reset(),
         }
     }
 
+    #[inline(always)]
     fn power(&mut self) {
         match self {
             Consoles::Nes(nes) => nes.power(),
         }
     }
 
+    #[inline(always)]
     fn run(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
         match self {
             Consoles::Nes(nes) => nes.run(frontend),
         }
     }
 
+    #[inline(always)]
     fn run_until(
         &mut self,
         frontend: &mut Frontends,
@@ -54,30 +60,35 @@ impl Console for Consoles {
         }
     }
 
+    #[inline(always)]
     fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>> {
         match self {
             Consoles::Nes(nes) => nes.get_memory_debug(range),
         }
     }
 
+    #[inline(always)]
     fn set_trace_log_path(&mut self, path: Option<String>) {
         match self {
             Consoles::Nes(nes) => nes.set_trace_log_path(path),
         }
     }
 
+    #[inline(always)]
     fn flush_trace_log(&mut self) {
         match self {
             Consoles::Nes(nes) => nes.flush_trace_log(),
         }
     }
 
+    #[inline(always)]
     fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
         match self {
             Consoles::Nes(nes) => nes.step(frontend, u128::MAX),
         }
     }
 
+    #[inline(always)]
     fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
         match self {
             Consoles::Nes(nes) => nes.step_frame(frontend),
