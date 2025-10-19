@@ -120,11 +120,13 @@ impl Cpu {
         Self::default()
     }
 
+    #[inline(always)]
     pub fn mem_read(&mut self, addr: u16) -> u8 {
         self.cpu_read_cycle = true;
         self.memory.mem_read(addr)
     }
 
+    #[inline(always)]
     pub fn mem_write(&mut self, addr: u16, data: u8) {
         self.cpu_read_cycle = false;
 
@@ -136,20 +138,25 @@ impl Cpu {
         self.memory.mem_write(addr, data);
     }
 
+    #[inline(always)]
     pub fn mem_read_u16(&mut self, addr: u16) -> u16 { self.memory.mem_read_u16(addr) }
 
+    #[inline(always)]
     pub fn mem_write_u16(&mut self, addr: u16, data: u16) { self.memory.mem_write_u16(addr, data); }
 
+    #[inline(always)]
     pub fn stack_pop(&mut self) -> u8 {
         let val = self.mem_read(STACK_START_ADDRESS + self.stack_pointer as u16);
         self.stack_pointer = self.stack_pointer.wrapping_add(1);
         val
     }
 
+    #[inline(always)]
     pub fn stack_peek(&mut self) -> u8 {
         self.mem_read(STACK_START_ADDRESS + self.stack_pointer as u16)
     }
 
+    #[inline(always)]
     pub fn stack_push(&mut self, data: Option<u8>) {
         if let Some(data) = data {
             self.mem_write(STACK_START_ADDRESS + self.stack_pointer as u16, data);
@@ -158,12 +165,14 @@ impl Cpu {
         self.stack_pointer = self.stack_pointer.wrapping_sub(1);
     }
 
+    #[inline(always)]
     pub fn stack_pop_u16(&mut self) -> u16 {
         let lo = self.stack_pop() as u16;
         let hi = self.stack_pop() as u16;
         (hi << 8) | lo
     }
 
+    #[inline(always)]
     pub fn stack_push_u16(&mut self, data: u16) {
         let hi = (data >> 8) as u8;
         let lo = (data & 0xFF) as u8;
@@ -171,14 +180,19 @@ impl Cpu {
         self.stack_push(Option::from(lo));
     }
 
+    #[inline(always)]
     fn set_zero_flag(&mut self) { self.processor_status |= ZERO_BIT; }
 
+    #[inline(always)]
     fn clear_zero_flag(&mut self) { self.processor_status &= !ZERO_BIT; }
 
+    #[inline(always)]
     fn set_negative_flag(&mut self) { self.processor_status |= NEGATIVE_BIT }
 
+    #[inline(always)]
     fn clear_negative_flag(&mut self) { self.processor_status &= !NEGATIVE_BIT }
 
+    #[inline(always)]
     fn update_zero_flag(&mut self, result: u8) {
         if result == 0 {
             self.set_zero_flag()
@@ -187,6 +201,7 @@ impl Cpu {
         }
     }
 
+    #[inline(always)]
     fn update_negative_flag(&mut self, result: u8) {
         if result & NEGATIVE_BIT != 0 {
             self.set_negative_flag();
@@ -195,43 +210,61 @@ impl Cpu {
         }
     }
 
+    #[inline(always)]
     fn update_negative_and_zero_flags(&mut self, result: u8) {
         self.update_negative_flag(result);
         self.update_zero_flag(result);
     }
 
+    #[inline(always)]
     fn set_carry_flag(&mut self) { self.processor_status |= CARRY_BIT; }
 
+    #[inline(always)]
     fn clear_carry_flag(&mut self) { self.processor_status &= !CARRY_BIT; }
 
+    #[inline(always)]
     fn set_overflow_flag(&mut self) { self.processor_status |= OVERFLOW_BIT; }
 
+    #[inline(always)]
     fn clear_overflow_flag(&mut self) { self.processor_status &= !OVERFLOW_BIT; }
 
+    #[inline(always)]
     fn set_interrupt_disable(&mut self) { self.processor_status |= IRQ_BIT; }
 
+    #[inline(always)]
     fn clear_interrupt_disable(&mut self) { self.processor_status &= !IRQ_BIT; }
 
+    #[inline(always)]
     fn set_decimal_flag(&mut self) { self.processor_status |= DECIMAL_BIT; }
 
+    #[inline(always)]
     fn clear_decimal_flag(&mut self) { self.processor_status &= !DECIMAL_BIT; }
 
+    #[inline(always)]
     pub fn get_zero_flag(&self) -> bool { (self.processor_status & ZERO_BIT) != 0 }
 
+    #[inline(always)]
     pub fn get_negative_flag(&self) -> bool { (self.processor_status & NEGATIVE_BIT) != 0 }
 
+    #[inline(always)]
     pub fn get_carry_flag(&self) -> bool { (self.processor_status & CARRY_BIT) != 0 }
 
+    #[inline(always)]
     pub fn get_overflow_flag(&self) -> bool { (self.processor_status & OVERFLOW_BIT) != 0 }
 
+    #[inline(always)]
     pub fn get_decimal_flag(&self) -> bool { (self.processor_status & DECIMAL_BIT) != 0 }
 
+    #[inline(always)]
     pub fn get_interrupt_disable_flag(&self) -> bool { (self.processor_status & IRQ_BIT) != 0 }
 
+    #[inline(always)]
     pub fn get_break_flag(&self) -> bool { (self.processor_status & BREAK_BIT) != 0 }
 
+    #[inline(always)]
     pub fn get_unused_flag(&self) -> bool { (self.processor_status & UNUSED_BIT) != 0 }
 
+    #[inline(always)]
     fn shift_left(&mut self, data: u8) -> u8 {
         let res = data << 1;
 
@@ -245,6 +278,7 @@ impl Cpu {
         res
     }
 
+    #[inline(always)]
     fn shift_right(&mut self, data: u8) -> u8 {
         let res = data >> 1;
 
@@ -258,6 +292,7 @@ impl Cpu {
         res
     }
 
+    #[inline(always)]
     fn rotate_left(&mut self, data: u8) -> u8 {
         let mut res = data << 1;
 
@@ -273,6 +308,7 @@ impl Cpu {
         res
     }
 
+    #[inline(always)]
     fn rotate_right(&mut self, data: u8) -> u8 {
         let mut res = data >> 1;
 
@@ -290,8 +326,10 @@ impl Cpu {
         res
     }
 
+    #[inline(always)]
     fn get_addr_latch(&self) -> u16 { ((self.hi as u16) << 8) | (self.lo as u16) }
 
+    #[inline(always)]
     fn get_instructions_for_op_type(&mut self) -> Vec<MicroOp> {
         let mut instructions = vec![];
 
@@ -854,6 +892,7 @@ impl Cpu {
         instructions
     }
 
+    #[inline(always)]
     fn get_instructions_for_irq(&mut self) -> Vec<MicroOp> {
         vec![
             MicroOp::ReadWithOffsetFromU16AndAddSomething(
@@ -893,6 +932,7 @@ impl Cpu {
         ]
     }
 
+    #[inline(always)]
     fn get_instructions_for_reset(&mut self) -> Vec<MicroOp> {
         vec![
             MicroOp::ReadWithOffsetFromU16AndAddSomething(
@@ -931,6 +971,7 @@ impl Cpu {
         ]
     }
 
+    #[inline(always)]
     pub fn trigger_nmi(&mut self) {
         let mut seq = self.get_instructions_for_irq();
         self.nmi_pending = false;
@@ -941,6 +982,7 @@ impl Cpu {
         self.op_queue = seq;
     }
 
+    #[inline(always)]
     pub fn trigger_irq(&mut self) {
         let mut seq = self.get_instructions_for_irq();
 
@@ -950,6 +992,7 @@ impl Cpu {
         self.op_queue = seq;
     }
 
+    #[inline(always)]
     pub fn reset(&mut self) {
         if !self.is_in_irq {
             let mut seq = self.get_instructions_for_reset();
@@ -1034,6 +1077,7 @@ impl Cpu {
         Ok(CycleCompleted)
     }
 
+    #[inline(always)]
     fn execute_micro_op(&mut self, micro_op: &MicroOp) -> Vec<MicroOp> {
         match micro_op {
             MicroOp::FetchOpcode(callback) => {
@@ -1263,6 +1307,7 @@ impl Cpu {
         }
     }
 
+    #[inline(always)]
     fn run_op(&mut self, op: MicroOpCallback) {
         match op {
             MicroOpCallback::None => {}
@@ -1330,6 +1375,7 @@ impl Cpu {
         }
     }
 
+    #[inline(always)]
     fn get_u16_address(&self, address_source: &AddressSource) -> Option<u16> {
         match address_source {
             AddressSource::AddressLatch => Some(self.get_addr_latch()),
@@ -1402,6 +1448,7 @@ impl Cpu {
         mem
     }
 
+    #[inline(always)]
     pub fn get_src_value(&mut self, src: &Source) -> Option<u8> {
         match src {
             Source::A => Option::from(self.accumulator),
@@ -1421,6 +1468,7 @@ impl Cpu {
         }
     }
 
+    #[inline(always)]
     fn write_to_target(&mut self, trg: &Target, val: u8) {
         match trg {
             Target::A => {
@@ -1457,6 +1505,7 @@ impl Cpu {
         }
     }
 
+    #[inline(always)]
     fn check_condition(&self, condition: Condition) -> bool {
         match condition {
             Condition::CarrySet => self.get_carry_flag(),
@@ -1470,6 +1519,7 @@ impl Cpu {
         }
     }
 
+    #[inline(always)]
     pub fn trigger_oam_dma(&mut self, seq: &mut Vec<MicroOp>) -> Vec<MicroOp> {
         self.dma_triggered = false;
         self.is_in_irq = true;
@@ -1782,6 +1832,7 @@ impl Cpu {
     }
 }
 
+#[inline(always)]
 pub fn adc(cpu: &mut Cpu) {
     let target_value = cpu.temp;
     let carry_in = cpu.processor_status & CARRY_BIT;
@@ -1810,6 +1861,7 @@ pub fn adc(cpu: &mut Cpu) {
     cpu.update_negative_and_zero_flags(cpu.accumulator);
 }
 
+#[inline(always)]
 fn rol(cpu: &mut Cpu) {
     if discriminant(&cpu.current_opcode.unwrap().op_type)
         != discriminant(&OpType::AccumulatorOrImplied(MicroOpCallback::None))
@@ -1823,6 +1875,7 @@ fn rol(cpu: &mut Cpu) {
     }
 }
 
+#[inline(always)]
 fn ror(cpu: &mut Cpu) {
     if discriminant(&cpu.current_opcode.unwrap().op_type)
         != discriminant(&OpType::AccumulatorOrImplied(MicroOpCallback::None))
@@ -1836,6 +1889,7 @@ fn ror(cpu: &mut Cpu) {
     }
 }
 
+#[inline(always)]
 fn asl(cpu: &mut Cpu) {
     if discriminant(&cpu.current_opcode.unwrap().op_type)
         != discriminant(&OpType::AccumulatorOrImplied(MicroOpCallback::None))
@@ -1849,6 +1903,7 @@ fn asl(cpu: &mut Cpu) {
     }
 }
 
+#[inline(always)]
 fn lsr(cpu: &mut Cpu) {
     if discriminant(&cpu.current_opcode.unwrap().op_type)
         != discriminant(&OpType::AccumulatorOrImplied(MicroOpCallback::None))
@@ -1862,71 +1917,89 @@ fn lsr(cpu: &mut Cpu) {
     }
 }
 
+#[inline(always)]
 fn tax(cpu: &mut Cpu) {
     cpu.x_register = cpu.accumulator;
     cpu.update_negative_and_zero_flags(cpu.x_register);
 }
 
+#[inline(always)]
 fn tay(cpu: &mut Cpu) {
     cpu.y_register = cpu.accumulator;
     cpu.update_negative_and_zero_flags(cpu.y_register);
 }
 
+#[inline(always)]
 fn txa(cpu: &mut Cpu) {
     cpu.accumulator = cpu.x_register;
     cpu.update_negative_and_zero_flags(cpu.accumulator);
 }
 
+#[inline(always)]
 fn tya(cpu: &mut Cpu) {
     cpu.accumulator = cpu.y_register;
     cpu.update_negative_and_zero_flags(cpu.accumulator);
 }
 
+#[inline(always)]
 fn tsx(cpu: &mut Cpu) {
     cpu.x_register = cpu.stack_pointer;
     cpu.update_negative_and_zero_flags(cpu.x_register)
 }
 
+#[inline(always)]
 fn txs(cpu: &mut Cpu) { cpu.stack_pointer = cpu.x_register; }
 
+#[inline(always)]
 fn clc(cpu: &mut Cpu) { cpu.clear_carry_flag(); }
 
+#[inline(always)]
 fn cld(cpu: &mut Cpu) { cpu.clear_decimal_flag(); }
 
+#[inline(always)]
 fn cli(cpu: &mut Cpu) { cpu.clear_interrupt_disable(); }
 
+#[inline(always)]
 fn clv(cpu: &mut Cpu) { cpu.clear_overflow_flag(); }
 
+#[inline(always)]
 fn sec(cpu: &mut Cpu) { cpu.set_carry_flag(); }
 
+#[inline(always)]
 fn sed(cpu: &mut Cpu) { cpu.set_decimal_flag(); }
 
+#[inline(always)]
 fn sei(cpu: &mut Cpu) { cpu.set_interrupt_disable(); }
 
+#[inline(always)]
 fn dex(cpu: &mut Cpu) {
     let mod_value = cpu.x_register.wrapping_sub(1);
     cpu.x_register = mod_value;
     cpu.update_negative_and_zero_flags(cpu.x_register);
 }
 
+#[inline(always)]
 fn dey(cpu: &mut Cpu) {
     let mod_value = cpu.y_register.wrapping_sub(1);
     cpu.y_register = mod_value;
     cpu.update_negative_and_zero_flags(cpu.y_register);
 }
 
+#[inline(always)]
 fn inx(cpu: &mut Cpu) {
     let mod_value = cpu.x_register.wrapping_add(1);
     cpu.x_register = mod_value;
     cpu.update_negative_and_zero_flags(cpu.x_register);
 }
 
+#[inline(always)]
 fn iny(cpu: &mut Cpu) {
     let mod_value = cpu.y_register.wrapping_add(1);
     cpu.y_register = mod_value;
     cpu.update_negative_and_zero_flags(cpu.y_register);
 }
 
+#[inline(always)]
 fn cmp(cpu: &mut Cpu) {
     let target_value = cpu.temp;
 
@@ -1949,6 +2022,7 @@ fn cmp(cpu: &mut Cpu) {
     }
 }
 
+#[inline(always)]
 fn cpx(cpu: &mut Cpu) {
     let target_value = cpu.temp;
 
@@ -1971,6 +2045,7 @@ fn cpx(cpu: &mut Cpu) {
     }
 }
 
+#[inline(always)]
 fn cpy(cpu: &mut Cpu) {
     let target_value = cpu.temp;
 
@@ -1993,24 +2068,28 @@ fn cpy(cpu: &mut Cpu) {
     }
 }
 
+#[inline(always)]
 fn and(cpu: &mut Cpu) {
     let target_val = cpu.temp;
     cpu.accumulator &= target_val;
     cpu.update_negative_and_zero_flags(cpu.accumulator);
 }
 
+#[inline(always)]
 fn eor(cpu: &mut Cpu) {
     let target_val = cpu.temp;
     cpu.accumulator ^= target_val;
     cpu.update_negative_and_zero_flags(cpu.accumulator);
 }
 
+#[inline(always)]
 fn ora(cpu: &mut Cpu) {
     let target_val = cpu.temp;
     cpu.accumulator |= target_val;
     cpu.update_negative_and_zero_flags(cpu.accumulator);
 }
 
+#[inline(always)]
 fn sbc(cpu: &mut Cpu) {
     let target_value = cpu.temp;
     let carry_in = cpu.processor_status & CARRY_BIT;
@@ -2038,6 +2117,7 @@ fn sbc(cpu: &mut Cpu) {
     cpu.update_negative_and_zero_flags(cpu.accumulator);
 }
 
+#[inline(always)]
 fn bit(cpu: &mut Cpu) {
     let target_val = cpu.temp;
     let res = cpu.accumulator & target_val;
@@ -2056,6 +2136,7 @@ fn bit(cpu: &mut Cpu) {
     }
 }
 
+#[inline(always)]
 fn inc(cpu: &mut Cpu) {
     let target_value = cpu.temp;
     let mod_value = target_value.wrapping_add(1);
@@ -2063,6 +2144,7 @@ fn inc(cpu: &mut Cpu) {
     cpu.update_negative_and_zero_flags(cpu.temp);
 }
 
+#[inline(always)]
 fn dec(cpu: &mut Cpu) {
     let target_value = cpu.temp;
     let mod_value = target_value.wrapping_sub(1);
@@ -2070,12 +2152,14 @@ fn dec(cpu: &mut Cpu) {
     cpu.update_negative_and_zero_flags(cpu.temp);
 }
 
+#[inline(always)]
 fn branch(cpu: &mut Cpu, condition: Condition) {
     if cpu.check_condition(condition) {
         cpu.op_queue.push(MicroOp::BranchIncrement(Source::LO))
     }
 }
 
+#[inline(always)]
 fn isb(cpu: &mut Cpu) {
     // Inc
     let target_value = cpu.get_src_value(&Source::TEMP);
@@ -2112,6 +2196,7 @@ fn isb(cpu: &mut Cpu) {
     }
 }
 
+#[inline(always)]
 fn alr(cpu: &mut Cpu) {
     let target_val = cpu.temp;
     cpu.accumulator &= target_val;
@@ -2121,6 +2206,7 @@ fn alr(cpu: &mut Cpu) {
     cpu.update_negative_and_zero_flags(cpu.accumulator);
 }
 
+#[inline(always)]
 fn anc(cpu: &mut Cpu) {
     let target_val = cpu.temp;
     cpu.accumulator &= target_val;
@@ -2133,12 +2219,14 @@ fn anc(cpu: &mut Cpu) {
     }
 }
 
+#[inline(always)]
 fn ane(cpu: &mut Cpu) {
     cpu.accumulator |= cpu.ane_constant;
     cpu.accumulator &= cpu.x_register;
     cpu.accumulator &= cpu.temp;
 }
 
+#[inline(always)]
 fn arr(cpu: &mut Cpu) {
     let target_val = cpu.temp;
     cpu.accumulator &= target_val;
@@ -2164,11 +2252,13 @@ fn arr(cpu: &mut Cpu) {
     }
 }
 
+#[inline(always)]
 fn dcp(cpu: &mut Cpu) {
     dec(cpu);
     cmp(cpu)
 }
 
+#[inline(always)]
 fn las(cpu: &mut Cpu) {
     let res = cpu.temp & cpu.stack_pointer;
     cpu.accumulator = res;
@@ -2176,18 +2266,21 @@ fn las(cpu: &mut Cpu) {
     cpu.stack_pointer = res;
 }
 
+#[inline(always)]
 fn lax(cpu: &mut Cpu) {
     cpu.accumulator = cpu.temp;
     cpu.x_register = cpu.temp;
     cpu.update_negative_and_zero_flags(cpu.accumulator)
 }
 
+#[inline(always)]
 fn lxa(cpu: &mut Cpu) {
     cpu.accumulator = (cpu.accumulator | cpu.ane_constant) & cpu.temp;
     cpu.x_register = cpu.accumulator;
     cpu.update_negative_and_zero_flags(cpu.accumulator)
 }
 
+#[inline(always)]
 fn rla(cpu: &mut Cpu) {
     let target_value = cpu.temp;
     let res = cpu.rotate_left(target_value);
@@ -2196,6 +2289,7 @@ fn rla(cpu: &mut Cpu) {
     cpu.update_negative_and_zero_flags(cpu.accumulator);
 }
 
+#[inline(always)]
 fn rra(cpu: &mut Cpu) {
     let target_value = cpu.temp;
     let res = cpu.rotate_right(target_value);
@@ -2203,11 +2297,13 @@ fn rra(cpu: &mut Cpu) {
     adc(cpu);
 }
 
+#[inline(always)]
 fn sax(cpu: &mut Cpu) {
     let res = cpu.accumulator & cpu.x_register;
     cpu.temp = res;
 }
 
+#[inline(always)]
 fn sbx(cpu: &mut Cpu) {
     let t = cpu.accumulator & cpu.x_register;
     let r = t.wrapping_sub(cpu.temp);
@@ -2232,8 +2328,10 @@ fn sbx(cpu: &mut Cpu) {
     }
 }
 
+#[inline(always)]
 fn sha(cpu: &mut Cpu) { cpu.temp = cpu.accumulator & cpu.x_register & cpu.hi.wrapping_add(1); }
 
+#[inline(always)]
 fn shx(cpu: &mut Cpu) {
     if !cpu.lo.overflowing_sub(cpu.y_register).1 {
         cpu.temp = cpu.x_register & cpu.hi.wrapping_add(1);
@@ -2244,6 +2342,7 @@ fn shx(cpu: &mut Cpu) {
     }
 }
 
+#[inline(always)]
 fn shy(cpu: &mut Cpu) {
     if !cpu.lo.overflowing_sub(cpu.x_register).1 {
         cpu.temp = cpu.y_register & cpu.hi.wrapping_add(1);
@@ -2254,6 +2353,7 @@ fn shy(cpu: &mut Cpu) {
     }
 }
 
+#[inline(always)]
 fn slo(cpu: &mut Cpu) {
     let target_value = cpu.temp;
     let res = cpu.shift_left(target_value);
@@ -2263,6 +2363,7 @@ fn slo(cpu: &mut Cpu) {
     cpu.update_negative_and_zero_flags(cpu.accumulator);
 }
 
+#[inline(always)]
 fn sre(cpu: &mut Cpu) {
     let target_value = cpu.temp;
     let res = cpu.shift_right(target_value);
@@ -2272,13 +2373,16 @@ fn sre(cpu: &mut Cpu) {
     cpu.update_negative_and_zero_flags(cpu.accumulator);
 }
 
+#[inline(always)]
 fn tas(cpu: &mut Cpu) {
     cpu.stack_pointer = cpu.accumulator & cpu.x_register;
     cpu.temp = cpu.accumulator & cpu.x_register & cpu.hi.wrapping_add(1);
 }
 
+#[inline(always)]
 fn jam(cpu: &mut Cpu) { cpu.is_halted = true }
 
+#[inline(always)]
 fn copy(cpu: &mut Cpu, source: AddressSource, target: Target) {
     let Some(address) = cpu.get_u16_address(&source) else {
         unreachable!()

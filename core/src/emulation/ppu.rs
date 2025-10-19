@@ -100,6 +100,8 @@ pub struct Ppu {
     pub shift_pattern_hi: u16,
     pub shift_attr_lo: u8,
     pub shift_attr_hi: u8,
+    pub shift_in_attr_lo: bool,
+    pub shift_in_attr_hi: bool,
     pub bg_next_tile_id: u8,
     pub bg_next_tile_attribute: u8,
     pub bg_next_tile_lsb: u8,
@@ -152,6 +154,8 @@ impl Ppu {
             shift_attr_lo: 0,
             shift_attr_hi: 0,
             current_palette: 0,
+            shift_in_attr_lo: false,
+            shift_in_attr_hi: false,
         }
     }
 
@@ -213,13 +217,13 @@ impl Ppu {
                     let pattern_index = (bit1 << 1) | bit0;
                     let palette_index = (attr1 << 1) | attr0;
 
-                    let color_addr = if pattern_index == 0 {
+                    let background_color_idx = if pattern_index == 0 {
                         0x3F00
                     } else {
                         0x3F00 + ((palette_index as u16) << 2) + (pattern_index as u16)
                     };
 
-                    let color_idx = self.mem_read(color_addr) & 0x3F;
+                    let color_idx = self.mem_read(background_color_idx) & 0x3F;
 
                     self.pixel_buffer
                         [self.scanline as usize * SCREEN_RENDER_WIDTH + (self.dot - 1) as usize] =
@@ -229,7 +233,9 @@ impl Ppu {
                 self.shift_pattern_lo <<= 1;
                 self.shift_pattern_hi <<= 1;
                 self.shift_attr_lo <<= 1;
+                self.shift_attr_lo |= self.shift_in_attr_lo as u8;
                 self.shift_attr_hi <<= 1;
+                self.shift_attr_hi |= self.shift_in_attr_hi as u8;
 
                 if (self.dot - 1) % 8 == 7 {
                     self.inc_coarse_x_scroll();
@@ -302,6 +308,7 @@ impl Ppu {
         frame_dot == DOTS_PER_FRAME - 1
     }
 
+    #[inline]
     pub fn do_dot_fetch(&mut self) {
         match (self.dot - 1) % 8 {
             0 => {
@@ -356,10 +363,12 @@ impl Ppu {
         }
     }
 
+    #[inline]
     pub fn is_rendering(&self) -> bool {
         self.is_background_rendering() || self.is_sprite_rendering()
     }
 
+    #[inline]
     pub fn get_vram_addr_step(&self) -> u8 {
         if self.ctrl_register & VRAM_ADDR_INC_BIT == 0 {
             1
@@ -368,6 +377,7 @@ impl Ppu {
         }
     }
 
+    #[inline]
     pub fn update_nmi(&self) {
         if (self.status_register.get() & self.ctrl_register & VBLANK_NMI_BIT) != 0 {
             self.nmi_requested.set(true);
@@ -383,12 +393,14 @@ impl Ppu {
         self.update_nmi()
     }
 
+    #[inline]
     pub fn set_vbl_bit(&mut self) {
         self.status_register
             .set(self.status_register.get() | VBLANK_NMI_BIT);
         self.update_nmi()
     }
 
+    #[inline]
     pub fn get_ppu_status(&self) -> u8 {
         let result = (self.status_register.get() & !VBLANK_NMI_BIT) | self.prev_vbl;
         self.vbl_clear_scheduled.set(Some(2));
@@ -398,8 +410,10 @@ impl Ppu {
         result
     }
 
+    #[inline]
     pub fn get_ppu_ctrl(&self) -> u8 { self.ctrl_register }
 
+    #[inline]
     pub fn set_ppu_ctrl(&mut self, value: u8) {
         if !self.reset_signal {
             self.ctrl_register = value;
@@ -410,18 +424,23 @@ impl Ppu {
         self.update_nmi();
     }
 
+    #[inline]
     pub fn get_mask_register(&self) -> u8 { self.mask_register }
 
+    #[inline]
     pub fn set_mask_register(&mut self, value: u8) {
         if !self.reset_signal {
             self.mask_register = value;
         }
     }
 
+    #[inline]
     pub fn set_oam_addr_register(&mut self, value: u8) { self.oam_addr_register = value }
 
+    #[inline]
     pub fn get_oam_at_addr(&self) -> u8 { self.oam.read(self.oam_addr_register as u16, 0) }
 
+    #[inline]
     pub fn get_vram_at_addr(&mut self) -> u8 {
         let mut ret = self.ppu_data_buffer;
 
@@ -442,6 +461,7 @@ impl Ppu {
         ret
     }
 
+    #[inline]
     pub fn write_oam(&mut self, mut data: u8) {
         if self.oam_addr_register % 4 == 2 {
             data &= 0xE3;
@@ -455,6 +475,7 @@ impl Ppu {
         }
     }
 
+    #[inline]
     pub fn write_vram(&mut self, data: u8) {
         self.mem_write(self.v_register, data);
         self.v_register = self
@@ -462,6 +483,7 @@ impl Ppu {
             .wrapping_add(self.get_vram_addr_step() as u16);
     }
 
+    #[inline]
     pub fn write_ppu_scroll(&mut self, data: u8) {
         if self.reset_signal {
             return;
@@ -484,6 +506,7 @@ impl Ppu {
         self.write_latch.set(!self.write_latch.get());
     }
 
+    #[inline]
     pub fn write_vram_addr(&mut self, data: u8) {
         if !self.write_latch.get() {
             // First write: upper byte (but only lower 6 bits valid)
@@ -500,28 +523,30 @@ impl Ppu {
     #[inline(always)]
     pub fn poll_nmi(&self) -> bool { self.nmi_requested.get() }
 
-    pub fn clear_nmi_requested(&self) { self.nmi_requested.set(false) }
-
+    #[inline]
     pub fn is_background_rendering(&self) -> bool {
         self.mask_register & BACKGROUND_RENDER_BIT != 0
     }
 
+    #[inline]
     pub fn is_sprite_rendering(&self) -> bool { self.mask_register & SPRITE_RENDER_BIT != 0 }
 
+    #[inline]
     pub fn get_coarse_x_scroll(&self) -> u8 {
         (self.v_register & VRAM_ADDR_COARSE_X_SCROLL_MASK) as u8
     }
 
+    #[inline]
     pub fn get_coarse_y_scroll(&self) -> u8 {
         (self.v_register & VRAM_ADDR_COARSE_Y_SCROLL_MASK) as u8
     }
 
-    pub fn get_fine_x_scroll(&self) -> u8 { self.fine_x_scroll }
-
+    #[inline]
     pub fn get_fine_y_scroll(&self) -> u8 {
         ((self.v_register & VRAM_ADDR_FINE_Y_SCROLL_MASK) >> 12) as u8
     }
 
+    #[inline]
     pub fn inc_coarse_x_scroll(&mut self) {
         if self.get_coarse_x_scroll() == 31 {
             self.v_register &= !VRAM_ADDR_COARSE_X_SCROLL_MASK;
@@ -531,6 +556,7 @@ impl Ppu {
         }
     }
 
+    #[inline]
     pub fn inc_y_scroll(&mut self) {
         if (self.v_register & VRAM_ADDR_FINE_Y_SCROLL_MASK) != VRAM_ADDR_FINE_Y_SCROLL_MASK {
             self.v_register += 0x1000;
@@ -550,10 +576,7 @@ impl Ppu {
         }
     }
 
-    pub fn get_nametable_x(&self) -> u8 { (self.v_register & VRAM_ADDR_NAMETABLE_X_BIT) as u8 }
-
-    pub fn get_nametable_y(&self) -> u8 { (self.v_register & VRAM_ADDR_NAMETABLE_Y_BIT) as u8 }
-
+    #[inline(always)]
     pub fn mem_read(&mut self, addr: u16) -> u8 {
         match addr {
             0x3F00..0x3FFF => self.palette_ram.mem_read(addr),
@@ -561,6 +584,7 @@ impl Ppu {
         }
     }
 
+    #[inline(always)]
     pub fn mem_write(&mut self, addr: u16, data: u8) {
         match addr {
             0x3F00..0x3FFF => self.palette_ram.mem_write(addr, data),
@@ -587,6 +611,7 @@ impl Ppu {
 
     pub fn reset(&mut self) { self.reset_signal = false; }
 
+    #[inline]
     pub fn get_pixel_buffer(&self) -> &[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize] {
         &self.pixel_buffer
     }
@@ -609,27 +634,18 @@ impl Ppu {
         }
     }
 
+    #[inline]
     fn reload_shifters(&mut self) {
-        // println!("Reloading Shifters @ {}x{}", self.dot, self.scanline);
-
         self.shift_pattern_lo = (self.shift_pattern_lo & 0xFF00) | self.bg_next_tile_lsb as u16;
         self.shift_pattern_hi = (self.shift_pattern_hi & 0xFF00) | self.address_latch as u16;
 
         // Decode the attribute bits for this tile (2 bits)
-        let attr_low_bit = if self.bg_next_tile_attribute & 0b01 != 0 {
-            0xFF
-        } else {
-            0x00
-        };
-        let attr_high_bit = if self.bg_next_tile_attribute & 0b10 != 0 {
-            0xFF
-        } else {
-            0x00
-        };
+        let attr_low_bit = self.bg_next_tile_attribute & 0b01 != 0;
+        let attr_high_bit = self.bg_next_tile_attribute & 0b10 != 0;
 
         // Load them into 8-bit shifters
-        self.shift_attr_lo = attr_low_bit;
-        self.shift_attr_hi = attr_high_bit;
+        self.shift_in_attr_lo = attr_low_bit;
+        self.shift_in_attr_hi = attr_high_bit;
     }
 
     pub fn frame(&mut self) { self.render_pattern_tables() }
@@ -803,6 +819,8 @@ impl Ppu {
             shift_attr_lo: 0,
             shift_attr_hi: 0,
             current_palette: 0,
+            shift_in_attr_lo: false,
+            shift_in_attr_hi: false,
         };
 
         ppu.load_rom(rom);

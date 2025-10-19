@@ -21,6 +21,7 @@ impl Default for Frontends {
 }
 
 impl Frontend for Frontends {
+    #[inline(always)]
     fn show_frame(
         &mut self,
         pixel_buffer: Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
@@ -33,6 +34,7 @@ impl Frontend for Frontends {
         }
     }
 
+    #[inline(always)]
     fn poll_input_events(&mut self) -> Result<Vec<InputEvent>, String> {
         match self {
             #[cfg(feature = "sdl2")]
