@@ -756,7 +756,11 @@ impl Ppu {
     }
 
     #[inline(always)]
-    pub fn tick_open_bus(&mut self, times: u8) { self.open_bus.get().tick(times); }
+    pub fn tick_open_bus(&mut self, times: u8) {
+        let mut bus = self.open_bus.get();
+        bus.tick(times);
+        self.open_bus.set(bus);
+    }
 
     pub fn from(state: &PpuState, rom: &RomFile) -> Self {
         let mut ppu = Self {
