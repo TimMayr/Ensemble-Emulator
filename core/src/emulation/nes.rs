@@ -198,11 +198,12 @@ impl Nes {
         self.cpu_cycle_counter += 1;
         self.ppu_cycle_counter += 1;
 
-        let mut ppu = self.ppu.borrow_mut();
-        if ppu.vbl_clear_scheduled.is_some() {
-            ppu.vbl_reset_counter += 1;
+        let ppu = self.ppu.borrow();
+        if ppu.vbl_clear_scheduled.get().is_some() {
+            ppu.vbl_reset_counter.set(ppu.vbl_reset_counter.get() + 1);
             ppu.process_vbl_clear_scheduled();
         }
+        drop(ppu);
 
         if self.total_cycles > last_cycle {
             self.total_cycles -= 1;
@@ -213,15 +214,13 @@ impl Nes {
 
         let mut frame_ready = false;
         if self.ppu_cycle_counter == 4 {
-            frame_ready = ppu.step();
+            frame_ready = self.ppu.borrow_mut().step();
             self.ppu_cycle_counter = 0;
         }
 
         // if frame_ready && !matches!(frontend, Frontends::None()) {
         //     ppu.frame();
         // }
-
-        drop(ppu);
 
         if frame_ready && !matches!(frontend, Frontends::None()) {
             let pixel_buffer = self.get_pixel_buffer();
