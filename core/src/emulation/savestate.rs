@@ -1,4 +1,4 @@
-use bincode::{Decode, Encode, config};
+use bincode::{config, Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 use crate::emulation::cpu::{Cpu, MicroOp};
@@ -62,25 +62,19 @@ pub struct PpuState {
     pub mask_register: u8,
     pub nmi_requested: bool,
     pub memory: Vec<u8>,
-    pub oam_data_register: u8,
     pub ppu_addr_register: u16,
-    pub ppu_data_register: u8,
     pub oam_addr_register: u8,
     pub write_latch: bool,
-    pub oam_dma_register: u8,
     pub ppu_data_buffer: u8,
     pub t_register: u16,
-    pub bg_next_tile_id: u8,
     pub bg_next_tile_attribute: u8,
-    pub bg_next_tile: u16,
-    pub bg_shifter_pattern: u16,
-    pub bg_shifter_attribute: u16,
     pub fine_x_scroll: u8,
     pub even_frame: bool,
     pub reset_signal: bool,
     pub pixel_buffer: Vec<u32>,
     pub dot: u16,
     pub scanline: u16,
+    pub bg_next_tile_id: u8,
 }
 
 impl From<&Ppu> for PpuState {
@@ -93,19 +87,13 @@ impl From<&Ppu> for PpuState {
             mask_register: ppu.mask_register,
             nmi_requested: ppu.nmi_requested.get(),
             memory: ppu.memory.get_memory_debug(Some(0x0..=0x3FFF)),
-            oam_data_register: ppu.oam_data_register,
             ppu_addr_register: ppu.v_register,
-            ppu_data_register: ppu.ppu_data_register,
             oam_addr_register: ppu.oam_addr_register,
             write_latch: ppu.write_latch.get(),
-            oam_dma_register: ppu.oam_dma_register,
             ppu_data_buffer: ppu.ppu_data_buffer,
             t_register: ppu.t_register,
             bg_next_tile_id: ppu.bg_next_tile_id,
             bg_next_tile_attribute: ppu.bg_next_tile_attribute,
-            bg_next_tile: ppu.bg_next_tile,
-            bg_shifter_pattern: ppu.bg_shifter_pattern,
-            bg_shifter_attribute: ppu.bg_shifter_attribute,
             fine_x_scroll: ppu.fine_x_scroll,
             even_frame: ppu.even_frame,
             reset_signal: ppu.reset_signal,
