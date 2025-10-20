@@ -1,5 +1,4 @@
 use std::cell::{Cell, RefCell};
-use std::mem::discriminant;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
@@ -13,7 +12,7 @@ use crate::emulation::mem::{Memory, Ram};
 use crate::emulation::nes::ExecutionFinishedType;
 use crate::emulation::nes::ExecutionFinishedType::CycleCompleted;
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OPCODES_MAP, OpCode};
+use crate::emulation::opcode::{OpCode, OPCODES_MAP};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
@@ -1862,9 +1861,10 @@ pub fn adc(cpu: &mut Cpu) {
 
 #[inline(always)]
 fn rol(cpu: &mut Cpu) {
-    if discriminant(&cpu.current_opcode.unwrap().op_type)
-        != discriminant(&OpType::AccumulatorOrImplied(MicroOpCallback::None))
-    {
+    if !matches!(
+        &cpu.current_opcode.unwrap().op_type,
+        OpType::AccumulatorOrImplied(..)
+    ) {
         let target_value = cpu.temp;
         let res = cpu.rotate_left(target_value);
         cpu.temp = res;
@@ -1876,9 +1876,10 @@ fn rol(cpu: &mut Cpu) {
 
 #[inline(always)]
 fn ror(cpu: &mut Cpu) {
-    if discriminant(&cpu.current_opcode.unwrap().op_type)
-        != discriminant(&OpType::AccumulatorOrImplied(MicroOpCallback::None))
-    {
+    if !matches!(
+        &cpu.current_opcode.unwrap().op_type,
+        OpType::AccumulatorOrImplied(..)
+    ) {
         let target_value = cpu.temp;
         let res = cpu.rotate_right(target_value);
         cpu.temp = res;
@@ -1890,9 +1891,10 @@ fn ror(cpu: &mut Cpu) {
 
 #[inline(always)]
 fn asl(cpu: &mut Cpu) {
-    if discriminant(&cpu.current_opcode.unwrap().op_type)
-        != discriminant(&OpType::AccumulatorOrImplied(MicroOpCallback::None))
-    {
+    if !matches!(
+        &cpu.current_opcode.unwrap().op_type,
+        OpType::AccumulatorOrImplied(..)
+    ) {
         let target_value = cpu.temp;
         let res = cpu.shift_left(target_value);
         cpu.temp = res;
@@ -1904,9 +1906,10 @@ fn asl(cpu: &mut Cpu) {
 
 #[inline(always)]
 fn lsr(cpu: &mut Cpu) {
-    if discriminant(&cpu.current_opcode.unwrap().op_type)
-        != discriminant(&OpType::AccumulatorOrImplied(MicroOpCallback::None))
-    {
+    if !matches!(
+        &cpu.current_opcode.unwrap().op_type,
+        OpType::AccumulatorOrImplied(..)
+    ) {
         let target_value = cpu.temp;
         let res = cpu.shift_right(target_value);
         cpu.temp = res
