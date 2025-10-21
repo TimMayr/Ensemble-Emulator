@@ -4,8 +4,8 @@ mod cpu_reset;
 mod nestest;
 #[cfg(test)]
 mod oam_read;
-// #[cfg(test)]
-// mod oam_stress;
+#[cfg(test)]
+mod oam_stress;
 #[cfg(test)]
 mod ppu_open_bus;
 #[cfg(test)]
