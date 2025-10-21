@@ -1,11 +1,11 @@
 use std::cell::Ref;
 
-use sdl2::EventPump;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::{Color, PixelFormatEnum};
 use sdl2::render::{ScaleMode, TextureCreator, UpdateTextureError, WindowCanvas};
 use sdl2::video::WindowContext;
+use sdl2::EventPump;
 
 use crate::emulation::emu::{InputEvent, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::frontend::Frontend;
@@ -34,7 +34,6 @@ impl Default for SdlFrontend {
         // Create canvas
         let mut canvas = window
             .into_canvas()
-            .present_vsync()
             .build()
             .expect("Error initializing canvas");
         canvas.set_draw_color(Color::RGB(255, 255, 255));

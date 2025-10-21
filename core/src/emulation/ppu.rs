@@ -77,7 +77,6 @@ pub struct Ppu {
     pub memory: MemoryMap,
     pub palette_ram: MemoryMap,
     pub oam: Ram,
-    pub secondary_oam: Ram,
     pub write_latch: Cell<bool>,
     pub t_register: u16,
     pub fine_x_scroll: u8,
@@ -137,7 +136,6 @@ impl Ppu {
             memory: Self::get_default_memory_map(),
             palette_ram: Self::get_palette_memory_map(),
             oam: Self::get_default_oam(),
-            secondary_oam: Self::get_default_secondary_oam(),
             write_latch: false.into(),
             t_register: 0,
             even_frame: false,
@@ -188,9 +186,7 @@ impl Ppu {
         mem
     }
 
-    fn get_default_oam() -> Ram { Ram::new(OAM_SIZE - 1) }
-
-    fn get_default_secondary_oam() -> Ram { Ram::new((OAM_SIZE / 8) - 1) }
+    fn get_default_oam() -> Ram { Ram::new(OAM_SIZE + OAM_SIZE / 8) }
 
     #[inline]
     pub fn step(&mut self) -> bool {
@@ -240,6 +236,7 @@ impl Ppu {
             }
 
             if (1..=64).contains(&self.dot) {
+                self.soam_disable = false;
                 self.is_secondary_oam_clear_active = true;
                 self.init_soam();
             } else {
@@ -250,8 +247,9 @@ impl Ppu {
                 self.sprite_eval();
             }
 
-            if self.dot == 257 && self.dot_counter > DOTS_PER_FRAME * 23000 {
-                println!("{:02X?}", self.secondary_oam)
+            if self.dot == 257 && self.dot_counter > DOTS_PER_FRAME * 2300 {
+                println!("{}x{} @ {}", self.dot, self.scanline, self.dot_counter);
+                self.print_oam();
             }
 
             if (257..=320).contains(&self.dot) {
@@ -464,6 +462,10 @@ impl Ppu {
     pub fn is_sprite_in_range(&self) -> bool {
         let (diff, o) = (self.scanline as u8).overflowing_sub(self.current_sprite_y);
 
+        if self.current_sprite_y == 0 {
+            return false;
+        }
+
         if o || diff > self.get_sprite_height() {
             false
         } else {
@@ -478,51 +480,16 @@ impl Ppu {
                 self.oam_addr_register = self.oam_index;
                 self.oam_fetch = self.get_oam_at_addr();
 
-                if self.soam_write_counter >= 4 {
+                if self.soam_write_counter == 0 {
                     self.current_sprite_y = self.oam_fetch;
                 }
 
-                if self.is_sprite_in_range() {
+                let is_in_range = self.is_sprite_in_range();
+
+                if is_in_range {
                     self.oam_increment = 1;
-                    self.soam_increment = 1;
-
-                    if self.dot_counter > DOTS_PER_FRAME * 2300 {
-                        println!("In Sprite copy loop");
-                        println!("{:02X?}", self.secondary_oam);
-                        println!("{:02X?}", self.oam);
-                    }
-
-                    if self.soam_write_counter == 4 {
-                        self.soam_write_counter = 1;
-                    } else {
-                        self.soam_write_counter += 1;
-                    }
-
-                    if self.scanline == PRE_RENDER_SCANLINE {
-                        self.soam_write_counter = 4;
-                    }
                 } else {
                     self.oam_increment = 4;
-                    self.soam_increment = 0;
-                    self.soam_write_counter = 4;
-                }
-
-                if self.scanline != PRE_RENDER_SCANLINE {
-                    self.oam_index += self.oam_increment;
-                }
-
-                self.soam_index += self.soam_increment;
-
-                if self.soam_index >= 32 {
-                    self.oam_increment = 5;
-                    self.soam_increment = 0;
-                    self.soam_index = 0;
-                    self.soam_disable = true;
-                }
-
-                if self.oam_index >= 64 {
-                    self.soam_disable = true;
-                    self.oam_index = 0;
                 }
             }
             false => {
@@ -533,11 +500,64 @@ impl Ppu {
                 };
 
                 self.secondary_oam_write(self.soam_index, write);
+
+                if self.is_sprite_in_range() {
+                    self.soam_index += 1;
+
+                    if self.soam_write_counter == 4 {
+                        self.soam_write_counter = 0;
+                    } else {
+                        self.soam_write_counter += 1;
+                    }
+
+                    if self.scanline == PRE_RENDER_SCANLINE {
+                        self.soam_write_counter = 0;
+                    }
+                } else {
+                    self.soam_write_counter = 0;
+                }
+
+                if self.soam_index >= 32 {
+                    self.oam_increment = 5;
+                    self.soam_disable = true;
+                }
+
+                if self.scanline != PRE_RENDER_SCANLINE {
+                    let (i, o) = self.oam_index.overflowing_add(self.oam_increment);
+                    self.oam_index = i;
+
+                    if o {
+                        self.soam_disable = true;
+                    }
+                }
             }
         }
         if self.dot_counter > DOTS_PER_FRAME * 23000 {
             println!();
         }
+    }
+
+    pub fn print_oam(&mut self) {
+        println!("================ OAM STATE ========================");
+        println!("Row | Y |T |A |X |Y |T |A |X  |          | OAM2[8]");
+        println!("----+------------------------------------+---------");
+
+        for row in 0..32 {
+            let base = row * 9;
+            let row_bytes = (0..8)
+                .map(|i| self.oam.read((base + i) as u16, 0))
+                .collect::<Vec<_>>();
+            let oam2_byte = self.oam.read((base + 8) as u16, 0);
+
+            // Print row
+            print!("{:02X}  | ", row);
+            for b in &row_bytes {
+                print!("{:02X} ", b);
+            }
+            println!("| {:02X}", oam2_byte);
+        }
+
+        println!("==========================================");
     }
 
     #[inline]
@@ -900,7 +920,9 @@ impl Ppu {
 
     #[inline(always)]
     pub fn oam_read(&mut self, addr: u8) -> u8 {
-        let mut res = self.oam.read(addr as u16, 0);
+        let row = addr >> 3;
+        let byte = addr & 0x7;
+        let mut res = self.oam.read((row as u16 * 9) + byte as u16, 0);
 
         if self.is_secondary_oam_clear_active {
             res = 0xFF;
@@ -910,17 +932,28 @@ impl Ppu {
     }
 
     #[inline(always)]
-    pub fn oam_write(&mut self, addr: u8, data: u8) { self.oam.write(addr as u16, data) }
+    pub fn oam_write(&mut self, addr: u8, data: u8) {
+        let row = addr >> 3;
+        let byte = addr & 0x7;
+        self.oam.write((row as u16 * 9) + byte as u16, data)
+    }
 
     #[inline(always)]
-    pub fn secondary_oam_read(&mut self, addr: u8) -> u8 { self.secondary_oam.read(addr as u16, 0) }
+    pub fn secondary_oam_read(&mut self, addr: u8) -> u8 {
+        let row = addr & 0x1F;
+        let byte = 8u8;
+        self.oam.read((row as u16 * 9) + byte as u16, 0)
+    }
 
     #[inline(always)]
     pub fn secondary_oam_write(&mut self, addr: u8, data: u8) {
+        let row = addr & 0x1F;
+        let byte = 8u8;
+
         if !self.soam_disable {
-            self.secondary_oam.write(addr as u16, data)
+            self.oam.write((row as u16 * 9) + byte as u16, data);
         } else {
-            self.secondary_oam.read(addr as u16, 0);
+            self.oam.read((row as u16 * 9) + byte as u16, 0);
         }
     }
 
@@ -1147,7 +1180,6 @@ impl Ppu {
             current_palette: 0,
             shift_in_attr_lo: false,
             shift_in_attr_hi: false,
-            secondary_oam: Self::get_default_secondary_oam(),
             is_secondary_oam_clear_active: false,
             oam_index: 0,
             soam_index: 0,

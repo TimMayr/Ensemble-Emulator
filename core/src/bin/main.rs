@@ -29,7 +29,7 @@ fn main() {
     let mut frontend = Frontends::default();
 
     emu.load_rom(&String::from(
-        "./core/tests/nes-test-roms/ppu_vbl_nmi/rom_singles/02-vbl_set_time.nes",
+        "./core/tests/nes-test-roms/oam_stress/oam_stress.nes",
     ));
     emu.power();
 
@@ -54,7 +54,7 @@ fn main() {
     //     }
     // }
 
-    emu.run_until(&mut frontend, 100_119_365)
+    emu.run_until(&mut frontend, 700_119_365)
         .expect("panic message");
 
     println!("{:?}", start.elapsed());
@@ -68,7 +68,7 @@ fn main() {
             }
             print!("    ");
         }
-        print!("{:02X}, ", n);
+        print!("0x{:02X}, ", n);
     }
     println!();
 }
