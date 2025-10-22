@@ -2,9 +2,9 @@ use std::time::Instant;
 
 use nes_core::emulation::emu::{Console, Consoles};
 use nes_core::emulation::nes::Nes;
+use nes_core::frontend::Frontends;
 #[cfg(feature = "sdl2")]
 use nes_core::frontend::sdl_frontend::SdlFrontend;
-use nes_core::frontend::Frontends;
 
 #[cfg(feature = "sdl2")]
 fn main() {
