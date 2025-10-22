@@ -48,7 +48,7 @@ impl Default for SdlFrontend {
 
         // Create texture creator
         let texture_creator = canvas.texture_creator();
-        let texture = texture_creator
+        let mut texture = texture_creator
             .create_texture_streaming(
                 PixelFormatEnum::RGBA8888,
                 TOTAL_OUTPUT_WIDTH,
