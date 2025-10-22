@@ -5,15 +5,16 @@ use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp};
 use crate::emulation::emu::{Console, InputEvent, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
-use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::mem::Memory;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
 use crate::emulation::savestate::{CpuState, PpuState, SaveState};
 use crate::frontend::{Frontend, Frontends};
 use crate::trace::TraceLog;
+use crate::util;
 
 pub const CPU_CYCLES_PER_FRAME: u16 = 29780;
 pub const FRAME_DURATION: Duration = Duration::from_nanos(16_666_667);
@@ -282,6 +283,7 @@ impl Nes {
                 self.inc_current_palette();
             }
             InputEvent::Quit => {
+                util::write_to_file("log/log.log", self.ppu.borrow().log.as_bytes().to_vec());
                 panic!()
             }
         }

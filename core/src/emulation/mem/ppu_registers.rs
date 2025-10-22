@@ -31,7 +31,7 @@ impl MemoryDevice for PpuRegisters {
                 bus.read()
             }
             0x4 => {
-                let ppu = self.ppu.borrow();
+                let mut ppu = self.ppu.borrow_mut();
                 let val = ppu.get_oam_at_addr();
                 let mut bus = ppu.open_bus.get();
                 bus.set_masked(val, 0xFF);
@@ -106,7 +106,7 @@ impl MemoryDevice for PpuRegisters {
                 ppu.status_register.get()
             }
             0x4 => {
-                let ppu = self.ppu.borrow();
+                let mut ppu = self.ppu.borrow_mut();
                 ppu.get_oam_at_addr()
             }
             0x7 => {

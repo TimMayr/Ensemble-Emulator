@@ -112,6 +112,7 @@ pub struct Ppu {
     pub sprite_fifo: [SpriteFifo; 8],
     pub current_sprite_tile_id: u8,
     pub oam_fetch: u8,
+    pub log: String,
 }
 
 impl Default for Ppu {
@@ -167,6 +168,7 @@ impl Ppu {
             sprite_fifo: [SpriteFifo::default(); 8],
             current_sprite_tile_id: 0,
             oam_fetch: 0,
+            log: "".to_string(),
         }
     }
 
@@ -247,9 +249,10 @@ impl Ppu {
                 self.sprite_eval();
             }
 
-            if self.dot == 257 && self.dot_counter > DOTS_PER_FRAME * 2300 {
-                println!("{}x{} @ {}", self.dot, self.scanline, self.dot_counter);
-                self.print_oam();
+            if self.dot == 257 && self.dot_counter > 207856807 - DOTS_PER_FRAME {
+                self.log +=
+                    format!("{}x{} @ {}\n", self.dot, self.scanline, self.dot_counter).as_str();
+                self.print_oam()
             }
 
             if (257..=320).contains(&self.dot) {
@@ -507,6 +510,18 @@ impl Ppu {
                     if self.soam_write_counter == 4 {
                         self.soam_write_counter = 0;
                     } else {
+                        if self.dot_counter > 207856807 - DOTS_PER_FRAME {
+                            self.log += format!(
+                                "Wrote Byte {:02X} ({:02X}) of sprite to soam @ {}; {}x{}\n",
+                                self.soam_write_counter,
+                                write,
+                                self.soam_index - 1,
+                                self.dot,
+                                self.scanline
+                            )
+                            .as_str();
+                        }
+
                         self.soam_write_counter += 1;
                     }
 
@@ -526,21 +541,26 @@ impl Ppu {
                     let (i, o) = self.oam_index.overflowing_add(self.oam_increment);
                     self.oam_index = i;
 
+                    // if self.dot_counter > 207856807 - DOTS_PER_FRAME {
+                    //     println!(
+                    //         "Incremented oam index to ${:02X}; {}x{}",
+                    //         self.oam_index, self.dot, self.scanline
+                    //     );
+                    //     self.print_oam();
+                    // }
+
                     if o {
                         self.soam_disable = true;
                     }
                 }
             }
         }
-        if self.dot_counter > DOTS_PER_FRAME * 23000 {
-            println!();
-        }
     }
 
     pub fn print_oam(&mut self) {
-        println!("================ OAM STATE ========================");
-        println!("Row | Y |T |A |X |Y |T |A |X  |          | OAM2[8]");
-        println!("----+------------------------------------+---------");
+        self.log += "================ OAM STATE ========================\n";
+        self.log += "Row | Y |T |A |X |Y |T |A |X  |          | OAM2[8]\n";
+        self.log += "----+------------------------------------+---------\n";
 
         for row in 0..32 {
             let base = row * 9;
@@ -550,14 +570,14 @@ impl Ppu {
             let oam2_byte = self.oam.read((base + 8) as u16, 0);
 
             // Print row
-            print!("{:02X}  | ", row);
+            self.log += format!("{:02X}  | ", row).as_str();
             for b in &row_bytes {
-                print!("{:02X} ", b);
+                self.log += format!("{:02X} ", b).as_str();
             }
-            println!("| {:02X}", oam2_byte);
+            self.log += format!("| {:02X}\n", oam2_byte).as_str();
         }
 
-        println!("==========================================");
+        self.log += "==========================================\n";
     }
 
     #[inline]
@@ -758,11 +778,11 @@ impl Ppu {
     pub fn set_oam_addr_register(&mut self, value: u8) { self.oam_addr_register = value }
 
     #[inline]
-    pub fn get_oam_at_addr(&self) -> u8 {
+    pub fn get_oam_at_addr(&mut self) -> u8 {
         if self.is_secondary_oam_clear_active {
             0xFF
         } else {
-            self.oam.read(self.oam_addr_register as u16, 0)
+            self.oam_read(self.oam_addr_register)
         }
     }
 
@@ -923,6 +943,14 @@ impl Ppu {
         let row = addr >> 3;
         let byte = addr & 0x7;
         let mut res = self.oam.read((row as u16 * 9) + byte as u16, 0);
+
+        if self.dot_counter > 207856807 - DOTS_PER_FRAME {
+            self.log += format!(
+                "Reading oam at {:02X}x{} ({:02X}); {}x{}\n",
+                row, byte, res, self.dot, self.scanline
+            )
+            .as_str();
+        }
 
         if self.is_secondary_oam_clear_active {
             res = 0xFF;
@@ -1191,6 +1219,7 @@ impl Ppu {
             current_sprite_y: 0,
             sprite_fifo: [SpriteFifo::default(); 8],
             oam_fetch: 0,
+            log: "".to_string(),
         };
 
         ppu.load_rom(rom);
