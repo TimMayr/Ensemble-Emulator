@@ -1,4 +1,6 @@
-use bincode::{config, Decode, Encode};
+use std::collections::VecDeque;
+
+use bincode::{Decode, Encode, config};
 use serde::{Deserialize, Serialize};
 
 use crate::emulation::cpu::{Cpu, MicroOp};
@@ -18,7 +20,7 @@ pub struct CpuState {
     pub lo: u8,
     pub hi: u8,
     pub current_op: MicroOp,
-    pub op_queue: Vec<MicroOp>,
+    pub op_queue: VecDeque<MicroOp>,
     pub current_opcode: Option<u8>,
     pub temp: u8,
     pub ane_constant: u8,
