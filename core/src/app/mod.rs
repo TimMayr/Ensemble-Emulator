@@ -14,8 +14,16 @@ use crate::app::imgui_frontend::ImguiFrontend;
 use crate::emulation::emu::{Console, Consoles, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::emulation::nes::{EmuExecutionFinishedType, Nes};
 
+#[cfg(feature = "frontend")]
 pub struct App<'a> {
     frontend: Frontends<'a>,
+    pub emulator: Arc<Mutex<Consoles>>,
+    pub state: Arc<Mutex<AppState>>,
+}
+
+#[cfg(not(feature = "frontend"))]
+pub struct App {
+    frontend: Frontends,
     pub emulator: Arc<Mutex<Consoles>>,
     pub state: Arc<Mutex<AppState>>,
 }
@@ -68,7 +76,26 @@ impl Default for App<'_> {
         }
     }
 }
+#[cfg(not(feature = "frontend"))]
+impl App {
+    pub fn new(mut frontend: Frontends, mut emulator: Consoles) -> Self {
+        let (app_sender, emu_receiver) = unbounded::<AppToEmuMessages>();
+        let (emu_sender, app_receiver) = unbounded::<EmuToAppMessages>();
 
+        emulator.set_message_sender(emu_sender);
+        emulator.set_message_receiver(emu_receiver);
+        frontend.set_message_sender(app_sender);
+        frontend.set_message_receiver(app_receiver);
+
+        Self {
+            frontend,
+            emulator: Arc::new(Mutex::new(emulator)),
+            state: Arc::new(Mutex::new(AppState::default())),
+        }
+    }
+}
+
+#[cfg(feature = "frontend")]
 impl<'a> App<'a> {
     pub fn new(mut frontend: Frontends<'a>, mut emulator: Consoles) -> Self {
         let (app_sender, emu_receiver) = unbounded::<AppToEmuMessages>();
@@ -87,6 +114,54 @@ impl<'a> App<'a> {
     }
 }
 
+#[cfg(not(feature = "frontend"))]
+impl App {
+    pub fn run(&mut self) {
+        let emu_state = self.state.clone();
+        let emu = self.emulator.clone();
+        emu.lock().unwrap().power();
+        let t = std::thread::spawn(move || {
+            loop {
+                let mut emu = emu.lock().unwrap();
+                let step_result = emu.step();
+
+                match step_result {
+                    Ok(t) => match t {
+                        EmuExecutionFinishedType::Running(true) => {
+                            let mut shared = emu_state.lock().unwrap();
+                            emu.with_pixel_buffer(|pixels| {
+                                shared.emulator_state.pixel_buffer.copy_from_slice(pixels)
+                            });
+                            shared.emulator_state.frame_ready = true;
+                            shared.emulator_state.last_frame_time = Instant::now()
+                        }
+                        EmuExecutionFinishedType::ReachedLastCycle
+                        | EmuExecutionFinishedType::Quit
+                        | EmuExecutionFinishedType::CpuHlt => {
+                            emu.flush_trace_log();
+                            println!("Emu Thread Quit");
+                            return;
+                        }
+                        EmuExecutionFinishedType::Running(_) | EmuExecutionFinishedType::Paused => {
+                            continue;
+                        }
+                    },
+                    Err(e) => {
+                        println!("Emulator thread error: {e}");
+                        break;
+                    }
+                }
+            }
+        });
+
+        self.frontend.run();
+        t.join().ok();
+
+        println!("App shutdown gracefully")
+    }
+}
+
+#[cfg(feature = "frontend")]
 impl App<'_> {
     pub fn run(&mut self) {
         let emu_state = self.state.clone();
