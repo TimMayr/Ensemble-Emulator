@@ -1,8 +1,8 @@
 use std::cell::Cell;
-use std::fmt::{Display, Formatter, Pointer};
+use std::fmt::{Display, Formatter};
 use std::ops::RangeInclusive;
 
-use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+use crate::emulation::emu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
@@ -83,7 +83,7 @@ pub struct Ppu {
     pub fine_x_scroll: u8,
     pub even_frame: bool,
     pub reset_signal: bool,
-    pub pixel_buffer: Box<[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
+    pub pixel_buffer: Box<[u32; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize]>,
     pub vbl_reset_counter: Cell<u8>,
     pub vbl_clear_scheduled: Cell<Option<u8>>,
     pub scanline: u16,
@@ -141,7 +141,7 @@ impl Ppu {
             t_register: 0,
             even_frame: false,
             reset_signal: false,
-            pixel_buffer: Box::from([0u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]),
+            pixel_buffer: Box::from([0u32; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize]),
             vbl_reset_counter: 0.into(),
             vbl_clear_scheduled: None.into(),
             scanline: 0,
@@ -209,8 +209,6 @@ impl Ppu {
 
         self.scanline = (frame_dot / (DOTS_PER_SCANLINE + 1) as u128) as u16;
         self.dot = (frame_dot % (DOTS_PER_SCANLINE + 1) as u128) as u16;
-
-        let mut res = false;
 
         for ref mut s in self.sprite_fifo {
             if s.is_counting && s.down_counter > 0 {
@@ -411,7 +409,7 @@ impl Ppu {
 
         self.dot_counter += 1;
 
-        frame_dot == DOTS_PER_FRAME - 1 || res
+        self.nmi_requested.get()
     }
 
     #[inline]
@@ -1009,7 +1007,7 @@ impl Ppu {
     pub fn reset(&mut self) { self.reset_signal = false; }
 
     #[inline]
-    pub fn get_pixel_buffer(&self) -> &[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize] {
+    pub fn get_pixel_buffer(&self) -> &[u32; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize] {
         &self.pixel_buffer
     }
 
@@ -1118,7 +1116,7 @@ impl Ppu {
                         let x = base_x as usize + col_in_tile;
                         let y = base_y as usize + row_in_tile;
 
-                        self.pixel_buffer[(y * TOTAL_OUTPUT_WIDTH as usize) + x] =
+                        self.pixel_buffer[(y * SCREEN_WIDTH as usize) + x] =
                             NES_PALETTE[color_idx as usize]
                     }
                 }
@@ -1153,7 +1151,7 @@ impl Ppu {
                     let mut p1 = self.mem_read(tile_addr + y as u16 + 8);
 
                     // Compute destination row start once
-                    let row_start = (tile_y + y) * TOTAL_OUTPUT_WIDTH as usize + tile_x;
+                    let row_start = (tile_y + y) * SCREEN_WIDTH as usize + tile_x;
 
                     // Fill pixels right-to-left using bit shifts (avoids (7 - x) indexing)
                     // This compiles to tight code and avoids variable shift amounts.

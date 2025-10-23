@@ -1,32 +1,28 @@
 use std::time::Instant;
 
-use nes_core::emulation::emu::{Console, Consoles};
-use nes_core::emulation::nes::Nes;
-use nes_core::frontend::Frontends;
-#[cfg(feature = "sdl2")]
-use nes_core::frontend::sdl_frontend::SdlFrontend;
+#[cfg(feature = "frontend")]
+use nes_core::app::App;
+use nes_core::emulation::emu::Console;
 
-#[cfg(feature = "sdl2")]
+#[cfg(feature = "frontend")]
 fn main() {
-    let mut emu = Consoles::Nes(Nes::default());
-    let mut frontend = Frontends::Sdl2(SdlFrontend::default());
+    let mut app = App::default();
 
-    emu.load_rom(&String::from("./core/tests/Pac-Man (USA) (Namco).nes"));
-    emu.power();
+    app.emulator
+        .lock()
+        .unwrap()
+        .load_rom(&"./core/tests/Pac-Man (USA) (Namco).nes".to_string());
 
     let start = Instant::now();
 
-    emu.run_until(&mut frontend, u128::MAX)
-        .expect("TODO: panic message");
+    app.run();
 
     println!("{:?}", start.elapsed());
 }
 
-#[cfg(not(feature = "sdl2"))]
+#[cfg(not(feature = "frontend"))]
 fn main() {
     let mut emu = Consoles::Nes(Nes::default());
-
-    let mut frontend = Frontends::default();
 
     emu.load_rom(&String::from(
         "./core/tests/nes-test-roms/oam_stress/oam_stress.nes",
@@ -38,12 +34,12 @@ fn main() {
     let Consoles::Nes(ref mut emu) = emu;
 
     // for i in 0..u128::MAX {
-    //     emu.step(&mut frontend, u128::MAX).expect("panic message");
+    //     emu.step(&mut app, u128::MAX).expect("panic message");
     //     let val = emu.get_memory_debug(Some(0x6000..=0x6000))[0][0];
     //
     //     if val == 0x81 {
     //         for _ in 0..8_000_000 {
-    //             emu.step(&mut frontend, u128::MAX).expect("panic message");
+    //             emu.step(&mut app, u128::MAX).expect("panic message");
     //         }
     //
     //         emu.reset();
@@ -54,8 +50,7 @@ fn main() {
     //     }
     // }
 
-    emu.run_until(&mut frontend, 700_119_365)
-        .expect("panic message");
+    emu.run_until(700_119_365).expect("panic message");
 
     println!("{:?}", start.elapsed());
 
@@ -68,7 +63,7 @@ fn main() {
             }
             print!("    ");
         }
-        print!("0x{:02X}, ", n);
+        print!("{:02X}, ", n);
     }
     println!();
 }

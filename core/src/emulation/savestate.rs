@@ -1,10 +1,10 @@
 use std::collections::VecDeque;
 
-use bincode::{Decode, Encode, config};
+use bincode::{config, Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 use crate::emulation::cpu::{Cpu, MicroOp};
-use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+use crate::emulation::emu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::RomFile;
 
@@ -99,7 +99,7 @@ impl From<&Ppu> for PpuState {
             fine_x_scroll: ppu.fine_x_scroll,
             even_frame: ppu.even_frame,
             reset_signal: ppu.reset_signal,
-            pixel_buffer: vec![0u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize],
+            pixel_buffer: vec![0u32; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize],
             dot: ppu.dot,
             scanline: ppu.scanline,
         }
