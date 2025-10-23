@@ -1,11 +1,12 @@
-use std::cell::Ref;
 use std::ops::RangeInclusive;
 
-use crate::emulation::nes::{ExecutionFinishedType, Nes};
-use crate::frontend::Frontends;
+use crossbeam_channel::{Receiver, Sender};
 
-pub const TOTAL_OUTPUT_WIDTH: u32 = 256;
-pub const TOTAL_OUTPUT_HEIGHT: u32 = 240;
+use crate::app::{AppToEmuMessages, EmuToAppMessages};
+use crate::emulation::nes::{EmuExecutionFinishedType, Nes};
+
+pub const SCREEN_WIDTH: u32 = 256;
+pub const SCREEN_HEIGHT: u32 = 240;
 
 pub enum Consoles {
     Nes(Nes),
@@ -13,11 +14,12 @@ pub enum Consoles {
 
 impl Console for Consoles {
     #[inline(always)]
-    fn get_pixel_buffer(
+    fn with_pixel_buffer<R>(
         &self,
-    ) -> Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]> {
+        f: impl FnOnce(&[u32; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize]) -> R,
+    ) -> R {
         match self {
-            Consoles::Nes(nes) => nes.get_pixel_buffer(),
+            Consoles::Nes(nes) => nes.with_pixel_buffer(f),
         }
     }
 
@@ -43,20 +45,16 @@ impl Console for Consoles {
     }
 
     #[inline(always)]
-    fn run(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
+    fn run(&mut self) -> Result<EmuExecutionFinishedType, String> {
         match self {
-            Consoles::Nes(nes) => nes.run(frontend),
+            Consoles::Nes(nes) => nes.run(),
         }
     }
 
     #[inline(always)]
-    fn run_until(
-        &mut self,
-        frontend: &mut Frontends,
-        last_cycle: u128,
-    ) -> Result<ExecutionFinishedType, String> {
+    fn run_until(&mut self, last_cycle: u128) -> Result<EmuExecutionFinishedType, String> {
         match self {
-            Consoles::Nes(nes) => nes.run_until(frontend, last_cycle),
+            Consoles::Nes(nes) => nes.run_until(last_cycle),
         }
     }
 
@@ -82,45 +80,63 @@ impl Console for Consoles {
     }
 
     #[inline(always)]
-    fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
+    fn step(&mut self) -> Result<EmuExecutionFinishedType, String> {
         match self {
-            Consoles::Nes(nes) => nes.step(frontend, u128::MAX),
+            Consoles::Nes(nes) => nes.step(u128::MAX),
         }
     }
 
     #[inline(always)]
-    fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
+    fn step_frame(&mut self) -> Result<EmuExecutionFinishedType, String> {
         match self {
-            Consoles::Nes(nes) => nes.step_frame(frontend),
+            Consoles::Nes(nes) => nes.step_frame(),
+        }
+    }
+
+    fn set_message_receiver(&mut self, receiver: Receiver<AppToEmuMessages>) {
+        match self {
+            Consoles::Nes(nes) => nes.set_message_receiver(receiver),
+        }
+    }
+
+    fn set_message_sender(&mut self, sender: Sender<EmuToAppMessages>) {
+        match self {
+            Consoles::Nes(nes) => nes.set_message_sender(sender),
         }
     }
 }
 
 pub trait Console {
-    fn get_pixel_buffer(
+    fn with_pixel_buffer<R>(
         &self,
-    ) -> Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>;
+        f: impl FnOnce(&[u32; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize]) -> R,
+    ) -> R;
     #[allow(clippy::ptr_arg)]
     fn load_rom(&mut self, path: &String);
     fn reset(&mut self);
     fn power(&mut self);
 
-    fn run(&mut self, option: &mut Frontends) -> Result<ExecutionFinishedType, String>;
-    fn run_until(
-        &mut self,
-        frontend: &mut Frontends,
-        last_cycle: u128,
-    ) -> Result<ExecutionFinishedType, String>;
+    fn run(&mut self) -> Result<EmuExecutionFinishedType, String>;
+    fn run_until(&mut self, last_cycle: u128) -> Result<EmuExecutionFinishedType, String>;
 
     fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>>;
     fn set_trace_log_path(&mut self, path: Option<String>);
     fn flush_trace_log(&mut self);
 
-    fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String>;
-    fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String>;
+    fn step(&mut self) -> Result<EmuExecutionFinishedType, String>;
+    fn step_frame(&mut self) -> Result<EmuExecutionFinishedType, String>;
+
+    fn set_message_receiver(&mut self, receiver: Receiver<AppToEmuMessages>);
+    fn set_message_sender(&mut self, sender: Sender<EmuToAppMessages>);
 }
 
 pub enum InputEvent {
     IncPalette,
     Quit,
+    Pause,
+    Resume,
+    TogglePause,
+    Power,
+    Reset,
+    LoadRom(String),
 }

@@ -1,6 +1,5 @@
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
-use crate::frontend::Frontends;
 
 #[test]
 fn test_10_even_odd_timing() {
@@ -9,8 +8,7 @@ fn test_10_even_odd_timing() {
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/10-even_odd_timing.nes",
     ));
     emu.power();
-    emu.run_until(&mut Frontends::default(), 75341973)
-        .expect("Error while running test");
+    emu.run_until(75341973).expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x602D));
     let cpu_mem = whole_mem[0].as_slice();

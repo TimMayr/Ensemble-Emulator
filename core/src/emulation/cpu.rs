@@ -1,7 +1,7 @@
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::collections::VecDeque;
 use std::ops::RangeInclusive;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
@@ -10,10 +10,8 @@ use crate::emulation::mem::apu_registers::ApuRegisters;
 use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::{Memory, Ram};
-use crate::emulation::nes::ExecutionFinishedType;
-use crate::emulation::nes::ExecutionFinishedType::CycleCompleted;
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OPCODES_MAP, OpCode};
+use crate::emulation::opcode::{OpCode, OPCODES_MAP};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
@@ -49,7 +47,7 @@ pub struct Cpu {
     pub y_register: u8,
     pub processor_status: u8,
     pub memory: MemoryMap,
-    pub ppu: Option<Rc<RefCell<Ppu>>>,
+    pub ppu: Option<Arc<Mutex<Ppu>>>,
     pub irq_provider: Cell<bool>,
     pub lo: u8,
     pub hi: u8,
@@ -1044,9 +1042,9 @@ impl Cpu {
     }
 
     #[inline]
-    pub fn step(&mut self) -> Result<ExecutionFinishedType, String> {
+    pub fn step(&mut self) -> Result<(), String> {
         if self.is_halted {
-            return Ok(ExecutionFinishedType::ReachedHlt);
+            return Ok(());
         }
 
         self.dma_read = !self.dma_read;
@@ -1069,7 +1067,7 @@ impl Cpu {
         }
 
         if let Some(ppu) = &self.ppu {
-            let ppu = ppu.borrow();
+            let ppu = ppu.lock().unwrap();
             ppu.tick_open_bus(12);
             let curr_nmi = ppu.poll_nmi();
 
@@ -1095,19 +1093,19 @@ impl Cpu {
                 self.trigger_nmi();
                 self.nmi_pending = false;
                 self.irq_pending = false;
-                return Ok(CycleCompleted);
+                return Ok(());
             } else if self.irq_pending && !self.get_interrupt_disable_flag() {
                 self.trigger_irq();
                 self.irq_provider.set(false);
                 self.nmi_pending = false;
                 self.irq_pending = false;
-                return Ok(CycleCompleted);
+                return Ok(());
             }
 
             self.current_op = MicroOp::FetchOpcode(MicroOpCallback::None);
         }
 
-        Ok(CycleCompleted)
+        Ok(())
     }
 
     #[inline(always)]
@@ -1786,7 +1784,7 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub fn from(state: &CpuState, ppu: Rc<RefCell<Ppu>>, rom: &RomFile) -> Self {
+    pub fn from(state: &CpuState, ppu: Arc<Mutex<Ppu>>, rom: &RomFile) -> Self {
         OPCODES_MAP.get_or_init(opcode::init);
         let mut opcode = None;
 

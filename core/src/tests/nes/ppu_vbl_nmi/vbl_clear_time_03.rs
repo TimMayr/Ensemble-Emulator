@@ -1,6 +1,5 @@
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
-use crate::frontend::Frontends;
 
 #[test]
 fn test_03_vbl_clear_time() {
@@ -9,8 +8,7 @@ fn test_03_vbl_clear_time() {
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/03-vbl_clear_time.nes",
     ));
     emu.power();
-    emu.run_until(&mut Frontends::default(), 76_843_511)
-        .expect("Error while running test");
+    emu.run_until(76_843_511).expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x604C));
     let cpu_mem = whole_mem[0].as_slice();
