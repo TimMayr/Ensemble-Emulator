@@ -2,7 +2,8 @@ use std::time::Instant;
 
 #[cfg(feature = "frontend")]
 use nes_core::app::App;
-use nes_core::emulation::emu::Console;
+use nes_core::emulation::emu::{Console, Consoles};
+use nes_core::emulation::nes::Nes;
 
 #[cfg(feature = "frontend")]
 fn main() {
