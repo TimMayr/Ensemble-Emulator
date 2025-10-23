@@ -4,13 +4,13 @@ use crossbeam_channel::{Receiver, Sender};
 use crate::app::imgui_frontend::ImguiFrontend;
 use crate::app::{AppToEmuMessages, EmuToAppMessages};
 
-pub enum Frontends {
+pub enum Frontends<'a> {
     #[cfg(feature = "frontend")]
-    Imgui(ImguiFrontend),
+    Imgui(ImguiFrontend<'a>),
     None(Sender<AppToEmuMessages>),
 }
 
-impl Frontend for Frontends {
+impl Frontend for Frontends<'_> {
     fn run(&mut self) {
         match self {
             #[cfg(feature = "frontend")]
