@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::fmt::{Display, Formatter, Pointer};
 use std::ops::RangeInclusive;
 
 use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
@@ -253,10 +254,6 @@ impl Ppu {
                 self.sprite_fetch();
             }
 
-            if self.dot == 321 && self.dot_counter > 207856807 - DOTS_PER_FRAME {
-                self.log += format!("{:?}", self.sprite_fifo).as_str()
-            }
-
             if (321..=341).contains(&self.dot) {
                 if self.dot.is_multiple_of(2) {
                     self.secondary_oam_read(self.soam_index);
@@ -279,18 +276,60 @@ impl Ppu {
                     let mut sprite_pixel_pattern = 0u8;
                     let mut sprite_pixel_priority = 0;
 
-                    for ref mut s in self.sprite_fifo {
+                    for (i, s) in self.sprite_fifo.iter_mut().enumerate() {
                         if s.down_counter == 0 {
+                            if self.dot_counter > 207856807 - DOTS_PER_FRAME {
+                                self.log += format!(
+                                    "Rendering sprite {i} @ {}x{}\n",
+                                    self.dot, self.scanline
+                                )
+                                .as_str();
+                            }
+
                             sprite_pixel_priority = s.attribute & 0b0010_0000;
                             sprite_pixel_palette = s.attribute & 3;
 
                             let shift_out_lo = (s.shifter_pattern_lo & 0x80 != 0) as u8;
                             let shift_out_hi = (s.shifter_pattern_hi & 0x80 != 0) as u8;
 
+                            if self.dot_counter > 207856807 - DOTS_PER_FRAME {
+                                self.log += format!(
+                                    "Before shift lo: {:08b} @ {}x{}\n",
+                                    s.shifter_pattern_lo, self.dot, self.scanline
+                                )
+                                .as_str();
+                                self.log += format!(
+                                    "Before shift hi: {:08b} @ {}x{}\n",
+                                    s.shifter_pattern_hi, self.dot, self.scanline
+                                )
+                                .as_str();
+                            }
+
                             s.shifter_pattern_lo <<= 1;
                             s.shifter_pattern_hi <<= 1;
 
+                            if self.dot_counter > 207856807 - DOTS_PER_FRAME {
+                                self.log += format!(
+                                    "After shift lo: {:08b} @ {}x{}\n",
+                                    s.shifter_pattern_lo, self.dot, self.scanline
+                                )
+                                .as_str();
+                                self.log += format!(
+                                    "After shift hi: {:08b} @ {}x{}\n",
+                                    s.shifter_pattern_hi, self.dot, self.scanline
+                                )
+                                .as_str();
+                            }
+
                             sprite_pixel_pattern = (shift_out_hi << 1) | shift_out_lo;
+
+                            if self.dot_counter > 207856807 - DOTS_PER_FRAME {
+                                self.log += format!(
+                                    "Sprite Pixel: {sprite_pixel_pattern:08b} @ {}x{}\n",
+                                    self.dot, self.scanline
+                                )
+                                .as_str();
+                            }
                         }
                     }
 
@@ -384,69 +423,69 @@ impl Ppu {
             1 => {
                 self.sprite_fifo[(self.soam_index / 4) as usize].attribute =
                     self.secondary_oam_read(self.soam_index + 2);
+
                 self.sprite_fifo[(self.soam_index / 4) as usize].down_counter =
                     self.secondary_oam_read(self.soam_index + 3);
             }
             2 => {
-                if self.is_sprite_in_range() {
-                    self.current_sprite_tile_id = self.secondary_oam_read(self.soam_index);
-                    let table_base = if self.get_sprite_height() == 8 {
-                        if self.ctrl_register & 0x10 != 0 {
-                            0x1000
-                        } else {
-                            0x0000
-                        }
+                self.current_sprite_tile_id = self.secondary_oam_read(self.soam_index + 1);
+                let table_base = if self.get_sprite_height() == 8 {
+                    if self.ctrl_register & 0x8 != 0 {
+                        0x1000
                     } else {
-                        (self.current_sprite_tile_id as u16 & 1) << 15
-                    };
-
-                    let row_offset =
-                        if self.sprite_fifo[(self.soam_index / 4) as usize].attribute & 80 == 0 {
-                            (self
-                                .current_sprite_y
-                                .wrapping_sub((self.scanline as u8).wrapping_add(1)))
-                                % self.get_sprite_height()
-                        } else {
-                            (self
-                                .current_sprite_y
-                                .wrapping_sub((self.scanline as u8).wrapping_add(1))
-                                .wrapping_add(self.get_sprite_height()))
-                                % self.get_sprite_height()
-                        };
-
-                    self.address_bus = table_base
-                        + ((self.current_sprite_tile_id as u16) * 16)
-                        + row_offset as u16;
-
-                    let mut pattern = self.mem_read(self.address_bus);
-
-                    if self.sprite_fifo[(self.soam_index / 4) as usize].attribute & 0b0100_0000 != 0
-                    {
-                        pattern = pattern.reverse_bits();
+                        0x0000
                     }
-
-                    self.sprite_fifo[(self.soam_index / 4) as usize].shifter_pattern_lo = pattern;
                 } else {
+                    ((self.current_sprite_tile_id & 1) as u16) << 3
+                };
+
+                let row_offset =
+                        // if self.sprite_fifo[(self.soam_index / 4) as usize].attribute & 80 == 0 {
+                        self
+                            .current_sprite_y
+                            .wrapping_sub(self.scanline.wrapping_add(1) as u8)
+                % self.get_sprite_height()
+                        ;
+                // }
+                // else {
+                //     (self
+                //         .current_sprite_y
+                //         .wrapping_sub((self.scanline as u8).wrapping_add(1))
+                //         .wrapping_add(self.get_sprite_height()))
+                //         % self.get_sprite_height()
+                // };
+
+                self.address_bus =
+                    table_base + ((self.current_sprite_tile_id as u16) * 16) + row_offset as u16;
+
+                let mut pattern = self.mem_read(self.address_bus);
+
+                if self.sprite_fifo[(self.soam_index / 4) as usize].attribute & 0b0100_0000 != 0 {
+                    pattern = pattern.reverse_bits();
+                }
+
+                self.sprite_fifo[(self.soam_index / 4) as usize].shifter_pattern_lo = pattern;
+
+                if !self.is_sprite_in_range() {
                     self.sprite_fifo[(self.soam_index / 4) as usize].shifter_pattern_lo = 0;
                 }
             }
             3 => {
-                if self.is_sprite_in_range() {
-                    let mut pattern = self.mem_read(self.address_bus + 8);
+                let mut pattern = self.mem_read(self.address_bus + 8);
 
-                    if self.sprite_fifo[(self.soam_index / 4) as usize].attribute & 0b0100_0000 != 0
-                    {
-                        pattern = pattern.reverse_bits();
-                    }
+                if self.sprite_fifo[(self.soam_index / 4) as usize].attribute & 0b0100_0000 != 0 {
+                    pattern = pattern.reverse_bits();
+                }
 
-                    self.sprite_fifo[(self.soam_index / 4) as usize].shifter_pattern_hi = pattern;
-                } else {
+                self.sprite_fifo[(self.soam_index / 4) as usize].shifter_pattern_hi = pattern;
+
+                if !self.is_sprite_in_range() {
                     self.sprite_fifo[(self.soam_index / 4) as usize].shifter_pattern_hi = 0;
                 }
             }
             4..8 => {
                 self.sprite_fifo[(self.soam_index / 4) as usize].down_counter =
-                    self.secondary_oam_read(self.soam_index);
+                    self.secondary_oam_read(self.soam_index + 3);
                 if (self.dot - 1) % 8 == 7 {
                     self.soam_index += 4;
                 }
@@ -459,7 +498,7 @@ impl Ppu {
     pub fn is_sprite_in_range(&self) -> bool {
         let (diff, o) = (self.scanline as u8).overflowing_sub(self.current_sprite_y);
 
-        if o || diff > self.get_sprite_height() {
+        if o || diff >= self.get_sprite_height() {
             false
         } else {
             true
@@ -916,14 +955,6 @@ impl Ppu {
         let byte = addr & 0x7;
         let mut res = self.oam.read((row as u16 * 9) + byte as u16, 0);
 
-        if self.dot_counter > 207856807 - DOTS_PER_FRAME && !self.is_soam_clear_active {
-            self.log += format!(
-                "Reading oam at {:02X}x{} ({:02X}); {}x{}\n",
-                row, byte, res, self.dot, self.scanline
-            )
-            .as_str();
-        }
-
         if self.is_soam_clear_active {
             res = 0xFF;
         }
@@ -942,18 +973,6 @@ impl Ppu {
     pub fn secondary_oam_read(&mut self, addr: u8) -> u8 {
         let row = addr & 0x1F;
         let byte = 8u8;
-
-        if self.dot_counter > 207856807 - DOTS_PER_FRAME {
-            self.log += format!(
-                "Read Byte {:02X}x{} ({:02X}) from soam; {}x{}\n",
-                row,
-                byte,
-                self.oam.read((row as u16 * 9) + byte as u16, 0),
-                self.dot,
-                self.scanline
-            )
-            .as_str();
-        }
 
         self.oam.read((row as u16 * 9) + byte as u16, 0)
     }
@@ -1230,5 +1249,15 @@ impl Default for SpriteFifo {
             attribute: 0,
             is_counting: false,
         }
+    }
+}
+
+impl Display for SpriteFifo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut res = format!("Shifter Pattern Low:  {:08b}\n", self.shifter_pattern_lo);
+        res += format!("Shifter Pattern High: {:08b}\n", self.shifter_pattern_hi).as_str();
+        res += format!("Down Counter/X: {}\n", self.down_counter).as_str();
+        res += format!("Attribute: {:08b}\n", self.attribute).as_str();
+        f.write_str(res.as_str())
     }
 }
