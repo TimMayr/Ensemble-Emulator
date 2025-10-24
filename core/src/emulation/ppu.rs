@@ -11,14 +11,14 @@ use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::PpuState;
 
 const NES_PALETTE: [u32; 64] = [
-    0x545454FF, 0x001E74F, 0x081090FF, 0x300088FF, 0x440064FF, 0x5C0030FF, 0x540400FF, 0x3C1800FF,
-    0x202A00FF, 0x083A00FF, 0x004000F, 0x003C00FF, 0x00323CFF, 0x000000FF, 0x000000FF, 0x000000FF,
-    0x989698FF, 0x084CC4FF, 0x3032ECFF, 0x5C1EE4F, 0x8814B0FF, 0xA01464FF, 0x982220FF, 0x783C00FF,
-    0x545A00FF, 0x287200FF, 0x087C00FF, 0x007628FF, 0x006678F, 0x000000FF, 0x000000FF, 0x000000FF,
-    0xECEEECFF, 0x4C9AECFF, 0x787CECFF, 0xB062ECFF, 0xE454ECFF, 0xEC58B4F, 0xEC6A64FF, 0xD48820FF,
-    0xA0AA00FF, 0x74C400FF, 0x4CD020FF, 0x38CC6CFF, 0x38B4CCFF, 0x3C3C3CFF, 0x000000F, 0x000000FF,
-    0xECEEECFF, 0xA8CCECFF, 0xBCBCECFF, 0xD4B2ECFF, 0xECAEECFF, 0xECAED4FF, 0xECB4B0FF, 0xE4C490F,
-    0xCCD278FF, 0xB4DE78FF, 0xA8E290FF, 0x98E2B4FF, 0xA0D6E4FF, 0xA0A2A0FF, 0x000000FF, 0x000000FF,
+    0xFF545454, 0xFF741E00, 0xFF901008, 0xFF880030, 0xFF640044, 0xFF30005C, 0xFF000454, 0xFF00183C,
+    0xFF002A20, 0xFF003A08, 0xFF004000, 0xFF003C00, 0xFF3C3200, 0xFF000000, 0xFF000000, 0xFF000000,
+    0xFF989698, 0xFFC44C08, 0xFFEC3230, 0xFFE41E5C, 0xFFB01488, 0xFF6414A0, 0xFF202298, 0xFF003C78,
+    0xFF005A54, 0xFF007228, 0xFF007C08, 0xFF287600, 0xFF786600, 0xFF000000, 0xFF000000, 0xFF000000,
+    0xFFECEEEC, 0xFFEC9A4C, 0xFFEC7C78, 0xFFEC62B0, 0xFFEC54E4, 0xFFB458EC, 0xFF646AEC, 0xFF2088D4,
+    0xFF00AAA0, 0xFF00C474, 0xFF20D04C, 0xFF6CCC38, 0xFFCCB438, 0xFF3C3C3C, 0xFF000000, 0xFF000000,
+    0xFFECEEEC, 0xFFECCCA8, 0xFFECBCBC, 0xFFECB2D4, 0xFFECAEEC, 0xFFD4AEEC, 0xFFB0B4EC, 0xFF90C4E4,
+    0xFF78D2CC, 0xFF78DEB4, 0xFF90E2A8, 0xFFB4E298, 0xFFE4D6A0, 0xFFA0A2A0, 0xFF000000, 0xFF000000,
 ];
 
 pub const VBLANK_NMI_BIT: u8 = 0x80;
@@ -496,11 +496,7 @@ impl Ppu {
     pub fn is_sprite_in_range(&self) -> bool {
         let (diff, o) = (self.scanline as u8).overflowing_sub(self.current_sprite_y);
 
-        if o || diff >= self.get_sprite_height() {
-            false
-        } else {
-            true
-        }
+        !(o || diff >= self.get_sprite_height())
     }
 
     #[inline]
@@ -1230,25 +1226,13 @@ impl Ppu {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct SpriteFifo {
     pub shifter_pattern_lo: u8,
     pub shifter_pattern_hi: u8,
     pub down_counter: u8,
     pub attribute: u8,
     pub is_counting: bool,
-}
-
-impl Default for SpriteFifo {
-    fn default() -> Self {
-        Self {
-            shifter_pattern_lo: 0,
-            shifter_pattern_hi: 0,
-            down_counter: 0,
-            attribute: 0,
-            is_counting: false,
-        }
-    }
 }
 
 impl Display for SpriteFifo {

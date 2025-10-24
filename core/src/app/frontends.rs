@@ -6,7 +6,7 @@ use crate::app::{AppToEmuMessages, EmuToAppMessages};
 
 #[cfg(feature = "frontend")]
 pub enum Frontends {
-    Imgui(ImguiFrontend),
+    Imgui(Box<ImguiFrontend>),
     None(Sender<AppToEmuMessages>),
 }
 

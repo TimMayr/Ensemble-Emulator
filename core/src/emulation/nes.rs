@@ -7,9 +7,9 @@ use crossbeam_channel::{Receiver, Sender};
 use crate::app::{AppToEmuMessages, EmuToAppMessages};
 use crate::emulation::cpu::{Cpu, CpuExecutionResult, MicroOp};
 use crate::emulation::emu::{Console, SCREEN_HEIGHT, SCREEN_WIDTH};
-use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::mem::Memory;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
@@ -195,43 +195,36 @@ impl Nes {
     }
 
     pub fn handle_messages(&mut self) -> Result<(), EmuExecutionFinishedType> {
-        if let Some(rec) = &self.emu_receiver {
+        if let Some(rec) = &self.emu_receiver.clone() {
             for msg in rec.try_iter() {
-                return match msg {
+                match msg {
                     AppToEmuMessages::Pause => {
                         self.set_paused(true);
-                        Ok(())
                     }
                     AppToEmuMessages::Resume => {
                         self.set_paused(false);
-                        Ok(())
                     }
                     AppToEmuMessages::Reset => {
                         self.reset();
-                        Ok(())
                     }
                     AppToEmuMessages::Quit => {
                         util::write_to_file(
                             "log/log.log",
                             self.ppu.lock().unwrap().log.as_bytes().to_vec(),
                         );
-                        Err(EmuExecutionFinishedType::Quit)
+                        return Err(EmuExecutionFinishedType::Quit);
                     }
                     AppToEmuMessages::Power => {
                         self.power();
-                        Ok(())
                     }
                     AppToEmuMessages::IncPalette => {
                         self.inc_current_palette();
-                        Ok(())
                     }
                     AppToEmuMessages::TogglePause => {
                         self.set_paused(!self.is_paused);
-                        Ok(())
                     }
                     AppToEmuMessages::LoadRom(path) => {
                         self.load_rom(&path);
-                        Ok(())
                     }
                 };
             }
@@ -308,6 +301,10 @@ impl Nes {
             }
 
             if frame_ready {
+                if let Some(sender) = &self.emu_sender {
+                    sender.send(EmuToAppMessages::FrameReady).ok();
+                }
+
                 Ok(EmuExecutionFinishedType::Running(true))
             } else {
                 match cpu_res {
@@ -331,10 +328,11 @@ impl Nes {
         emu_sender: Sender<EmuToAppMessages>,
         emu_receiver: Receiver<AppToEmuMessages>,
     ) -> Nes {
-        let mut nes = Nes::default();
-        nes.emu_sender = Some(emu_sender);
-        nes.emu_receiver = Some(emu_receiver);
-        nes
+        Nes {
+            emu_sender: Some(emu_sender),
+            emu_receiver: Some(emu_receiver),
+            ..Nes::default()
+        }
     }
 
     pub fn set_paused(&mut self, val: bool) { self.is_paused = val; }
