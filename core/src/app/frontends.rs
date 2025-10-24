@@ -5,8 +5,8 @@ use crate::app::imgui_frontend::ImguiFrontend;
 use crate::app::{AppToEmuMessages, EmuToAppMessages};
 
 #[cfg(feature = "frontend")]
-pub enum Frontends<'a> {
-    Imgui(ImguiFrontend<'a>),
+pub enum Frontends {
+    Imgui(ImguiFrontend),
     None(Sender<AppToEmuMessages>),
 }
 
@@ -16,34 +16,23 @@ pub enum Frontends {
 }
 
 #[cfg(feature = "frontend")]
-impl Frontend for Frontends<'_> {
+impl Frontend for Frontends {
     fn run(&mut self) {
         match self {
-            #[cfg(feature = "frontend")]
             Frontends::Imgui(frontend) => frontend.run(),
-            Frontends::None(s) => s.send(AppToEmuMessages::Quit).unwrap(),
+            Frontends::None(sender) => sender.send(AppToEmuMessages::Quit).unwrap(),
         }
     }
 
-    fn set_message_sender(
-        &mut self,
-        #[cfg(not(feature = "frontend"))] _: Sender<AppToEmuMessages>,
-        #[cfg(feature = "frontend")] sender: Sender<AppToEmuMessages>,
-    ) {
+    fn set_message_sender(&mut self, sender: Sender<AppToEmuMessages>) {
         match self {
-            #[cfg(feature = "frontend")]
             Frontends::Imgui(frontend) => frontend.set_message_sender(sender),
             Frontends::None(_) => {}
         }
     }
 
-    fn set_message_receiver(
-        &mut self,
-        #[cfg(not(feature = "frontend"))] _: Receiver<EmuToAppMessages>,
-        #[cfg(feature = "frontend")] receiver: Receiver<EmuToAppMessages>,
-    ) {
+    fn set_message_receiver(&mut self, receiver: Receiver<EmuToAppMessages>) {
         match self {
-            #[cfg(feature = "frontend")]
             Frontends::Imgui(frontend) => frontend.set_message_receiver(receiver),
             Frontends::None(_) => {}
         }
@@ -54,35 +43,13 @@ impl Frontend for Frontends<'_> {
 impl Frontend for Frontends {
     fn run(&mut self) {
         match self {
-            #[cfg(feature = "frontend")]
-            Frontends::Imgui(frontend) => frontend.run(),
-            Frontends::None(s) => s.send(AppToEmuMessages::Quit).unwrap(),
+            Frontends::None(sender) => sender.send(AppToEmuMessages::Quit).unwrap(),
         }
     }
 
-    fn set_message_sender(
-        &mut self,
-        #[cfg(not(feature = "frontend"))] _: Sender<AppToEmuMessages>,
-        #[cfg(feature = "frontend")] sender: Sender<AppToEmuMessages>,
-    ) {
-        match self {
-            #[cfg(feature = "frontend")]
-            Frontends::Imgui(frontend) => frontend.set_message_sender(sender),
-            Frontends::None(_) => {}
-        }
-    }
+    fn set_message_sender(&mut self, _sender: Sender<AppToEmuMessages>) {}
 
-    fn set_message_receiver(
-        &mut self,
-        #[cfg(not(feature = "frontend"))] _: Receiver<EmuToAppMessages>,
-        #[cfg(feature = "frontend")] receiver: Receiver<EmuToAppMessages>,
-    ) {
-        match self {
-            #[cfg(feature = "frontend")]
-            Frontends::Imgui(frontend) => frontend.set_message_receiver(receiver),
-            Frontends::None(_) => {}
-        }
-    }
+    fn set_message_receiver(&mut self, _receiver: Receiver<EmuToAppMessages>) {}
 }
 
 pub trait Frontend {
