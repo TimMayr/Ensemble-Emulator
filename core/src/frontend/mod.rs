@@ -28,7 +28,25 @@ impl Frontend for Frontends {
     ) -> Result<(), String> {
         match self {
             #[cfg(feature = "sdl2")]
-            Frontends::Sdl2(frontend) => frontend.show_frame(pixel_buffer),
+            Frontends::Sdl2(frontend) => match frontend.show_frame(pixel_buffer) {
+                Ok(()) => Ok(()),
+                Err(err) => {
+                    let original_error = err;
+
+                    log::warn!(
+                        "SDL2 frontend failed while presenting a frame ({}). Attempting to reinitialize the frontend.",
+                        original_error
+                    );
+
+                    *frontend = SdlFrontend::default();
+
+                    frontend.show_frame(pixel_buffer).map_err(|retry_err| {
+                        format!(
+                            "SDL2 frontend failed to recover after reinitialization. First error: {original_error}. Second error: {retry_err}."
+                        )
+                    })
+                }
+            },
             Frontends::Godot(frontend) => frontend.show_frame(pixel_buffer),
             Frontends::None() => Ok(()),
         }
@@ -38,7 +56,25 @@ impl Frontend for Frontends {
     fn poll_input_events(&mut self) -> Result<Vec<InputEvent>, String> {
         match self {
             #[cfg(feature = "sdl2")]
-            Frontends::Sdl2(frontend) => frontend.poll_input_events(),
+            Frontends::Sdl2(frontend) => match frontend.poll_input_events() {
+                Ok(events) => Ok(events),
+                Err(err) => {
+                    let original_error = err;
+
+                    log::warn!(
+                        "SDL2 frontend failed while polling input ({}). Attempting to reinitialize the frontend.",
+                        original_error
+                    );
+
+                    *frontend = SdlFrontend::default();
+
+                    frontend.poll_input_events().map_err(|retry_err| {
+                        format!(
+                            "SDL2 frontend failed to recover after reinitialization. First error: {original_error}. Second error: {retry_err}."
+                        )
+                    })
+                }
+            },
             Frontends::Godot(frontend) => frontend.poll_input_events(),
             Frontends::None() => Ok(Vec::new()),
         }
