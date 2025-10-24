@@ -193,6 +193,8 @@ pub struct EmulatorSharedState {
     pub pixel_buffer: Box<[u32; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize]>,
     pub frame_ready: bool,
     pub last_frame_time: Instant,
+    pub nametable_ready: bool,
+    pub pattern_table_ready: bool,
 }
 
 impl Default for EmulatorSharedState {
@@ -201,6 +203,8 @@ impl Default for EmulatorSharedState {
             pixel_buffer: Box::new([0; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize]),
             frame_ready: false,
             last_frame_time: Instant::now(),
+            nametable_ready: false,
+            pattern_table_ready: false,
         }
     }
 }
@@ -213,6 +217,12 @@ pub enum AppToEmuMessages {
     Reset,
     Power,
     TogglePause,
+    ToggleNametable,
+    ShowNametable,
+    HideNametable,
+    TogglePatternTable,
+    ShowPatternTable,
+    HidePatternTable,
     LoadRom(String),
 }
 
@@ -220,4 +230,6 @@ pub enum EmuToAppMessages {
     Halted,
     Error(String),
     FrameReady,
+    NametableChanged,
+    PatternTableChanged,
 }

@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
@@ -7,10 +7,10 @@ use imgui::TextureId;
 use imgui_sdl3::ImGuiSdl3;
 use sdl3::event::Event;
 use sdl3::gpu::{
-    ColorTargetInfo, Device, Filter, LoadOp, SampleCount, SamplerAddressMode, SamplerCreateInfo,
-    SamplerMipmapMode, ShaderFormat, StoreOp, Texture, TextureCreateInfo, TextureFormat,
-    TextureRegion, TextureSamplerBinding, TextureTransferInfo, TextureUsage, TransferBuffer,
-    TransferBufferUsage,
+    ColorTargetInfo, CopyPass, Device, Filter, LoadOp, SampleCount, SamplerAddressMode,
+    SamplerCreateInfo, SamplerMipmapMode, ShaderFormat, StoreOp, Texture, TextureCreateInfo,
+    TextureFormat, TextureRegion, TextureSamplerBinding, TextureTransferInfo, TextureUsage,
+    TransferBuffer, TransferBufferUsage,
 };
 use sdl3::keyboard::Keycode;
 use sdl3::pixels::Color;
@@ -19,9 +19,9 @@ use sdl3::{EventPump, Sdl};
 
 use crate::app::frontends::Frontend;
 use crate::app::{AppState, AppToEmuMessages, EmuToAppMessages};
-use crate::emulation::emu::{InputEvent, SCREEN_HEIGHT, SCREEN_WIDTH};
-
-const FRAME_BUFFER_BYTES: usize = (SCREEN_WIDTH as usize) * (SCREEN_HEIGHT as usize) * 4;
+use crate::emulation::emu::{
+    InputEvent, PATTERN_TABLE_HEIGHT, PATTERN_TABLE_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH,
+};
 
 pub struct FrontendState {
     show_pattern_table: bool,
@@ -34,6 +34,7 @@ pub struct TextureData {
     _sampler: sdl3::gpu::Sampler,
     _binding: Box<TextureSamplerBinding>,
     texture_id: TextureId,
+    transfer_buffer: TransferBuffer,
 }
 
 pub struct ImguiFrontend {
@@ -46,16 +47,15 @@ pub struct ImguiFrontend {
     app_sender: Sender<AppToEmuMessages>,
     app_receiver: Receiver<EmuToAppMessages>,
     input_queue: VecDeque<InputEvent>,
-    screen_texture: TextureData,
-    transfer_buffer: TransferBuffer,
+    textures: HashMap<&'static str, TextureData>,
 }
 
 impl TextureData {
-    fn new(device: &Device) -> Self {
+    fn new(device: &Device, width: u32, height: u32) -> Self {
         let texture_info = TextureCreateInfo::new()
             .with_format(TextureFormat::R8g8b8a8Unorm)
-            .with_width(SCREEN_WIDTH)
-            .with_height(SCREEN_HEIGHT)
+            .with_width(width)
+            .with_height(height)
             .with_layer_count_or_depth(1)
             .with_num_levels(1)
             .with_sample_count(SampleCount::NoMultiSampling)
@@ -82,11 +82,19 @@ impl TextureData {
         let binding_ptr: *const TextureSamplerBinding = &*binding;
         let texture_id = TextureId::from(binding_ptr);
 
+        let transfer_buffer = device
+            .create_transfer_buffer()
+            .with_usage(TransferBufferUsage::UPLOAD)
+            .with_size(width * height * 4)
+            .build()
+            .unwrap();
+
         Self {
             texture,
             _sampler: sampler,
             _binding: binding,
             texture_id,
+            transfer_buffer,
         }
     }
 
@@ -131,14 +139,15 @@ impl ImguiFrontend {
             }]);
         });
 
-        let screen_texture = TextureData::new(&device);
+        let screen_texture = TextureData::new(&device, SCREEN_WIDTH, SCREEN_HEIGHT);
+        let nametable_texture = TextureData::new(&device, SCREEN_WIDTH * 4, SCREEN_HEIGHT * 4);
+        let pattern_table_texture =
+            TextureData::new(&device, PATTERN_TABLE_WIDTH, PATTERN_TABLE_HEIGHT);
 
-        let transfer_buffer = device
-            .create_transfer_buffer()
-            .with_usage(TransferBufferUsage::UPLOAD)
-            .with_size(FRAME_BUFFER_BYTES as u32)
-            .build()
-            .unwrap();
+        let mut textures = HashMap::new();
+        textures.insert("screen", screen_texture);
+        textures.insert("nametable", nametable_texture);
+        textures.insert("pattern_table", pattern_table_texture);
 
         Self {
             sdl,
@@ -154,8 +163,7 @@ impl ImguiFrontend {
             app_sender: sender,
             app_receiver: receiver,
             input_queue: VecDeque::new(),
-            screen_texture,
-            transfer_buffer,
+            textures,
         }
     }
 }
@@ -184,26 +192,54 @@ impl Frontend for ImguiFrontend {
                 if app_state.emulator_state.frame_ready {
                     app_state.emulator_state.frame_ready = false;
 
-                    let mut map = self.transfer_buffer.map::<u8>(&self.device, true);
+                    let texture = self.textures.get("screen").unwrap();
+
+                    let mut map = texture.transfer_buffer.map::<u8>(&self.device, true);
                     let slice = map.mem_mut();
 
-                    slice[..FRAME_BUFFER_BYTES].copy_from_slice(bytemuck::cast_slice(
-                        app_state.emulator_state.pixel_buffer.as_slice(),
-                    ));
+                    slice[..texture.transfer_buffer.len() as usize].copy_from_slice(
+                        bytemuck::cast_slice(app_state.emulator_state.pixel_buffer.as_slice()),
+                    );
                     map.unmap();
 
                     let copy_pass = self.device.begin_copy_pass(&command_buffer).unwrap();
-                    copy_pass.upload_to_gpu_texture(
-                        TextureTransferInfo::new()
-                            .with_transfer_buffer(&self.transfer_buffer)
-                            .with_pixels_per_row(SCREEN_WIDTH)
-                            .with_rows_per_layer(SCREEN_HEIGHT),
-                        TextureRegion::new()
-                            .with_texture(self.screen_texture.texture())
-                            .with_height(SCREEN_HEIGHT)
-                            .with_width(SCREEN_WIDTH),
-                        true,
+                    self.upload_texture(texture, &copy_pass);
+                    self.device.end_copy_pass(copy_pass);
+                }
+
+                if app_state.emulator_state.nametable_ready {
+                    app_state.emulator_state.frame_ready = false;
+
+                    let texture = self.textures.get("nametable").unwrap();
+
+                    let mut map = texture.transfer_buffer.map::<u8>(&self.device, true);
+                    let slice = map.mem_mut();
+
+                    slice[..texture.transfer_buffer.len() as usize].copy_from_slice(
+                        bytemuck::cast_slice(app_state.emulator_state.pixel_buffer.as_slice()),
                     );
+                    map.unmap();
+
+                    let copy_pass = self.device.begin_copy_pass(&command_buffer).unwrap();
+                    self.upload_texture(texture, &copy_pass);
+                    self.device.end_copy_pass(copy_pass);
+                }
+
+                if app_state.emulator_state.pattern_table_ready {
+                    app_state.emulator_state.frame_ready = false;
+
+                    let texture = self.textures.get("pattern_table").unwrap();
+
+                    let mut map = texture.transfer_buffer.map::<u8>(&self.device, true);
+                    let slice = map.mem_mut();
+
+                    slice[..texture.transfer_buffer.len() as usize].copy_from_slice(
+                        bytemuck::cast_slice(app_state.emulator_state.pixel_buffer.as_slice()),
+                    );
+                    map.unmap();
+
+                    let copy_pass = self.device.begin_copy_pass(&command_buffer).unwrap();
+                    self.upload_texture(texture, &copy_pass);
                     self.device.end_copy_pass(copy_pass);
                 }
             }
@@ -226,7 +262,7 @@ impl Frontend for ImguiFrontend {
                         self.frontend_state.render_ui(
                             ui,
                             &mut self.input_queue,
-                            &self.screen_texture,
+                            &self.textures,
                             self.app_state.lock().unwrap(),
                         );
                     },
@@ -346,10 +382,38 @@ impl ImguiFrontend {
                     .emulator_state
                     .last_frame_time = Instant::now();
             }
+            EmuToAppMessages::NametableChanged => {
+                self.app_state
+                    .lock()
+                    .unwrap()
+                    .emulator_state
+                    .nametable_ready = true;
+            }
+            EmuToAppMessages::PatternTableChanged => {
+                self.app_state
+                    .lock()
+                    .unwrap()
+                    .emulator_state
+                    .pattern_table_ready = true;
+            }
         }
     }
 
     fn quit(&mut self) { self.app_sender.send(AppToEmuMessages::Quit).ok(); }
+
+    pub fn upload_texture(&self, texture: &TextureData, copy_pass: &CopyPass) {
+        copy_pass.upload_to_gpu_texture(
+            TextureTransferInfo::new()
+                .with_transfer_buffer(&texture.transfer_buffer)
+                .with_pixels_per_row(SCREEN_WIDTH)
+                .with_rows_per_layer(SCREEN_HEIGHT),
+            TextureRegion::new()
+                .with_texture(&texture.texture)
+                .with_height(SCREEN_HEIGHT)
+                .with_width(SCREEN_WIDTH),
+            true,
+        );
+    }
 }
 
 impl FrontendState {
@@ -357,7 +421,7 @@ impl FrontendState {
         &mut self,
         ui: &mut imgui::Ui,
         input_queue: &mut VecDeque<InputEvent>,
-        screen_texture: &TextureData,
+        textures: &HashMap<&str, TextureData>,
         app_state: MutexGuard<AppState>,
     ) {
         // === Menu bar ===
@@ -398,12 +462,8 @@ impl FrontendState {
                 imgui::Condition::FirstUseEver,
             )
             .build(|| {
-                ui.text(format!(
-                    "Frame Time: {:?}",
-                    app_state.emulator_state.last_frame_time.elapsed()
-                ));
                 imgui::Image::new(
-                    screen_texture.id(),
+                    textures.get("screen").unwrap().texture_id,
                     [SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32],
                 )
                 .build(ui)
@@ -411,25 +471,33 @@ impl FrontendState {
 
         // === Optional windows ===
         if self.show_pattern_table {
-            self.render_pattern_table(ui);
+            self.render_pattern_table(ui, textures);
         }
         if self.show_nametable {
-            self.render_nametable(ui);
+            self.render_nametable(ui, textures);
         }
         if self.show_settings {
             self.render_settings(ui, input_queue);
         }
     }
 
-    fn render_pattern_table(&self, ui: &imgui::Ui) {
+    fn render_pattern_table(&self, ui: &imgui::Ui, textures: &HashMap<&str, TextureData>) {
         ui.window("Pattern Table").build(|| {
-            ui.text("Pattern table visualizer here");
+            imgui::Image::new(
+                textures.get("pattern_table").unwrap().texture_id,
+                [PATTERN_TABLE_WIDTH as f32, PATTERN_TABLE_HEIGHT as f32],
+            )
+            .build(ui)
         });
     }
 
-    fn render_nametable(&self, ui: &imgui::Ui) {
+    fn render_nametable(&self, ui: &imgui::Ui, textures: &HashMap<&str, TextureData>) {
         ui.window("Nametable Viewer").build(|| {
-            ui.text("Nametable viewer here");
+            imgui::Image::new(
+                textures.get("nametable").unwrap().texture_id,
+                [(SCREEN_WIDTH * 4) as f32, (SCREEN_HEIGHT * 4) as f32],
+            )
+            .build(ui)
         });
     }
 
