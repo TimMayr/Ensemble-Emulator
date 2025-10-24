@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::{Receiver, Sender};
@@ -7,7 +8,8 @@ use sdl3::event::Event;
 use sdl3::gpu::{
     ColorTargetInfo, Device, Filter, LoadOp, SampleCount, SamplerAddressMode, SamplerCreateInfo,
     SamplerMipmapMode, ShaderFormat, StoreOp, Texture, TextureCreateInfo, TextureFormat,
-    TextureRegion, TextureSamplerBinding, TextureTransferInfo, TextureUsage, TransferBufferUsage,
+    TextureRegion, TextureSamplerBinding, TextureTransferInfo, TextureUsage, TransferBuffer,
+    TransferBufferUsage,
 };
 use sdl3::keyboard::Keycode;
 use sdl3::pixels::Color;
@@ -18,18 +20,22 @@ use crate::app::frontends::Frontend;
 use crate::app::{AppState, AppToEmuMessages, EmuToAppMessages};
 use crate::emulation::emu::{Consoles, InputEvent, SCREEN_HEIGHT, SCREEN_WIDTH};
 
+const FRAME_BUFFER_BYTES: usize = (SCREEN_WIDTH as usize) * (SCREEN_HEIGHT as usize) * 4;
+
 pub struct FrontendState {
     show_pattern_table: bool,
     show_nametable: bool,
     show_settings: bool,
 }
 
-pub struct TextureData<'a> {
-    texture: Texture<'a>,
+pub struct TextureData {
+    texture: Texture<'static>,
+    _sampler: sdl3::gpu::Sampler,
+    _binding: Box<TextureSamplerBinding>,
     texture_id: TextureId,
 }
 
-pub struct ImguiFrontend<'a> {
+pub struct ImguiFrontend {
     sdl: Sdl,
     window: Window,
     imgui_sdl3: ImGuiSdl3,
@@ -39,12 +45,57 @@ pub struct ImguiFrontend<'a> {
     emu: Arc<Mutex<Consoles>>,
     app_sender: Sender<AppToEmuMessages>,
     app_receiver: Receiver<EmuToAppMessages>,
-    input_queue: Vec<InputEvent>,
-    screen_texture: TextureData<'a>,
-    sampler: sdl3::gpu::Sampler,
+    input_queue: VecDeque<InputEvent>,
+    screen_texture: TextureData,
+    transfer_buffer: TransferBuffer,
 }
 
-impl ImguiFrontend<'_> {
+impl TextureData {
+    fn new(device: &Device) -> Self {
+        let texture_info = TextureCreateInfo::new()
+            .with_format(TextureFormat::R8g8b8a8Unorm)
+            .with_width(SCREEN_WIDTH)
+            .with_height(SCREEN_HEIGHT)
+            .with_layer_count_or_depth(1)
+            .with_num_levels(1)
+            .with_sample_count(SampleCount::NoMultiSampling)
+            .with_usage(TextureUsage::SAMPLER | TextureUsage::GRAPHICS_STORAGE_READ);
+
+        let texture = device.create_texture(texture_info).unwrap();
+
+        let sampler_info = SamplerCreateInfo::new()
+            .with_mag_filter(Filter::Nearest)
+            .with_min_filter(Filter::Nearest)
+            .with_mipmap_mode(SamplerMipmapMode::Nearest)
+            .with_address_mode_u(SamplerAddressMode::ClampToEdge)
+            .with_address_mode_v(SamplerAddressMode::ClampToEdge)
+            .with_address_mode_w(SamplerAddressMode::ClampToEdge);
+
+        let sampler = device.create_sampler(sampler_info).unwrap();
+
+        let binding = Box::new(
+            TextureSamplerBinding::new()
+                .with_texture(&texture)
+                .with_sampler(&sampler),
+        );
+
+        let binding_ptr: *const TextureSamplerBinding = &*binding;
+        let texture_id = TextureId::from(binding_ptr);
+
+        Self {
+            texture,
+            _sampler: sampler,
+            _binding: binding,
+            texture_id,
+        }
+    }
+
+    fn texture(&self) -> &Texture<'static> { &self.texture }
+
+    fn id(&self) -> TextureId { self.texture_id }
+}
+
+impl ImguiFrontend {
     pub fn new(
         sender: Sender<AppToEmuMessages>,
         receiver: Receiver<EmuToAppMessages>,
@@ -81,34 +132,14 @@ impl ImguiFrontend<'_> {
             }]);
         });
 
-        let info = TextureCreateInfo::new()
-            .with_format(TextureFormat::R8g8b8a8Unorm)
-            .with_width(SCREEN_WIDTH)
-            .with_height(SCREEN_HEIGHT)
-            .with_layer_count_or_depth(1)
-            .with_num_levels(1)
-            .with_sample_count(SampleCount::NoMultiSampling)
-            .with_usage(TextureUsage::SAMPLER | TextureUsage::GRAPHICS_STORAGE_READ);
+        let screen_texture = TextureData::new(&device);
 
-        let screen_texture = device.create_texture(info).unwrap();
-
-        let info = SamplerCreateInfo::new()
-            .with_mag_filter(Filter::Nearest)
-            .with_min_filter(Filter::Nearest)
-            .with_mipmap_mode(SamplerMipmapMode::Nearest)
-            .with_address_mode_u(SamplerAddressMode::ClampToEdge)
-            .with_address_mode_v(SamplerAddressMode::ClampToEdge)
-            .with_address_mode_w(SamplerAddressMode::ClampToEdge);
-        let sampler = device.create_sampler(info).unwrap();
-
-        let screen_binding = Box::new(
-            TextureSamplerBinding::new()
-                .with_texture(&screen_texture)
-                .with_sampler(&sampler),
-        );
-
-        let screen_texture_id =
-            imgui::TextureId::from(screen_binding.as_ref() as *const _ as usize);
+        let transfer_buffer = device
+            .create_transfer_buffer()
+            .with_usage(TransferBufferUsage::UPLOAD)
+            .with_size(FRAME_BUFFER_BYTES as u32)
+            .build()
+            .unwrap();
 
         Self {
             sdl,
@@ -124,17 +155,14 @@ impl ImguiFrontend<'_> {
             emu,
             app_sender: sender,
             app_receiver: receiver,
-            input_queue: vec![],
-            screen_texture: TextureData {
-                texture: screen_texture,
-                texture_id: screen_texture_id,
-            },
-            sampler,
+            input_queue: VecDeque::new(),
+            screen_texture,
+            transfer_buffer,
         }
     }
 }
 
-impl Frontend for ImguiFrontend<'_> {
+impl Frontend for ImguiFrontend {
     fn run(&mut self) {
         let mut event_pump = self.sdl.event_pump().unwrap();
         let mut running = true;
@@ -143,11 +171,9 @@ impl Frontend for ImguiFrontend<'_> {
                 self.handle_message(msg);
             }
 
-            for i in self.get_inputs(&mut event_pump) {
-                self.input_queue.push(i);
-            }
+            self.collect_inputs(&mut event_pump);
 
-            while let Some(i) = self.input_queue.pop() {
+            while let Some(i) = self.input_queue.pop_front() {
                 if let Err(_) = self.handle_input(i) {
                     running = false;
                 }
@@ -155,38 +181,32 @@ impl Frontend for ImguiFrontend<'_> {
 
             let mut command_buffer = self.device.acquire_command_buffer().unwrap();
 
-            let mut app_state = self.app_state.lock().unwrap();
-            if app_state.emulator_state.frame_ready {
-                app_state.emulator_state.frame_ready = false;
+            {
+                let mut app_state = self.app_state.lock().unwrap();
+                if app_state.emulator_state.frame_ready {
+                    app_state.emulator_state.frame_ready = false;
 
-                let byte_size = (SCREEN_WIDTH * SCREEN_HEIGHT * 4) as usize;
-                let mut tb = self
-                    .device
-                    .create_transfer_buffer()
-                    .with_usage(TransferBufferUsage::UPLOAD)
-                    .with_size(byte_size as u32)
-                    .build()
-                    .unwrap();
+                    let mut map = self.transfer_buffer.map::<u8>(&self.device, true);
+                    let slice = map.mem_mut();
+                    slice[..FRAME_BUFFER_BYTES].copy_from_slice(bytemuck::cast_slice(
+                        app_state.emulator_state.pixel_buffer.as_slice(),
+                    ));
+                    map.unmap();
 
-                let mut map = tb.map::<u8>(&self.device, true);
-                let slice = map.mem_mut();
-                slice[..byte_size].copy_from_slice(bytemuck::cast_slice(
-                    app_state.emulator_state.pixel_buffer.as_slice(),
-                ));
-
-                let mut copy_pass = self.device.begin_copy_pass(&command_buffer).unwrap();
-                copy_pass.upload_to_gpu_texture(
-                    TextureTransferInfo::new()
-                        .with_transfer_buffer(&tb)
-                        .with_pixels_per_row(SCREEN_WIDTH)
-                        .with_rows_per_layer(SCREEN_HEIGHT),
-                    TextureRegion::new()
-                        .with_texture(&self.screen_texture.texture)
-                        .with_height(SCREEN_HEIGHT)
-                        .with_width(SCREEN_WIDTH),
-                    true,
-                );
-                self.device.end_copy_pass(copy_pass)
+                    let mut copy_pass = self.device.begin_copy_pass(&command_buffer).unwrap();
+                    copy_pass.upload_to_gpu_texture(
+                        TextureTransferInfo::new()
+                            .with_transfer_buffer(&self.transfer_buffer)
+                            .with_pixels_per_row(SCREEN_WIDTH)
+                            .with_rows_per_layer(SCREEN_HEIGHT),
+                        TextureRegion::new()
+                            .with_texture(self.screen_texture.texture())
+                            .with_height(SCREEN_HEIGHT)
+                            .with_width(SCREEN_WIDTH),
+                        true,
+                    );
+                    self.device.end_copy_pass(copy_pass);
+                }
             }
 
             if let Ok(swapchain) = command_buffer.wait_and_acquire_swapchain_texture(&self.window) {
@@ -218,6 +238,15 @@ impl Frontend for ImguiFrontend<'_> {
                 println!("Swapchain unavailable, cancel work");
                 command_buffer.cancel();
             }
+
+            if running {
+                while let Some(i) = self.input_queue.pop_front() {
+                    if let Err(_) = self.handle_input(i) {
+                        running = false;
+                        break;
+                    }
+                }
+            }
         }
 
         self.quit()
@@ -230,67 +259,47 @@ impl Frontend for ImguiFrontend<'_> {
     }
 }
 
-impl ImguiFrontend<'_> {
-    fn get_inputs(&mut self, event_pump: &mut EventPump) -> Vec<InputEvent> {
-        let mut events = Vec::new();
-
-        // Handle events
+impl ImguiFrontend {
+    fn collect_inputs(&mut self, event_pump: &mut EventPump) {
         for event in event_pump.poll_iter() {
             self.imgui_sdl3.handle_event(&event);
 
             match event {
                 Event::Quit {
                     ..
-                } => events.push(InputEvent::Quit),
+                } => self.input_queue.push_back(InputEvent::Quit),
                 Event::KeyDown {
                     keycode: Some(Keycode::P),
                     ..
-                } => {
-                    events.push(InputEvent::IncPalette);
-                }
+                } => self.input_queue.push_back(InputEvent::IncPalette),
                 Event::KeyDown {
                     keycode: Some(Keycode::Period),
                     ..
-                } => {
-                    events.push(InputEvent::TogglePause);
-                }
+                } => self.input_queue.push_back(InputEvent::TogglePause),
                 Event::KeyDown {
                     keycode: Some(Keycode::Comma),
                     ..
-                } => {
-                    events.push(InputEvent::Pause);
-                }
+                } => self.input_queue.push_back(InputEvent::Pause),
                 Event::KeyDown {
                     keycode: Some(Keycode::Slash),
                     ..
-                } => {
-                    events.push(InputEvent::Resume);
-                }
+                } => self.input_queue.push_back(InputEvent::Resume),
                 Event::KeyDown {
                     keycode: Some(Keycode::Plus),
                     ..
-                } => {
-                    events.push(InputEvent::Power);
-                }
+                } => self.input_queue.push_back(InputEvent::Power),
                 Event::KeyDown {
                     keycode: Some(Keycode::Minus),
                     ..
-                } => {
-                    events.push(InputEvent::Reset);
-                }
+                } => self.input_queue.push_back(InputEvent::Reset),
                 _ => {}
             }
         }
-
-        events
     }
 
     fn handle_input(&mut self, event: InputEvent) -> Result<(), String> {
         match event {
-            InputEvent::Quit => {
-                self.quit();
-                Err("Quit".to_string())
-            }
+            InputEvent::Quit => Err("Quit".to_string()),
             InputEvent::IncPalette => {
                 self.app_sender.send(AppToEmuMessages::IncPalette).ok();
                 Ok(())
@@ -341,25 +350,37 @@ impl FrontendState {
         &mut self,
         ui: &mut imgui::Ui,
         emu: &Arc<Mutex<Consoles>>,
-        input_queue: &mut Vec<InputEvent>,
+        input_queue: &mut VecDeque<InputEvent>,
         screen_texture: &TextureData,
     ) {
         // === Menu bar ===
         ui.main_menu_bar(|| {
             ui.menu("View", || {
-                ui.menu_item_config("Pattern Table")
+                if ui
+                    .menu_item_config("Pattern Table")
                     .selected(self.show_pattern_table)
-                    .build();
-                ui.menu_item_config("Nametable Viewer")
+                    .build()
+                {
+                    self.show_pattern_table = !self.show_pattern_table;
+                }
+                if ui
+                    .menu_item_config("Nametable Viewer")
                     .selected(self.show_nametable)
-                    .build();
-                ui.menu_item_config("Settings")
+                    .build()
+                {
+                    self.show_nametable = !self.show_nametable;
+                }
+                if ui
+                    .menu_item_config("Settings")
                     .selected(self.show_settings)
-                    .build();
+                    .build()
+                {
+                    self.show_settings = !self.show_settings;
+                }
             });
 
             if ui.menu_item("Quit") {
-                input_queue.push(InputEvent::Quit);
+                input_queue.push_back(InputEvent::Quit);
             }
         });
 
@@ -371,7 +392,7 @@ impl FrontendState {
             )
             .build(|| {
                 imgui::Image::new(
-                    screen_texture.texture_id,
+                    screen_texture.id(),
                     [SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32],
                 )
             });
@@ -401,14 +422,14 @@ impl FrontendState {
         });
     }
 
-    fn render_settings(&self, ui: &imgui::Ui, input_queue: &mut Vec<InputEvent>) {
+    fn render_settings(&self, ui: &imgui::Ui, input_queue: &mut VecDeque<InputEvent>) {
         ui.window("Settings").build(|| {
             if ui.button("Reset Emulator") {
-                input_queue.push(InputEvent::Reset);
+                input_queue.push_back(InputEvent::Reset);
             }
             ui.same_line();
             if ui.button("Power Cycle") {
-                input_queue.push(InputEvent::Power);
+                input_queue.push_back(InputEvent::Power);
             }
         });
     }
