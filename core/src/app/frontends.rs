@@ -5,8 +5,8 @@ use crate::app::imgui_frontend::ImguiFrontend;
 use crate::app::{AppToEmuMessages, EmuToAppMessages};
 
 #[cfg(feature = "frontend")]
-pub enum Frontends<'a> {
-    Imgui(ImguiFrontend<'a>),
+pub enum Frontends {
+    Imgui(ImguiFrontend),
     None(Sender<AppToEmuMessages>),
 }
 
@@ -16,7 +16,7 @@ pub enum Frontends {
 }
 
 #[cfg(feature = "frontend")]
-impl Frontend for Frontends<'_> {
+impl Frontend for Frontends {
     fn run(&mut self) {
         match self {
             #[cfg(feature = "frontend")]
