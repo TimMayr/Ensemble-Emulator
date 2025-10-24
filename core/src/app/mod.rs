@@ -11,20 +11,21 @@ use crossbeam_channel::unbounded;
 use crate::app::frontends::{Frontend, Frontends};
 #[cfg(feature = "frontend")]
 use crate::app::imgui_frontend::ImguiFrontend;
-use crate::emulation::emu::{Console, Consoles, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::emulation::emu::{Console, PATTERN_TABLE_HEIGHT, PATTERN_TABLE_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::emulation::nes::{EmuExecutionFinishedType, Nes};
 
 #[cfg(feature = "frontend")]
 pub struct App {
     frontend: Frontends,
-    pub emulator: Arc<Mutex<Consoles>>,
+    pub emulator: Arc<Mutex<Nes>>,
     pub state: Arc<Mutex<AppState>>,
 }
 
 #[cfg(not(feature = "frontend"))]
 pub struct App {
     frontend: Frontends,
-    pub emulator: Arc<Mutex<Consoles>>,
+    pub emulator: Arc<Mutex<Nes>>,
+    #[cfg(feature = "frontend")]
     pub state: Arc<Mutex<AppState>>,
 }
 
@@ -34,16 +35,17 @@ impl Default for App {
         let (app_sender, emu_receiver) = unbounded::<AppToEmuMessages>();
         let (emu_sender, _) = unbounded::<EmuToAppMessages>();
 
-        let emu = Arc::new(Mutex::new(Consoles::Nes(Nes::with_communication(
+        let emu = Arc::new(Mutex::new(Nes::with_communication(
             emu_sender,
             emu_receiver,
-        ))));
+        )));
 
         let frontend = Frontends::None(app_sender);
 
         Self {
             frontend,
             emulator: emu,
+            #[cfg(feature = "frontend")]
             state: Arc::new(Mutex::new(AppState::default())),
         }
     }
@@ -55,10 +57,10 @@ impl Default for App {
         let (app_sender, emu_receiver) = unbounded::<AppToEmuMessages>();
         let (emu_sender, app_receiver) = unbounded::<EmuToAppMessages>();
 
-        let emu = Arc::new(Mutex::new(Consoles::Nes(Nes::with_communication(
+        let emu = Arc::new(Mutex::new(Nes::with_communication(
             emu_sender,
             emu_receiver,
-        ))));
+        )));
 
         let state = Arc::new(Mutex::new(AppState::default()));
 
@@ -77,7 +79,7 @@ impl Default for App {
 }
 
 impl App {
-    pub fn new(mut frontend: Frontends, mut emulator: Consoles) -> Self {
+    pub fn new(mut frontend: Frontends, mut emulator: Nes) -> Self {
         let (app_sender, emu_receiver) = unbounded::<AppToEmuMessages>();
         let (emu_sender, app_receiver) = unbounded::<EmuToAppMessages>();
 
@@ -89,6 +91,7 @@ impl App {
         Self {
             frontend,
             emulator: Arc::new(Mutex::new(emulator)),
+            #[cfg(feature = "frontend")]
             state: Arc::new(Mutex::new(AppState::default())),
         }
     }
@@ -97,22 +100,15 @@ impl App {
 #[cfg(not(feature = "frontend"))]
 impl App {
     pub fn run(&mut self) {
-        let emu_state = self.state.clone();
         let emu = self.emulator.clone();
         emu.lock().unwrap().power();
         let t = std::thread::spawn(move || {
             loop {
                 let mut emu = emu.lock().unwrap();
-                let step_result = emu.step();
+                let step_result = emu.step(u128::MAX);
 
                 match step_result {
                     Ok(t) => match t {
-                        EmuExecutionFinishedType::Running(true) => {
-                            let mut shared = emu_state.lock().unwrap();
-                            emu.with_pixel_buffer(|pixels| {
-                                shared.emulator_state.pixel_buffer.copy_from_slice(pixels)
-                            });
-                        }
                         EmuExecutionFinishedType::ReachedLastCycle
                         | EmuExecutionFinishedType::Quit
                         | EmuExecutionFinishedType::CpuHlt => {
@@ -148,15 +144,33 @@ impl App {
         let t = std::thread::spawn(move || {
             loop {
                 let mut emu = emu.lock().unwrap();
-                let step_result = emu.step();
+                let step_result = emu.step(u128::MAX);
 
                 match step_result {
                     Ok(t) => match t {
-                        EmuExecutionFinishedType::Running(true) => {
-                            let mut shared = emu_state.lock().unwrap();
-                            emu.with_pixel_buffer(|pixels| {
-                                shared.emulator_state.pixel_buffer.copy_from_slice(pixels)
-                            });
+                        EmuExecutionFinishedType::Running(r) => {
+                            if let Some(r) = r
+                                && r.frame_ready
+                                && r.nametable_changed
+                            {
+                                let mut shared = emu_state.lock().unwrap();
+
+
+                                if r.frame_ready {
+                                    emu.with_pixel_buffer(|pixels| {
+                                        shared.emulator_state.pixel_buffer.copy_from_slice(pixels)
+                                    });
+                                }
+
+                                if r.nametable_changed {
+                                    emu.with_nametable_pixel_buffer(|pixels| {
+                                        shared
+                                            .emulator_state
+                                            .nametable_pixel_buffer
+                                            .copy_from_slice(&pixels)
+                                    });
+                                }
+                            }
                         }
                         EmuExecutionFinishedType::ReachedLastCycle
                         | EmuExecutionFinishedType::Quit => {
@@ -183,6 +197,7 @@ impl App {
     }
 }
 
+#[cfg(feature = "frontend")]
 #[derive(Debug, Clone, Default)]
 pub struct AppState {
     emulator_state: EmulatorSharedState,
@@ -195,6 +210,8 @@ pub struct EmulatorSharedState {
     pub last_frame_time: Instant,
     pub nametable_ready: bool,
     pub pattern_table_ready: bool,
+    pub nametable_pixel_buffer: Box<[u32; (SCREEN_WIDTH * 2 * SCREEN_HEIGHT * 2) as usize]>,
+    pub pattern_pixel_buffer: Box<[u32; (PATTERN_TABLE_HEIGHT * PATTERN_TABLE_WIDTH) as usize]>,
 }
 
 impl Default for EmulatorSharedState {
@@ -205,6 +222,8 @@ impl Default for EmulatorSharedState {
             last_frame_time: Instant::now(),
             nametable_ready: false,
             pattern_table_ready: false,
+            nametable_pixel_buffer: Box::new([0; (SCREEN_WIDTH * 2 * SCREEN_HEIGHT * 2) as usize]),
+            pattern_pixel_buffer: Box::new([0; (PATTERN_TABLE_HEIGHT * PATTERN_TABLE_WIDTH) as usize]),
         }
     }
 }
