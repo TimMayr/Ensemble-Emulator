@@ -7,6 +7,8 @@ use crate::emulation::nes::{EmuExecutionFinishedType, Nes};
 
 pub const SCREEN_WIDTH: u32 = 256;
 pub const SCREEN_HEIGHT: u32 = 240;
+pub const PATTERN_TABLE_WIDTH: u32 = 128 * 2 + 16;
+pub const PATTERN_TABLE_HEIGHT: u32 = 128;
 
 pub enum Consoles {
     Nes(Nes),

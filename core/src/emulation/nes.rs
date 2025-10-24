@@ -32,6 +32,8 @@ pub struct Nes {
     pub cpu_cycle_counter: u8,
     pub ppu_cycle_counter: u8,
     pub is_paused: bool,
+    pub render_palette_tables: bool,
+    pub render_nametables: bool,
 }
 
 impl Console for Nes {
@@ -142,6 +144,8 @@ impl Nes {
             emu_sender: None,
             emu_receiver: None,
             is_paused: false,
+            render_palette_tables: false,
+            render_nametables: false,
         }
     }
 
@@ -225,6 +229,24 @@ impl Nes {
                     }
                     AppToEmuMessages::LoadRom(path) => {
                         self.load_rom(&path);
+                    }
+                    AppToEmuMessages::ToggleNametable => {
+                        self.set_render_nametables(!self.render_nametables);
+                    }
+                    AppToEmuMessages::ShowNametable => {
+                        self.set_render_nametables(true);
+                    }
+                    AppToEmuMessages::HideNametable => {
+                        self.set_render_nametables(false);
+                    }
+                    AppToEmuMessages::TogglePatternTable => {
+                        self.set_render_palette_tables(!self.render_palette_tables);
+                    }
+                    AppToEmuMessages::ShowPatternTable => {
+                        self.set_render_palette_tables(true);
+                    }
+                    AppToEmuMessages::HidePatternTable => {
+                        self.set_render_palette_tables(false);
                     }
                 };
             }
@@ -336,6 +358,10 @@ impl Nes {
     }
 
     pub fn set_paused(&mut self, val: bool) { self.is_paused = val; }
+
+    pub fn set_render_palette_tables(&mut self, val: bool) { self.render_palette_tables = val; }
+
+    pub fn set_render_nametables(&mut self, val: bool) { self.render_nametables = val; }
 }
 
 impl Default for Nes {
