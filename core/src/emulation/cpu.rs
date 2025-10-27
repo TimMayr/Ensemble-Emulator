@@ -1042,9 +1042,9 @@ impl Cpu {
     }
 
     #[inline]
-    pub fn step(&mut self) -> Result<CpuExecutionResult, String> {
+    pub fn step(&mut self) -> Result<(), String> {
         if self.is_halted {
-            return Ok(CpuExecutionResult::Hlt);
+            return Ok(());
         }
 
         self.dma_read = !self.dma_read;
@@ -1093,19 +1093,19 @@ impl Cpu {
                 self.trigger_nmi();
                 self.nmi_pending = false;
                 self.irq_pending = false;
-                return Ok(CpuExecutionResult::CycleCompleted);
+                return Ok(());
             } else if self.irq_pending && !self.get_interrupt_disable_flag() {
                 self.trigger_irq();
                 self.irq_provider.set(false);
                 self.nmi_pending = false;
                 self.irq_pending = false;
-                return Ok(CpuExecutionResult::CycleCompleted);
+                return Ok(());
             }
 
             self.current_op = MicroOp::FetchOpcode(MicroOpCallback::None);
         }
 
-        Ok(CpuExecutionResult::CycleCompleted)
+        Ok(())
     }
 
     #[inline(always)]
@@ -2399,9 +2399,4 @@ fn copy(cpu: &mut Cpu, source: AddressSource, target: Target) {
     if target == Target::IrqVecCandidate {
         cpu.current_irq_vec = address
     }
-}
-
-pub enum CpuExecutionResult {
-    CycleCompleted,
-    Hlt,
 }

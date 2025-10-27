@@ -5,7 +5,7 @@ use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
 
 use crate::app::{AppToEmuMessages, EmuToAppMessages};
-use crate::emulation::cpu::{Cpu, CpuExecutionResult, MicroOp};
+use crate::emulation::cpu::{Cpu, MicroOp};
 use crate::emulation::emu::{Console, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
@@ -68,9 +68,7 @@ impl Console for Nes {
         loop {
             match self.step(last_cycle) {
                 Ok(t) => match t {
-                    EmuExecutionFinishedType::ReachedLastCycle
-                    | EmuExecutionFinishedType::Quit
-                    | EmuExecutionFinishedType::CpuHlt => {
+                    EmuExecutionFinishedType::ReachedLastCycle | EmuExecutionFinishedType::Quit => {
                         return Ok(t);
                     }
                     EmuExecutionFinishedType::Running(_) | EmuExecutionFinishedType::Paused => {
@@ -271,7 +269,7 @@ impl Nes {
                 self.ppu_cycle_counter = 0;
             }
 
-            let mut cpu_res = Ok(CpuExecutionResult::CycleCompleted);
+            let mut cpu_res = Ok(());
 
             if self.cpu_cycle_counter.wrapping_add(2) == 12 {
                 let mut do_trace = false;
@@ -311,12 +309,7 @@ impl Nes {
                 Ok(EmuExecutionFinishedType::Running(true))
             } else {
                 match cpu_res {
-                    Ok(t) => match t {
-                        CpuExecutionResult::CycleCompleted => {
-                            Ok(EmuExecutionFinishedType::Running(false))
-                        }
-                        CpuExecutionResult::Hlt => Ok(EmuExecutionFinishedType::CpuHlt),
-                    },
+                    Ok(_) => Ok(EmuExecutionFinishedType::Running(false)),
                     Err(e) => Err(e),
                 }
             }
@@ -354,5 +347,4 @@ pub enum EmuExecutionFinishedType {
     Running(bool),
     Quit,
     Paused,
-    CpuHlt,
 }
