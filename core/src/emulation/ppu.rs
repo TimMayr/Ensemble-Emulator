@@ -276,13 +276,13 @@ impl Ppu {
 
                     for (i, s) in self.sprite_fifo.iter_mut().enumerate() {
                         if s.down_counter == 0 {
-                            // if self.dot_counter > 207856807 - DOTS_PER_FRAME {
-                            //     self.log += format!(
-                            //         "Rendering sprite {i} @ {}x{}\n",
-                            //         self.dot, self.scanline
-                            //     )
-                            //     .as_str();
-                            // }
+                            if self.dot_counter > 207856807 - DOTS_PER_FRAME {
+                                self.log += format!(
+                                    "Rendering sprite {i} @ {}x{}\n",
+                                    self.dot, self.scanline
+                                )
+                                .as_str();
+                            }
 
                             sprite_pixel_priority = s.attribute & 0b0010_0000;
                             sprite_pixel_palette = s.attribute & 3;
@@ -290,44 +290,44 @@ impl Ppu {
                             let shift_out_lo = (s.shifter_pattern_lo & 0x80 != 0) as u8;
                             let shift_out_hi = (s.shifter_pattern_hi & 0x80 != 0) as u8;
 
-                            // if self.dot_counter > 207856807 - DOTS_PER_FRAME {
-                            //     self.log += format!(
-                            //         "Before shift lo: {:08b} @ {}x{}\n",
-                            //         s.shifter_pattern_lo, self.dot, self.scanline
-                            //     )
-                            //     .as_str();
-                            //     self.log += format!(
-                            //         "Before shift hi: {:08b} @ {}x{}\n",
-                            //         s.shifter_pattern_hi, self.dot, self.scanline
-                            //     )
-                            //     .as_str();
-                            // }
+                            if self.dot_counter > 207856807 - DOTS_PER_FRAME {
+                                self.log += format!(
+                                    "Before shift lo: {:08b} @ {}x{}\n",
+                                    s.shifter_pattern_lo, self.dot, self.scanline
+                                )
+                                .as_str();
+                                self.log += format!(
+                                    "Before shift hi: {:08b} @ {}x{}\n",
+                                    s.shifter_pattern_hi, self.dot, self.scanline
+                                )
+                                .as_str();
+                            }
 
                             s.shifter_pattern_lo <<= 1;
                             s.shifter_pattern_hi <<= 1;
 
-                            // if self.dot_counter > 207856807 - DOTS_PER_FRAME {
-                            //     self.log += format!(
-                            //         "After shift lo: {:08b} @ {}x{}\n",
-                            //         s.shifter_pattern_lo, self.dot, self.scanline
-                            //     )
-                            //     .as_str();
-                            //     self.log += format!(
-                            //         "After shift hi: {:08b} @ {}x{}\n",
-                            //         s.shifter_pattern_hi, self.dot, self.scanline
-                            //     )
-                            //     .as_str();
-                            // }
+                            if self.dot_counter > 207856807 - DOTS_PER_FRAME {
+                                self.log += format!(
+                                    "After shift lo: {:08b} @ {}x{}\n",
+                                    s.shifter_pattern_lo, self.dot, self.scanline
+                                )
+                                .as_str();
+                                self.log += format!(
+                                    "After shift hi: {:08b} @ {}x{}\n",
+                                    s.shifter_pattern_hi, self.dot, self.scanline
+                                )
+                                .as_str();
+                            }
 
                             sprite_pixel_pattern = (shift_out_hi << 1) | shift_out_lo;
 
-                            // if self.dot_counter > 207856807 - DOTS_PER_FRAME {
-                            //     self.log += format!(
-                            //         "Sprite Pixel: {sprite_pixel_pattern:08b} @ {}x{}\n",
-                            //         self.dot, self.scanline
-                            //     )
-                            //     .as_str();
-                            // }
+                            if self.dot_counter > 207856807 - DOTS_PER_FRAME {
+                                self.log += format!(
+                                    "Sprite Pixel: {sprite_pixel_pattern:08b} @ {}x{}\n",
+                                    self.dot, self.scanline
+                                )
+                                .as_str();
+                            }
                         }
                     }
 
@@ -409,7 +409,7 @@ impl Ppu {
 
         self.dot_counter += 1;
 
-        self.dot == 0 && self.scanline == 0
+        self.nmi_requested.get()
     }
 
     #[inline]
@@ -1008,7 +1008,6 @@ impl Ppu {
 
     #[inline]
     pub fn get_pixel_buffer(&self) -> &[u32; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize] {
-        // println!("{:?}", self.pixel_buffer);
         &self.pixel_buffer
     }
 
