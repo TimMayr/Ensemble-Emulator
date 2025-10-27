@@ -1,9 +1,11 @@
-use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::emulation::cpu::Cpu;
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
 use crate::emulation::ppu::Ppu;
+use crate::frontend::Frontends;
 
 #[test]
 fn test_03_immediate() {
@@ -13,14 +15,15 @@ fn test_03_immediate() {
     };
 
     let ppu = Ppu::default();
-    let mut emu = Consoles::Nes(Nes::new(cpu, Arc::new(Mutex::new(ppu))));
+    let mut emu = Consoles::Nes(Nes::new(cpu, Rc::new(RefCell::new(ppu))));
 
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/instr_test-v5/rom_singles/03-immediate.nes",
     ));
 
     emu.reset();
-    emu.run_until(41064917).expect("Error while running test");
+    emu.run_until(&mut Frontends::default(), 41064917)
+        .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601A));
     let cpu_mem = whole_mem[0].as_slice();

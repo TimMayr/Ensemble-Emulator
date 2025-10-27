@@ -1,15 +1,16 @@
-use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::emulation::mem::MemoryDevice;
 use crate::emulation::ppu::Ppu;
 
 #[derive(Debug, Clone)]
 pub struct PpuRegisters {
-    ppu: Arc<Mutex<Ppu>>,
+    ppu: Rc<RefCell<Ppu>>,
 }
 
 impl PpuRegisters {
-    pub fn new(ppu: Arc<Mutex<Ppu>>) -> Self {
+    pub fn new(ppu: Rc<RefCell<Ppu>>) -> Self {
         Self {
             ppu,
         }
@@ -21,7 +22,7 @@ impl MemoryDevice for PpuRegisters {
     fn read(&self, addr: u16, _: u8) -> u8 {
         match addr {
             0x2 => {
-                let ppu = self.ppu.lock().unwrap();
+                let ppu = self.ppu.borrow();
                 let val = ppu.get_ppu_status();
 
                 let mut bus = ppu.open_bus.get();
@@ -30,7 +31,7 @@ impl MemoryDevice for PpuRegisters {
                 bus.read()
             }
             0x4 => {
-                let mut ppu = self.ppu.lock().unwrap();
+                let mut ppu = self.ppu.borrow_mut();
                 let val = ppu.get_oam_at_addr();
                 let mut bus = ppu.open_bus.get();
                 bus.set_masked(val, 0xFF);
@@ -38,7 +39,7 @@ impl MemoryDevice for PpuRegisters {
                 bus.read()
             }
             0x7 => {
-                let mut ppu = self.ppu.lock().unwrap();
+                let mut ppu = self.ppu.borrow_mut();
                 let val = ppu.get_vram_at_addr();
 
                 let mut bus = ppu.open_bus.get();
@@ -53,13 +54,13 @@ impl MemoryDevice for PpuRegisters {
                 ppu.open_bus.set(bus);
                 bus.read()
             }
-            _ => self.ppu.lock().unwrap().open_bus.get().read(),
+            _ => self.ppu.borrow().open_bus.get().read(),
         }
     }
 
     #[inline(always)]
     fn write(&mut self, addr: u16, data: u8) {
-        let mut ppu = self.ppu.lock().unwrap();
+        let mut ppu = self.ppu.borrow_mut();
         let mut bus = ppu.open_bus.get();
         bus.set_masked(data, 0xFF);
         match addr {
@@ -97,19 +98,19 @@ impl MemoryDevice for PpuRegisters {
     fn snapshot(&self, addr: u16, _: u8) -> u8 {
         match addr {
             0x0 => {
-                let ppu = self.ppu.lock().unwrap();
+                let ppu = self.ppu.borrow();
                 ppu.get_ppu_ctrl()
             }
             0x2 => {
-                let ppu = self.ppu.lock().unwrap();
+                let ppu = self.ppu.borrow();
                 ppu.status_register.get()
             }
             0x4 => {
-                let mut ppu = self.ppu.lock().unwrap();
+                let mut ppu = self.ppu.borrow_mut();
                 ppu.get_oam_at_addr()
             }
             0x7 => {
-                let ppu = self.ppu.lock().unwrap();
+                let ppu = self.ppu.borrow();
                 ppu.ppu_data_buffer
             }
             _ => 0,

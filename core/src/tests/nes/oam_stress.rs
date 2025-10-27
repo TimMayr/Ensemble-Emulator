@@ -1,5 +1,6 @@
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
+use crate::frontend::Frontends;
 
 #[test]
 fn test_oam_stress() {
@@ -9,7 +10,7 @@ fn test_oam_stress() {
     ));
     emu.power();
 
-    emu.run_until(700_119_365)
+    emu.run_until(&mut Frontends::default(), 700_119_365)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6129));

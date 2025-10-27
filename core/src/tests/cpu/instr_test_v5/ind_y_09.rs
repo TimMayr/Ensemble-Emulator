@@ -1,5 +1,6 @@
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
+use crate::frontend::Frontends;
 
 #[test]
 fn test_09_ind_y() {
@@ -8,7 +9,8 @@ fn test_09_ind_y() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/09-ind_y.nes",
     ));
     emu.reset();
-    emu.run_until(58933325).expect("Error while running test");
+    emu.run_until(&mut Frontends::default(), 58933325)
+        .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6016));
     let cpu_mem = whole_mem[0].as_slice();

@@ -1,12 +1,10 @@
+use std::cell::{Ref, RefCell};
 use std::ops::{Deref, RangeInclusive};
-use std::sync::{Arc, Mutex};
+use std::rc::Rc;
 use std::time::Duration;
 
-use crossbeam_channel::{Receiver, Sender};
-
-use crate::app::{AppToEmuMessages, EmuToAppMessages};
 use crate::emulation::cpu::{Cpu, MicroOp};
-use crate::emulation::emu::{Console, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::emulation::emu::{Console, InputEvent, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
 use crate::emulation::mem::Memory;
@@ -14,6 +12,7 @@ use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
 use crate::emulation::savestate::{CpuState, PpuState, SaveState};
+use crate::frontend::{Frontend, Frontends};
 use crate::trace::TraceLog;
 use crate::util;
 
@@ -23,25 +22,20 @@ pub const MASTER_CYCLES_PER_FRAME: u32 = 357366;
 
 pub struct Nes {
     pub cpu: Cpu,
-    pub ppu: Arc<Mutex<Ppu>>,
-    pub emu_sender: Option<Sender<EmuToAppMessages>>,
-    pub emu_receiver: Option<Receiver<AppToEmuMessages>>,
+    pub ppu: Rc<RefCell<Ppu>>,
     pub total_cycles: u128,
     pub rom_file: Option<RomFile>,
     pub trace_log: Option<TraceLog>,
     pub cpu_cycle_counter: u8,
     pub ppu_cycle_counter: u8,
-    pub is_paused: bool,
 }
 
 impl Console for Nes {
     #[inline]
-    fn with_pixel_buffer<R>(
+    fn get_pixel_buffer(
         &self,
-        f: impl FnOnce(&[u32; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize]) -> R,
-    ) -> R {
-        let ppu = self.ppu.lock().unwrap();
-        f(ppu.get_pixel_buffer())
+    ) -> Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]> {
+        Ref::map(self.ppu.borrow(), |ppu| ppu.get_pixel_buffer())
     }
 
     fn load_rom(&mut self, path: &String) { self.load_rom(path); }
@@ -62,21 +56,34 @@ impl Console for Nes {
         self.cpu.reset();
     }
 
-    fn run(&mut self) -> Result<EmuExecutionFinishedType, String> { self.run_until(u128::MAX) }
+    fn run(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
+        self.run_until(frontend, u128::MAX)
+    }
 
-    fn run_until(&mut self, last_cycle: u128) -> Result<EmuExecutionFinishedType, String> {
+    fn run_until(
+        &mut self,
+        frontend: &mut Frontends,
+        last_cycle: u128,
+    ) -> Result<ExecutionFinishedType, String> {
         loop {
-            match self.step(last_cycle) {
-                Ok(t) => match t {
-                    EmuExecutionFinishedType::ReachedLastCycle | EmuExecutionFinishedType::Quit => {
-                        return Ok(t);
+            let res = self.step(frontend, last_cycle);
+            match res {
+                Ok(ExecutionFinishedType::CycleCompleted) => {
+                    continue;
+                }
+                Ok(res) => {
+                    if let Some(ref mut trace) = self.trace_log {
+                        trace.flush();
                     }
-                    EmuExecutionFinishedType::Running(_) | EmuExecutionFinishedType::Paused => {
-                        continue;
+
+                    return Ok(res);
+                }
+                Err(err) => {
+                    if let Some(ref mut trace) = self.trace_log {
+                        trace.flush();
                     }
-                },
-                Err(e) => {
-                    return Err(e);
+
+                    panic!("{}", err)
                 }
             };
         }
@@ -85,7 +92,7 @@ impl Console for Nes {
     fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>> {
         vec![
             self.cpu.get_memory_debug(range.clone()),
-            self.ppu.lock().unwrap().get_memory_debug(range.clone()),
+            self.ppu.borrow().get_memory_debug(range.clone()),
         ]
     }
 
@@ -111,24 +118,21 @@ impl Console for Nes {
     }
 
     #[inline]
-    fn step(&mut self) -> Result<EmuExecutionFinishedType, String> { self.step(u128::MAX) }
+    fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
+        self.step(frontend, u128::MAX)
+    }
 
     #[inline]
-    fn step_frame(&mut self) -> Result<EmuExecutionFinishedType, String> {
-        self.run_until(self.total_cycles + MASTER_CYCLES_PER_FRAME as u128)
-    }
-
-    fn set_message_receiver(&mut self, receiver: Receiver<AppToEmuMessages>) {
-        self.emu_receiver = Some(receiver);
-    }
-
-    fn set_message_sender(&mut self, sender: Sender<EmuToAppMessages>) {
-        self.emu_sender = Some(sender);
+    fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
+        self.run_until(
+            frontend,
+            self.total_cycles + MASTER_CYCLES_PER_FRAME as u128,
+        )
     }
 }
 
 impl Nes {
-    pub fn new(cpu: Cpu, ppu: Arc<Mutex<Ppu>>) -> Self {
+    pub fn new(cpu: Cpu, ppu: Rc<RefCell<Ppu>>) -> Self {
         Self {
             cpu,
             ppu,
@@ -137,27 +141,24 @@ impl Nes {
             total_cycles: 0,
             cpu_cycle_counter: 0,
             ppu_cycle_counter: 0,
-            emu_sender: None,
-            emu_receiver: None,
-            is_paused: false,
         }
     }
 
     pub fn reset(&mut self) {
         self.cpu.reset();
-        self.ppu.lock().unwrap().reset();
+        self.ppu.borrow_mut().reset();
     }
 
     pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
         let rom_file = rom_get.as_rom_file();
         self.cpu.load_rom(&rom_file);
-        self.ppu.lock().unwrap().load_rom(&rom_file);
+        self.ppu.borrow_mut().load_rom(&rom_file);
         self.rom_file = Some(rom_file);
     }
 
     pub fn save_state(&self, path: &str) {
         let ppu_state = {
-            let ppu_ref = self.ppu.lock().unwrap();
+            let ppu_ref = self.ppu.borrow();
             PpuState::from(ppu_ref.deref())
         };
 
@@ -177,7 +178,7 @@ impl Nes {
         let state = savestate::load_state(path);
 
         self.rom_file = Some(state.rom_file);
-        self.ppu = Arc::new(Mutex::new(Ppu::from(
+        self.ppu = Rc::new(RefCell::new(Ppu::from(
             &state.ppu,
             self.rom_file.as_ref().unwrap(),
         )));
@@ -189,162 +190,119 @@ impl Nes {
         self.cpu_cycle_counter = state.cycle;
 
         self.cpu.memory.load(&state.cpu.memory);
-        self.ppu.lock().unwrap().memory.load(&state.ppu.memory);
-    }
-
-    pub fn handle_messages(&mut self) -> Result<(), EmuExecutionFinishedType> {
-        if let Some(rec) = &self.emu_receiver {
-            for msg in rec.try_iter() {
-                return match msg {
-                    AppToEmuMessages::Pause => {
-                        self.set_paused(true);
-                        Ok(())
-                    }
-                    AppToEmuMessages::Resume => {
-                        self.set_paused(false);
-                        Ok(())
-                    }
-                    AppToEmuMessages::Reset => {
-                        self.reset();
-                        Ok(())
-                    }
-                    AppToEmuMessages::Quit => {
-                        util::write_to_file(
-                            "log/log.log",
-                            self.ppu.lock().unwrap().log.as_bytes().to_vec(),
-                        );
-                        Err(EmuExecutionFinishedType::Quit)
-                    }
-                    AppToEmuMessages::Power => {
-                        self.power();
-                        Ok(())
-                    }
-                    AppToEmuMessages::IncPalette => {
-                        self.inc_current_palette();
-                        Ok(())
-                    }
-                    AppToEmuMessages::TogglePause => {
-                        self.set_paused(!self.is_paused);
-                        Ok(())
-                    }
-                    AppToEmuMessages::LoadRom(path) => {
-                        self.load_rom(&path);
-                        Ok(())
-                    }
-                };
-            }
-
-            Ok(())
-        } else {
-            Ok(())
-        }
+        self.ppu.borrow_mut().memory.load(&state.ppu.memory);
     }
 
     #[inline]
-    pub fn step(&mut self, last_cycle: u128) -> Result<EmuExecutionFinishedType, String> {
-        if let Err(e) = self.handle_messages() {
-            return Ok(e);
+    pub fn step(
+        &mut self,
+        frontend: &mut Frontends,
+        last_cycle: u128,
+    ) -> Result<ExecutionFinishedType, String> {
+        self.total_cycles += 1;
+        self.cpu_cycle_counter += 1;
+        self.ppu_cycle_counter += 1;
+
+        let ppu = self.ppu.borrow();
+        if ppu.vbl_clear_scheduled.get().is_some() {
+            ppu.vbl_reset_counter.set(ppu.vbl_reset_counter.get() + 1);
+            ppu.process_vbl_clear_scheduled();
+        }
+        drop(ppu);
+
+        if self.total_cycles > last_cycle {
+            self.total_cycles -= 1;
+            return Ok(ExecutionFinishedType::ReachedLastCycle);
+        };
+
+        let mut cpu_res = Ok(ExecutionFinishedType::CycleCompleted);
+
+        let mut frame_ready = false;
+        if self.ppu_cycle_counter == 4 {
+            frame_ready = self.ppu.borrow_mut().step();
+            self.ppu_cycle_counter = 0;
         }
 
-        if !self.is_paused {
-            self.total_cycles += 1;
-            self.cpu_cycle_counter += 1;
-            self.ppu_cycle_counter += 1;
+        // if frame_ready && !matches!(frontend, Frontends::None()) {
+        //     self.ppu.borrow_mut().frame();
+        // }
 
-            let ppu = self.ppu.lock().unwrap();
-            if ppu.vbl_clear_scheduled.get().is_some() {
-                ppu.vbl_reset_counter.set(ppu.vbl_reset_counter.get() + 1);
-                ppu.process_vbl_clear_scheduled();
-            }
-            drop(ppu);
+        if frame_ready && !matches!(frontend, Frontends::None()) {
+            let pixel_buffer = self.get_pixel_buffer();
+            frontend.show_frame(pixel_buffer)?;
 
-            if self.total_cycles > last_cycle {
-                self.total_cycles -= 1;
-                return Ok(EmuExecutionFinishedType::ReachedLastCycle);
-            };
-
-            let mut frame_ready = false;
-            if self.ppu_cycle_counter == 4 {
-                frame_ready = self.ppu.lock().unwrap().step();
-                self.ppu_cycle_counter = 0;
-            }
-
-            let mut cpu_res = Ok(());
-
-            if self.cpu_cycle_counter.wrapping_add(2) == 12 {
-                let mut do_trace = false;
-
-                if self.trace_log.is_some()
-                    && matches!(&self.cpu.current_op, &MicroOp::FetchOpcode(..))
-                {
-                    do_trace = true;
+            let res = frontend.poll_input_events();
+            if let Ok(events) = res {
+                for event in events {
+                    self.handle_input_event(event);
                 }
+            } else if let Err(s) = res {
+                panic!("{s}")
+            }
+        }
 
-                cpu_res = self.cpu.step();
+        if self.cpu_cycle_counter.wrapping_add(2) == 12 {
+            let mut do_trace = false;
 
-                if do_trace && let Some(ref mut trace) = self.trace_log {
-                    let ppu_state = {
-                        let ppu_ref = self.ppu.lock().unwrap();
-                        PpuState::from(ppu_ref.deref())
-                    };
-
-                    let state = SaveState {
-                        cpu: CpuState::from(&self.cpu),
-                        ppu: ppu_state,
-                        cycle: self.cpu_cycle_counter,
-                        total_cycles: self.total_cycles,
-                        rom_file: self.rom_file.as_ref().unwrap().clone(),
-                        version: 1,
-                    };
-
-                    trace.trace(state)
-                }
+            if self.trace_log.is_some() && matches!(&self.cpu.current_op, &MicroOp::FetchOpcode(..))
+            {
+                do_trace = true;
             }
 
-            if self.cpu_cycle_counter == 12 {
-                self.cpu_cycle_counter = 0;
-            }
+            cpu_res = self.cpu.step();
 
-            if frame_ready {
-                Ok(EmuExecutionFinishedType::Running(true))
-            } else {
-                match cpu_res {
-                    Ok(_) => Ok(EmuExecutionFinishedType::Running(false)),
-                    Err(e) => Err(e),
-                }
+            if do_trace && let Some(ref mut trace) = self.trace_log {
+                let ppu_state = {
+                    let ppu_ref = self.ppu.borrow();
+                    PpuState::from(ppu_ref.deref())
+                };
+
+                let state = SaveState {
+                    cpu: CpuState::from(&self.cpu),
+                    ppu: ppu_state,
+                    cycle: self.cpu_cycle_counter,
+                    total_cycles: self.total_cycles,
+                    rom_file: self.rom_file.as_ref().unwrap().clone(),
+                    version: 1,
+                };
+
+                trace.trace(state)
             }
-        } else {
-            Ok(EmuExecutionFinishedType::Paused)
+        }
+
+        if self.cpu_cycle_counter == 12 {
+            self.cpu_cycle_counter = 0;
+        }
+
+        cpu_res
+    }
+
+    pub fn handle_input_event(&mut self, input_event: InputEvent) {
+        match input_event {
+            InputEvent::IncPalette => {
+                self.inc_current_palette();
+            }
+            InputEvent::Quit => {
+                util::write_to_file("log/log.log", self.ppu.borrow().log.as_bytes().to_vec());
+                panic!()
+            }
         }
     }
 
-    pub fn inc_current_palette(&mut self) { self.ppu.lock().unwrap().inc_current_palette(); }
-
-    pub fn with_communication(
-        emu_sender: Sender<EmuToAppMessages>,
-        emu_receiver: Receiver<AppToEmuMessages>,
-    ) -> Nes {
-        let mut nes = Nes::default();
-        nes.emu_sender = Some(emu_sender);
-        nes.emu_receiver = Some(emu_receiver);
-        nes
-    }
-
-    pub fn set_paused(&mut self, val: bool) { self.is_paused = val; }
+    pub fn inc_current_palette(&mut self) { self.ppu.borrow_mut().inc_current_palette(); }
 }
 
 impl Default for Nes {
     fn default() -> Self {
         let cpu = Cpu::new();
-        let ppu = Arc::new(Mutex::new(Ppu::default()));
+        let ppu = Rc::new(RefCell::new(Ppu::default()));
         Nes::new(cpu, ppu)
     }
 }
 
 #[derive(Debug)]
-pub enum EmuExecutionFinishedType {
+pub enum ExecutionFinishedType {
     ReachedLastCycle,
-    Running(bool),
-    Quit,
-    Paused,
+    ReachedHlt,
+    CycleCompleted,
 }
