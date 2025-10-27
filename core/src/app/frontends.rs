@@ -4,54 +4,13 @@ use crossbeam_channel::{Receiver, Sender};
 use crate::app::imgui_frontend::ImguiFrontend;
 use crate::app::{AppToEmuMessages, EmuToAppMessages};
 
-#[cfg(feature = "frontend")]
 pub enum Frontends<'a> {
+    #[cfg(feature = "frontend")]
     Imgui(ImguiFrontend<'a>),
     None(Sender<AppToEmuMessages>),
 }
 
-#[cfg(not(feature = "frontend"))]
-pub enum Frontends {
-    None(Sender<AppToEmuMessages>),
-}
-
-#[cfg(feature = "frontend")]
 impl Frontend for Frontends<'_> {
-    fn run(&mut self) {
-        match self {
-            #[cfg(feature = "frontend")]
-            Frontends::Imgui(frontend) => frontend.run(),
-            Frontends::None(s) => s.send(AppToEmuMessages::Quit).unwrap(),
-        }
-    }
-
-    fn set_message_sender(
-        &mut self,
-        #[cfg(not(feature = "frontend"))] _: Sender<AppToEmuMessages>,
-        #[cfg(feature = "frontend")] sender: Sender<AppToEmuMessages>,
-    ) {
-        match self {
-            #[cfg(feature = "frontend")]
-            Frontends::Imgui(frontend) => frontend.set_message_sender(sender),
-            Frontends::None(_) => {}
-        }
-    }
-
-    fn set_message_receiver(
-        &mut self,
-        #[cfg(not(feature = "frontend"))] _: Receiver<EmuToAppMessages>,
-        #[cfg(feature = "frontend")] receiver: Receiver<EmuToAppMessages>,
-    ) {
-        match self {
-            #[cfg(feature = "frontend")]
-            Frontends::Imgui(frontend) => frontend.set_message_receiver(receiver),
-            Frontends::None(_) => {}
-        }
-    }
-}
-
-#[cfg(not(feature = "frontend"))]
-impl Frontend for Frontends {
     fn run(&mut self) {
         match self {
             #[cfg(feature = "frontend")]
