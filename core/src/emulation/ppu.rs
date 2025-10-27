@@ -113,7 +113,6 @@ pub struct Ppu {
     pub current_sprite_tile_id: u8,
     pub oam_fetch: u8,
     pub log: String,
-    nametable_changed: bool,
 }
 
 impl Default for Ppu {
@@ -169,7 +168,6 @@ impl Ppu {
             current_sprite_tile_id: 0,
             oam_fetch: 0,
             log: "".to_string(),
-            nametable_changed: false,
         }
     }
 
@@ -192,7 +190,7 @@ impl Ppu {
     fn get_default_oam() -> Ram { Ram::new(OAM_SIZE + OAM_SIZE / 8) }
 
     #[inline]
-    pub fn step(&mut self) -> PpuResult {
+    pub fn step(&mut self) -> bool {
         self.prev_vbl = self.status_register.get() & VBLANK_NMI_BIT;
 
         if self.reset_signal {
@@ -276,7 +274,7 @@ impl Ppu {
                     let mut sprite_pixel_pattern = 0u8;
                     let mut sprite_pixel_priority = 0;
 
-                    for s in self.sprite_fifo.iter_mut() {
+                    for (i, s) in self.sprite_fifo.iter_mut().enumerate() {
                         if s.down_counter == 0 {
                             // if self.dot_counter > 207856807 - DOTS_PER_FRAME {
                             //     self.log += format!(
@@ -411,15 +409,7 @@ impl Ppu {
 
         self.dot_counter += 1;
 
-        let frame_ready = self.dot == 0 && self.scanline == 0;
-
-        let res = PpuResult {
-            frame_ready,
-            nametable_changed: self.nametable_changed,
-        };
-
-        self.nametable_changed = false;
-        res
+        self.dot == 0 && self.scanline == 0
     }
 
     #[inline]
@@ -448,12 +438,12 @@ impl Ppu {
                 };
 
                 let row_offset =
-                    // if self.sprite_fifo[(self.soam_index / 4) as usize].attribute & 80 == 0 {
-                    self
-                        .current_sprite_y
-                        .wrapping_sub(self.scanline.wrapping_add(1) as u8)
-                        % self.get_sprite_height()
-                    ;
+                        // if self.sprite_fifo[(self.soam_index / 4) as usize].attribute & 80 == 0 {
+                        self
+                            .current_sprite_y
+                            .wrapping_sub(self.scanline.wrapping_add(1) as u8)
+                % self.get_sprite_height()
+                        ;
                 // }
                 // else {
                 //     (self
@@ -949,10 +939,7 @@ impl Ppu {
     pub fn mem_write(&mut self, addr: u16, data: u8) {
         match addr {
             0x3F00..0x3FFF => self.palette_ram.mem_write(addr, data),
-            _ => {
-                self.nametable_changed = true;
-                self.memory.mem_write(addr, data)
-            }
+            _ => self.memory.mem_write(addr, data),
         }
     }
 
@@ -1017,6 +1004,7 @@ impl Ppu {
 
     #[inline]
     pub fn get_pixel_buffer(&self) -> &[u32; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize] {
+        // println!("{:?}", self.pixel_buffer);
         &self.pixel_buffer
     }
 
@@ -1070,9 +1058,7 @@ impl Ppu {
         colors
     }
 
-    pub fn get_nametable_pixels(&self) -> [u32; (SCREEN_WIDTH * 2 * SCREEN_HEIGHT * 2) as usize] {
-        let mut pixels = [0; (SCREEN_WIDTH * 2 * SCREEN_HEIGHT * 2) as usize];
-
+    pub fn render_nametables(&mut self) {
         let pattern_table_base_address = if self.ctrl_register & 0b0001_0000 != 0 {
             0x1000
         } else {
@@ -1083,7 +1069,7 @@ impl Ppu {
             let nametable_start_addr = 0x2000 + nametable_idx * 0x0400;
 
             for entry_idx in 0..NAMETABLE_TILE_AREA_SIZE {
-                let tile_index = self.memory.mem_read_debug(nametable_start_addr + entry_idx);
+                let tile_index = self.mem_read(nametable_start_addr + entry_idx);
 
                 let nametable_row = entry_idx / 32;
                 let nametable_col = entry_idx % 32;
@@ -1092,7 +1078,7 @@ impl Ppu {
                     + ((nametable_row / 4) * 8)
                     + (nametable_col / 4)
                     + NAMETABLE_TILE_AREA_SIZE;
-                let attr_byte = self.memory.mem_read_debug(attr_addr);
+                let attr_byte = self.mem_read(attr_addr);
 
                 let tile_x = nametable_col + ((nametable_idx & 0x1) * 32);
                 let tile_y = nametable_row + ((nametable_idx >> 1) * 30);
@@ -1103,10 +1089,8 @@ impl Ppu {
                 let patter_addr = pattern_table_base_address + (tile_index as u16) * 16;
 
                 for row_in_tile in 0..TILE_SIZE {
-                    let low = self.memory.mem_read_debug(patter_addr + row_in_tile as u16);
-                    let high = self
-                        .memory
-                        .mem_read_debug(patter_addr + row_in_tile as u16 + 8);
+                    let low = self.mem_read(patter_addr + row_in_tile as u16);
+                    let high = self.mem_read(patter_addr + row_in_tile as u16 + 8);
 
                     let quad_x = (nametable_col % 4) / 2;
                     let quad_y = (nametable_row % 4) / 2;
@@ -1124,18 +1108,17 @@ impl Ppu {
                             PALETTE_RAM_START_ADDRESS + (palette_select * 4 + pixel_value) as u16
                         };
 
-                        let color_idx = self.palette_ram.mem_read_debug(palette_addr);
+                        let color_idx = self.mem_read(palette_addr);
 
                         let x = base_x as usize + col_in_tile;
                         let y = base_y as usize + row_in_tile;
 
-                        pixels[(y * SCREEN_WIDTH as usize) + x] = NES_PALETTE[color_idx as usize]
+                        self.pixel_buffer[(y * SCREEN_WIDTH as usize) + x] =
+                            NES_PALETTE[color_idx as usize]
                     }
                 }
             }
         }
-
-        pixels
     }
 
     pub fn render_pattern_tables(&mut self) {
@@ -1235,7 +1218,6 @@ impl Ppu {
             sprite_fifo: [SpriteFifo::default(); 8],
             oam_fetch: 0,
             log: "".to_string(),
-            nametable_changed: false,
         };
 
         ppu.load_rom(rom);
@@ -1261,10 +1243,4 @@ impl Display for SpriteFifo {
         res += format!("Attribute: {:08b}\n", self.attribute).as_str();
         f.write_str(res.as_str())
     }
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct PpuResult {
-    pub frame_ready: bool,
-    pub nametable_changed: bool,
 }

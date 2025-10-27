@@ -1,5 +1,5 @@
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 use crossbeam_channel::{Receiver, Sender};
@@ -140,7 +140,7 @@ impl ImguiFrontend {
         });
 
         let screen_texture = TextureData::new(&device, SCREEN_WIDTH, SCREEN_HEIGHT);
-        let nametable_texture = TextureData::new(&device, SCREEN_WIDTH * 2, SCREEN_HEIGHT * 2);
+        let nametable_texture = TextureData::new(&device, SCREEN_WIDTH * 4, SCREEN_HEIGHT * 4);
         let pattern_table_texture =
             TextureData::new(&device, PATTERN_TABLE_WIDTH, PATTERN_TABLE_HEIGHT);
 
@@ -189,64 +189,57 @@ impl Frontend for ImguiFrontend {
 
             {
                 let mut app_state = self.app_state.lock().unwrap();
-                if app_state.emulator_state.pattern_table_ready
-                    || app_state.emulator_state.frame_ready
-                    || app_state.emulator_state.nametable_ready
-                {
+                if app_state.emulator_state.frame_ready {
+                    app_state.emulator_state.frame_ready = false;
+
+                    let texture = self.textures.get("screen").unwrap();
+
+                    let mut map = texture.transfer_buffer.map::<u8>(&self.device, true);
+                    let slice = map.mem_mut();
+
+                    slice[..texture.transfer_buffer.len() as usize].copy_from_slice(
+                        bytemuck::cast_slice(app_state.emulator_state.pixel_buffer.as_slice()),
+                    );
+                    map.unmap();
+
                     let copy_pass = self.device.begin_copy_pass(&command_buffer).unwrap();
+                    self.upload_texture(texture, &copy_pass);
+                    self.device.end_copy_pass(copy_pass);
+                }
 
-                    if app_state.emulator_state.frame_ready {
-                        app_state.emulator_state.frame_ready = false;
+                if app_state.emulator_state.nametable_ready {
+                    app_state.emulator_state.frame_ready = false;
 
-                        let texture = self.textures.get("screen").unwrap();
+                    let texture = self.textures.get("nametable").unwrap();
 
-                        let mut map = texture.transfer_buffer.map::<u8>(&self.device, true);
-                        let slice = map.mem_mut();
+                    let mut map = texture.transfer_buffer.map::<u8>(&self.device, true);
+                    let slice = map.mem_mut();
 
-                        slice[..texture.transfer_buffer.len() as usize].copy_from_slice(
-                            bytemuck::cast_slice(app_state.emulator_state.pixel_buffer.as_slice()),
-                        );
-                        map.unmap();
+                    slice[..texture.transfer_buffer.len() as usize].copy_from_slice(
+                        bytemuck::cast_slice(app_state.emulator_state.pixel_buffer.as_slice()),
+                    );
+                    map.unmap();
 
-                        self.upload_texture(texture, &copy_pass);
-                    }
+                    let copy_pass = self.device.begin_copy_pass(&command_buffer).unwrap();
+                    self.upload_texture(texture, &copy_pass);
+                    self.device.end_copy_pass(copy_pass);
+                }
 
-                    if app_state.emulator_state.nametable_ready {
-                        app_state.emulator_state.nametable_ready = false;
+                if app_state.emulator_state.pattern_table_ready {
+                    app_state.emulator_state.frame_ready = false;
 
-                        let texture = self.textures.get("nametable").unwrap();
+                    let texture = self.textures.get("pattern_table").unwrap();
 
-                        let mut map = texture.transfer_buffer.map::<u8>(&self.device, true);
-                        let slice = map.mem_mut();
+                    let mut map = texture.transfer_buffer.map::<u8>(&self.device, true);
+                    let slice = map.mem_mut();
 
-                        slice[..texture.transfer_buffer.len() as usize].copy_from_slice(
-                            bytemuck::cast_slice(
-                                app_state.emulator_state.nametable_pixel_buffer.as_slice(),
-                            ),
-                        );
-                        map.unmap();
+                    slice[..texture.transfer_buffer.len() as usize].copy_from_slice(
+                        bytemuck::cast_slice(app_state.emulator_state.pixel_buffer.as_slice()),
+                    );
+                    map.unmap();
 
-                        self.upload_texture(texture, &copy_pass);
-                    }
-
-                    if app_state.emulator_state.pattern_table_ready {
-                        app_state.emulator_state.pattern_table_ready = false;
-
-                        let texture = self.textures.get("pattern_table").unwrap();
-
-                        let mut map = texture.transfer_buffer.map::<u8>(&self.device, true);
-                        let slice = map.mem_mut();
-
-                        slice[..texture.transfer_buffer.len() as usize].copy_from_slice(
-                            bytemuck::cast_slice(
-                                app_state.emulator_state.pattern_pixel_buffer.as_slice(),
-                            ),
-                        );
-                        map.unmap();
-
-                        self.upload_texture(texture, &copy_pass);
-                    }
-
+                    let copy_pass = self.device.begin_copy_pass(&command_buffer).unwrap();
+                    self.upload_texture(texture, &copy_pass);
                     self.device.end_copy_pass(copy_pass);
                 }
             }
@@ -266,8 +259,12 @@ impl Frontend for ImguiFrontend {
                     &mut command_buffer,
                     &color_targets,
                     |ui| {
-                        self.frontend_state
-                            .render_ui(ui, &mut self.input_queue, &self.textures);
+                        self.frontend_state.render_ui(
+                            ui,
+                            &mut self.input_queue,
+                            &self.textures,
+                            self.app_state.lock().unwrap(),
+                        );
                     },
                 );
 
@@ -425,6 +422,7 @@ impl FrontendState {
         ui: &mut imgui::Ui,
         input_queue: &mut VecDeque<InputEvent>,
         textures: &HashMap<&str, TextureData>,
+        app_state: MutexGuard<AppState>,
     ) {
         // === Menu bar ===
         ui.main_menu_bar(|| {
