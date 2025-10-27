@@ -33,6 +33,7 @@ mod zp_xy_05;
 
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
+use crate::frontend::Frontends;
 
 #[test]
 fn test_official_only() {
@@ -41,7 +42,7 @@ fn test_official_only() {
         "./tests/nes-test-roms/instr_test-v5/official_only.nes",
     ));
     emu.reset();
-    emu.run_until(750_000_000)
+    emu.run_until(&mut Frontends::default(), 750_000_000)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601C));
@@ -63,7 +64,7 @@ fn test_all_instrs() {
         "./tests/nes-test-roms/instr_test-v5/all_instrs.nes",
     ));
     emu.reset();
-    emu.run_until(900_000_000)
+    emu.run_until(&mut Frontends::default(), 900_000_000)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601C));

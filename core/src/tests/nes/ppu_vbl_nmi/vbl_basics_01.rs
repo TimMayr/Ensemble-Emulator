@@ -1,5 +1,6 @@
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
+use crate::frontend::Frontends;
 
 #[test]
 fn test_01_vbl_basics() {
@@ -8,7 +9,8 @@ fn test_01_vbl_basics() {
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/01-vbl_basics.nes",
     ));
     emu.power();
-    emu.run_until(51119365).expect("Error while running test");
+    emu.run_until(&mut Frontends::default(), 51119365)
+        .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601B));
     let cpu_mem = whole_mem[0].as_slice();

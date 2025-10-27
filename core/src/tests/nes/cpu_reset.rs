@@ -1,5 +1,6 @@
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
+use crate::frontend::Frontends;
 
 #[test]
 fn test_ram_after_reset() {
@@ -10,13 +11,15 @@ fn test_ram_after_reset() {
     emu.reset();
 
     for i in 0..u128::MAX {
-        emu.step().expect("TODO: panic message");
+        emu.step(&mut Frontends::default())
+            .expect("TODO: panic message");
 
         let val = emu.get_memory_debug(Some(0x6000..=0x6000))[0][0];
 
         if val == 0x81 {
             for _ in 0..4_000_000 {
-                emu.step().expect("TODO: panic message");
+                emu.step(&mut Frontends::default())
+                    .expect("TODO: panic message");
             }
             emu.reset();
         }
@@ -49,13 +52,15 @@ fn test_registers() {
     emu.reset();
 
     for i in 0..u128::MAX {
-        emu.step().expect("TODO: panic message");
+        emu.step(&mut Frontends::default())
+            .expect("TODO: panic message");
 
         let val = emu.get_memory_debug(Some(0x6000..=0x6000))[0][0];
 
         if val == 0x81 {
             for _ in 0..8_000_000 {
-                emu.step().expect("TODO: panic message");
+                emu.step(&mut Frontends::default())
+                    .expect("TODO: panic message");
             }
             emu.reset();
         }
