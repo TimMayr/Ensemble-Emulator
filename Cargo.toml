@@ -5,9 +5,6 @@ members = [
 default-members = ["core"]
 resolver = "2"
 
-[patch.crates-io]
-imgui-sdl3 = { path = "vendor/imgui-sdl3" }
-
 [profile.profiling]
 inherits = "release"
 lto = false
