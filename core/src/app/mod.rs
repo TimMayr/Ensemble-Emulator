@@ -15,8 +15,8 @@ use crate::emulation::emu::{Console, Consoles, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::emulation::nes::{EmuExecutionFinishedType, Nes};
 
 #[cfg(feature = "frontend")]
-pub struct App {
-    frontend: Frontends,
+pub struct App<'a> {
+    frontend: Frontends<'a>,
     pub emulator: Arc<Mutex<Consoles>>,
     pub state: Arc<Mutex<AppState>>,
 }
@@ -50,7 +50,7 @@ impl Default for App {
 }
 
 #[cfg(feature = "frontend")]
-impl Default for App {
+impl Default for App<'_> {
     fn default() -> Self {
         let (app_sender, emu_receiver) = unbounded::<AppToEmuMessages>();
         let (emu_sender, app_receiver) = unbounded::<EmuToAppMessages>();
@@ -96,8 +96,8 @@ impl App {
 }
 
 #[cfg(feature = "frontend")]
-impl App {
-    pub fn new(mut frontend: Frontends, mut emulator: Consoles) -> Self {
+impl<'a> App<'a> {
+    pub fn new(mut frontend: Frontends<'a>, mut emulator: Consoles) -> Self {
         let (app_sender, emu_receiver) = unbounded::<AppToEmuMessages>();
         let (emu_sender, app_receiver) = unbounded::<EmuToAppMessages>();
 
@@ -162,7 +162,7 @@ impl App {
 }
 
 #[cfg(feature = "frontend")]
-impl App {
+impl App<'_> {
     pub fn run(&mut self) {
         let emu_state = self.state.clone();
         let emu = self.emulator.clone();

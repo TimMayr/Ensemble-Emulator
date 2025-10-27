@@ -108,6 +108,8 @@ dependencies = [
 [[package]]
 name = "imgui-sdl3"
 version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bcd231a382e4f6d660d1fef5d40ca4bcd6d85620a12fa1f03e4946aa53621e5"
 dependencies = [
  "imgui",
  "sdl3",
