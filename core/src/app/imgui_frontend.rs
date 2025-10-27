@@ -1,6 +1,5 @@
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Instant;
+use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::{Receiver, Sender};
 use imgui::TextureId;
@@ -19,7 +18,7 @@ use sdl3::{EventPump, Sdl};
 
 use crate::app::frontends::Frontend;
 use crate::app::{AppState, AppToEmuMessages, EmuToAppMessages};
-use crate::emulation::emu::{InputEvent, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::emulation::emu::{Consoles, InputEvent, SCREEN_HEIGHT, SCREEN_WIDTH};
 
 const FRAME_BUFFER_BYTES: usize = (SCREEN_WIDTH as usize) * (SCREEN_HEIGHT as usize) * 4;
 
@@ -43,6 +42,7 @@ pub struct ImguiFrontend {
     device: Device,
     frontend_state: FrontendState,
     app_state: Arc<Mutex<AppState>>,
+    emu: Arc<Mutex<Consoles>>,
     app_sender: Sender<AppToEmuMessages>,
     app_receiver: Receiver<EmuToAppMessages>,
     input_queue: VecDeque<InputEvent>,
@@ -99,6 +99,7 @@ impl ImguiFrontend {
     pub fn new(
         sender: Sender<AppToEmuMessages>,
         receiver: Receiver<EmuToAppMessages>,
+        emu: Arc<Mutex<Consoles>>,
         state: Arc<Mutex<AppState>>,
     ) -> Self {
         // Initialize SDL3
@@ -151,6 +152,7 @@ impl ImguiFrontend {
                 show_settings: false,
             },
             app_state: state,
+            emu,
             app_sender: sender,
             app_receiver: receiver,
             input_queue: VecDeque::new(),
@@ -172,7 +174,7 @@ impl Frontend for ImguiFrontend {
             self.collect_inputs(&mut event_pump);
 
             while let Some(i) = self.input_queue.pop_front() {
-                if self.handle_input(i).is_err() {
+                if let Err(_) = self.handle_input(i) {
                     running = false;
                 }
             }
@@ -186,13 +188,12 @@ impl Frontend for ImguiFrontend {
 
                     let mut map = self.transfer_buffer.map::<u8>(&self.device, true);
                     let slice = map.mem_mut();
-
                     slice[..FRAME_BUFFER_BYTES].copy_from_slice(bytemuck::cast_slice(
                         app_state.emulator_state.pixel_buffer.as_slice(),
                     ));
                     map.unmap();
 
-                    let copy_pass = self.device.begin_copy_pass(&command_buffer).unwrap();
+                    let mut copy_pass = self.device.begin_copy_pass(&command_buffer).unwrap();
                     copy_pass.upload_to_gpu_texture(
                         TextureTransferInfo::new()
                             .with_transfer_buffer(&self.transfer_buffer)
@@ -225,9 +226,9 @@ impl Frontend for ImguiFrontend {
                     |ui| {
                         self.frontend_state.render_ui(
                             ui,
+                            &self.emu,
                             &mut self.input_queue,
                             &self.screen_texture,
-                            self.app_state.lock().unwrap(),
                         );
                     },
                 );
@@ -240,7 +241,7 @@ impl Frontend for ImguiFrontend {
 
             if running {
                 while let Some(i) = self.input_queue.pop_front() {
-                    if self.handle_input(i).is_err() {
+                    if let Err(_) = self.handle_input(i) {
                         running = false;
                         break;
                     }
@@ -338,14 +339,6 @@ impl ImguiFrontend {
             EmuToAppMessages::Error(e) => {
                 eprintln!("{e}")
             }
-            EmuToAppMessages::FrameReady => {
-                self.app_state.lock().unwrap().emulator_state.frame_ready = true;
-                self.app_state
-                    .lock()
-                    .unwrap()
-                    .emulator_state
-                    .last_frame_time = Instant::now();
-            }
         }
     }
 
@@ -356,9 +349,9 @@ impl FrontendState {
     fn render_ui(
         &mut self,
         ui: &mut imgui::Ui,
+        emu: &Arc<Mutex<Consoles>>,
         input_queue: &mut VecDeque<InputEvent>,
         screen_texture: &TextureData,
-        app_state: MutexGuard<AppState>,
     ) {
         // === Menu bar ===
         ui.main_menu_bar(|| {
@@ -398,36 +391,32 @@ impl FrontendState {
                 imgui::Condition::FirstUseEver,
             )
             .build(|| {
-                ui.text(format!(
-                    "Frame Time: {:?}",
-                    app_state.emulator_state.last_frame_time.elapsed()
-                ));
                 imgui::Image::new(
                     screen_texture.id(),
                     [SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32],
                 )
-                .build(ui)
             });
 
         // === Optional windows ===
         if self.show_pattern_table {
-            self.render_pattern_table(ui);
+            self.render_pattern_table(ui, emu);
         }
         if self.show_nametable {
-            self.render_nametable(ui);
+            self.render_nametable(ui, emu);
         }
         if self.show_settings {
             self.render_settings(ui, input_queue);
         }
     }
 
-    fn render_pattern_table(&self, ui: &imgui::Ui) {
+    fn render_pattern_table(&self, ui: &imgui::Ui, emu: &Arc<Mutex<Consoles>>) {
         ui.window("Pattern Table").build(|| {
             ui.text("Pattern table visualizer here");
+            // TODO: use emu.lock() and pull pattern table data
         });
     }
 
-    fn render_nametable(&self, ui: &imgui::Ui) {
+    fn render_nametable(&self, ui: &imgui::Ui, emu: &Arc<Mutex<Consoles>>) {
         ui.window("Nametable Viewer").build(|| {
             ui.text("Nametable viewer here");
         });

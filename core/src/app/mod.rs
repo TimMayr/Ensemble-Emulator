@@ -62,11 +62,12 @@ impl Default for App {
 
         let state = Arc::new(Mutex::new(AppState::default()));
 
-        let frontend = Frontends::Imgui(Box::from(ImguiFrontend::new(
+        let frontend = Frontends::Imgui(ImguiFrontend::new(
             app_sender,
             app_receiver,
+            emu.clone(),
             state.clone(),
-        )));
+        ));
 
         Self {
             frontend,
@@ -75,7 +76,26 @@ impl Default for App {
         }
     }
 }
+#[cfg(not(feature = "frontend"))]
+impl App {
+    pub fn new(mut frontend: Frontends, mut emulator: Consoles) -> Self {
+        let (app_sender, emu_receiver) = unbounded::<AppToEmuMessages>();
+        let (emu_sender, app_receiver) = unbounded::<EmuToAppMessages>();
 
+        emulator.set_message_sender(emu_sender);
+        emulator.set_message_receiver(emu_receiver);
+        frontend.set_message_sender(app_sender);
+        frontend.set_message_receiver(app_receiver);
+
+        Self {
+            frontend,
+            emulator: Arc::new(Mutex::new(emulator)),
+            state: Arc::new(Mutex::new(AppState::default())),
+        }
+    }
+}
+
+#[cfg(feature = "frontend")]
 impl App {
     pub fn new(mut frontend: Frontends, mut emulator: Consoles) -> Self {
         let (app_sender, emu_receiver) = unbounded::<AppToEmuMessages>();
@@ -112,6 +132,8 @@ impl App {
                             emu.with_pixel_buffer(|pixels| {
                                 shared.emulator_state.pixel_buffer.copy_from_slice(pixels)
                             });
+                            shared.emulator_state.frame_ready = true;
+                            shared.emulator_state.last_frame_time = Instant::now()
                         }
                         EmuExecutionFinishedType::ReachedLastCycle
                         | EmuExecutionFinishedType::Quit
@@ -157,6 +179,8 @@ impl App {
                             emu.with_pixel_buffer(|pixels| {
                                 shared.emulator_state.pixel_buffer.copy_from_slice(pixels)
                             });
+                            shared.emulator_state.frame_ready = true;
+                            shared.emulator_state.last_frame_time = Instant::now()
                         }
                         EmuExecutionFinishedType::ReachedLastCycle
                         | EmuExecutionFinishedType::Quit => {
@@ -164,7 +188,7 @@ impl App {
                             println!("Emu Thread Quit");
                             return;
                         }
-                        _ => {
+                        EmuExecutionFinishedType::Running(_) | EmuExecutionFinishedType::Paused => {
                             continue;
                         }
                     },
@@ -183,9 +207,17 @@ impl App {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct AppState {
     emulator_state: EmulatorSharedState,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            emulator_state: EmulatorSharedState::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -219,5 +251,4 @@ pub enum AppToEmuMessages {
 pub enum EmuToAppMessages {
     Halted,
     Error(String),
-    FrameReady,
 }
