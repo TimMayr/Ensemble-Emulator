@@ -7,10 +7,10 @@ use crossbeam_channel::{Receiver, Sender};
 use crate::app::{AppToEmuMessages, EmuToAppMessages};
 use crate::emulation::cpu::{Cpu, CpuExecutionResult, MicroOp};
 use crate::emulation::emu::{Console, SCREEN_HEIGHT, SCREEN_WIDTH};
-use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
-use crate::emulation::ppu::{Ppu, PpuResult};
+use crate::emulation::mem::Memory;
+use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
 use crate::emulation::savestate::{CpuState, PpuState, SaveState};
@@ -159,10 +159,6 @@ impl Nes {
         self.cpu.load_rom(&rom_file);
         self.ppu.lock().unwrap().load_rom(&rom_file);
         self.rom_file = Some(rom_file);
-
-        if let Some(sender) = &self.emu_sender {
-            sender.send(EmuToAppMessages::PatternTableChanged).ok();
-        }
     }
 
     pub fn save_state(&self, path: &str) {
@@ -284,22 +280,10 @@ impl Nes {
                 return Ok(EmuExecutionFinishedType::ReachedLastCycle);
             };
 
-            let mut ppu_res = None;
+            let mut frame_ready = false;
             if self.ppu_cycle_counter == 4 {
-                let l_res = self.ppu.lock().unwrap().step();
-
-                if let Some(sender) = &self.emu_sender {
-                    if l_res.frame_ready {
-                        sender.send(EmuToAppMessages::FrameReady).ok();
-                    }
-
-                    if l_res.nametable_changed {
-                        sender.send(EmuToAppMessages::NametableChanged).ok();
-                    }
-                }
-
+                frame_ready = self.ppu.lock().unwrap().step();
                 self.ppu_cycle_counter = 0;
-                ppu_res = Some(l_res);
             }
 
             let mut cpu_res = Ok(CpuExecutionResult::CycleCompleted);
@@ -338,14 +322,22 @@ impl Nes {
                 self.cpu_cycle_counter = 0;
             }
 
-            match cpu_res {
-                Ok(t) => match t {
-                    CpuExecutionResult::CycleCompleted => {
-                        Ok(EmuExecutionFinishedType::Running(ppu_res))
-                    }
-                    CpuExecutionResult::Hlt => Ok(EmuExecutionFinishedType::CpuHlt),
-                },
-                Err(e) => Err(e),
+            if frame_ready {
+                if let Some(sender) = &self.emu_sender {
+                    sender.send(EmuToAppMessages::FrameReady).ok();
+                }
+
+                Ok(EmuExecutionFinishedType::Running(true))
+            } else {
+                match cpu_res {
+                    Ok(t) => match t {
+                        CpuExecutionResult::CycleCompleted => {
+                            Ok(EmuExecutionFinishedType::Running(false))
+                        }
+                        CpuExecutionResult::Hlt => Ok(EmuExecutionFinishedType::CpuHlt),
+                    },
+                    Err(e) => Err(e),
+                }
             }
         } else {
             Ok(EmuExecutionFinishedType::Paused)
@@ -370,15 +362,6 @@ impl Nes {
     pub fn set_render_palette_tables(&mut self, val: bool) { self.render_palette_tables = val; }
 
     pub fn set_render_nametables(&mut self, val: bool) { self.render_nametables = val; }
-
-    #[inline]
-    pub fn with_nametable_pixel_buffer<R>(
-        &self,
-        f: impl FnOnce([u32; (SCREEN_WIDTH * 2 * SCREEN_HEIGHT * 2) as usize]) -> R,
-    ) -> R {
-        let ppu = self.ppu.lock().unwrap();
-        f(ppu.get_nametable_pixels())
-    }
 }
 
 impl Default for Nes {
@@ -392,7 +375,7 @@ impl Default for Nes {
 #[derive(Debug)]
 pub enum EmuExecutionFinishedType {
     ReachedLastCycle,
-    Running(Option<PpuResult>),
+    Running(bool),
     Quit,
     Paused,
     CpuHlt,
