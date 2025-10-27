@@ -14,8 +14,8 @@ use crate::app::imgui_frontend::ImguiFrontend;
 use crate::emulation::emu::{Console, Consoles, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::emulation::nes::{EmuExecutionFinishedType, Nes};
 
-pub struct App<'a> {
-    frontend: Frontends<'a>,
+pub struct App {
+    frontend: Frontends,
     pub emulator: Arc<Mutex<Consoles>>,
     pub state: Arc<Mutex<AppState>>,
 }
@@ -42,7 +42,7 @@ impl Default for App {
 }
 
 #[cfg(feature = "frontend")]
-impl Default for App<'_> {
+impl Default for App {
     fn default() -> Self {
         let (app_sender, emu_receiver) = unbounded::<AppToEmuMessages>();
         let (emu_sender, app_receiver) = unbounded::<EmuToAppMessages>();
@@ -52,25 +52,18 @@ impl Default for App<'_> {
             emu_receiver,
         ))));
 
-        let state = Arc::new(Mutex::new(AppState::default()));
-
-        let frontend = Frontends::Imgui(ImguiFrontend::new(
-            app_sender,
-            app_receiver,
-            emu.clone(),
-            state.clone(),
-        ));
+        let frontend = Frontends::Imgui(ImguiFrontend::new(app_sender, app_receiver, emu.clone()));
 
         Self {
             frontend,
             emulator: emu,
-            state,
+            state: Arc::new(Mutex::new(AppState::default())),
         }
     }
 }
 
-impl<'a> App<'a> {
-    pub fn new(mut frontend: Frontends<'a>, mut emulator: Consoles) -> Self {
+impl App {
+    pub fn new(mut frontend: Frontends, mut emulator: Consoles) -> Self {
         let (app_sender, emu_receiver) = unbounded::<AppToEmuMessages>();
         let (emu_sender, app_receiver) = unbounded::<EmuToAppMessages>();
 
@@ -85,9 +78,7 @@ impl<'a> App<'a> {
             state: Arc::new(Mutex::new(AppState::default())),
         }
     }
-}
 
-impl App<'_> {
     pub fn run(&mut self) {
         let emu_state = self.state.clone();
         let emu = self.emulator.clone();
