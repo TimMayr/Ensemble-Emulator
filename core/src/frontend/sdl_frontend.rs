@@ -1,12 +1,12 @@
 use std::cell::Ref;
 use std::mem;
 
+use sdl2::EventPump;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::{Color, PixelFormatEnum};
 use sdl2::render::{ScaleMode, Texture, TextureCreator, UpdateTextureError, WindowCanvas};
 use sdl2::video::WindowContext;
-use sdl2::EventPump;
 
 use crate::emulation::emu::{InputEvent, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::frontend::Frontend;
