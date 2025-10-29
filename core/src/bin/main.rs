@@ -3,10 +3,29 @@ use std::time::Instant;
 use nes_core::emulation::emu::{Console, Consoles};
 use nes_core::emulation::nes::Nes;
 use nes_core::frontend::Frontends;
+#[cfg(feature = "imgui-sdl3-frontend")]
+use nes_core::frontend::imgui_sdl3_frontend::ImguiSdl3Frontend;
 #[cfg(feature = "sdl2")]
 use nes_core::frontend::sdl_frontend::SdlFrontend;
 
-#[cfg(feature = "sdl2")]
+#[cfg(feature = "imgui-sdl3-frontend")]
+fn main() {
+    let mut emu = Consoles::Nes(Nes::default());
+    let frontend = ImguiSdl3Frontend::new().expect("Failed to start ImGui SDL3 frontend");
+    let mut frontend = Frontends::ImguiSdl3(frontend);
+
+    emu.load_rom(&String::from("./core/tests/Pac-Man (USA) (Namco).nes"));
+    emu.power();
+
+    let start = Instant::now();
+
+    emu.run_until(&mut frontend, u128::MAX)
+        .expect("TODO: panic message");
+
+    println!("{:?}", start.elapsed());
+}
+
+#[cfg(all(not(feature = "imgui-sdl3-frontend"), feature = "sdl2"))]
 fn main() {
     let mut emu = Consoles::Nes(Nes::default());
     let mut frontend = Frontends::Sdl2(SdlFrontend::default());
@@ -22,7 +41,7 @@ fn main() {
     println!("{:?}", start.elapsed());
 }
 
-#[cfg(not(feature = "sdl2"))]
+#[cfg(all(not(feature = "imgui-sdl3-frontend"), not(feature = "sdl2")))]
 fn main() {
     let mut emu = Consoles::Nes(Nes::default());
 

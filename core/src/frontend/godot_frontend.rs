@@ -1,4 +1,3 @@
-use std::cell::Ref;
 use std::ffi::c_void;
 
 use crate::emulation::emu::{InputEvent, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
@@ -28,15 +27,12 @@ impl GodotFrontend {
 }
 
 impl Frontend for GodotFrontend {
-    fn show_frame(
-        &mut self,
-        pixel_buffer: Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
-    ) -> Result<(), String> {
+    fn show_frame(&mut self, pixel_buffer: &[u32]) -> Result<(), String> {
         if self.video_ptr.is_null() || self.video_len == 0 {
             return Ok(());
         }
 
-        let src_bytes: &[u8] = bytemuck::cast_slice(&*pixel_buffer);
+        let src_bytes: &[u8] = bytemuck::cast_slice(pixel_buffer);
         let expected_len = src_bytes.len();
 
         if expected_len > self.video_len {
@@ -68,5 +64,5 @@ impl Frontend for GodotFrontend {
         Ok(())
     }
 
-    fn poll_input_events(&mut self) -> Result<Vec<InputEvent>, String> { todo!() }
+    fn poll_input_events(&mut self) -> Result<Vec<InputEvent>, String> { Ok(Vec::new()) }
 }

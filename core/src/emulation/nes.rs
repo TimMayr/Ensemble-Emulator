@@ -5,9 +5,9 @@ use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp};
 use crate::emulation::emu::{Console, InputEvent, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
-use crate::emulation::mem::Memory;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
@@ -227,9 +227,9 @@ impl Nes {
         //     self.ppu.borrow_mut().frame();
         // }
 
-        if frame_ready && !matches!(frontend, Frontends::None()) {
+        if frame_ready && !matches!(frontend, Frontends::None) {
             let pixel_buffer = self.get_pixel_buffer();
-            frontend.show_frame(pixel_buffer)?;
+            frontend.show_frame(&pixel_buffer)?;
 
             let res = frontend.poll_input_events();
             if let Ok(events) = res {

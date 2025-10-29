@@ -1,12 +1,11 @@
-use std::cell::Ref;
 use std::mem;
 
+use sdl2::EventPump;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::{Color, PixelFormatEnum};
 use sdl2::render::{ScaleMode, Texture, TextureCreator, UpdateTextureError, WindowCanvas};
 use sdl2::video::WindowContext;
-use sdl2::EventPump;
 
 use crate::emulation::emu::{InputEvent, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::frontend::Frontend;
@@ -74,11 +73,8 @@ impl Default for SdlFrontend {
 }
 
 impl Frontend for SdlFrontend {
-    fn show_frame(
-        &mut self,
-        pixel_buffer: Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
-    ) -> Result<(), String> {
-        let bytes: &[u8] = bytemuck::cast_slice(&*pixel_buffer);
+    fn show_frame(&mut self, pixel_buffer: &[u32]) -> Result<(), String> {
+        let bytes: &[u8] = bytemuck::cast_slice(pixel_buffer);
         self.texture
             .update(None, bytes, (TOTAL_OUTPUT_WIDTH * 4) as usize)
             .map_err(|e: UpdateTextureError| e.to_string())?;
