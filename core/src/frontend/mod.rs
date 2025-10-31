@@ -1,4 +1,6 @@
 pub mod godot_frontend;
+#[cfg(feature = "imgui-frontend")]
+pub mod imgui_frontend;
 #[cfg(feature = "sdl2-frontend")]
 pub mod sdl_frontend;
 

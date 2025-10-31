@@ -1,8 +1,10 @@
 pub mod cpu;
 pub mod emu;
 pub mod mem;
+pub mod messages;
 pub mod nes;
 pub mod opcode;
 pub mod ppu;
 pub mod rom;
 pub mod savestate;
+pub mod threaded;
