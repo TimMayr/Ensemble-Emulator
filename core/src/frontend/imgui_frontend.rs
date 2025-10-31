@@ -23,7 +23,6 @@ pub struct ImGuiFrontend {
     to_emulator: Sender<FrontendMessage>,
     from_emulator: Receiver<EmulatorMessage>,
     current_frame: Option<Box<[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>>,
-    emulator_texture: Option<Texture>,
     should_quit: bool,
     show_pattern_table: bool,
     show_nametable: bool,
@@ -90,7 +89,6 @@ impl ImGuiFrontend {
             to_emulator,
             from_emulator,
             current_frame: None,
-            emulator_texture: None,
             should_quit: false,
             show_pattern_table: false,
             show_nametable: false,
@@ -103,6 +101,7 @@ impl ImGuiFrontend {
         sdl: &mut sdl3::Sdl,
         window: &sdl3::video::Window,
         device: &Device,
+        channel_emu: &mut crate::emulation::channel_emu::ChannelEmulator,
     ) -> Result<(), String> {
         let mut event_pump = sdl.event_pump().map_err(|e| e.to_string())?;
 
@@ -118,6 +117,13 @@ impl ImGuiFrontend {
                     }
                     _ => {}
                 }
+            }
+
+            // Step the emulator one frame
+            if let Err(e) = channel_emu.step_frame() {
+                eprintln!("Emulator error: {}", e);
+                self.should_quit = true;
+                break 'main;
             }
 
             // Check for messages from emulator
@@ -166,6 +172,11 @@ impl ImGuiFrontend {
                 .with_store_op(StoreOp::STORE)
                 .with_clear_color(Color::RGB(45, 45, 48))];
 
+            // Prepare UI data before rendering
+            let current_fps = self.fps_counter.fps();
+            let has_frame = self.current_frame.is_some();
+            let first_pixel = self.current_frame.as_ref().map(|frame| frame[0]);
+
             self.imgui.render(
                 sdl,
                 device,
@@ -174,7 +185,14 @@ impl ImGuiFrontend {
                 &mut command_buffer,
                 &color_targets,
                 |ui| {
-                    self.render_ui(ui);
+                    render_ui_static(
+                        ui,
+                        &mut self.show_pattern_table,
+                        &mut self.show_nametable,
+                        current_fps,
+                        has_frame,
+                        first_pixel,
+                    );
                 },
             );
 
@@ -186,88 +204,6 @@ impl ImGuiFrontend {
         }
 
         Ok(())
-    }
-
-    fn render_ui(&mut self, ui: &imgui::Ui) {
-        // Main menu bar
-        if let Some(_menu_bar) = ui.begin_main_menu_bar() {
-            if let Some(_menu) = ui.begin_menu("View") {
-                ui.checkbox("Pattern Table Viewer", &mut self.show_pattern_table);
-                ui.checkbox("Nametable Viewer", &mut self.show_nametable);
-            }
-        }
-
-        // Emulator output window (always visible)
-        self.render_emulator_window(ui);
-
-        // Optional windows
-        if self.show_pattern_table {
-            self.render_pattern_table_window(ui);
-        }
-
-        if self.show_nametable {
-            self.render_nametable_window(ui);
-        }
-
-        // Status bar
-        self.render_status_bar(ui);
-    }
-
-    fn render_emulator_window(&mut self, ui: &imgui::Ui) {
-        ui.window("Emulator Output")
-            .size([640.0, 480.0], imgui::Condition::FirstUseEver)
-            .position([50.0, 50.0], imgui::Condition::FirstUseEver)
-            .build(|| {
-                if let Some(ref frame) = self.current_frame {
-                    // TODO: Create texture from frame data and display it
-                    // For now, just show a placeholder
-                    ui.text(format!(
-                        "Frame buffer: {}x{} pixels",
-                        TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT
-                    ));
-                    ui.text("TODO: Render frame to texture");
-                    
-                    // Show a sample of the frame data
-                    ui.text(format!(
-                        "First pixel color: 0x{:08X}",
-                        frame[0]
-                    ));
-                } else {
-                    ui.text("Waiting for first frame...");
-                }
-            });
-    }
-
-    fn render_pattern_table_window(&mut self, ui: &imgui::Ui) {
-        ui.window("Pattern Table Viewer")
-            .size([400.0, 300.0], imgui::Condition::FirstUseEver)
-            .position([700.0, 50.0], imgui::Condition::FirstUseEver)
-            .opened(&mut self.show_pattern_table)
-            .build(|| {
-                ui.text("Pattern Table visualization");
-                ui.separator();
-                ui.text("TODO: Implement pattern table rendering");
-                ui.text_wrapped(
-                    "This window will display the CHR ROM pattern tables \
-                     used for sprites and background tiles.",
-                );
-            });
-    }
-
-    fn render_nametable_window(&mut self, ui: &imgui::Ui) {
-        ui.window("Nametable Viewer")
-            .size([400.0, 300.0], imgui::Condition::FirstUseEver)
-            .position([700.0, 370.0], imgui::Condition::FirstUseEver)
-            .opened(&mut self.show_nametable)
-            .build(|| {
-                ui.text("Nametable visualization");
-                ui.separator();
-                ui.text("TODO: Implement nametable rendering");
-                ui.text_wrapped(
-                    "This window will display the nametables showing \
-                     the background tile arrangement.",
-                );
-            });
     }
 
     fn render_status_bar(&self, ui: &imgui::Ui) {
@@ -293,4 +229,102 @@ impl ImGuiFrontend {
                 }
             });
     }
+}
+
+#[cfg(feature = "imgui-frontend")]
+#[allow(unused_variables)] // show_pattern_table and show_nametable will be used when we add keyboard shortcuts
+fn render_ui_static(
+    ui: &imgui::Ui,
+    show_pattern_table: &mut bool,
+    show_nametable: &mut bool,
+    current_fps: f32,
+    has_frame: bool,
+    first_pixel: Option<u32>,
+) {
+    // Main menu bar
+    if let Some(_menu_bar) = ui.begin_main_menu_bar() {
+        if let Some(_menu) = ui.begin_menu("View") {
+            ui.checkbox("Pattern Table Viewer", show_pattern_table);
+            ui.checkbox("Nametable Viewer", show_nametable);
+        }
+    }
+
+    // Emulator output window (always visible)
+    ui.window("Emulator Output")
+        .size([640.0, 480.0], imgui::Condition::FirstUseEver)
+        .position([50.0, 50.0], imgui::Condition::FirstUseEver)
+        .build(|| {
+            if has_frame {
+                // TODO: Create texture from frame data and display it
+                // For now, just show a placeholder
+                ui.text(format!(
+                    "Frame buffer: {}x{} pixels",
+                    TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT
+                ));
+                ui.text("TODO: Render frame to texture");
+                
+                // Show a sample of the frame data
+                if let Some(pixel) = first_pixel {
+                    ui.text(format!("First pixel color: 0x{:08X}", pixel));
+                }
+            } else {
+                ui.text("Waiting for first frame...");
+            }
+        });
+
+    // Optional windows
+    if *show_pattern_table {
+        ui.window("Pattern Table Viewer")
+            .size([400.0, 300.0], imgui::Condition::FirstUseEver)
+            .position([700.0, 50.0], imgui::Condition::FirstUseEver)
+            .opened(show_pattern_table)
+            .build(|| {
+                ui.text("Pattern Table visualization");
+                ui.separator();
+                ui.text("TODO: Implement pattern table rendering");
+                ui.text_wrapped(
+                    "This window will display the CHR ROM pattern tables \
+                     used for sprites and background tiles.",
+                );
+            });
+    }
+
+    if *show_nametable {
+        ui.window("Nametable Viewer")
+            .size([400.0, 300.0], imgui::Condition::FirstUseEver)
+            .position([700.0, 370.0], imgui::Condition::FirstUseEver)
+            .opened(show_nametable)
+            .build(|| {
+                ui.text("Nametable visualization");
+                ui.separator();
+                ui.text("TODO: Implement nametable rendering");
+                ui.text_wrapped(
+                    "This window will display the nametables showing \
+                     the background tile arrangement.",
+                );
+            });
+    }
+
+    // Status bar
+    let window_size = ui.io().display_size;
+    let status_height = 25.0;
+
+    ui.window("StatusBar")
+        .position([0.0, window_size[1] - status_height], imgui::Condition::Always)
+        .size([window_size[0], status_height], imgui::Condition::Always)
+        .title_bar(false)
+        .resizable(false)
+        .movable(false)
+        .scrollable(false)
+        .build(|| {
+            ui.text(format!("FPS: {:.1}", current_fps));
+            ui.same_line();
+            ui.text("|");
+            ui.same_line();
+            if has_frame {
+                ui.text("Emulator: Running");
+            } else {
+                ui.text("Emulator: Initializing");
+            }
+        });
 }

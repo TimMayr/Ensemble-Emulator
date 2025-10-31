@@ -2,26 +2,26 @@
 use sdl3::gpu::*;
 
 #[cfg(feature = "imgui-frontend")]
-use crate::emulation::emu::Consoles;
+use crate::emulation::channel_emu::ChannelEmulator;
+#[cfg(feature = "imgui-frontend")]
+use crate::emulation::emu::{Console, Consoles};
 #[cfg(feature = "imgui-frontend")]
 use crate::emulation::nes::Nes;
-#[cfg(feature = "imgui-frontend")]
-use crate::emulation::threaded::ThreadedEmulator;
 #[cfg(feature = "imgui-frontend")]
 use crate::frontend::imgui_frontend::ImGuiFrontend;
 
 #[cfg(feature = "imgui-frontend")]
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create the emulator instance
-    let mut emu = Consoles::Nes(Nes::default());
+    let mut console = Consoles::Nes(Nes::default());
     
     // Load a ROM
     // TODO: Make this configurable via command line or file dialog
-    emu.load_rom(&String::from("./core/tests/Pac-Man (USA) (Namco).nes"));
-    emu.power();
+    console.load_rom(&String::from("./core/tests/Pac-Man (USA) (Namco).nes"));
+    console.power();
 
-    // Create threaded emulator
-    let threaded_emu = ThreadedEmulator::new(emu);
+    // Create channel-based emulator wrapper
+    let (mut channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
 
     // Initialize SDL
     let mut sdl = sdl3::init().map_err(|e| e.to_string())?;
@@ -45,15 +45,12 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut frontend = ImGuiFrontend::new(
         &device,
         &window,
-        threaded_emu.to_emulator(),
-        threaded_emu.from_emulator(),
+        tx_to_emu,
+        rx_from_emu,
     )?;
 
-    // Run the frontend (this blocks until the window is closed)
-    frontend.run(&mut sdl, &window, &device)?;
-
-    // Wait for emulator thread to finish
-    threaded_emu.join().map_err(|e| format!("Thread join error: {:?}", e))?;
+    // Run the main loop
+    frontend.run(&mut sdl, &window, &device, &mut channel_emu)?;
 
     Ok(())
 }
