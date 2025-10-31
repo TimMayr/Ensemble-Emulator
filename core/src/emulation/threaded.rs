@@ -15,7 +15,7 @@ pub struct ThreadedEmulator {
 }
 
 impl ThreadedEmulator {
-    pub fn new(mut console: Consoles) -> Self {
+    pub fn new(console: Consoles) -> Self {
         let (tx_to_emu, rx_from_frontend) = crossbeam_channel::unbounded();
         let (tx_from_emu, rx_to_frontend) = crossbeam_channel::unbounded();
 
