@@ -1,7 +1,7 @@
-/// ImGui-based frontend for the NES emulator using SDL3.
+/// ImGui-based frontend for the NES emulator using SDL2 + OpenGL.
 ///
 /// This frontend provides a modern, multi-window debugging interface with:
-/// - Real-time emulator output display
+/// - Real-time emulator output display with proper texture rendering
 /// - Pattern table viewer (planned)
 /// - Nametable viewer (planned)
 /// - FPS counter and status display
@@ -25,13 +25,13 @@ use std::time::{Duration, Instant};
 #[cfg(feature = "imgui-frontend")]
 use crossbeam_channel::{Receiver, Sender};
 #[cfg(feature = "imgui-frontend")]
-use imgui_sdl3::ImGuiSdl3;
+use glow::HasContext;
 #[cfg(feature = "imgui-frontend")]
-use sdl3::event::Event;
+use imgui_sdl2_support::SdlPlatform;
 #[cfg(feature = "imgui-frontend")]
-use sdl3::gpu::*;
+use sdl2::event::Event;
 #[cfg(feature = "imgui-frontend")]
-use sdl3::pixels::Color;
+use sdl2::video::Window;
 
 #[cfg(feature = "imgui-frontend")]
 use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
@@ -40,10 +40,14 @@ use crate::emulation::messages::{EmulatorMessage, FrontendMessage};
 
 #[cfg(feature = "imgui-frontend")]
 pub struct ImGuiFrontend {
-    imgui: ImGuiSdl3,
+    imgui: imgui::Context,
+    platform: SdlPlatform,
+    renderer: imgui_glow_renderer::AutoRenderer,
+    _gl_context: sdl2::video::GLContext,
     to_emulator: Sender<FrontendMessage>,
     from_emulator: Receiver<EmulatorMessage>,
     current_frame: Option<Box<[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>>,
+    emulator_texture: Option<glow::Texture>,
     should_quit: bool,
     show_pattern_table: bool,
     show_nametable: bool,
@@ -88,41 +92,55 @@ impl FpsCounter {
 #[cfg(feature = "imgui-frontend")]
 impl ImGuiFrontend {
     pub fn new(
-        device: &Device,
-        window: &sdl3::video::Window,
+        window: &Window,
         to_emulator: Sender<FrontendMessage>,
         from_emulator: Receiver<EmulatorMessage>,
     ) -> Result<Self, String> {
-        // Create ImGui context
-        let imgui = ImGuiSdl3::new(device, window, |ctx| {
-            // Disable creation of files on disc
-            ctx.set_ini_filename(None);
-            ctx.set_log_filename(None);
+        // Create OpenGL context
+        let gl_context = window.gl_create_context().map_err(|e| e.to_string())?;
+        window.gl_make_current(&gl_context).map_err(|e| e.to_string())?;
+        window.subsystem().gl_set_swap_interval(1).map_err(|e| e.to_string())?;
 
-            // Get display scale for proper DPI handling
-            let scale_factor = window.display_scale().max(1.0);
-            
-            // Setup fonts with proper scaling for high DPI displays
-            ctx.fonts().add_font(&[imgui::FontSource::DefaultFontData {
-                config: Some(imgui::FontConfig {
-                    size_pixels: (13.0 * scale_factor),
-                    oversample_h: 2,
-                    oversample_v: 2,
-                    pixel_snap_h: true,
-                    ..Default::default()
-                }),
-            }]);
-            
-            // Set display scale to handle high DPI displays
-            let style = ctx.style_mut();
-            style.scale_all_sizes(scale_factor);
-        });
+        // Create glow context
+        let gl = unsafe {
+            glow::Context::from_loader_function(|s| window.subsystem().gl_get_proc_address(s) as _)
+        };
+
+        // Create ImGui context
+        let mut imgui = imgui::Context::create();
+        imgui.set_ini_filename(None);
+        imgui.set_log_filename(None);
+
+        // Setup fonts with proper DPI handling
+        let (window_width, _window_height) = window.size();
+        let (drawable_width, _drawable_height) = window.drawable_size();
+        let scale_factor = (drawable_width as f32 / window_width as f32).max(1.0);
+        
+        imgui.fonts().add_font(&[imgui::FontSource::DefaultFontData {
+            config: Some(imgui::FontConfig {
+                size_pixels: (13.0 * scale_factor),
+                oversample_h: 2,
+                oversample_v: 2,
+                ..Default::default()
+            }),
+        }]);
+        
+        imgui.io_mut().font_global_scale = 1.0 / scale_factor;
+
+        // Setup platform and renderer
+        let platform = SdlPlatform::new(&mut imgui);
+        let renderer = imgui_glow_renderer::AutoRenderer::new(gl, &mut imgui)
+            .map_err(|e| e.to_string())?;
 
         Ok(Self {
             imgui,
+            platform,
+            renderer,
+            _gl_context: gl_context,
             to_emulator,
             from_emulator,
             current_frame: None,
+            emulator_texture: None,
             should_quit: false,
             show_pattern_table: false,
             show_nametable: false,
@@ -132,9 +150,8 @@ impl ImGuiFrontend {
 
     pub fn run(
         &mut self,
-        sdl: &mut sdl3::Sdl,
-        window: &sdl3::video::Window,
-        device: &Device,
+        sdl: &sdl2::Sdl,
+        window: &Window,
         channel_emu: &mut crate::emulation::channel_emu::ChannelEmulator,
     ) -> Result<(), String> {
         let mut event_pump = sdl.event_pump().map_err(|e| e.to_string())?;
@@ -142,7 +159,7 @@ impl ImGuiFrontend {
         'main: loop {
             // Handle SDL events
             for event in event_pump.poll_iter() {
-                self.imgui.handle_event(&event);
+                self.platform.handle_event(&mut self.imgui, &event);
 
                 match event {
                     Event::Quit { .. } => {
@@ -166,6 +183,7 @@ impl ImGuiFrontend {
                     EmulatorMessage::FrameReady(frame) => {
                         self.current_frame = Some(frame);
                         self.fps_counter.update();
+                        self.update_emulator_texture()?;
                     }
                     EmulatorMessage::Stopped => {
                         self.should_quit = true;
@@ -175,7 +193,7 @@ impl ImGuiFrontend {
             }
 
             // Render UI
-            self.render(sdl, window, device, &mut event_pump)?;
+            self.render(window, &event_pump)?;
 
             if self.should_quit {
                 break 'main;
@@ -188,141 +206,134 @@ impl ImGuiFrontend {
         Ok(())
     }
 
-    fn render(
-        &mut self,
-        sdl: &mut sdl3::Sdl,
-        window: &sdl3::video::Window,
-        device: &Device,
-        event_pump: &mut sdl3::EventPump,
-    ) -> Result<(), String> {
-        let mut command_buffer = device
-            .acquire_command_buffer()
-            .map_err(|e| format!("Failed to acquire command buffer: {:?}", e))?;
+    fn update_emulator_texture(&mut self) -> Result<(), String> {
+        if let Some(ref frame) = self.current_frame {
+            let gl = self.renderer.gl_context();
 
-        if let Ok(swapchain) = command_buffer.wait_and_acquire_swapchain_texture(window) {
-            let color_targets = [ColorTargetInfo::default()
-                .with_texture(&swapchain)
-                .with_load_op(LoadOp::CLEAR)
-                .with_store_op(StoreOp::STORE)
-                .with_clear_color(Color::RGB(45, 45, 48))];
+            unsafe {
+                // Create texture if it doesn't exist
+                if self.emulator_texture.is_none() {
+                    let texture = gl.create_texture().map_err(|e| e.to_string())?;
+                    gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32);
+                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32);
+                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
+                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+                    
+                    self.emulator_texture = Some(texture);
+                }
 
-            // Prepare UI data before rendering
-            let current_fps = self.fps_counter.fps();
-            let frame_data = self.current_frame.clone();
-
-            self.imgui.render(
-                sdl,
-                device,
-                window,
-                event_pump,
-                &mut command_buffer,
-                &color_targets,
-                |ui| {
-                    render_ui_static(
-                        ui,
-                        &mut self.show_pattern_table,
-                        &mut self.show_nametable,
-                        current_fps,
-                        frame_data.as_deref(),
+                // Update texture with frame data
+                if let Some(texture) = self.emulator_texture {
+                    gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                    
+                    let bytes: &[u8] = bytemuck::cast_slice(&**frame);
+                    gl.tex_image_2d(
+                        glow::TEXTURE_2D,
+                        0,
+                        glow::RGBA as i32,
+                        TOTAL_OUTPUT_WIDTH as i32,
+                        TOTAL_OUTPUT_HEIGHT as i32,
+                        0,
+                        glow::RGBA,
+                        glow::UNSIGNED_BYTE,
+                        Some(bytes),
                     );
-                },
-            );
-
-            command_buffer
-                .submit()
-                .map_err(|e| format!("Failed to submit command buffer: {:?}", e))?;
-        } else {
-            command_buffer.cancel();
+                }
+            }
         }
+
+        Ok(())
+    }
+
+    fn render(&mut self, window: &Window, event_pump: &sdl2::EventPump) -> Result<(), String> {
+        self.platform.prepare_frame(&mut self.imgui, window, event_pump);
+
+        let ui = self.imgui.new_frame();
+
+        // Render UI elements
+        let show_pattern_table = self.show_pattern_table;
+        let show_nametable = self.show_nametable;
+        let fps = self.fps_counter.fps();
+        let has_frame = self.current_frame.is_some();
+        let emulator_texture = self.emulator_texture;
+
+        render_ui_static(ui, show_pattern_table, show_nametable, fps, has_frame, emulator_texture, 
+                        &mut self.show_pattern_table, &mut self.show_nametable);
+
+        // Render to screen
+        let gl = self.renderer.gl_context();
+        unsafe {
+            gl.clear_color(0.18, 0.18, 0.19, 1.0);
+            gl.clear(glow::COLOR_BUFFER_BIT);
+        }
+        
+        let draw_data = self.imgui.render();
+        self.renderer
+            .render(draw_data)
+            .map_err(|e| e.to_string())?;
+        
+        window.gl_swap_window();
 
         Ok(())
     }
 }
 
 #[cfg(feature = "imgui-frontend")]
-#[allow(unused_variables)] // show_pattern_table and show_nametable will be used when we add keyboard shortcuts
 fn render_ui_static(
     ui: &imgui::Ui,
-    show_pattern_table: &mut bool,
-    show_nametable: &mut bool,
-    current_fps: f32,
-    frame_data: Option<&[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
+    show_pattern_table: bool,
+    show_nametable: bool,
+    fps: f32,
+    has_frame: bool,
+    emulator_texture: Option<glow::Texture>,
+    show_pattern_table_mut: &mut bool,
+    show_nametable_mut: &mut bool,
 ) {
     // Main menu bar
-    if let Some(_menu_bar) = ui.begin_main_menu_bar()
-        && let Some(_menu) = ui.begin_menu("View") {
-            ui.checkbox("Pattern Table Viewer", show_pattern_table);
-            ui.checkbox("Nametable Viewer", show_nametable);
+    if let Some(_menu_bar) = ui.begin_main_menu_bar() {
+        if let Some(_menu) = ui.begin_menu("View") {
+            ui.checkbox("Pattern Table Viewer", show_pattern_table_mut);
+            ui.checkbox("Nametable Viewer", show_nametable_mut);
         }
+    }
 
     // Emulator output window (always visible)
     ui.window("Emulator Output")
         .size([640.0, 480.0], imgui::Condition::FirstUseEver)
         .position([50.0, 50.0], imgui::Condition::FirstUseEver)
         .build(|| {
-            if let Some(frame) = frame_data {
-                // Draw the frame using ImGui's draw list
-                let draw_list = ui.get_window_draw_list();
-                let cursor_pos = ui.cursor_screen_pos();
+            if let Some(texture) = emulator_texture {
+                // Get available content region
+                let content_region = ui.content_region_avail();
                 
                 // Calculate display size (scale to fit window while maintaining aspect ratio)
-                let content_region = ui.content_region_avail();
                 let scale = (content_region[0] / TOTAL_OUTPUT_WIDTH as f32)
                     .min(content_region[1] / TOTAL_OUTPUT_HEIGHT as f32)
-                    .min(3.0); // Cap at 3x scale
+                    .min(4.0); // Cap at 4x scale
                 
-                let display_width = (TOTAL_OUTPUT_WIDTH as f32 * scale) as usize;
-                let display_height = (TOTAL_OUTPUT_HEIGHT as f32 * scale) as usize;
+                let display_width = TOTAL_OUTPUT_WIDTH as f32 * scale;
+                let display_height = TOTAL_OUTPUT_HEIGHT as f32 * scale;
                 
-                ui.text(format!("Rendering {}x{} at {:.1}x scale", 
+                ui.text(format!("{}x{} at {:.1}x scale", 
                     TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT, scale));
-                ui.text(format!("Display size: {}x{}", display_width, display_height));
                 
-                // For now, draw a downsampled preview using colored rectangles
-                // This is a fallback until we have proper texture rendering
-                let pixel_size = scale.max(1.0);
-                let skip = if scale < 1.0 { (1.0 / scale) as usize } else { 1 };
+                // Create texture ID from OpenGL texture
+                let texture_id = imgui::TextureId::new(texture.0.get() as usize);
                 
-                for y in (0..TOTAL_OUTPUT_HEIGHT as usize).step_by(skip) {
-                    for x in (0..TOTAL_OUTPUT_WIDTH as usize).step_by(skip) {
-                        let pixel_index = y * TOTAL_OUTPUT_WIDTH as usize + x;
-                        if pixel_index < frame.len() {
-                            let color_u32 = frame[pixel_index];
-                            
-                            // Convert RGBA to ImGui color (ABGR format)
-                            let r = ((color_u32 >> 24) & 0xFF) as f32 / 255.0;
-                            let g = ((color_u32 >> 16) & 0xFF) as f32 / 255.0;
-                            let b = ((color_u32 >> 8) & 0xFF) as f32 / 255.0;
-                            let a = (color_u32 & 0xFF) as f32 / 255.0;
-                            
-                            let x_pos = cursor_pos[0] + (x as f32 * pixel_size);
-                            let y_pos = cursor_pos[1] + 20.0 + (y as f32 * pixel_size);
-                            
-                            draw_list
-                                .add_rect(
-                                    [x_pos, y_pos],
-                                    [x_pos + pixel_size, y_pos + pixel_size],
-                                    [r, g, b, a],
-                                )
-                                .filled(true)
-                                .build();
-                        }
-                    }
-                }
-                
-                // Reserve space for the display
-                ui.dummy([display_width as f32, display_height as f32 + 40.0]);
+                imgui::Image::new(texture_id, [display_width, display_height])
+                    .build(ui);
             } else {
                 ui.text("Waiting for first frame...");
             }
         });
 
     // Optional windows
-    if *show_pattern_table {
+    if show_pattern_table {
         ui.window("Pattern Table Viewer")
             .size([400.0, 300.0], imgui::Condition::FirstUseEver)
             .position([700.0, 50.0], imgui::Condition::FirstUseEver)
-            .opened(show_pattern_table)
+            .opened(show_pattern_table_mut)
             .build(|| {
                 ui.text("Pattern Table visualization");
                 ui.separator();
@@ -334,11 +345,11 @@ fn render_ui_static(
             });
     }
 
-    if *show_nametable {
+    if show_nametable {
         ui.window("Nametable Viewer")
             .size([400.0, 300.0], imgui::Condition::FirstUseEver)
             .position([700.0, 370.0], imgui::Condition::FirstUseEver)
-            .opened(show_nametable)
+            .opened(show_nametable_mut)
             .build(|| {
                 ui.text("Nametable visualization");
                 ui.separator();
@@ -362,11 +373,11 @@ fn render_ui_static(
         .movable(false)
         .scrollable(false)
         .build(|| {
-            ui.text(format!("FPS: {:.1}", current_fps));
+            ui.text(format!("FPS: {:.1}", fps));
             ui.same_line();
             ui.text("|");
             ui.same_line();
-            if frame_data.is_some() {
+            if has_frame {
                 ui.text("Emulator: Running");
             } else {
                 ui.text("Emulator: Initializing");

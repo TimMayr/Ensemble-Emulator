@@ -1,7 +1,4 @@
 #[cfg(feature = "imgui-frontend")]
-use sdl3::gpu::*;
-
-#[cfg(feature = "imgui-frontend")]
 use crate::emulation::channel_emu::ChannelEmulator;
 #[cfg(feature = "imgui-frontend")]
 use crate::emulation::emu::{Console, Consoles};
@@ -23,35 +20,34 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create channel-based emulator wrapper
     let (mut channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
 
-    // Initialize SDL
-    let mut sdl = sdl3::init().map_err(|e| e.to_string())?;
+    // Initialize SDL2
+    let sdl = sdl2::init().map_err(|e| e.to_string())?;
     let video_subsystem = sdl.video().map_err(|e| e.to_string())?;
+
+    // Setup OpenGL attributes
+    let gl_attr = video_subsystem.gl_attr();
+    gl_attr.set_context_version(3, 3);
+    gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
 
     // Create window
     let window = video_subsystem
-        .window("NES Emulator - ImGui", 800, 600)
+        .window("NES Emulator - ImGui", 1024, 768)
         .position_centered()
         .resizable()
+        .opengl()
+        .allow_highdpi()
         .build()
         .map_err(|e| e.to_string())?;
 
-    // Create GPU device
-    let device = Device::new(ShaderFormat::SPIRV, true)
-        .map_err(|e| format!("Failed to create device: {:?}", e))?
-        .with_window(&window)
-        .map_err(|e| format!("Failed to associate window: {:?}", e))?;
-
     // Create frontend
     let mut frontend = ImGuiFrontend::new(
-        &device,
         &window,
         tx_to_emu,
         rx_from_emu,
     )?;
 
     // Run the main loop
-    frontend.run(&mut sdl, &window, &device, &mut channel_emu)?;
+    frontend.run(&sdl, &window, &mut channel_emu)?;
 
     Ok(())
 }
-

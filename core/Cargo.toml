@@ -14,15 +14,19 @@ path = "src/bin/main.rs"
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 bincode = { version = "2", features = ["serde"] }
-sdl2 = { version = "0.38.0", optional = true }
+sdl2 = { version = "0.37.0", optional = true, features = ["gfx"] }
 bytemuck = "1.23.2"
 sdl3 = { version = "0.16.1", optional = true, features = ["build-from-source"] }
 imgui = { version = "0.12.0", optional = true }
 imgui-sdl3 = { version = "0.4.1", optional = true }
+imgui-sdl2-support = { version = "0.13.0", optional = true }
+imgui-glow-renderer = { version = "0.13.0", optional = true }
+glow = { version = "0.14", optional = true }
 log = "0.4.28"
 crossbeam-channel = "0.5.15"
 
 [features]
 default = []
 sdl2-frontend = ["sdl2"]
-imgui-frontend = ["sdl3", "imgui", "sdl2", "imgui-sdl3"]
+imgui-frontend = ["sdl2", "imgui", "imgui-sdl2-support", "imgui-glow-renderer", "glow"]
+imgui-sdl3-frontend = ["sdl3", "imgui", "imgui-sdl3"]
