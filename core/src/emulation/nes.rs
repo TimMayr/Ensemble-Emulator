@@ -200,8 +200,8 @@ impl Nes {
         last_cycle: u128,
     ) -> Result<ExecutionFinishedType, String> {
         self.total_cycles += 1;
-        self.cpu_cycle_counter += 1;
-        self.ppu_cycle_counter += 1;
+        self.cpu_cycle_counter = self.cpu_cycle_counter.wrapping_add(1);
+        self.ppu_cycle_counter = self.ppu_cycle_counter.wrapping_add(1);
 
         let ppu = self.ppu.borrow();
         if ppu.vbl_clear_scheduled.get().is_some() {

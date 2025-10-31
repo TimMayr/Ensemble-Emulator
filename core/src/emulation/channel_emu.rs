@@ -30,8 +30,8 @@
 /// // In your main loop:
 /// emu.step_frame()?; // Run one frame
 /// ```
-
 use crossbeam_channel::{Receiver, Sender};
+
 
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::messages::{ControllerEvent, EmulatorMessage, FrontendMessage};
@@ -103,23 +103,25 @@ impl ChannelEmulator {
 
     fn execute_frame(&mut self) -> Result<(), String> {
         match self.console.step_frame(&mut self.frontend) {
-            Ok(ExecutionFinishedType::CycleCompleted) | Ok(ExecutionFinishedType::ReachedLastCycle) => {
+            Ok(
+                ExecutionFinishedType::CycleCompleted
+                | ExecutionFinishedType::ReachedLastCycle
+                | ExecutionFinishedType::ReachedHlt,
+            ) => {
                 // Frame completed, send it to frontend
                 let frame = self.console.get_pixel_buffer();
                 let frame_data = Box::new(*frame);
-                if self.to_frontend.send(EmulatorMessage::FrameReady(frame_data)).is_err() {
+                if self
+                    .to_frontend
+                    .send(EmulatorMessage::FrameReady(frame_data))
+                    .is_err()
+                {
                     // Frontend disconnected
                     return Err("Frontend disconnected".to_string());
                 }
                 Ok(())
             }
-            Ok(ExecutionFinishedType::ReachedHlt) => {
-                // Emulator halted
-                Err("Emulator halted".to_string())
-            }
-            Err(e) => {
-                Err(format!("Emulator error: {}", e))
-            }
+            Err(e) => Err(format!("Emulator error: {}", e)),
         }
     }
 
