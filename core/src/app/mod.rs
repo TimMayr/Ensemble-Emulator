@@ -1,82 +1,60 @@
-use imgui_sdl3::ImGuiSdl3;
-use sdl3::event::Event;
+#[cfg(feature = "imgui-frontend")]
 use sdl3::gpu::*;
-use sdl3::pixels::Color;
 
+#[cfg(feature = "imgui-frontend")]
+use crate::emulation::emu::Consoles;
+#[cfg(feature = "imgui-frontend")]
+use crate::emulation::nes::Nes;
+#[cfg(feature = "imgui-frontend")]
+use crate::emulation::threaded::ThreadedEmulator;
+#[cfg(feature = "imgui-frontend")]
+use crate::frontend::imgui_frontend::ImGuiFrontend;
+
+#[cfg(feature = "imgui-frontend")]
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // initialize SDL and its video subsystem
-    let mut sdl = sdl3::init().unwrap();
-    let video_subsystem = sdl.video().unwrap();
+    // Create the emulator instance
+    let mut emu = Consoles::Nes(Nes::default());
+    
+    // Load a ROM
+    // TODO: Make this configurable via command line or file dialog
+    emu.load_rom(&String::from("./core/tests/Pac-Man (USA) (Namco).nes"));
+    emu.power();
 
-    // create a new window
+    // Create threaded emulator
+    let threaded_emu = ThreadedEmulator::new(emu);
+
+    // Initialize SDL
+    let mut sdl = sdl3::init().map_err(|e| e.to_string())?;
+    let video_subsystem = sdl.video().map_err(|e| e.to_string())?;
+
+    // Create window
     let window = video_subsystem
-        .window("Hello imgui-rs!", 1280, 720)
+        .window("NES Emulator - ImGui", 1280, 720)
         .position_centered()
         .resizable()
         .build()
-        .unwrap();
+        .map_err(|e| e.to_string())?;
 
+    // Create GPU device
     let device = Device::new(ShaderFormat::SPIRV, true)
-        .unwrap()
+        .map_err(|e| format!("Failed to create device: {:?}", e))?
         .with_window(&window)
-        .unwrap();
+        .map_err(|e| format!("Failed to associate window: {:?}", e))?;
 
-    // create platform and renderer
-    let mut imgui = ImGuiSdl3::new(&device, &window, |ctx| {
-        // disable creation of files on disc
-        ctx.set_ini_filename(None);
-        ctx.set_log_filename(None);
+    // Create frontend
+    let mut frontend = ImGuiFrontend::new(
+        &device,
+        &window,
+        threaded_emu.to_emulator(),
+        threaded_emu.from_emulator(),
+    )?;
 
-        // setup platform and renderer, and fonts to imgui
-        ctx.fonts().add_font(&[imgui::FontSource::DefaultFontData {
-            config: None,
-        }]);
-    });
+    // Run the frontend (this blocks until the window is closed)
+    frontend.run(&mut sdl, &window, &device)?;
 
-    // start main loop
-    let mut event_pump = sdl.event_pump().unwrap();
-
-    'main: loop {
-        for event in event_pump.poll_iter() {
-            // pass all events to imgui platform
-            imgui.handle_event(&event);
-
-            if let Event::Quit {
-                ..
-            } = event
-            {
-                break 'main;
-            }
-        }
-
-        let mut command_buffer = device.acquire_command_buffer()?;
-
-        if let Ok(swapchain) = command_buffer.wait_and_acquire_swapchain_texture(&window) {
-            let color_targets = [ColorTargetInfo::default()
-                .with_texture(&swapchain)
-                .with_load_op(LoadOp::CLEAR)
-                .with_store_op(StoreOp::STORE)
-                .with_clear_color(Color::RGB(128, 128, 128))];
-
-            imgui.render(
-                &mut sdl,
-                &device,
-                &window,
-                &event_pump,
-                &mut command_buffer,
-                &color_targets,
-                |ui| {
-                    // create imgui UI here
-                    ui.show_demo_window(&mut true);
-                },
-            );
-
-            command_buffer.submit()?;
-        } else {
-            println!("Swapchain unavailable, cancel work");
-            command_buffer.cancel();
-        }
-    }
+    // Wait for emulator thread to finish
+    threaded_emu.join().map_err(|e| format!("Thread join error: {:?}", e))?;
 
     Ok(())
 }
+
