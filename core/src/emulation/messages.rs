@@ -7,7 +7,6 @@
 ///
 /// The message-based architecture provides clean separation between the frontend
 /// and emulation logic, enabling future threading and remote control features.
-
 use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 
 /// Messages sent from the frontend to the emulator

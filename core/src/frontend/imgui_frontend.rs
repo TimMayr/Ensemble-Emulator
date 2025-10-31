@@ -98,8 +98,13 @@ impl ImGuiFrontend {
     ) -> Result<Self, String> {
         // Create OpenGL context
         let gl_context = window.gl_create_context().map_err(|e| e.to_string())?;
-        window.gl_make_current(&gl_context).map_err(|e| e.to_string())?;
-        window.subsystem().gl_set_swap_interval(1).map_err(|e| e.to_string())?;
+        window
+            .gl_make_current(&gl_context)
+            .map_err(|e| e.to_string())?;
+        window
+            .subsystem()
+            .gl_set_swap_interval(1)
+            .map_err(|e| e.to_string())?;
 
         // Create glow context
         let gl = unsafe {
@@ -115,22 +120,24 @@ impl ImGuiFrontend {
         let (window_width, _window_height) = window.size();
         let (drawable_width, _drawable_height) = window.drawable_size();
         let scale_factor = (drawable_width as f32 / window_width as f32).max(1.0);
-        
-        imgui.fonts().add_font(&[imgui::FontSource::DefaultFontData {
-            config: Some(imgui::FontConfig {
-                size_pixels: (13.0 * scale_factor),
-                oversample_h: 2,
-                oversample_v: 2,
-                ..Default::default()
-            }),
-        }]);
-        
+
+        imgui
+            .fonts()
+            .add_font(&[imgui::FontSource::DefaultFontData {
+                config: Some(imgui::FontConfig {
+                    size_pixels: (13.0 * scale_factor),
+                    oversample_h: 2,
+                    oversample_v: 2,
+                    ..Default::default()
+                }),
+            }]);
+
         imgui.io_mut().font_global_scale = 1.0 / scale_factor;
 
         // Setup platform and renderer
         let platform = SdlPlatform::new(&mut imgui);
-        let renderer = imgui_glow_renderer::AutoRenderer::new(gl, &mut imgui)
-            .map_err(|e| e.to_string())?;
+        let renderer =
+            imgui_glow_renderer::AutoRenderer::new(gl, &mut imgui).map_err(|e| e.to_string())?;
 
         Ok(Self {
             imgui,
@@ -162,7 +169,9 @@ impl ImGuiFrontend {
                 self.platform.handle_event(&mut self.imgui, &event);
 
                 match event {
-                    Event::Quit { .. } => {
+                    Event::Quit {
+                        ..
+                    } => {
                         self.should_quit = true;
                         break 'main;
                     }
@@ -215,18 +224,34 @@ impl ImGuiFrontend {
                 if self.emulator_texture.is_none() {
                     let texture = gl.create_texture().map_err(|e| e.to_string())?;
                     gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32);
-                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32);
-                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
-                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
-                    
+                    gl.tex_parameter_i32(
+                        glow::TEXTURE_2D,
+                        glow::TEXTURE_MIN_FILTER,
+                        glow::NEAREST as i32,
+                    );
+                    gl.tex_parameter_i32(
+                        glow::TEXTURE_2D,
+                        glow::TEXTURE_MAG_FILTER,
+                        glow::NEAREST as i32,
+                    );
+                    gl.tex_parameter_i32(
+                        glow::TEXTURE_2D,
+                        glow::TEXTURE_WRAP_S,
+                        glow::CLAMP_TO_EDGE as i32,
+                    );
+                    gl.tex_parameter_i32(
+                        glow::TEXTURE_2D,
+                        glow::TEXTURE_WRAP_T,
+                        glow::CLAMP_TO_EDGE as i32,
+                    );
+
                     self.emulator_texture = Some(texture);
                 }
 
                 // Update texture with frame data
                 if let Some(texture) = self.emulator_texture {
                     gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                    
+
                     let bytes: &[u8] = bytemuck::cast_slice(&**frame);
                     gl.tex_image_2d(
                         glow::TEXTURE_2D,
@@ -247,7 +272,8 @@ impl ImGuiFrontend {
     }
 
     fn render(&mut self, window: &Window, event_pump: &sdl2::EventPump) -> Result<(), String> {
-        self.platform.prepare_frame(&mut self.imgui, window, event_pump);
+        self.platform
+            .prepare_frame(&mut self.imgui, window, event_pump);
 
         let ui = self.imgui.new_frame();
 
@@ -258,8 +284,16 @@ impl ImGuiFrontend {
         let has_frame = self.current_frame.is_some();
         let emulator_texture = self.emulator_texture;
 
-        render_ui_static(ui, show_pattern_table, show_nametable, fps, has_frame, emulator_texture, 
-                        &mut self.show_pattern_table, &mut self.show_nametable);
+        render_ui_static(
+            ui,
+            show_pattern_table,
+            show_nametable,
+            fps,
+            has_frame,
+            emulator_texture,
+            &mut self.show_pattern_table,
+            &mut self.show_nametable,
+        );
 
         // Render to screen
         let gl = self.renderer.gl_context();
@@ -267,12 +301,10 @@ impl ImGuiFrontend {
             gl.clear_color(0.18, 0.18, 0.19, 1.0);
             gl.clear(glow::COLOR_BUFFER_BIT);
         }
-        
+
         let draw_data = self.imgui.render();
-        self.renderer
-            .render(draw_data)
-            .map_err(|e| e.to_string())?;
-        
+        self.renderer.render(draw_data).map_err(|e| e.to_string())?;
+
         window.gl_swap_window();
 
         Ok(())
@@ -306,23 +338,24 @@ fn render_ui_static(
             if let Some(texture) = emulator_texture {
                 // Get available content region
                 let content_region = ui.content_region_avail();
-                
+
                 // Calculate display size (scale to fit window while maintaining aspect ratio)
                 let scale = (content_region[0] / TOTAL_OUTPUT_WIDTH as f32)
                     .min(content_region[1] / TOTAL_OUTPUT_HEIGHT as f32)
                     .min(4.0); // Cap at 4x scale
-                
+
                 let display_width = TOTAL_OUTPUT_WIDTH as f32 * scale;
                 let display_height = TOTAL_OUTPUT_HEIGHT as f32 * scale;
-                
-                ui.text(format!("{}x{} at {:.1}x scale", 
-                    TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT, scale));
-                
+
+                ui.text(format!(
+                    "{}x{} at {:.1}x scale",
+                    TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT, scale
+                ));
+
                 // Create texture ID from OpenGL texture
                 let texture_id = imgui::TextureId::new(texture.0.get() as usize);
-                
-                imgui::Image::new(texture_id, [display_width, display_height])
-                    .build(ui);
+
+                imgui::Image::new(texture_id, [display_width, display_height]).build(ui);
             } else {
                 ui.text("Waiting for first frame...");
             }
@@ -366,7 +399,10 @@ fn render_ui_static(
     let status_height = 25.0;
 
     ui.window("StatusBar")
-        .position([0.0, window_size[1] - status_height], imgui::Condition::Always)
+        .position(
+            [0.0, window_size[1] - status_height],
+            imgui::Condition::Always,
+        )
         .size([window_size[0], status_height], imgui::Condition::Always)
         .title_bar(false)
         .resizable(false)

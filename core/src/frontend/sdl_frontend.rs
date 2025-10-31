@@ -1,12 +1,12 @@
 use std::cell::Ref;
 use std::mem;
 
+use sdl2::EventPump;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::{Color, PixelFormatEnum};
-use sdl2::render::{ScaleMode, Texture, TextureCreator, UpdateTextureError, WindowCanvas};
+use sdl2::render::{Texture, TextureCreator, UpdateTextureError, WindowCanvas};
 use sdl2::video::WindowContext;
-use sdl2::EventPump;
 
 use crate::emulation::emu::{InputEvent, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::frontend::Frontend;
@@ -48,14 +48,13 @@ impl Default for SdlFrontend {
 
         // Create texture creator
         let texture_creator = canvas.texture_creator();
-        let mut texture = texture_creator
+        let texture = texture_creator
             .create_texture_streaming(
                 PixelFormatEnum::RGBA8888,
                 TOTAL_OUTPUT_WIDTH,
                 TOTAL_OUTPUT_HEIGHT,
             )
             .expect("Error creating Texture");
-        texture.set_scale_mode(ScaleMode::Nearest);
 
         // SAFETY: The texture only lives as long as the frontend instance and is dropped
         // before the stored texture creator. Extending the lifetime to 'static is safe
