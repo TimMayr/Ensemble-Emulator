@@ -99,10 +99,23 @@ impl ImGuiFrontend {
             ctx.set_ini_filename(None);
             ctx.set_log_filename(None);
 
-            // Setup fonts
+            // Get display scale for proper DPI handling
+            let scale_factor = window.display_scale().max(1.0);
+            
+            // Setup fonts with proper scaling for high DPI displays
             ctx.fonts().add_font(&[imgui::FontSource::DefaultFontData {
-                config: None
+                config: Some(imgui::FontConfig {
+                    size_pixels: (13.0 * scale_factor),
+                    oversample_h: 2,
+                    oversample_v: 2,
+                    pixel_snap_h: true,
+                    ..Default::default()
+                }),
             }]);
+            
+            // Set display scale to handle high DPI displays
+            let style = ctx.style_mut();
+            style.scale_all_sizes(scale_factor);
         });
 
         Ok(Self {
