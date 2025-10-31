@@ -32,7 +32,6 @@
 /// ```
 use crossbeam_channel::{Receiver, Sender};
 
-
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::messages::{ControllerEvent, EmulatorMessage, FrontendMessage};
 use crate::emulation::nes::ExecutionFinishedType;

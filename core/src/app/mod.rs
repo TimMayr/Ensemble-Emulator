@@ -11,7 +11,7 @@ use crate::frontend::imgui_frontend::ImGuiFrontend;
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create the emulator instance
     let mut console = Consoles::Nes(Nes::default());
-    
+
     // Load a ROM
     // TODO: Make this configurable via command line or file dialog
     console.load_rom(&String::from("./core/tests/Pac-Man (USA) (Namco).nes"));
@@ -40,11 +40,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|e| e.to_string())?;
 
     // Create frontend
-    let mut frontend = ImGuiFrontend::new(
-        &window,
-        tx_to_emu,
-        rx_from_emu,
-    )?;
+    let mut frontend = ImGuiFrontend::new(&window, tx_to_emu, rx_from_emu)?;
 
     // Run the main loop
     frontend.run(&sdl, &window, &mut channel_emu)?;
