@@ -1,3 +1,13 @@
+/// Message types for communication between the frontend and emulator.
+///
+/// This module defines the message protocol for bidirectional communication:
+/// - `FrontendMessage`: Commands sent from the frontend to the emulator
+/// - `EmulatorMessage`: Notifications sent from the emulator to the frontend
+/// - `ControllerEvent`: Input events for the emulated console
+///
+/// The message-based architecture provides clean separation between the frontend
+/// and emulation logic, enabling future threading and remote control features.
+
 use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 
 /// Messages sent from the frontend to the emulator
