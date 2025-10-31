@@ -208,8 +208,7 @@ impl ImGuiFrontend {
 
             // Prepare UI data before rendering
             let current_fps = self.fps_counter.fps();
-            let has_frame = self.current_frame.is_some();
-            let first_pixel = self.current_frame.as_ref().map(|frame| frame[0]);
+            let frame_data = self.current_frame.clone();
 
             self.imgui.render(
                 sdl,
@@ -224,8 +223,7 @@ impl ImGuiFrontend {
                         &mut self.show_pattern_table,
                         &mut self.show_nametable,
                         current_fps,
-                        has_frame,
-                        first_pixel,
+                        frame_data.as_deref(),
                     );
                 },
             );
@@ -248,8 +246,7 @@ fn render_ui_static(
     show_pattern_table: &mut bool,
     show_nametable: &mut bool,
     current_fps: f32,
-    has_frame: bool,
-    first_pixel: Option<u32>,
+    frame_data: Option<&[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
 ) {
     // Main menu bar
     if let Some(_menu_bar) = ui.begin_main_menu_bar()
@@ -263,19 +260,58 @@ fn render_ui_static(
         .size([640.0, 480.0], imgui::Condition::FirstUseEver)
         .position([50.0, 50.0], imgui::Condition::FirstUseEver)
         .build(|| {
-            if has_frame {
-                // TODO: Create texture from frame data and display it
-                // For now, just show a placeholder
-                ui.text(format!(
-                    "Frame buffer: {}x{} pixels",
-                    TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT
-                ));
-                ui.text("TODO: Render frame to texture");
+            if let Some(frame) = frame_data {
+                // Draw the frame using ImGui's draw list
+                let draw_list = ui.get_window_draw_list();
+                let cursor_pos = ui.cursor_screen_pos();
                 
-                // Show a sample of the frame data
-                if let Some(pixel) = first_pixel {
-                    ui.text(format!("First pixel color: 0x{:08X}", pixel));
+                // Calculate display size (scale to fit window while maintaining aspect ratio)
+                let content_region = ui.content_region_avail();
+                let scale = (content_region[0] / TOTAL_OUTPUT_WIDTH as f32)
+                    .min(content_region[1] / TOTAL_OUTPUT_HEIGHT as f32)
+                    .min(3.0); // Cap at 3x scale
+                
+                let display_width = (TOTAL_OUTPUT_WIDTH as f32 * scale) as usize;
+                let display_height = (TOTAL_OUTPUT_HEIGHT as f32 * scale) as usize;
+                
+                ui.text(format!("Rendering {}x{} at {:.1}x scale", 
+                    TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT, scale));
+                ui.text(format!("Display size: {}x{}", display_width, display_height));
+                
+                // For now, draw a downsampled preview using colored rectangles
+                // This is a fallback until we have proper texture rendering
+                let pixel_size = scale.max(1.0);
+                let skip = if scale < 1.0 { (1.0 / scale) as usize } else { 1 };
+                
+                for y in (0..TOTAL_OUTPUT_HEIGHT as usize).step_by(skip) {
+                    for x in (0..TOTAL_OUTPUT_WIDTH as usize).step_by(skip) {
+                        let pixel_index = y * TOTAL_OUTPUT_WIDTH as usize + x;
+                        if pixel_index < frame.len() {
+                            let color_u32 = frame[pixel_index];
+                            
+                            // Convert RGBA to ImGui color (ABGR format)
+                            let r = ((color_u32 >> 24) & 0xFF) as f32 / 255.0;
+                            let g = ((color_u32 >> 16) & 0xFF) as f32 / 255.0;
+                            let b = ((color_u32 >> 8) & 0xFF) as f32 / 255.0;
+                            let a = (color_u32 & 0xFF) as f32 / 255.0;
+                            
+                            let x_pos = cursor_pos[0] + (x as f32 * pixel_size);
+                            let y_pos = cursor_pos[1] + 20.0 + (y as f32 * pixel_size);
+                            
+                            draw_list
+                                .add_rect(
+                                    [x_pos, y_pos],
+                                    [x_pos + pixel_size, y_pos + pixel_size],
+                                    [r, g, b, a],
+                                )
+                                .filled(true)
+                                .build();
+                        }
+                    }
                 }
+                
+                // Reserve space for the display
+                ui.dummy([display_width as f32, display_height as f32 + 40.0]);
             } else {
                 ui.text("Waiting for first frame...");
             }
@@ -330,7 +366,7 @@ fn render_ui_static(
             ui.same_line();
             ui.text("|");
             ui.same_line();
-            if has_frame {
+            if frame_data.is_some() {
                 ui.text("Emulator: Running");
             } else {
                 ui.text("Emulator: Initializing");
