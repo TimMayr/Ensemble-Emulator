@@ -1,5 +1,5 @@
 use std::cell::Cell;
-use std::fmt::{Display, Formatter, Pointer};
+use std::fmt::{Display, Formatter};
 use std::ops::RangeInclusive;
 
 use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
@@ -210,7 +210,7 @@ impl Ppu {
         self.scanline = (frame_dot / (DOTS_PER_SCANLINE + 1) as u128) as u16;
         self.dot = (frame_dot % (DOTS_PER_SCANLINE + 1) as u128) as u16;
 
-        let mut res = false;
+        let res = false;
 
         for ref mut s in self.sprite_fifo {
             if s.is_counting && s.down_counter > 0 {

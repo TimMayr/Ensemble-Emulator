@@ -1,3 +1,36 @@
+/// Channel-based emulator wrapper for clean frontend/emulator separation.
+///
+/// This module provides a non-threaded emulator wrapper that uses channels for
+/// communication. While it doesn't provide true multi-threading (due to the
+/// emulator core using `Rc<RefCell<>>` which is not `Send`), it provides:
+///
+/// - Clean separation of concerns between frontend and emulator
+/// - Message-based communication protocol
+/// - Easy upgrade path to multi-threading once core is refactored
+/// - Testable architecture
+///
+/// # Architecture
+///
+/// ```text
+/// Frontend → FrontendMessage → ChannelEmulator → Emulator Core
+///              (channels)              ↓
+/// Frontend ← EmulatorMessage ←─────────┘
+/// ```
+///
+/// # Example
+///
+/// ```ignore
+/// use nes_core::emulation::channel_emu::ChannelEmulator;
+/// use nes_core::emulation::emu::{Console, Consoles};
+/// use nes_core::emulation::nes::Nes;
+///
+/// let console = Consoles::Nes(Nes::default());
+/// let (mut emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
+///
+/// // In your main loop:
+/// emu.step_frame()?; // Run one frame
+/// ```
+
 use crossbeam_channel::{Receiver, Sender};
 
 use crate::emulation::emu::{Console, Consoles};
@@ -93,9 +126,9 @@ impl ChannelEmulator {
     fn handle_controller_event(&mut self, event: ControllerEvent) {
         match event {
             ControllerEvent::IncPalette => {
-                if let Consoles::Nes(ref mut nes) = self.console {
-                    nes.inc_current_palette();
-                }
+                // Since we only have NES consoles for now, we can safely unwrap
+                let Consoles::Nes(ref mut nes) = self.console;
+                nes.inc_current_palette();
             }
         }
     }

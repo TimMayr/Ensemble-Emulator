@@ -1,3 +1,24 @@
+/// ImGui-based frontend for the NES emulator using SDL3.
+///
+/// This frontend provides a modern, multi-window debugging interface with:
+/// - Real-time emulator output display
+/// - Pattern table viewer (planned)
+/// - Nametable viewer (planned)
+/// - FPS counter and status display
+/// - Extensible window system for future debug features
+///
+/// # Architecture
+///
+/// The frontend uses message-based communication with the emulator:
+/// - Sends `FrontendMessage` for commands (pause, resume, quit, etc.)
+/// - Receives `EmulatorMessage` for updates (frame ready, stopped, etc.)
+///
+/// # Threading
+///
+/// Currently runs in a single thread with the emulator for simplicity.
+/// The architecture supports future multi-threading once the emulator
+/// core is refactored to use `Arc<Mutex<>>` instead of `Rc<RefCell<>>`.
+
 #[cfg(feature = "imgui-frontend")]
 use std::time::{Duration, Instant};
 
@@ -204,30 +225,6 @@ impl ImGuiFrontend {
         }
 
         Ok(())
-    }
-
-    fn render_status_bar(&self, ui: &imgui::Ui) {
-        let window_size = ui.io().display_size;
-        let status_height = 25.0;
-
-        ui.window("StatusBar")
-            .position([0.0, window_size[1] - status_height], imgui::Condition::Always)
-            .size([window_size[0], status_height], imgui::Condition::Always)
-            .title_bar(false)
-            .resizable(false)
-            .movable(false)
-            .scrollable(false)
-            .build(|| {
-                ui.text(format!("FPS: {:.1}", self.fps_counter.fps()));
-                ui.same_line();
-                ui.text("|");
-                ui.same_line();
-                if self.current_frame.is_some() {
-                    ui.text("Emulator: Running");
-                } else {
-                    ui.text("Emulator: Initializing");
-                }
-            });
     }
 }
 
