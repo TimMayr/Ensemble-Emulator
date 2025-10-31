@@ -11,13 +11,13 @@ use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::PpuState;
 
 const NES_PALETTE: [u32; 64] = [
-    0x545454FF, 0x001E74F, 0x081090FF, 0x300088FF, 0x440064FF, 0x5C0030FF, 0x540400FF, 0x3C1800FF,
-    0x202A00FF, 0x083A00FF, 0x004000F, 0x003C00FF, 0x00323CFF, 0x000000FF, 0x000000FF, 0x000000FF,
-    0x989698FF, 0x084CC4FF, 0x3032ECFF, 0x5C1EE4F, 0x8814B0FF, 0xA01464FF, 0x982220FF, 0x783C00FF,
-    0x545A00FF, 0x287200FF, 0x087C00FF, 0x007628FF, 0x006678F, 0x000000FF, 0x000000FF, 0x000000FF,
-    0xECEEECFF, 0x4C9AECFF, 0x787CECFF, 0xB062ECFF, 0xE454ECFF, 0xEC58B4F, 0xEC6A64FF, 0xD48820FF,
-    0xA0AA00FF, 0x74C400FF, 0x4CD020FF, 0x38CC6CFF, 0x38B4CCFF, 0x3C3C3CFF, 0x000000F, 0x000000FF,
-    0xECEEECFF, 0xA8CCECFF, 0xBCBCECFF, 0xD4B2ECFF, 0xECAEECFF, 0xECAED4FF, 0xECB4B0FF, 0xE4C490F,
+    0x545454FF, 0x001E74FF, 0x081090FF, 0x300088FF, 0x440064FF, 0x5C0030FF, 0x540400FF, 0x3C1800FF,
+    0x202A00FF, 0x083A00FF, 0x004000FF, 0x003C00FF, 0x00323CFF, 0x000000FF, 0x000000FF, 0x000000FF,
+    0x989698FF, 0x084CC4FF, 0x3032ECFF, 0x5C1EE4FF, 0x8814B0FF, 0xA01464FF, 0x982220FF, 0x783C00FF,
+    0x545A00FF, 0x287200FF, 0x087C00FF, 0x007628FF, 0x006678FF, 0x000000FF, 0x000000FF, 0x000000FF,
+    0xECEEECFF, 0x4C9AECFF, 0x787CECFF, 0xB062ECFF, 0xE454ECFF, 0xEC58B4FF, 0xEC6A64FF, 0xD48820FF,
+    0xA0AA00FF, 0x74C400FF, 0x4CD020FF, 0x38CC6CFF, 0x38B4CCFF, 0x3C3C3CFF, 0x000000FF, 0x000000FF,
+    0xECEEECFF, 0xA8CCECFF, 0xBCBCECFF, 0xD4B2ECFF, 0xECAEECFF, 0xECAED4FF, 0xECB4B0FF, 0xE4C490FF,
     0xCCD278FF, 0xB4DE78FF, 0xA8E290FF, 0x98E2B4FF, 0xA0D6E4FF, 0xA0A2A0FF, 0x000000FF, 0x000000FF,
 ];
 
@@ -84,6 +84,10 @@ pub struct Ppu {
     pub even_frame: bool,
     pub reset_signal: bool,
     pub pixel_buffer: Box<[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
+    pub pattern_table_buffer: Box<[u32; ((256 + 16) * 128) as usize]>,
+    pub nametable_buffer: Box<[u32; (512 * 480) as usize]>,
+    pub render_pattern_tables_enabled: bool,
+    pub render_nametables_enabled: bool,
     pub vbl_reset_counter: Cell<u8>,
     pub vbl_clear_scheduled: Cell<Option<u8>>,
     pub scanline: u16,
@@ -142,6 +146,10 @@ impl Ppu {
             even_frame: false,
             reset_signal: false,
             pixel_buffer: Box::from([0u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]),
+            pattern_table_buffer: Box::from([0u32; ((256 + 16) * 128) as usize]),
+            nametable_buffer: Box::from([0u32; (512 * 480) as usize]),
+            render_pattern_tables_enabled: false,
+            render_nametables_enabled: false,
             vbl_reset_counter: 0.into(),
             vbl_clear_scheduled: None.into(),
             scanline: 0,
@@ -1013,6 +1021,22 @@ impl Ppu {
         &self.pixel_buffer
     }
 
+    pub fn get_pattern_table_buffer(&self) -> &[u32; ((256 + 16) * 128) as usize] {
+        &self.pattern_table_buffer
+    }
+
+    pub fn get_nametable_buffer(&self) -> &[u32; (512 * 480) as usize] {
+        &self.nametable_buffer
+    }
+
+    pub fn set_render_pattern_tables(&mut self, enabled: bool) {
+        self.render_pattern_tables_enabled = enabled;
+    }
+
+    pub fn set_render_nametables(&mut self, enabled: bool) {
+        self.render_nametables_enabled = enabled;
+    }
+
     pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
         self.memory.get_memory_debug(range)
     }
@@ -1118,8 +1142,7 @@ impl Ppu {
                         let x = base_x as usize + col_in_tile;
                         let y = base_y as usize + row_in_tile;
 
-                        self.pixel_buffer[(y * TOTAL_OUTPUT_WIDTH as usize) + x] =
-                            NES_PALETTE[color_idx as usize]
+                        self.nametable_buffer[(y * 512) + x] = NES_PALETTE[color_idx as usize]
                     }
                 }
             }
@@ -1152,8 +1175,8 @@ impl Ppu {
                     let mut p0 = self.mem_read(tile_addr + y as u16);
                     let mut p1 = self.mem_read(tile_addr + y as u16 + 8);
 
-                    // Compute destination row start once
-                    let row_start = (tile_y + y) * TOTAL_OUTPUT_WIDTH as usize + tile_x;
+                    // Compute destination row start once (pattern table buffer is 272 wide)
+                    let row_start = (tile_y + y) * 272 + tile_x;
 
                     // Fill pixels right-to-left using bit shifts (avoids (7 - x) indexing)
                     // This compiles to tight code and avoids variable shift amounts.
@@ -1161,7 +1184,7 @@ impl Ppu {
                         let idx = ((p0 & 1) | ((p1 & 1) << 1)) as usize;
                         p0 >>= 1;
                         p1 >>= 1;
-                        self.pixel_buffer[row_start + x] = color_lut[idx];
+                        self.pattern_table_buffer[row_start + x] = color_lut[idx];
                     }
                 }
             }
@@ -1197,6 +1220,10 @@ impl Ppu {
             even_frame: state.even_frame,
             reset_signal: state.reset_signal,
             pixel_buffer: state.pixel_buffer.clone().try_into().unwrap(),
+            pattern_table_buffer: Box::from([0u32; ((256 + 16) * 128) as usize]),
+            nametable_buffer: Box::from([0u32; (512 * 480) as usize]),
+            render_pattern_tables_enabled: false,
+            render_nametables_enabled: false,
             vbl_reset_counter: 0.into(),
             vbl_clear_scheduled: None.into(),
             scanline: state.scanline,

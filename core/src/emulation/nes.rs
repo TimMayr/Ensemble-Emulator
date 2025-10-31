@@ -228,6 +228,17 @@ impl Nes {
         // }
 
         if frame_ready && !matches!(frontend, Frontends::None()) {
+            // Render debug views if enabled
+            {
+                let mut ppu = self.ppu.borrow_mut();
+                if ppu.render_pattern_tables_enabled {
+                    ppu.render_pattern_tables();
+                }
+                if ppu.render_nametables_enabled {
+                    ppu.render_nametables();
+                }
+            }
+
             let pixel_buffer = self.get_pixel_buffer();
             frontend.show_frame(pixel_buffer)?;
 
