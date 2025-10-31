@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "core",
-    "ffi",
 ]
 default-members = ["core"]
 resolver = "2"
