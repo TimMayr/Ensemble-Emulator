@@ -101,7 +101,7 @@ impl ImGuiFrontend {
 
             // Setup fonts
             ctx.fonts().add_font(&[imgui::FontSource::DefaultFontData {
-                config: None,
+                config: None
             }]);
         });
 
@@ -239,12 +239,11 @@ fn render_ui_static(
     first_pixel: Option<u32>,
 ) {
     // Main menu bar
-    if let Some(_menu_bar) = ui.begin_main_menu_bar() {
-        if let Some(_menu) = ui.begin_menu("View") {
+    if let Some(_menu_bar) = ui.begin_main_menu_bar()
+        && let Some(_menu) = ui.begin_menu("View") {
             ui.checkbox("Pattern Table Viewer", show_pattern_table);
             ui.checkbox("Nametable Viewer", show_nametable);
         }
-    }
 
     // Emulator output window (always visible)
     ui.window("Emulator Output")

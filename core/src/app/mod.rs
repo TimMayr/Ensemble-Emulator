@@ -29,7 +29,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create window
     let window = video_subsystem
-        .window("NES Emulator - ImGui", 1280, 720)
+        .window("NES Emulator - ImGui", 800, 600)
         .position_centered()
         .resizable()
         .build()
