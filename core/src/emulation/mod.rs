@@ -1,3 +1,4 @@
+pub mod channel_emu;
 pub mod cpu;
 pub mod emu;
 pub mod mem;
@@ -7,4 +8,6 @@ pub mod opcode;
 pub mod ppu;
 pub mod rom;
 pub mod savestate;
-pub mod threaded;
+// Note: threaded module is not yet functional due to Rc<RefCell<>> not being Send
+// TODO: Convert Nes to use Arc<Mutex<>> for thread safety
+// pub mod threaded;
