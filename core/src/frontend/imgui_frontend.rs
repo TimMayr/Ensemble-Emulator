@@ -36,7 +36,7 @@ use sdl2::video::Window;
 #[cfg(feature = "imgui-frontend")]
 use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 #[cfg(feature = "imgui-frontend")]
-use crate::emulation::messages::{EmulatorMessage, FrontendMessage};
+use crate::emulation::messages::{EmulatorMessage, FrontendMessage, PATTERN_TABLE_WIDTH, PATTERN_TABLE_HEIGHT, NAMETABLE_WIDTH, NAMETABLE_HEIGHT};
 
 #[cfg(feature = "imgui-frontend")]
 pub struct ImGuiFrontend {
@@ -48,6 +48,10 @@ pub struct ImGuiFrontend {
     from_emulator: Receiver<EmulatorMessage>,
     current_frame: Option<Box<[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>>,
     emulator_texture: Option<glow::Texture>,
+    pattern_table_data: Option<Box<[u32; (PATTERN_TABLE_WIDTH * PATTERN_TABLE_HEIGHT) as usize]>>,
+    pattern_table_texture: Option<glow::Texture>,
+    nametable_data: Option<Box<[u32; (NAMETABLE_WIDTH * NAMETABLE_HEIGHT) as usize]>>,
+    nametable_texture: Option<glow::Texture>,
     should_quit: bool,
     show_pattern_table: bool,
     show_nametable: bool,
@@ -148,6 +152,10 @@ impl ImGuiFrontend {
             from_emulator,
             current_frame: None,
             emulator_texture: None,
+            pattern_table_data: None,
+            pattern_table_texture: None,
+            nametable_data: None,
+            nametable_texture: None,
             should_quit: false,
             show_pattern_table: false,
             show_nametable: false,
@@ -193,6 +201,14 @@ impl ImGuiFrontend {
                         self.current_frame = Some(frame);
                         self.fps_counter.update();
                         self.update_emulator_texture()?;
+                    }
+                    EmulatorMessage::PatternTableReady(data) => {
+                        self.pattern_table_data = Some(data);
+                        self.update_pattern_table_texture()?;
+                    }
+                    EmulatorMessage::NametableReady(data) => {
+                        self.nametable_data = Some(data);
+                        self.update_nametable_texture()?;
                     }
                     EmulatorMessage::Stopped => {
                         self.should_quit = true;
@@ -253,6 +269,8 @@ impl ImGuiFrontend {
                     gl.bind_texture(glow::TEXTURE_2D, Some(texture));
 
                     let bytes: &[u8] = bytemuck::cast_slice(&**frame);
+                    // Use BGRA format because our u32 palette is RGBA but when cast to bytes
+                    // on little-endian systems it becomes BGRA (0xRRGGBBAA -> [AA, BB, GG, RR])
                     gl.tex_image_2d(
                         glow::TEXTURE_2D,
                         0,
@@ -260,7 +278,83 @@ impl ImGuiFrontend {
                         TOTAL_OUTPUT_WIDTH as i32,
                         TOTAL_OUTPUT_HEIGHT as i32,
                         0,
-                        glow::RGBA,
+                        glow::BGRA,  // Changed from RGBA to BGRA for correct color order
+                        glow::UNSIGNED_BYTE,
+                        Some(bytes),
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn update_pattern_table_texture(&mut self) -> Result<(), String> {
+        if let Some(ref data) = self.pattern_table_data {
+            let gl = self.renderer.gl_context();
+
+            unsafe {
+                // Create texture if it doesn't exist
+                if self.pattern_table_texture.is_none() {
+                    let texture = gl.create_texture().map_err(|e| e.to_string())?;
+                    gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32);
+                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32);
+                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
+                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+                    self.pattern_table_texture = Some(texture);
+                }
+
+                // Update texture with pattern table data
+                if let Some(texture) = self.pattern_table_texture {
+                    gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                    let bytes: &[u8] = bytemuck::cast_slice(&**data);
+                    gl.tex_image_2d(
+                        glow::TEXTURE_2D,
+                        0,
+                        glow::RGBA as i32,
+                        PATTERN_TABLE_WIDTH as i32,
+                        PATTERN_TABLE_HEIGHT as i32,
+                        0,
+                        glow::BGRA,
+                        glow::UNSIGNED_BYTE,
+                        Some(bytes),
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn update_nametable_texture(&mut self) -> Result<(), String> {
+        if let Some(ref data) = self.nametable_data {
+            let gl = self.renderer.gl_context();
+
+            unsafe {
+                // Create texture if it doesn't exist
+                if self.nametable_texture.is_none() {
+                    let texture = gl.create_texture().map_err(|e| e.to_string())?;
+                    gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32);
+                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32);
+                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
+                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+                    self.nametable_texture = Some(texture);
+                }
+
+                // Update texture with nametable data
+                if let Some(texture) = self.nametable_texture {
+                    gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                    let bytes: &[u8] = bytemuck::cast_slice(&**data);
+                    gl.tex_image_2d(
+                        glow::TEXTURE_2D,
+                        0,
+                        glow::RGBA as i32,
+                        NAMETABLE_WIDTH as i32,
+                        NAMETABLE_HEIGHT as i32,
+                        0,
+                        glow::BGRA,
                         glow::UNSIGNED_BYTE,
                         Some(bytes),
                     );
@@ -272,6 +366,21 @@ impl ImGuiFrontend {
     }
 
     fn render(&mut self, window: &Window, event_pump: &sdl2::EventPump) -> Result<(), String> {
+        // Handle window visibility changes and send enable/disable messages
+        if self.show_pattern_table && self.pattern_table_data.is_none() {
+            let _ = self.to_emulator.send(FrontendMessage::EnablePatternTableRendering(true));
+        } else if !self.show_pattern_table && self.pattern_table_data.is_some() {
+            let _ = self.to_emulator.send(FrontendMessage::EnablePatternTableRendering(false));
+            self.pattern_table_data = None;
+        }
+
+        if self.show_nametable && self.nametable_data.is_none() {
+            let _ = self.to_emulator.send(FrontendMessage::EnableNametableRendering(true));
+        } else if !self.show_nametable && self.nametable_data.is_some() {
+            let _ = self.to_emulator.send(FrontendMessage::EnableNametableRendering(false));
+            self.nametable_data = None;
+        }
+
         self.platform
             .prepare_frame(&mut self.imgui, window, event_pump);
 
@@ -283,6 +392,8 @@ impl ImGuiFrontend {
         let fps = self.fps_counter.fps();
         let has_frame = self.current_frame.is_some();
         let emulator_texture = self.emulator_texture;
+        let pattern_table_texture = self.pattern_table_texture;
+        let nametable_texture = self.nametable_texture;
 
         render_ui_static(
             ui,
@@ -291,6 +402,8 @@ impl ImGuiFrontend {
             fps,
             has_frame,
             emulator_texture,
+            pattern_table_texture,
+            nametable_texture,
             &mut self.show_pattern_table,
             &mut self.show_nametable,
         );
@@ -319,6 +432,8 @@ fn render_ui_static(
     fps: f32,
     has_frame: bool,
     emulator_texture: Option<glow::Texture>,
+    pattern_table_texture: Option<glow::Texture>,
+    nametable_texture: Option<glow::Texture>,
     show_pattern_table_mut: &mut bool,
     show_nametable_mut: &mut bool,
 ) {
@@ -364,33 +479,57 @@ fn render_ui_static(
     // Optional windows
     if show_pattern_table {
         ui.window("Pattern Table Viewer")
-            .size([400.0, 300.0], imgui::Condition::FirstUseEver)
+            .size([580.0, 300.0], imgui::Condition::FirstUseEver)
             .position([700.0, 50.0], imgui::Condition::FirstUseEver)
             .opened(show_pattern_table_mut)
             .build(|| {
-                ui.text("Pattern Table visualization");
-                ui.separator();
-                ui.text("TODO: Implement pattern table rendering");
-                ui.text_wrapped(
-                    "This window will display the CHR ROM pattern tables \
-                     used for sprites and background tiles.",
-                );
+                if let Some(texture) = pattern_table_texture {
+                    let content_region = ui.content_region_avail();
+                    let scale = (content_region[0] / PATTERN_TABLE_WIDTH as f32)
+                        .min(content_region[1] / PATTERN_TABLE_HEIGHT as f32)
+                        .min(2.0);
+
+                    let display_width = PATTERN_TABLE_WIDTH as f32 * scale;
+                    let display_height = PATTERN_TABLE_HEIGHT as f32 * scale;
+
+                    ui.text(format!(
+                        "Pattern Tables ({}x{} at {:.1}x)",
+                        PATTERN_TABLE_WIDTH, PATTERN_TABLE_HEIGHT, scale
+                    ));
+
+                    let texture_id = imgui::TextureId::new(texture.0.get() as usize);
+                    imgui::Image::new(texture_id, [display_width, display_height]).build(ui);
+                } else {
+                    ui.text("Waiting for pattern table data...");
+                }
             });
     }
 
     if show_nametable {
         ui.window("Nametable Viewer")
-            .size([400.0, 300.0], imgui::Condition::FirstUseEver)
+            .size([600.0, 560.0], imgui::Condition::FirstUseEver)
             .position([700.0, 370.0], imgui::Condition::FirstUseEver)
             .opened(show_nametable_mut)
             .build(|| {
-                ui.text("Nametable visualization");
-                ui.separator();
-                ui.text("TODO: Implement nametable rendering");
-                ui.text_wrapped(
-                    "This window will display the nametables showing \
-                     the background tile arrangement.",
-                );
+                if let Some(texture) = nametable_texture {
+                    let content_region = ui.content_region_avail();
+                    let scale = (content_region[0] / NAMETABLE_WIDTH as f32)
+                        .min(content_region[1] / NAMETABLE_HEIGHT as f32)
+                        .min(1.0);
+
+                    let display_width = NAMETABLE_WIDTH as f32 * scale;
+                    let display_height = NAMETABLE_HEIGHT as f32 * scale;
+
+                    ui.text(format!(
+                        "Nametables ({}x{} at {:.1}x)",
+                        NAMETABLE_WIDTH, NAMETABLE_HEIGHT, scale
+                    ));
+
+                    let texture_id = imgui::TextureId::new(texture.0.get() as usize);
+                    imgui::Image::new(texture_id, [display_width, display_height]).build(ui);
+                } else {
+                    ui.text("Waiting for nametable data...");
+                }
             });
     }
 

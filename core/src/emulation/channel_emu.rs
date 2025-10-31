@@ -89,6 +89,16 @@ impl ChannelEmulator {
                 FrontendMessage::ControllerInput(event) => {
                     self.handle_controller_event(event);
                 }
+                FrontendMessage::EnablePatternTableRendering(enabled) => {
+                    if let Consoles::Nes(ref mut nes) = self.console {
+                        nes.ppu.borrow_mut().set_render_pattern_tables(enabled);
+                    }
+                }
+                FrontendMessage::EnableNametableRendering(enabled) => {
+                    if let Consoles::Nes(ref mut nes) = self.console {
+                        nes.ppu.borrow_mut().set_render_nametables(enabled);
+                    }
+                }
             }
         }
 
@@ -118,6 +128,20 @@ impl ChannelEmulator {
                     // Frontend disconnected
                     return Err("Frontend disconnected".to_string());
                 }
+
+                // Send pattern table data if rendering is enabled
+                if let Consoles::Nes(ref nes) = self.console {
+                    let ppu = nes.ppu.borrow();
+                    if ppu.render_pattern_tables_enabled {
+                        let pattern_data = Box::new(*ppu.get_pattern_table_buffer());
+                        let _ = self.to_frontend.send(EmulatorMessage::PatternTableReady(pattern_data));
+                    }
+                    if ppu.render_nametables_enabled {
+                        let nametable_data = Box::new(*ppu.get_nametable_buffer());
+                        let _ = self.to_frontend.send(EmulatorMessage::NametableReady(nametable_data));
+                    }
+                }
+
                 Ok(())
             }
             Err(e) => Err(format!("Emulator error: {}", e)),

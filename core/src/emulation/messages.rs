@@ -9,6 +9,14 @@
 /// and emulation logic, enabling future threading and remote control features.
 use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 
+// Pattern table display: 2 tables of 16x16 tiles (8px each) with 16px gap
+pub const PATTERN_TABLE_WIDTH: u32 = 256 + 16;  // 16*8*2 + 16px gap
+pub const PATTERN_TABLE_HEIGHT: u32 = 128;      // 16*8
+
+// Nametable display: 4 nametables of 32x30 tiles (8px each) arranged 2x2
+pub const NAMETABLE_WIDTH: u32 = 512;   // 32*8*2
+pub const NAMETABLE_HEIGHT: u32 = 480;  // 30*8*2
+
 /// Messages sent from the frontend to the emulator
 #[derive(Debug, Clone)]
 pub enum FrontendMessage {
@@ -24,6 +32,10 @@ pub enum FrontendMessage {
     Reset,
     /// Request to step one frame
     StepFrame,
+    /// Enable pattern table rendering
+    EnablePatternTableRendering(bool),
+    /// Enable nametable rendering
+    EnableNametableRendering(bool),
 }
 
 /// Controller input events
@@ -39,6 +51,10 @@ pub enum ControllerEvent {
 pub enum EmulatorMessage {
     /// A new frame is ready to be displayed
     FrameReady(Box<[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>),
+    /// Pattern table data is ready
+    PatternTableReady(Box<[u32; (PATTERN_TABLE_WIDTH * PATTERN_TABLE_HEIGHT) as usize]>),
+    /// Nametable data is ready
+    NametableReady(Box<[u32; (NAMETABLE_WIDTH * NAMETABLE_HEIGHT) as usize]>),
     /// Emulator has stopped/quit
     Stopped,
 }
