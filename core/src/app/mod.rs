@@ -1,82 +1,52 @@
-use imgui_sdl3::ImGuiSdl3;
-use sdl3::event::Event;
-use sdl3::gpu::*;
-use sdl3::pixels::Color;
+#[cfg(feature = "imgui-frontend")]
+use crate::emulation::channel_emu::ChannelEmulator;
+#[cfg(feature = "imgui-frontend")]
+use crate::emulation::emu::{Console, Consoles};
+#[cfg(feature = "imgui-frontend")]
+use crate::emulation::nes::Nes;
+#[cfg(feature = "imgui-frontend")]
+use crate::frontend::imgui_frontend::ImGuiFrontend;
+use crate::frontend::Frontends;
 
+#[cfg(feature = "imgui-frontend")]
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // initialize SDL and its video subsystem
-    let mut sdl = sdl3::init().unwrap();
-    let video_subsystem = sdl.video().unwrap();
+    // Create the emulator instance
+    let mut console = Consoles::Nes(Nes::default());
 
-    // create a new window
+    // Load a ROM
+    // TODO: Make this configurable via command line or file dialog
+    console.load_rom(&String::from("./core/tests/Pac-Man (USA) (Namco).nes"));
+    console.power();
+
+    // Create channel-based emulator wrapper
+    let (mut channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
+
+    // Initialize SDL2
+    let sdl = sdl2::init().map_err(|e| e.to_string())?;
+    let video_subsystem = sdl.video().map_err(|e| e.to_string())?;
+
+    // Setup OpenGL attributes
+    let gl_attr = video_subsystem.gl_attr();
+    gl_attr.set_context_version(3, 3);
+    gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
+
+    // Create window
     let window = video_subsystem
-        .window("Hello imgui-rs!", 1280, 720)
+        .window("NES Emulator - ImGui", 1024, 768)
         .position_centered()
         .resizable()
+        .opengl()
+        .allow_highdpi()
         .build()
-        .unwrap();
+        .map_err(|e| e.to_string())?;
 
-    let device = Device::new(ShaderFormat::SPIRV, true)
-        .unwrap()
-        .with_window(&window)
-        .unwrap();
+    // Create frontend
+    let mut frontend = ImGuiFrontend::new(&window, tx_to_emu, rx_from_emu)?;
 
-    // create platform and renderer
-    let mut imgui = ImGuiSdl3::new(&device, &window, |ctx| {
-        // disable creation of files on disc
-        ctx.set_ini_filename(None);
-        ctx.set_log_filename(None);
+    channel_emu.set_frontend(Frontends::Imgui());
 
-        // setup platform and renderer, and fonts to imgui
-        ctx.fonts().add_font(&[imgui::FontSource::DefaultFontData {
-            config: None,
-        }]);
-    });
-
-    // start main loop
-    let mut event_pump = sdl.event_pump().unwrap();
-
-    'main: loop {
-        for event in event_pump.poll_iter() {
-            // pass all events to imgui platform
-            imgui.handle_event(&event);
-
-            if let Event::Quit {
-                ..
-            } = event
-            {
-                break 'main;
-            }
-        }
-
-        let mut command_buffer = device.acquire_command_buffer()?;
-
-        if let Ok(swapchain) = command_buffer.wait_and_acquire_swapchain_texture(&window) {
-            let color_targets = [ColorTargetInfo::default()
-                .with_texture(&swapchain)
-                .with_load_op(LoadOp::CLEAR)
-                .with_store_op(StoreOp::STORE)
-                .with_clear_color(Color::RGB(128, 128, 128))];
-
-            imgui.render(
-                &mut sdl,
-                &device,
-                &window,
-                &event_pump,
-                &mut command_buffer,
-                &color_targets,
-                |ui| {
-                    // create imgui UI here
-                    ui.show_demo_window(&mut true);
-                },
-            );
-
-            command_buffer.submit()?;
-        } else {
-            println!("Swapchain unavailable, cancel work");
-            command_buffer.cancel();
-        }
-    }
+    // Run the main loop
+    frontend.run(&sdl, &window, &mut channel_emu).expect("Err");
 
     Ok(())
 }
