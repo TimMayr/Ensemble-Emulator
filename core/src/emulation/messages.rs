@@ -36,6 +36,10 @@ pub enum FrontendMessage {
     EnablePatternTableRendering(bool),
     /// Enable nametable rendering
     EnableNametableRendering(bool),
+    /// Request pattern table data (frontend requests it, not sent every frame)
+    RequestPatternTableData,
+    /// Request nametable data (frontend requests it, not sent every frame)
+    RequestNametableData,
 }
 
 /// Controller input events

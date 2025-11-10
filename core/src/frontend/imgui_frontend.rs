@@ -62,6 +62,8 @@ pub struct ImGuiFrontend {
     show_pattern_table: bool,
     show_nametable: bool,
     fps_counter: FpsCounter,
+    last_pattern_table_request: Instant,
+    last_nametable_request: Instant,
 }
 
 #[cfg(feature = "imgui-frontend")]
@@ -121,6 +123,12 @@ impl ImGuiFrontend {
             glow::Context::from_loader_function(|s| window.subsystem().gl_get_proc_address(s) as _)
         };
 
+        // Disable sRGB conversion to prevent color desaturation
+        // Our palette values are already in the correct color space
+        unsafe {
+            gl.disable(glow::FRAMEBUFFER_SRGB);
+        }
+
         // Create ImGui context
         let mut imgui = imgui::Context::create();
         imgui.set_ini_filename(None);
@@ -166,6 +174,8 @@ impl ImGuiFrontend {
             show_pattern_table: false,
             show_nametable: false,
             fps_counter: FpsCounter::new(),
+            last_pattern_table_request: Instant::now(),
+            last_nametable_request: Instant::now(),
         })
     }
 
@@ -417,26 +427,28 @@ impl ImGuiFrontend {
     }
 
     fn render(&mut self, window: &Window, event_pump: &sdl2::EventPump) -> Result<(), String> {
-        // Handle window visibility changes and send enable/disable messages
-        if self.show_pattern_table && self.pattern_table_data.is_none() {
-            let _ = self
-                .to_emulator
-                .send(FrontendMessage::EnablePatternTableRendering(true));
-        } else if !self.show_pattern_table && self.pattern_table_data.is_some() {
-            let _ = self
-                .to_emulator
-                .send(FrontendMessage::EnablePatternTableRendering(false));
+        // Request debug view updates at a reasonable rate (10 FPS for debug views)
+        const DEBUG_UPDATE_INTERVAL: Duration = Duration::from_millis(100); // 10 FPS
+        
+        if self.show_pattern_table {
+            let now = Instant::now();
+            if now.duration_since(self.last_pattern_table_request) >= DEBUG_UPDATE_INTERVAL {
+                let _ = self.to_emulator.send(FrontendMessage::RequestPatternTableData);
+                self.last_pattern_table_request = now;
+            }
+        } else if self.pattern_table_data.is_some() {
+            // Clear data when window is closed
             self.pattern_table_data = None;
         }
 
-        if self.show_nametable && self.nametable_data.is_none() {
-            let _ = self
-                .to_emulator
-                .send(FrontendMessage::EnableNametableRendering(true));
-        } else if !self.show_nametable && self.nametable_data.is_some() {
-            let _ = self
-                .to_emulator
-                .send(FrontendMessage::EnableNametableRendering(false));
+        if self.show_nametable {
+            let now = Instant::now();
+            if now.duration_since(self.last_nametable_request) >= DEBUG_UPDATE_INTERVAL {
+                let _ = self.to_emulator.send(FrontendMessage::RequestNametableData);
+                self.last_nametable_request = now;
+            }
+        } else if self.nametable_data.is_some() {
+            // Clear data when window is closed
             self.nametable_data = None;
         }
 
