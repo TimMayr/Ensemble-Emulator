@@ -102,6 +102,24 @@ impl ChannelEmulator {
                         nes.ppu.borrow_mut().set_render_nametables(enabled);
                     }
                 }
+                FrontendMessage::RequestPatternTableData => {
+                    // Render pattern tables on demand and send
+                    if let Consoles::Nes(ref mut nes) = self.console {
+                        let mut ppu = nes.ppu.borrow_mut();
+                        ppu.render_pattern_tables();
+                        let pattern_data = Box::new(*ppu.get_pattern_table_buffer());
+                        let _ = self.to_frontend.send(EmulatorMessage::PatternTableReady(pattern_data));
+                    }
+                }
+                FrontendMessage::RequestNametableData => {
+                    // Render nametables on demand and send
+                    if let Consoles::Nes(ref mut nes) = self.console {
+                        let mut ppu = nes.ppu.borrow_mut();
+                        ppu.render_nametables();
+                        let nametable_data = Box::new(*ppu.get_nametable_buffer());
+                        let _ = self.to_frontend.send(EmulatorMessage::NametableReady(nametable_data));
+                    }
+                }
             }
         }
 
@@ -132,22 +150,8 @@ impl ChannelEmulator {
                     return Err("Frontend disconnected".to_string());
                 }
 
-                // Send pattern table data if rendering is enabled
-                if let Consoles::Nes(ref nes) = self.console {
-                    let ppu = nes.ppu.borrow();
-                    if ppu.render_pattern_tables_enabled {
-                        let pattern_data = Box::new(*ppu.get_pattern_table_buffer());
-                        let _ = self
-                            .to_frontend
-                            .send(EmulatorMessage::PatternTableReady(pattern_data));
-                    }
-                    if ppu.render_nametables_enabled {
-                        let nametable_data = Box::new(*ppu.get_nametable_buffer());
-                        let _ = self
-                            .to_frontend
-                            .send(EmulatorMessage::NametableReady(nametable_data));
-                    }
-                }
+                // Debug views are now sent only on explicit request via RequestPatternTableData/RequestNametableData
+                // This eliminates the overhead of rendering and sending large buffers every frame
 
                 Ok(())
             }
