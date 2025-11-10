@@ -11,9 +11,12 @@ use crate::frontend::godot_frontend::GodotFrontend;
 #[cfg(feature = "sdl2-frontend")]
 use crate::frontend::sdl_frontend::SdlFrontend;
 
+#[derive(Debug)]
 pub enum Frontends {
     #[cfg(feature = "sdl2-frontend")]
     Sdl2(SdlFrontend),
+    #[cfg(feature = "imgui-frontend")]
+    Imgui(),
     Godot(GodotFrontend),
     None(),
 }
@@ -31,6 +34,8 @@ impl Frontend for Frontends {
         match self {
             #[cfg(feature = "sdl2-frontend")]
             Frontends::Sdl2(frontend) => frontend.show_frame(pixel_buffer),
+            #[cfg(feature = "imgui-frontend")]
+            Frontends::Imgui() => Ok(()),
             Frontends::Godot(frontend) => frontend.show_frame(pixel_buffer),
             Frontends::None() => Ok(()),
         }
@@ -41,6 +46,8 @@ impl Frontend for Frontends {
         match self {
             #[cfg(feature = "sdl2-frontend")]
             Frontends::Sdl2(frontend) => frontend.poll_input_events(),
+            #[cfg(feature = "imgui-frontend")]
+            Frontends::Imgui() => Ok(Vec::new()),
             Frontends::Godot(frontend) => frontend.poll_input_events(),
             Frontends::None() => Ok(Vec::new()),
         }

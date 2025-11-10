@@ -6,6 +6,7 @@ use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
 #[cfg(feature = "imgui-frontend")]
 use crate::frontend::imgui_frontend::ImGuiFrontend;
+use crate::frontend::Frontends;
 
 #[cfg(feature = "imgui-frontend")]
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -42,8 +43,10 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create frontend
     let mut frontend = ImGuiFrontend::new(&window, tx_to_emu, rx_from_emu)?;
 
+    channel_emu.set_frontend(Frontends::Imgui());
+
     // Run the main loop
-    frontend.run(&sdl, &window, &mut channel_emu)?;
+    frontend.run(&sdl, &window, &mut channel_emu).expect("Err");
 
     Ok(())
 }
