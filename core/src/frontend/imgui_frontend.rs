@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter, Pointer};
 /// ImGui-based frontend for the NES emulator using SDL2 + OpenGL.
 ///
 /// This frontend provides a modern, multi-window debugging interface with:
@@ -30,13 +31,18 @@ use glow::HasContext;
 use imgui_sdl2_support::SdlPlatform;
 #[cfg(feature = "imgui-frontend")]
 use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
 #[cfg(feature = "imgui-frontend")]
 use sdl2::video::Window;
 
 #[cfg(feature = "imgui-frontend")]
 use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+use crate::emulation::messages::ControllerEvent;
 #[cfg(feature = "imgui-frontend")]
-use crate::emulation::messages::{EmulatorMessage, FrontendMessage, PATTERN_TABLE_WIDTH, PATTERN_TABLE_HEIGHT, NAMETABLE_WIDTH, NAMETABLE_HEIGHT};
+use crate::emulation::messages::{
+    EmulatorMessage, FrontendMessage, NAMETABLE_HEIGHT, NAMETABLE_WIDTH, PATTERN_TABLE_HEIGHT,
+    PATTERN_TABLE_WIDTH,
+};
 
 #[cfg(feature = "imgui-frontend")]
 pub struct ImGuiFrontend {
@@ -179,10 +185,23 @@ impl ImGuiFrontend {
                 match event {
                     Event::Quit {
                         ..
+                    }
+                    | Event::KeyDown {
+                        keycode: Some(Keycode::Escape),
+                        ..
                     } => {
                         self.should_quit = true;
                         break 'main;
                     }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::N),
+                        ..
+                    } => self
+                        .to_emulator
+                        .send(FrontendMessage::ControllerInput(
+                            ControllerEvent::IncPalette,
+                        ))
+                        .unwrap(),
                     _ => {}
                 }
             }
@@ -278,7 +297,7 @@ impl ImGuiFrontend {
                         TOTAL_OUTPUT_WIDTH as i32,
                         TOTAL_OUTPUT_HEIGHT as i32,
                         0,
-                        glow::BGRA,  // Changed from RGBA to BGRA for correct color order
+                        glow::BGRA, // Changed from RGBA to BGRA for correct color order
                         glow::UNSIGNED_BYTE,
                         Some(bytes),
                     );
@@ -298,10 +317,26 @@ impl ImGuiFrontend {
                 if self.pattern_table_texture.is_none() {
                     let texture = gl.create_texture().map_err(|e| e.to_string())?;
                     gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32);
-                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32);
-                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
-                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+                    gl.tex_parameter_i32(
+                        glow::TEXTURE_2D,
+                        glow::TEXTURE_MIN_FILTER,
+                        glow::NEAREST as i32,
+                    );
+                    gl.tex_parameter_i32(
+                        glow::TEXTURE_2D,
+                        glow::TEXTURE_MAG_FILTER,
+                        glow::NEAREST as i32,
+                    );
+                    gl.tex_parameter_i32(
+                        glow::TEXTURE_2D,
+                        glow::TEXTURE_WRAP_S,
+                        glow::CLAMP_TO_EDGE as i32,
+                    );
+                    gl.tex_parameter_i32(
+                        glow::TEXTURE_2D,
+                        glow::TEXTURE_WRAP_T,
+                        glow::CLAMP_TO_EDGE as i32,
+                    );
                     self.pattern_table_texture = Some(texture);
                 }
 
@@ -336,10 +371,26 @@ impl ImGuiFrontend {
                 if self.nametable_texture.is_none() {
                     let texture = gl.create_texture().map_err(|e| e.to_string())?;
                     gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32);
-                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32);
-                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
-                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+                    gl.tex_parameter_i32(
+                        glow::TEXTURE_2D,
+                        glow::TEXTURE_MIN_FILTER,
+                        glow::NEAREST as i32,
+                    );
+                    gl.tex_parameter_i32(
+                        glow::TEXTURE_2D,
+                        glow::TEXTURE_MAG_FILTER,
+                        glow::NEAREST as i32,
+                    );
+                    gl.tex_parameter_i32(
+                        glow::TEXTURE_2D,
+                        glow::TEXTURE_WRAP_S,
+                        glow::CLAMP_TO_EDGE as i32,
+                    );
+                    gl.tex_parameter_i32(
+                        glow::TEXTURE_2D,
+                        glow::TEXTURE_WRAP_T,
+                        glow::CLAMP_TO_EDGE as i32,
+                    );
                     self.nametable_texture = Some(texture);
                 }
 
@@ -368,16 +419,24 @@ impl ImGuiFrontend {
     fn render(&mut self, window: &Window, event_pump: &sdl2::EventPump) -> Result<(), String> {
         // Handle window visibility changes and send enable/disable messages
         if self.show_pattern_table && self.pattern_table_data.is_none() {
-            let _ = self.to_emulator.send(FrontendMessage::EnablePatternTableRendering(true));
+            let _ = self
+                .to_emulator
+                .send(FrontendMessage::EnablePatternTableRendering(true));
         } else if !self.show_pattern_table && self.pattern_table_data.is_some() {
-            let _ = self.to_emulator.send(FrontendMessage::EnablePatternTableRendering(false));
+            let _ = self
+                .to_emulator
+                .send(FrontendMessage::EnablePatternTableRendering(false));
             self.pattern_table_data = None;
         }
 
         if self.show_nametable && self.nametable_data.is_none() {
-            let _ = self.to_emulator.send(FrontendMessage::EnableNametableRendering(true));
+            let _ = self
+                .to_emulator
+                .send(FrontendMessage::EnableNametableRendering(true));
         } else if !self.show_nametable && self.nametable_data.is_some() {
-            let _ = self.to_emulator.send(FrontendMessage::EnableNametableRendering(false));
+            let _ = self
+                .to_emulator
+                .send(FrontendMessage::EnableNametableRendering(false));
             self.nametable_data = None;
         }
 
@@ -558,4 +617,8 @@ fn render_ui_static(
                 ui.text("Emulator: Initializing");
             }
         });
+}
+
+impl Debug for ImGuiFrontend {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { f.write_str("ImguiFrontend") }
 }

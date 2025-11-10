@@ -32,6 +32,7 @@
 /// ```
 use crossbeam_channel::{Receiver, Sender};
 
+
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::messages::{ControllerEvent, EmulatorMessage, FrontendMessage};
 use crate::emulation::nes::ExecutionFinishedType;
@@ -63,6 +64,8 @@ impl ChannelEmulator {
 
         (emu, tx_to_emu, rx_to_frontend)
     }
+
+    pub fn set_frontend(&mut self, frontend: Frontends) { self.frontend = frontend; }
 
     /// Run one frame of emulation and handle messages
     pub fn step_frame(&mut self) -> Result<(), String> {
@@ -134,11 +137,15 @@ impl ChannelEmulator {
                     let ppu = nes.ppu.borrow();
                     if ppu.render_pattern_tables_enabled {
                         let pattern_data = Box::new(*ppu.get_pattern_table_buffer());
-                        let _ = self.to_frontend.send(EmulatorMessage::PatternTableReady(pattern_data));
+                        let _ = self
+                            .to_frontend
+                            .send(EmulatorMessage::PatternTableReady(pattern_data));
                     }
                     if ppu.render_nametables_enabled {
                         let nametable_data = Box::new(*ppu.get_nametable_buffer());
-                        let _ = self.to_frontend.send(EmulatorMessage::NametableReady(nametable_data));
+                        let _ = self
+                            .to_frontend
+                            .send(EmulatorMessage::NametableReady(nametable_data));
                     }
                 }
 
