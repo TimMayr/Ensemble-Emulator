@@ -4,6 +4,7 @@ use std::ffi::c_void;
 use crate::emulation::emu::{InputEvent, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::frontend::Frontend;
 
+#[derive(Debug)]
 pub struct GodotFrontend {
     pub video_ptr: *mut c_void,
     pub video_len: usize,
