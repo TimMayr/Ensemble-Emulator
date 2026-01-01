@@ -76,6 +76,13 @@ impl MemoryMap {
     }
 
     #[inline]
+    pub fn init(&mut self, addr: u16, data: u8) {
+        if let Some(entry) = self.lookup[addr as usize] {
+            self.regions[entry.device].init(entry.offset, data)
+        }
+    }
+
+    #[inline]
     pub fn mem_read_u16(&mut self, addr: u16) -> u16 {
         let least_significant_bits = self.mem_read(addr) as u16;
         let highest_significant_bits = self.mem_read(addr + 1) as u16;

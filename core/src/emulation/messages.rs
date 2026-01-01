@@ -9,13 +9,14 @@
 /// and emulation logic, enabling future threading and remote control features.
 use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 
+
 // Pattern table display: 2 tables of 16x16 tiles (8px each) with 16px gap
-pub const PATTERN_TABLE_WIDTH: u32 = 256 + 16;  // 16*8*2 + 16px gap
-pub const PATTERN_TABLE_HEIGHT: u32 = 128;      // 16*8
+pub const PATTERN_TABLE_WIDTH: u32 = 256 + 16; // 16*8*2 + 16px gap
+pub const PATTERN_TABLE_HEIGHT: u32 = 128; // 16*8
 
 // Nametable display: 4 nametables of 32x30 tiles (8px each) arranged 2x2
-pub const NAMETABLE_WIDTH: u32 = 512;   // 32*8*2
-pub const NAMETABLE_HEIGHT: u32 = 480;  // 30*8*2
+pub const NAMETABLE_WIDTH: u32 = 512; // 32*8*2
+pub const NAMETABLE_HEIGHT: u32 = 480; // 30*8*2
 
 /// Messages sent from the frontend to the emulator
 #[derive(Debug, Clone)]
@@ -45,9 +46,15 @@ pub enum FrontendMessage {
 /// Controller input events
 #[derive(Debug, Clone, Copy)]
 pub enum ControllerEvent {
-    // TODO: Add actual NES controller buttons
-    // For now, keep the existing events
     IncPalette,
+    Left,
+    Right,
+    Up,
+    Down,
+    Start,
+    Select,
+    A,
+    B,
 }
 
 /// Messages sent from the emulator to the frontend

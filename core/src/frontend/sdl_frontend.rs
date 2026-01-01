@@ -1,4 +1,5 @@
 use std::cell::Ref;
+use std::fmt::{Debug, Formatter, Pointer};
 use std::mem;
 
 use sdl2::event::Event;
@@ -115,4 +116,8 @@ impl Frontend for SdlFrontend {
 
         Ok(events)
     }
+}
+
+impl Debug for SdlFrontend {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { f.write_str("f") }
 }

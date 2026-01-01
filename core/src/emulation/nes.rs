@@ -230,9 +230,16 @@ impl Nes {
         if frame_ready && !matches!(frontend, Frontends::None()) {
             // Debug views are now rendered on-demand only via explicit frontend requests
             // This eliminates the massive performance cost of rendering 245,760+ pixels every frame
-            
-            let pixel_buffer = self.get_pixel_buffer();
-            frontend.show_frame(pixel_buffer)?;
+            #[cfg(feature = "sdl2-frontend")]
+            {
+                let pixel_buffer = self.get_pixel_buffer();
+                frontend.show_frame(pixel_buffer)?;
+            }
+
+            #[cfg(not(feature = "sdl2-frontend"))]
+            {
+                frontend.show_frame()?;
+            }
 
             let res = frontend.poll_input_events();
             if let Ok(events) = res {
