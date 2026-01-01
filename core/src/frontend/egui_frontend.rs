@@ -21,6 +21,7 @@
 use std::fmt::{Debug, Formatter};
 use std::time::{Duration, Instant};
 
+
 use crossbeam_channel::{Receiver, Sender};
 use egui::{ColorImage, TextureHandle, TextureOptions};
 
@@ -78,11 +79,55 @@ pub struct EguiApp {
     pattern_table_texture: Option<TextureHandle>,
     nametable_data: Option<Box<[u32; (NAMETABLE_WIDTH * NAMETABLE_HEIGHT) as usize]>>,
     nametable_texture: Option<TextureHandle>,
-    show_pattern_table: bool,
-    show_nametable: bool,
     fps_counter: FpsCounter,
     last_pattern_table_request: Instant,
     last_nametable_request: Instant,
+    last_frame_request: Instant,
+    accumulator: Duration,
+    config: AppConfig,
+}
+
+#[derive(Default, Debug, Copy, Clone, Eq, PartialEq)]
+struct AppConfig {
+    show_pattern_table: bool,
+    show_nametable: bool,
+    target_speed: AppSpeed,
+    debug_speed: DebugSpeed,
+    is_paused: bool,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
+enum AppSpeed {
+    #[default]
+    Default,
+    Uncapped,
+    Custom(u16),
+}
+
+impl AppSpeed {
+    pub fn get_fps(&self) -> u16 {
+        match self {
+            AppSpeed::Default => 60,
+            AppSpeed::Uncapped => u16::MAX,
+            AppSpeed::Custom(i) => (60.0 * (*i as f32 / 100.0)) as u16,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
+enum DebugSpeed {
+    #[default]
+    Default,
+    InStep,
+}
+
+impl DebugSpeed {
+    pub fn get_fps(&self) -> u16 {
+        match self {
+            DebugSpeed::Default => 10,
+            DebugSpeed::InStep => 0,
+        }
+    }
 }
 
 impl EguiApp {
@@ -101,11 +146,12 @@ impl EguiApp {
             pattern_table_texture: None,
             nametable_data: None,
             nametable_texture: None,
-            show_pattern_table: false,
-            show_nametable: false,
             fps_counter: FpsCounter::new(),
             last_pattern_table_request: Instant::now(),
             last_nametable_request: Instant::now(),
+            last_frame_request: Instant::now(),
+            accumulator: Duration::ZERO,
+            config: Default::default(),
         }
     }
 
@@ -190,7 +236,7 @@ impl EguiApp {
         }
     }
 
-    fn handle_keyboard_input(&self, ctx: &egui::Context) {
+    fn handle_keyboard_input(&mut self, ctx: &egui::Context) {
         ctx.input(|i| {
             // Emulator controls
             if i.key_pressed(egui::Key::N) {
@@ -199,7 +245,8 @@ impl EguiApp {
                 ));
             }
             if i.key_pressed(egui::Key::Period) {
-                let _ = self.to_emulator.send(FrontendMessage::Pause);
+                self.config.is_paused = !self.config.is_paused;
+                self.last_frame_request = Instant::now();
             }
             if i.key_pressed(egui::Key::R) {
                 let _ = self.to_emulator.send(FrontendMessage::Reset);
@@ -249,6 +296,20 @@ impl EguiApp {
             }
         });
     }
+
+    fn get_frame_budget(&self) -> Duration {
+        Duration::from_nanos(1_000_000_000 / self.config.target_speed.get_fps() as u64)
+    }
+
+    fn get_debug_viewers_frame_budget(&self) -> Duration {
+        let fps = self.config.debug_speed.get_fps();
+
+        if fps == 0 {
+            return self.get_frame_budget();
+        }
+
+        Duration::from_nanos(1_000_000_000 / fps as u64)
+    }
 }
 
 impl eframe::App for EguiApp {
@@ -262,10 +323,31 @@ impl eframe::App for EguiApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
 
-        // Step the emulator one frame
-        if let Err(e) = self.channel_emu.step_frame() {
-            eprintln!("Emulator error: {}", e);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        let now = Instant::now();
+        if !self.config.is_paused {
+            let delta = now - self.last_frame_request;
+            self.accumulator += delta;
+            self.last_frame_request = now;
+            let frame_budget = self.get_frame_budget();
+
+            while self.accumulator >= frame_budget {
+                let start = Instant::now();
+
+                if let Err(e) = self.channel_emu.step_frame() {
+                    eprintln!("Emulator error: {}", e);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+
+                let step_time = start.elapsed();
+
+                // Machine cannot keep up
+                if step_time > frame_budget {
+                    self.accumulator = Duration::ZERO; // drop backlog
+                    break;
+                }
+
+                self.accumulator -= frame_budget;
+            }
         }
 
         // Process messages from emulator
@@ -290,12 +372,10 @@ impl eframe::App for EguiApp {
             }
         }
 
-        // Request debug view updates at a reasonable rate (10 FPS for debug views)
-        const DEBUG_UPDATE_INTERVAL: Duration = Duration::from_millis(100);
-
-        if self.show_pattern_table {
-            let now = Instant::now();
-            if now.duration_since(self.last_pattern_table_request) >= DEBUG_UPDATE_INTERVAL {
+        if self.config.show_pattern_table {
+            if now.duration_since(self.last_pattern_table_request)
+                >= self.get_debug_viewers_frame_budget()
+            {
                 let _ = self
                     .to_emulator
                     .send(FrontendMessage::RequestPatternTableData);
@@ -305,9 +385,10 @@ impl eframe::App for EguiApp {
             self.pattern_table_data = None;
         }
 
-        if self.show_nametable {
-            let now = Instant::now();
-            if now.duration_since(self.last_nametable_request) >= DEBUG_UPDATE_INTERVAL {
+        if self.config.show_nametable {
+            if now.duration_since(self.last_nametable_request)
+                >= self.get_debug_viewers_frame_budget()
+            {
                 let _ = self.to_emulator.send(FrontendMessage::RequestNametableData);
                 self.last_nametable_request = now;
             }
@@ -319,8 +400,8 @@ impl eframe::App for EguiApp {
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             egui::containers::menu::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("View", |ui| {
-                    ui.checkbox(&mut self.show_pattern_table, "Pattern Table Viewer");
-                    ui.checkbox(&mut self.show_nametable, "Nametable Viewer");
+                    ui.checkbox(&mut self.config.show_pattern_table, "Pattern Table Viewer");
+                    ui.checkbox(&mut self.config.show_nametable, "Nametable Viewer");
                 });
             });
         });
@@ -330,7 +411,7 @@ impl eframe::App for EguiApp {
             ui.horizontal(|ui| {
                 ui.label(format!("FPS: {:.1}", self.fps_counter.fps()));
                 ui.separator();
-                if self.channel_emu.paused {
+                if self.config.is_paused {
                     ui.label("Emulator: Paused");
                 } else if self.current_frame.is_some() {
                     ui.label("Emulator: Running");
@@ -351,8 +432,7 @@ impl eframe::App for EguiApp {
 
                     // Calculate display size (scale to fit window while maintaining aspect ratio)
                     let scale = (available.x / TOTAL_OUTPUT_WIDTH as f32)
-                        .min(available.y / TOTAL_OUTPUT_HEIGHT as f32)
-                        .min(4.0); // Cap at 4x scale
+                        .min(available.y / TOTAL_OUTPUT_HEIGHT as f32);
 
                     let display_width = TOTAL_OUTPUT_WIDTH as f32 * scale;
                     let display_height = TOTAL_OUTPUT_HEIGHT as f32 * scale;
@@ -369,17 +449,16 @@ impl eframe::App for EguiApp {
             });
 
         // Pattern Table Viewer window (optional)
-        if self.show_pattern_table {
+        if self.config.show_pattern_table {
             egui::Window::new("Pattern Table Viewer")
                 .default_size([580.0, 300.0])
                 .default_pos([700.0, 50.0])
-                .open(&mut self.show_pattern_table)
+                .open(&mut self.config.show_pattern_table)
                 .show(ctx, |ui| {
                     if let Some(ref texture) = self.pattern_table_texture {
                         let available = ui.available_size();
                         let scale = (available.x / PATTERN_TABLE_WIDTH as f32)
-                            .min(available.y / PATTERN_TABLE_HEIGHT as f32)
-                            .min(2.0);
+                            .min(available.y / PATTERN_TABLE_HEIGHT as f32);
 
                         let display_width = PATTERN_TABLE_WIDTH as f32 * scale;
                         let display_height = PATTERN_TABLE_HEIGHT as f32 * scale;
@@ -397,17 +476,16 @@ impl eframe::App for EguiApp {
         }
 
         // Nametable Viewer window (optional)
-        if self.show_nametable {
+        if self.config.show_nametable {
             egui::Window::new("Nametable Viewer")
                 .default_size([600.0, 560.0])
                 .default_pos([700.0, 370.0])
-                .open(&mut self.show_nametable)
+                .open(&mut self.config.show_nametable)
                 .show(ctx, |ui| {
                     if let Some(ref texture) = self.nametable_texture {
                         let available = ui.available_size();
                         let scale = (available.x / NAMETABLE_WIDTH as f32)
-                            .min(available.y / NAMETABLE_HEIGHT as f32)
-                            .min(1.0);
+                            .min(available.y / NAMETABLE_HEIGHT as f32);
 
                         let display_width = NAMETABLE_WIDTH as f32 * scale;
                         let display_height = NAMETABLE_HEIGHT as f32 * scale;

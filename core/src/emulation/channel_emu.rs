@@ -32,6 +32,7 @@
 /// ```
 use crossbeam_channel::{Receiver, Sender};
 
+
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::messages::{ControllerEvent, EmulatorMessage, FrontendMessage};
 use crate::emulation::nes::ExecutionFinishedType;
@@ -45,7 +46,6 @@ pub struct ChannelEmulator {
     to_frontend: Sender<EmulatorMessage>,
     from_frontend: Receiver<FrontendMessage>,
     frontend: Frontends,
-    pub paused: bool,
     input: u8,
 }
 
@@ -59,7 +59,6 @@ impl ChannelEmulator {
             to_frontend: tx_from_emu,
             from_frontend: rx_from_frontend,
             frontend: Frontends::None(),
-            paused: false,
             input: 0,
         };
 
@@ -76,9 +75,6 @@ impl ChannelEmulator {
                 FrontendMessage::Quit => {
                     let _ = self.to_frontend.send(EmulatorMessage::Stopped);
                     return Err("Quit requested".to_string());
-                }
-                FrontendMessage::Pause => {
-                    self.paused = !self.paused;
                 }
                 FrontendMessage::Reset => {
                     self.console.reset();
@@ -125,14 +121,11 @@ impl ChannelEmulator {
             }
         }
 
-        // If not paused, run a frame
-        if !self.paused {
-            if let Consoles::Nes(ref mut nes) = self.console {
-                nes.cpu.memory.init(0x4016, self.input);
-            }
-            self.execute_frame()?;
-            self.input = 0;
+        if let Consoles::Nes(ref mut nes) = self.console {
+            nes.cpu.memory.init(0x4016, self.input);
         }
+        self.execute_frame()?;
+        self.input = 0;
 
         Ok(())
     }
