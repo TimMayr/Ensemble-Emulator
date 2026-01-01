@@ -1,3 +1,4 @@
+#[cfg(feature = "imgui-frontend")]
 use sdl2::video::WindowBuildError;
 
 #[cfg(feature = "imgui-frontend")]
@@ -8,6 +9,7 @@ use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
 #[cfg(feature = "imgui-frontend")]
 use crate::frontend::imgui_frontend::ImGuiFrontend;
+#[cfg(feature = "imgui-frontend")]
 use crate::frontend::Frontends;
 
 #[cfg(feature = "imgui-frontend")]
