@@ -1,11 +1,14 @@
 use std::cell::RefCell;
-use std::ops::BitAnd;
+use std::ops::{Add, BitAnd, Shr};
 
 use crate::emulation::mem::MemoryDevice;
 
 #[derive(Debug, Clone)]
 pub struct ApuRegisters {
     status: RefCell<u8>,
+    input_a: u8,
+    input_b: u8,
+    read_counter: RefCell<u8>,
 }
 
 impl Default for ApuRegisters {
@@ -16,6 +19,9 @@ impl ApuRegisters {
     pub fn new() -> Self {
         Self {
             status: RefCell::new(0xFF),
+            input_a: 0b1110_0000,
+            input_b: 0b1110_0000,
+            read_counter: 0.into(),
         }
     }
 }
@@ -33,7 +39,34 @@ impl MemoryDevice for ApuRegisters {
                 self.status.replace(new);
                 new
             }
-            0x16..=0x17 => open_bus & 0b11100000,
+            0x16 => {
+                let mut counter = self.read_counter.borrow().add(0).clone();
+                let res = open_bus & self.input_a.shr(counter);
+
+                counter += 1;
+
+                if counter > 8 {
+                    counter = 0;
+                }
+
+                self.read_counter.replace(counter);
+
+                res
+            }
+            0x17 => {
+                let mut counter = self.read_counter.borrow().add(0).clone();
+                let res = open_bus & self.input_b.shr(counter);
+
+                counter += 1;
+
+                if counter > 8 {
+                    counter = 0;
+                }
+
+                self.read_counter.replace(counter);
+
+                res
+            }
             _ => 0,
         }
     }
@@ -41,7 +74,13 @@ impl MemoryDevice for ApuRegisters {
     #[inline(always)]
     fn write(&mut self, _: u16, _: u8) {}
 
-    fn init(&mut self, _: u16, _: u8) {}
+    fn init(&mut self, addr: u16, val: u8) {
+        match addr {
+            0x16 => self.input_a = val,
+            0x17 => self.input_b = val,
+            _ => {}
+        }
+    }
 
     fn load(&mut self, _: Box<[u8]>) {}
 

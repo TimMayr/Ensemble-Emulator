@@ -143,7 +143,7 @@ impl ImGuiFrontend {
             .fonts()
             .add_font(&[imgui::FontSource::DefaultFontData {
                 config: Some(imgui::FontConfig {
-                    size_pixels: (13.0 * scale_factor),
+                    size_pixels: 13.0 * scale_factor,
                     oversample_h: 2,
                     oversample_v: 2,
                     ..Default::default()
@@ -212,6 +212,90 @@ impl ImGuiFrontend {
                             ControllerEvent::IncPalette,
                         ))
                         .unwrap(),
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Period),
+                        ..
+                    } => {
+                        self.to_emulator.send(FrontendMessage::Pause).unwrap();
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Comma),
+                        ..
+                    } => {
+                        self.to_emulator.send(FrontendMessage::Resume).unwrap();
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::R),
+                        ..
+                    } => {
+                        self.to_emulator.send(FrontendMessage::Reset).unwrap();
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Left),
+                        ..
+                    } => {
+                        self.to_emulator
+                            .send(FrontendMessage::ControllerInput(ControllerEvent::Left))
+                            .unwrap();
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Right),
+                        ..
+                    } => {
+                        self.to_emulator
+                            .send(FrontendMessage::ControllerInput(ControllerEvent::Right))
+                            .unwrap();
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Up),
+                        ..
+                    } => {
+                        self.to_emulator
+                            .send(FrontendMessage::ControllerInput(ControllerEvent::Up))
+                            .unwrap();
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Down),
+                        ..
+                    } => {
+                        self.to_emulator
+                            .send(FrontendMessage::ControllerInput(ControllerEvent::Down))
+                            .unwrap();
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::S),
+                        ..
+                    } => {
+                        self.to_emulator
+                            .send(FrontendMessage::ControllerInput(ControllerEvent::Start))
+                            .unwrap();
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Tab),
+                        ..
+                    } => {
+                        self.to_emulator
+                            .send(FrontendMessage::ControllerInput(ControllerEvent::Select))
+                            .unwrap();
+                    }
+
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Space),
+                        ..
+                    } => {
+                        self.to_emulator
+                            .send(FrontendMessage::ControllerInput(ControllerEvent::A))
+                            .unwrap();
+                    }
+
+                    Event::KeyDown {
+                        keycode: Some(Keycode::LShift),
+                        ..
+                    } => {
+                        self.to_emulator
+                            .send(FrontendMessage::ControllerInput(ControllerEvent::B))
+                            .unwrap();
+                    }
                     _ => {}
                 }
             }
@@ -429,11 +513,13 @@ impl ImGuiFrontend {
     fn render(&mut self, window: &Window, event_pump: &sdl2::EventPump) -> Result<(), String> {
         // Request debug view updates at a reasonable rate (10 FPS for debug views)
         const DEBUG_UPDATE_INTERVAL: Duration = Duration::from_millis(100); // 10 FPS
-        
+
         if self.show_pattern_table {
             let now = Instant::now();
             if now.duration_since(self.last_pattern_table_request) >= DEBUG_UPDATE_INTERVAL {
-                let _ = self.to_emulator.send(FrontendMessage::RequestPatternTableData);
+                let _ = self
+                    .to_emulator
+                    .send(FrontendMessage::RequestPatternTableData);
                 self.last_pattern_table_request = now;
             }
         } else if self.pattern_table_data.is_some() {

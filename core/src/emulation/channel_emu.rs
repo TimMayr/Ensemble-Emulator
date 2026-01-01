@@ -47,6 +47,7 @@ pub struct ChannelEmulator {
     from_frontend: Receiver<FrontendMessage>,
     frontend: Frontends,
     paused: bool,
+    input: u8,
 }
 
 impl ChannelEmulator {
@@ -60,6 +61,7 @@ impl ChannelEmulator {
             from_frontend: rx_from_frontend,
             frontend: Frontends::None(),
             paused: false,
+            input: 0,
         };
 
         (emu, tx_to_emu, rx_to_frontend)
@@ -108,7 +110,9 @@ impl ChannelEmulator {
                         let mut ppu = nes.ppu.borrow_mut();
                         ppu.render_pattern_tables();
                         let pattern_data = Box::new(*ppu.get_pattern_table_buffer());
-                        let _ = self.to_frontend.send(EmulatorMessage::PatternTableReady(pattern_data));
+                        let _ = self
+                            .to_frontend
+                            .send(EmulatorMessage::PatternTableReady(pattern_data));
                     }
                 }
                 FrontendMessage::RequestNametableData => {
@@ -117,7 +121,9 @@ impl ChannelEmulator {
                         let mut ppu = nes.ppu.borrow_mut();
                         ppu.render_nametables();
                         let nametable_data = Box::new(*ppu.get_nametable_buffer());
-                        let _ = self.to_frontend.send(EmulatorMessage::NametableReady(nametable_data));
+                        let _ = self
+                            .to_frontend
+                            .send(EmulatorMessage::NametableReady(nametable_data));
                     }
                 }
             }
@@ -125,7 +131,11 @@ impl ChannelEmulator {
 
         // If not paused, run a frame
         if !self.paused {
+            if let Consoles::Nes(ref mut nes) = self.console {
+                nes.cpu.memory.init(0x4016, self.input);
+            }
             self.execute_frame()?;
+            self.input = 0;
         }
 
         Ok(())
@@ -166,6 +176,14 @@ impl ChannelEmulator {
                 let Consoles::Nes(ref mut nes) = self.console;
                 nes.inc_current_palette();
             }
+            ControllerEvent::Left => self.input |= 64,
+            ControllerEvent::Right => self.input |= 128,
+            ControllerEvent::Up => self.input |= 16,
+            ControllerEvent::Down => self.input |= 32,
+            ControllerEvent::Start => self.input |= 8,
+            ControllerEvent::Select => self.input |= 4,
+            ControllerEvent::A => self.input |= 1,
+            ControllerEvent::B => self.input |= 2,
         }
     }
 }
