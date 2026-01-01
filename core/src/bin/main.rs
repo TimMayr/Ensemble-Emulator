@@ -1,21 +1,26 @@
-#[cfg(not(feature = "imgui-frontend"))]
+#[cfg(not(any(feature = "imgui-frontend", feature = "egui-frontend")))]
 use std::time::Instant;
 
+#[cfg(feature = "egui-frontend")]
+use nes_core::frontend::egui_frontend;
 #[cfg(feature = "imgui-frontend")]
 use nes_core::app;
-#[cfg(not(feature = "imgui-frontend"))]
+#[cfg(not(any(feature = "imgui-frontend", feature = "egui-frontend")))]
 use nes_core::emulation::emu::{Console, Consoles};
-#[cfg(not(feature = "imgui-frontend"))]
+#[cfg(not(any(feature = "imgui-frontend", feature = "egui-frontend")))]
 use nes_core::emulation::nes::Nes;
 #[cfg(feature = "sdl2-frontend")]
 use nes_core::frontend::sdl_frontend::SdlFrontend;
-#[cfg(not(feature = "imgui-frontend"))]
+#[cfg(not(any(feature = "imgui-frontend", feature = "egui-frontend")))]
 use nes_core::frontend::Frontends;
 
-#[cfg(all(feature = "imgui-frontend", not(feature = "sdl2-frontend")))]
+#[cfg(all(feature = "imgui-frontend", not(feature = "sdl2-frontend"), not(feature = "egui-frontend")))]
 fn main() { app::main().expect("") }
 
-#[cfg(all(feature = "sdl2-frontend", not(feature = "imgui-frontend")))]
+#[cfg(all(feature = "egui-frontend", not(feature = "imgui-frontend")))]
+fn main() { egui_frontend::run().expect("") }
+
+#[cfg(all(feature = "sdl2-frontend", not(feature = "imgui-frontend"), not(feature = "egui-frontend")))]
 fn main() {
     let mut emu = Consoles::Nes(Nes::default());
     let mut frontend = Frontends::Sdl2(SdlFrontend::default());
@@ -31,7 +36,7 @@ fn main() {
     println!("{:?}", start.elapsed());
 }
 
-#[cfg(all(not(feature = "sdl2-frontend"), not(feature = "imgui-frontend")))]
+#[cfg(all(not(feature = "sdl2-frontend"), not(feature = "imgui-frontend"), not(feature = "egui-frontend")))]
 fn main() {
     let mut emu = Consoles::Nes(Nes::default());
 
