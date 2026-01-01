@@ -245,14 +245,8 @@ impl EguiApp {
                     .to_emulator
                     .send(FrontendMessage::ControllerInput(ControllerEvent::A));
             }
-            // Use LShift for B button (check modifiers)
-            if i.modifiers.shift && i.key_pressed(egui::Key::B) {
-                let _ = self
-                    .to_emulator
-                    .send(FrontendMessage::ControllerInput(ControllerEvent::B));
-            }
-            // Also allow just pressing B for B button (matching imgui behavior with LShift)
-            if i.key_pressed(egui::Key::B) && !i.modifiers.shift {
+            // B button is mapped to Left Shift (matching imgui behavior)
+            if i.modifiers.shift {
                 let _ = self
                     .to_emulator
                     .send(FrontendMessage::ControllerInput(ControllerEvent::B));
