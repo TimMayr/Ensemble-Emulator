@@ -40,7 +40,7 @@ impl MemoryDevice for ApuRegisters {
                 new
             }
             0x16 => {
-                let mut counter = self.read_counter.borrow().add(0).clone();
+                let mut counter = self.read_counter.borrow().add(0);
                 let res = open_bus & self.input_a.shr(counter);
 
                 counter += 1;
@@ -54,7 +54,7 @@ impl MemoryDevice for ApuRegisters {
                 res
             }
             0x17 => {
-                let mut counter = self.read_counter.borrow().add(0).clone();
+                let mut counter = self.read_counter.borrow().add(0);
                 let res = open_bus & self.input_b.shr(counter);
 
                 counter += 1;

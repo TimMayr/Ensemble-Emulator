@@ -47,7 +47,7 @@ impl Drop for ThreadedEmulator {
     fn drop(&mut self) {
         // Send quit message if thread is still running
         let _ = self.to_emulator.send(FrontendMessage::Quit);
-        
+
         // Wait for thread to finish
         if let Some(handle) = self.handle.take() {
             let _ = handle.join();
@@ -109,11 +109,15 @@ fn run_emulator_thread(
 
         // Step one frame
         match console.step_frame(&mut frontend) {
-            Ok(ExecutionFinishedType::CycleCompleted) | Ok(ExecutionFinishedType::ReachedLastCycle) => {
+            Ok(ExecutionFinishedType::CycleCompleted)
+            | Ok(ExecutionFinishedType::ReachedLastCycle) => {
                 // Frame completed, send it to frontend
                 let frame = console.get_pixel_buffer();
                 let frame_data = Box::new(*frame);
-                if to_frontend.send(EmulatorMessage::FrameReady(frame_data)).is_err() {
+                if to_frontend
+                    .send(EmulatorMessage::FrameReady(frame_data))
+                    .is_err()
+                {
                     // Frontend disconnected
                     break;
                 }
@@ -160,10 +164,7 @@ struct ChannelFrontend {
 }
 
 impl ChannelFrontend {
-    fn new(
-        from_frontend: Receiver<FrontendMessage>,
-        to_frontend: Sender<EmulatorMessage>,
-    ) -> Self {
+    fn new(from_frontend: Receiver<FrontendMessage>, to_frontend: Sender<EmulatorMessage>) -> Self {
         Self {
             from_frontend,
             to_frontend,
