@@ -1,3 +1,5 @@
+#[cfg(feature = "egui-frontend")]
+pub mod egui_frontend;
 #[cfg(feature = "imgui-frontend")]
 pub mod imgui_frontend;
 #[cfg(feature = "sdl2-frontend")]
@@ -18,6 +20,8 @@ pub enum Frontends {
     Sdl2(SdlFrontend),
     #[cfg(feature = "imgui-frontend")]
     Imgui(),
+    #[cfg(feature = "egui-frontend")]
+    Egui(),
     None(),
 }
 
@@ -32,6 +36,8 @@ impl Frontend for Frontends {
         match self {
             #[cfg(feature = "imgui-frontend")]
             Frontends::Imgui() => Ok(()),
+            #[cfg(feature = "egui-frontend")]
+            Frontends::Egui() => Ok(()),
             Frontends::None() => Ok(()),
         }
     }
@@ -56,6 +62,8 @@ impl Frontend for Frontends {
             Frontends::Sdl2(frontend) => frontend.poll_input_events(),
             #[cfg(feature = "imgui-frontend")]
             Frontends::Imgui() => Ok(Vec::new()),
+            #[cfg(feature = "egui-frontend")]
+            Frontends::Egui() => Ok(Vec::new()),
             Frontends::None() => Ok(Vec::new()),
         }
     }
