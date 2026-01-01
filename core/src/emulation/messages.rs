@@ -9,7 +9,6 @@
 /// and emulation logic, enabling future threading and remote control features.
 use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 
-
 // Pattern table display: 2 tables of 16x16 tiles (8px each) with 16px gap
 pub const PATTERN_TABLE_WIDTH: u32 = 256 + 16; // 16*8*2 + 16px gap
 pub const PATTERN_TABLE_HEIGHT: u32 = 128; // 16*8
@@ -25,10 +24,8 @@ pub enum FrontendMessage {
     Quit,
     /// Controller input events
     ControllerInput(ControllerEvent),
-    /// Request to pause emulation
+    /// Request to pause/unpause emulation
     Pause,
-    /// Request to resume emulation
-    Resume,
     /// Request to reset the console
     Reset,
     /// Request to step one frame

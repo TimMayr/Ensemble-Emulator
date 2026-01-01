@@ -506,11 +506,7 @@ impl Ppu {
     pub fn is_sprite_in_range(&self) -> bool {
         let (diff, o) = (self.scanline as u8).overflowing_sub(self.current_sprite_y);
 
-        if o || diff >= self.get_sprite_height() {
-            false
-        } else {
-            true
-        }
+        !(o || diff >= self.get_sprite_height())
     }
 
     #[inline]
@@ -1256,25 +1252,13 @@ impl Ppu {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct SpriteFifo {
     pub shifter_pattern_lo: u8,
     pub shifter_pattern_hi: u8,
     pub down_counter: u8,
     pub attribute: u8,
     pub is_counting: bool,
-}
-
-impl Default for SpriteFifo {
-    fn default() -> Self {
-        Self {
-            shifter_pattern_lo: 0,
-            shifter_pattern_hi: 0,
-            down_counter: 0,
-            attribute: 0,
-            is_counting: false,
-        }
-    }
 }
 
 impl Display for SpriteFifo {

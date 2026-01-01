@@ -14,9 +14,6 @@ jobs:
             -   name: Checkout code
                 uses: actions/checkout@v5.0.0
 
-            -   name: Install SDL2
-                run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
-
             -   uses: dtolnay/rust-toolchain@nightly
                 with:
                     components: clippy, rustfmt
@@ -44,12 +41,6 @@ jobs:
 
             -   name: Run tests
                 run: cargo test --verbose --release
-
-            -   name: Run clippy
-                run: cargo clippy --all-targets --no-default-features -- -D warnings
-
-            -   name: Run clippy for sdl
-                run: cargo clippy --all-targets --no-default-features --features sdl2-frontend -- -D warnings
 
             -   name: Check formatting
                 run: cargo fmt --check

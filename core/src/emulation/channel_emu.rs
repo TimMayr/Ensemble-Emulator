@@ -32,7 +32,6 @@
 /// ```
 use crossbeam_channel::{Receiver, Sender};
 
-
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::messages::{ControllerEvent, EmulatorMessage, FrontendMessage};
 use crate::emulation::nes::ExecutionFinishedType;
@@ -46,7 +45,7 @@ pub struct ChannelEmulator {
     to_frontend: Sender<EmulatorMessage>,
     from_frontend: Receiver<FrontendMessage>,
     frontend: Frontends,
-    paused: bool,
+    pub paused: bool,
     input: u8,
 }
 
@@ -79,10 +78,7 @@ impl ChannelEmulator {
                     return Err("Quit requested".to_string());
                 }
                 FrontendMessage::Pause => {
-                    self.paused = true;
-                }
-                FrontendMessage::Resume => {
-                    self.paused = false;
+                    self.paused = !self.paused;
                 }
                 FrontendMessage::Reset => {
                     self.console.reset();

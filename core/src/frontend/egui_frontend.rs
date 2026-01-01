@@ -64,9 +64,7 @@ impl FpsCounter {
         }
     }
 
-    fn fps(&self) -> f32 {
-        self.current_fps
-    }
+    fn fps(&self) -> f32 { self.current_fps }
 }
 
 /// Main egui application state
@@ -124,6 +122,7 @@ impl EguiApp {
         }
         ColorImage {
             size: [width, height],
+            source_size: Default::default(),
             pixels,
         }
     }
@@ -195,15 +194,12 @@ impl EguiApp {
         ctx.input(|i| {
             // Emulator controls
             if i.key_pressed(egui::Key::N) {
-                let _ = self
-                    .to_emulator
-                    .send(FrontendMessage::ControllerInput(ControllerEvent::IncPalette));
+                let _ = self.to_emulator.send(FrontendMessage::ControllerInput(
+                    ControllerEvent::IncPalette,
+                ));
             }
             if i.key_pressed(egui::Key::Period) {
                 let _ = self.to_emulator.send(FrontendMessage::Pause);
-            }
-            if i.key_pressed(egui::Key::Comma) {
-                let _ = self.to_emulator.send(FrontendMessage::Resume);
             }
             if i.key_pressed(egui::Key::R) {
                 let _ = self.to_emulator.send(FrontendMessage::Reset);
@@ -245,7 +241,7 @@ impl EguiApp {
                     .to_emulator
                     .send(FrontendMessage::ControllerInput(ControllerEvent::A));
             }
-            // B button is mapped to Left Shift (matching imgui behavior)
+
             if i.modifiers.shift {
                 let _ = self
                     .to_emulator
@@ -321,7 +317,7 @@ impl eframe::App for EguiApp {
 
         // Main menu bar
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
+            egui::containers::menu::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("View", |ui| {
                     ui.checkbox(&mut self.show_pattern_table, "Pattern Table Viewer");
                     ui.checkbox(&mut self.show_nametable, "Nametable Viewer");
@@ -334,7 +330,9 @@ impl eframe::App for EguiApp {
             ui.horizontal(|ui| {
                 ui.label(format!("FPS: {:.1}", self.fps_counter.fps()));
                 ui.separator();
-                if self.current_frame.is_some() {
+                if self.channel_emu.paused {
+                    ui.label("Emulator: Paused");
+                } else if self.current_frame.is_some() {
                     ui.label("Emulator: Running");
                 } else {
                     ui.label("Emulator: Initializing");
@@ -436,9 +434,7 @@ impl eframe::App for EguiApp {
 }
 
 impl Debug for EguiApp {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str("EguiApp")
-    }
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { f.write_str("EguiApp") }
 }
 
 /// Run the egui frontend
