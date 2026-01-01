@@ -24,8 +24,6 @@ pub enum FrontendMessage {
     Quit,
     /// Controller input events
     ControllerInput(ControllerEvent),
-    /// Request to pause/unpause emulation
-    Pause,
     /// Request to reset the console
     Reset,
     /// Request to step one frame
