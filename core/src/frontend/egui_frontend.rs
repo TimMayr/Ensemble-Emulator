@@ -91,9 +91,7 @@ pub struct EguiApp {
 struct AppConfig {
     show_pattern_table: bool,
     show_nametable: bool,
-    target_speed: AppSpeed,
-    debug_speed: DebugSpeed,
-    is_paused: bool,
+    speed_config: SpeedConfig,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
@@ -101,15 +99,37 @@ enum AppSpeed {
     #[default]
     Default,
     Uncapped,
-    Custom(u16),
+    Custom,
+}
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+struct SpeedConfig {
+    app_speed: AppSpeed,
+    debug_speed: DebugSpeed,
+    is_paused: bool,
+    custom_speed: u16,
+    debug_custom_speed: u16,
+}
+
+impl Default for SpeedConfig {
+    fn default() -> Self {
+        Self {
+            app_speed: Default::default(),
+            debug_speed: Default::default(),
+            is_paused: false,
+            custom_speed: 100,
+            debug_custom_speed: 10,
+        }
+    }
 }
 
 impl AppSpeed {
-    pub fn get_fps(&self) -> u16 {
+    pub fn get_fps(&self, app: &EguiApp) -> u16 {
         match self {
             AppSpeed::Default => 60,
             AppSpeed::Uncapped => u16::MAX,
-            AppSpeed::Custom(i) => (60.0 * (*i as f32 / 100.0)) as u16,
+            AppSpeed::Custom => {
+                (60.0 * (app.config.speed_config.custom_speed as f32 / 100.0)) as u16
+            }
         }
     }
 }
@@ -119,13 +139,18 @@ enum DebugSpeed {
     #[default]
     Default,
     InStep,
+    Custom,
 }
 
 impl DebugSpeed {
-    pub fn get_fps(&self) -> u16 {
+    pub fn get_fps(&self, app: &EguiApp) -> u16 {
         match self {
             DebugSpeed::Default => 10,
-            DebugSpeed::InStep => 0,
+            DebugSpeed::InStep => app.config.speed_config.app_speed.get_fps(app),
+            DebugSpeed::Custom => {
+                app.config.speed_config.debug_custom_speed
+                    * app.config.speed_config.app_speed.get_fps(app)
+            }
         }
     }
 }
@@ -245,7 +270,7 @@ impl EguiApp {
                 ));
             }
             if i.key_pressed(egui::Key::Period) {
-                self.config.is_paused = !self.config.is_paused;
+                self.config.speed_config.is_paused = !self.config.speed_config.is_paused;
                 self.last_frame_request = Instant::now();
             }
             if i.key_pressed(egui::Key::R) {
@@ -297,17 +322,20 @@ impl EguiApp {
         });
     }
 
-    fn get_frame_budget(&self) -> Duration {
-        Duration::from_nanos(1_000_000_000 / self.config.target_speed.get_fps() as u64)
-    }
+    fn get_frame_budget(&mut self) -> Duration {
+        let speed = self.config.speed_config.app_speed.get_fps(self);
 
-    fn get_debug_viewers_frame_budget(&self) -> Duration {
-        let fps = self.config.debug_speed.get_fps();
-
-        if fps == 0 {
-            return self.get_frame_budget();
+        if speed == 0 {
+            return Duration::from_secs(5);
         }
 
+        Duration::from_nanos(
+            1_000_000_000 / self.config.speed_config.app_speed.get_fps(self) as u64,
+        )
+    }
+
+    fn get_debug_viewers_frame_budget(&mut self) -> Duration {
+        let fps = self.config.speed_config.debug_speed.get_fps(self);
         Duration::from_nanos(1_000_000_000 / fps as u64)
     }
 }
@@ -324,29 +352,32 @@ impl eframe::App for EguiApp {
         }
 
         let now = Instant::now();
-        if !self.config.is_paused {
+        if !self.config.speed_config.is_paused {
             let delta = now - self.last_frame_request;
             self.accumulator += delta;
             self.last_frame_request = now;
+
             let frame_budget = self.get_frame_budget();
 
-            while self.accumulator >= frame_budget {
-                let start = Instant::now();
+            if frame_budget < Duration::from_secs(5) {
+                while self.accumulator >= frame_budget {
+                    let start = Instant::now();
 
-                if let Err(e) = self.channel_emu.step_frame() {
-                    eprintln!("Emulator error: {}", e);
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    if let Err(e) = self.channel_emu.step_frame() {
+                        eprintln!("Emulator error: {}", e);
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+
+                    let step_time = start.elapsed();
+
+                    // Machine cannot keep up
+                    if step_time > frame_budget {
+                        self.accumulator = Duration::ZERO; // drop backlog
+                        break;
+                    }
+
+                    self.accumulator -= frame_budget;
                 }
-
-                let step_time = start.elapsed();
-
-                // Machine cannot keep up
-                if step_time > frame_budget {
-                    self.accumulator = Duration::ZERO; // drop backlog
-                    break;
-                }
-
-                self.accumulator -= frame_budget;
             }
         }
 
@@ -403,6 +434,62 @@ impl eframe::App for EguiApp {
                     ui.checkbox(&mut self.config.show_pattern_table, "Pattern Table Viewer");
                     ui.checkbox(&mut self.config.show_nametable, "Nametable Viewer");
                 });
+                ui.menu_button("Settings", |ui| {
+                    ui.radio_value(
+                        &mut self.config.speed_config.app_speed,
+                        AppSpeed::Default,
+                        "Default (60fps)",
+                    );
+                    ui.radio_value(
+                        &mut self.config.speed_config.app_speed,
+                        AppSpeed::Custom,
+                        "Custom",
+                    );
+                    ui.radio_value(
+                        &mut self.config.speed_config.app_speed,
+                        AppSpeed::Uncapped,
+                        "Uncapped",
+                    );
+
+                    if self.config.speed_config.app_speed == AppSpeed::Custom {
+                        ui.add(
+                            egui::Slider::new(&mut self.config.speed_config.custom_speed, 0..=500)
+                                .text("Speed")
+                                .suffix("%")
+                                .fixed_decimals(0)
+                                .logarithmic(true),
+                        );
+                    }
+                    ui.separator();
+
+                    ui.radio_value(
+                        &mut self.config.speed_config.debug_speed,
+                        DebugSpeed::Default,
+                        "1x 60fpx",
+                    );
+                    ui.radio_value(
+                        &mut self.config.speed_config.debug_speed,
+                        DebugSpeed::Custom,
+                        "Custom",
+                    );
+                    ui.radio_value(
+                        &mut self.config.speed_config.debug_speed,
+                        DebugSpeed::InStep,
+                        "Realtime",
+                    );
+                    if self.config.speed_config.debug_speed == DebugSpeed::Custom {
+                        ui.add(
+                            egui::Slider::new(
+                                &mut self.config.speed_config.debug_custom_speed,
+                                0..=100,
+                            )
+                            .text("Debug Speed")
+                            .suffix("%")
+                            .fixed_decimals(0)
+                            .logarithmic(true),
+                        );
+                    }
+                })
             });
         });
 
@@ -411,7 +498,7 @@ impl eframe::App for EguiApp {
             ui.horizontal(|ui| {
                 ui.label(format!("FPS: {:.1}", self.fps_counter.fps()));
                 ui.separator();
-                if self.config.is_paused {
+                if self.config.speed_config.is_paused {
                     ui.label("Emulator: Paused");
                 } else if self.current_frame.is_some() {
                     ui.label("Emulator: Running");
