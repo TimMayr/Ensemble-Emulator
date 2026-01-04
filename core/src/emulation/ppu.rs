@@ -2,11 +2,14 @@ use std::cell::Cell;
 use std::fmt::{Display, Formatter};
 use std::ops::RangeInclusive;
 
-use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, MemoryDevice, OpenBus, Ram};
+use crate::emulation::messages::{
+    PaletteData, PatternTableData, PatternTableViewerData, TileData, NAMETABLE_HEIGHT,
+    NAMETABLE_WIDTH, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
+};
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::PpuState;
 
@@ -83,7 +86,7 @@ pub struct Ppu {
     pub fine_x_scroll: u8,
     pub even_frame: bool,
     pub reset_signal: bool,
-    pub pixel_buffer: Box<[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
+    pub pixel_buffer: Box<[u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT]>,
     pub pattern_table_buffer: Box<[u32; ((256 + 16) * 128) as usize]>,
     pub nametable_buffer: Box<[u32; (512 * 480) as usize]>,
     pub render_pattern_tables_enabled: bool,
@@ -145,7 +148,7 @@ impl Ppu {
             t_register: 0,
             even_frame: false,
             reset_signal: false,
-            pixel_buffer: Box::from([0u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]),
+            pixel_buffer: Box::from([0u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT)]),
             pattern_table_buffer: Box::from([0u32; ((256 + 16) * 128) as usize]),
             nametable_buffer: Box::from([0u32; (512 * 480) as usize]),
             render_pattern_tables_enabled: false,
@@ -937,6 +940,13 @@ impl Ppu {
         }
     }
 
+    pub fn mem_read_debug(&self, addr: u16) -> u8 {
+        match addr {
+            0x3F00..0x3FFF => self.palette_ram.mem_read_debug(addr),
+            _ => self.memory.mem_read_debug(addr),
+        }
+    }
+
     #[inline(always)]
     pub fn mem_read(&mut self, addr: u16) -> u8 {
         match addr {
@@ -1013,7 +1023,7 @@ impl Ppu {
     pub fn reset(&mut self) { self.reset_signal = false; }
 
     #[inline]
-    pub fn get_pixel_buffer(&self) -> &[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize] {
+    pub fn get_pixel_buffer(&self) -> &[u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT] {
         &self.pixel_buffer
     }
 
@@ -1021,7 +1031,21 @@ impl Ppu {
         &self.pattern_table_buffer
     }
 
-    pub fn get_nametable_buffer(&self) -> &[u32; (512 * 480) as usize] { &self.nametable_buffer }
+    pub fn get_nametable_buffer(&self) -> &[u32; (NAMETABLE_WIDTH * NAMETABLE_HEIGHT) as usize] {
+        &self.nametable_buffer
+    }
+
+    // pub fn render_sprites_debug(&self) -> ([Box<[u32]>; SPRITE_COUNT], usize) {
+    //     let data = Vec::new();
+    //     let palette = self.load_palette_colors();
+    //
+    //     let mut sprite_data: Vec<u8> = Vec::new();
+    //     for i in 0.. OAM_SIZE {
+    //         sprite_data.push(self.oam.read(i as u16, 0))
+    //     }
+    //
+    //
+    // }
 
     pub fn set_render_pattern_tables(&mut self, enabled: bool) {
         self.render_pattern_tables_enabled = enabled;
@@ -1068,13 +1092,13 @@ impl Ppu {
     pub fn inc_current_palette(&mut self) { self.current_palette += 1; }
 
     #[inline]
-    fn load_palette_colors(&mut self) -> [u32; 4] {
+    fn load_palette_colors(&self) -> [u32; 4] {
         let mut colors = [0u32; 4];
         let sel = self.current_palette as u16;
         let base = PALETTE_RAM_START_ADDRESS + sel * 4;
 
         for (i, color) in colors.iter_mut().enumerate() {
-            let idx = self.mem_read(base + i as u16) as usize;
+            let idx = self.mem_read_debug(base + i as u16) as usize;
             *color = NES_PALETTE[idx];
         }
 
@@ -1092,7 +1116,7 @@ impl Ppu {
             let nametable_start_addr = 0x2000 + nametable_idx * 0x0400;
 
             for entry_idx in 0..NAMETABLE_TILE_AREA_SIZE {
-                let tile_index = self.mem_read(nametable_start_addr + entry_idx);
+                let tile_index = self.mem_read_debug(nametable_start_addr + entry_idx);
 
                 let nametable_row = entry_idx / 32;
                 let nametable_col = entry_idx % 32;
@@ -1101,7 +1125,7 @@ impl Ppu {
                     + ((nametable_row / 4) * 8)
                     + (nametable_col / 4)
                     + NAMETABLE_TILE_AREA_SIZE;
-                let attr_byte = self.mem_read(attr_addr);
+                let attr_byte = self.mem_read_debug(attr_addr);
 
                 let tile_x = nametable_col + ((nametable_idx & 0x1) * 32);
                 let tile_y = nametable_row + ((nametable_idx >> 1) * 30);
@@ -1112,8 +1136,8 @@ impl Ppu {
                 let patter_addr = pattern_table_base_address + (tile_index as u16) * 16;
 
                 for row_in_tile in 0..TILE_SIZE {
-                    let low = self.mem_read(patter_addr + row_in_tile as u16);
-                    let high = self.mem_read(patter_addr + row_in_tile as u16 + 8);
+                    let low = self.mem_read_debug(patter_addr + row_in_tile as u16);
+                    let high = self.mem_read_debug(patter_addr + row_in_tile as u16 + 8);
 
                     let quad_x = (nametable_col % 4) / 2;
                     let quad_y = (nametable_row % 4) / 2;
@@ -1131,7 +1155,7 @@ impl Ppu {
                             PALETTE_RAM_START_ADDRESS + (palette_select * 4 + pixel_value) as u16
                         };
 
-                        let color_idx = self.mem_read(palette_addr);
+                        let color_idx = self.mem_read_debug(palette_addr);
 
                         let x = base_x as usize + col_in_tile;
                         let y = base_y as usize + row_in_tile;
@@ -1143,47 +1167,7 @@ impl Ppu {
         }
     }
 
-    pub fn render_pattern_tables(&mut self) {
-        // Build palette→color once
-        let color_lut: [u32; 4] = self.load_palette_colors();
-
-        // Two tables: base 0x0000 and 0x1000
-        for table_ix in 0..2 {
-            let table_base = (table_ix * TABLE_BYTES) as u16;
-
-            // Place table 1 to the right with a gap
-            let offset_x = match table_ix {
-                0 => 0,
-                _ => TILES_PER_ROW * TILE_SIZE + TABLE_GAP_PX,
-            };
-
-            for tile_index in 0..256 {
-                let tile_x = (tile_index % TILES_PER_ROW) * TILE_SIZE + offset_x;
-                let tile_y = (tile_index / TILES_PER_ROW) * TILE_SIZE;
-
-                let tile_addr = table_base + (tile_index * BYTES_PER_TILE) as u16;
-
-                // Each tile row is two bytes: low-plane at [y], high-plane at [y+8]
-                for y in 0..TILE_SIZE {
-                    // Load both planes once
-                    let mut p0 = self.mem_read(tile_addr + y as u16);
-                    let mut p1 = self.mem_read(tile_addr + y as u16 + 8);
-
-                    // Compute destination row start once (pattern table buffer is 272 wide)
-                    let row_start = (tile_y + y) * 272 + tile_x;
-
-                    // Fill pixels right-to-left using bit shifts (avoids (7 - x) indexing)
-                    // This compiles to tight code and avoids variable shift amounts.
-                    for x in (0..TILE_SIZE).rev() {
-                        let idx = ((p0 & 1) | ((p1 & 1) << 1)) as usize;
-                        p0 >>= 1;
-                        p1 >>= 1;
-                        self.pattern_table_buffer[row_start + x] = color_lut[idx];
-                    }
-                }
-            }
-        }
-    }
+    pub fn render_pattern_tables(&mut self) {}
 
     #[inline(always)]
     pub fn tick_open_bus(&self, times: u8) {
@@ -1249,6 +1233,56 @@ impl Ppu {
         ppu.load_rom(rom);
 
         ppu
+    }
+}
+
+impl Ppu {
+    pub fn get_pattern_table_data_debug(&self) -> PatternTableViewerData {
+        // Build palette→color once
+        let palette: PaletteData = PaletteData {
+            colors: self.load_palette_colors(),
+        };
+
+        // Two tables: base 0x0000 and 0x1000
+        let mut pattern_tables: Vec<PatternTableData> = Vec::new();
+        for table_ix in 0..2 {
+            let mut tiles: Vec<TileData> = Vec::new();
+
+            let table_base = (table_ix * TABLE_BYTES) as u16;
+            for tile_index in 0..256 {
+                let tile_addr = table_base + (tile_index * BYTES_PER_TILE) as u16;
+                let mut plane_0: u64 = 0;
+                let mut plane_1: u64 = 0;
+
+                for y in 0..TILE_SIZE {
+                    let p0 = self.mem_read_debug(tile_addr + y as u16);
+                    let p1 = self.mem_read_debug(tile_addr + y as u16 + 8);
+
+                    plane_0 = (plane_0 << 8) | p0 as u64;
+                    plane_1 = (plane_1 << 8) | p1 as u64;
+                }
+
+                let tile: TileData = TileData {
+                    address: tile_addr,
+                    plane_0,
+                    plane_1,
+                };
+
+                tiles.push(tile);
+            }
+
+            let tiles = tiles.as_slice().try_into().unwrap();
+            let pattern_table = PatternTableData {
+                tiles,
+            };
+            pattern_tables.push(pattern_table);
+        }
+
+        PatternTableViewerData {
+            left: pattern_tables[0],
+            right: pattern_tables[1],
+            palette,
+        }
     }
 }
 

@@ -98,13 +98,14 @@ impl ChannelEmulator {
                 }
                 FrontendMessage::RequestPatternTableData => {
                     // Render pattern tables on demand and send
-                    if let Consoles::Nes(ref mut nes) = self.console {
-                        let mut ppu = nes.ppu.borrow_mut();
-                        ppu.render_pattern_tables();
-                        let pattern_data = Box::new(*ppu.get_pattern_table_buffer());
-                        let _ = self
-                            .to_frontend
-                            .send(EmulatorMessage::PatternTableReady(pattern_data));
+                    match self.console {
+                        Consoles::Nes(ref nes) => {
+                            let ppu = nes.ppu.borrow_mut();
+                            let data = ppu.get_pattern_table_data_debug();
+                            let _ = self
+                                .to_frontend
+                                .send(EmulatorMessage::PatternTableReady(data));
+                        }
                     }
                 }
                 FrontendMessage::RequestNametableData => {
@@ -117,6 +118,12 @@ impl ChannelEmulator {
                             .to_frontend
                             .send(EmulatorMessage::NametableReady(nametable_data));
                     }
+                }
+                FrontendMessage::RequestSpriteData => {
+                    // if let Consoles::Nes(ref mut nes)  = self.console{
+                    //     let ppu = nes.ppu.borrow_mut();
+                    //     let _ = self.to_frontend.send(EmulatorMessage::SpritesReady(ppu.render_sprites_debug()));
+                    // }
                 }
             }
         }

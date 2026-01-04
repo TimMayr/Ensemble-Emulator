@@ -1,11 +1,8 @@
 use std::cell::Ref;
 use std::ops::RangeInclusive;
-
+use crate::emulation::messages::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::emulation::nes::{ExecutionFinishedType, Nes};
 use crate::frontend::Frontends;
-
-pub const TOTAL_OUTPUT_WIDTH: u32 = 256;
-pub const TOTAL_OUTPUT_HEIGHT: u32 = 240;
 
 pub enum Consoles {
     Nes(Nes),
@@ -15,7 +12,7 @@ impl Console for Consoles {
     #[inline(always)]
     fn get_pixel_buffer(
         &self,
-    ) -> Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]> {
+    ) -> Ref<'_, [u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT]> {
         match self {
             Consoles::Nes(nes) => nes.get_pixel_buffer(),
         }

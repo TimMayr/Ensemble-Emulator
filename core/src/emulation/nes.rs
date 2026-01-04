@@ -4,10 +4,11 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp};
-use crate::emulation::emu::{Console, InputEvent, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
-use crate::emulation::mem::Memory;
+use crate::emulation::emu::{Console, InputEvent};
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::mem::Memory;
+use crate::emulation::messages::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
@@ -32,9 +33,7 @@ pub struct Nes {
 
 impl Console for Nes {
     #[inline]
-    fn get_pixel_buffer(
-        &self,
-    ) -> Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]> {
+    fn get_pixel_buffer(&self) -> Ref<'_, [u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT]> {
         Ref::map(self.ppu.borrow(), |ppu| ppu.get_pixel_buffer())
     }
 
