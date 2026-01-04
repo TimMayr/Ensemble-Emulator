@@ -7,15 +7,19 @@
 ///
 /// The message-based architecture provides clean separation between the frontend
 /// and emulation logic, enabling future threading and remote control features.
-use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
-
 // Pattern table display: 2 tables of 16x16 tiles (8px each) with 16px gap
-pub const PATTERN_TABLE_WIDTH: u32 = 256 + 16; // 16*8*2 + 16px gap
-pub const PATTERN_TABLE_HEIGHT: u32 = 128; // 16*8
+pub const PATTERN_TABLE_WIDTH: usize = 256 + 16; // 16*8*2 + 16px gap
+pub const PATTERN_TABLE_HEIGHT: usize = 128; // 16*8
 
 // Nametable display: 4 nametables of 32x30 tiles (8px each) arranged 2x2
-pub const NAMETABLE_WIDTH: u32 = 512; // 32*8*2
-pub const NAMETABLE_HEIGHT: u32 = 480; // 30*8*2
+pub const NAMETABLE_WIDTH: usize = 512; // 32*8*2
+pub const NAMETABLE_HEIGHT: usize = 480; // 30*8*2
+
+pub const SPRITE_COUNT: usize = 64;
+pub const SPRITE_WIDTH: usize = 8;
+
+pub const TOTAL_OUTPUT_WIDTH: usize = 256;
+pub const TOTAL_OUTPUT_HEIGHT: usize = 240;
 
 /// Messages sent from the frontend to the emulator
 #[derive(Debug, Clone)]
@@ -36,6 +40,7 @@ pub enum FrontendMessage {
     RequestPatternTableData,
     /// Request nametable data (frontend requests it, not sent every frame)
     RequestNametableData,
+    RequestSpriteData,
 }
 
 /// Controller input events
@@ -53,14 +58,62 @@ pub enum ControllerEvent {
 }
 
 /// Messages sent from the emulator to the frontend
-#[derive(Debug)]
 pub enum EmulatorMessage {
     /// A new frame is ready to be displayed
-    FrameReady(Box<[u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>),
+    FrameReady(Box<[u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT]>),
     /// Pattern table data is ready
-    PatternTableReady(Box<[u32; (PATTERN_TABLE_WIDTH * PATTERN_TABLE_HEIGHT) as usize]>),
+    PatternTableReady(PatternTableViewerData),
     /// Nametable data is ready
-    NametableReady(Box<[u32; (NAMETABLE_WIDTH * NAMETABLE_HEIGHT) as usize]>),
+    NametableReady(Box<[u32; NAMETABLE_WIDTH * NAMETABLE_HEIGHT]>),
     /// Emulator has stopped/quit
     Stopped,
+    SpritesReady(([Box<[u32]>; SPRITE_COUNT], usize)),
+}
+
+#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
+pub struct SpriteViewerData {
+    pub sprites: [SpriteData; 64],
+    pub sprite_height: u8,
+    pub palette: PaletteData,
+}
+#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
+
+pub struct PatternTableViewerData {
+    pub left: PatternTableData,
+    pub right: PatternTableData,
+    pub palette: PaletteData,
+}
+#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
+
+pub struct PatternTableData {
+    pub tiles: [TileData; 256],
+}
+#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
+
+pub struct SpriteData {
+    pub tile: TileData,
+    pub tile_2: Option<TileData>,
+    pub y_pos: usize,
+    pub x_pos: usize,
+    pub attributes: SpriteAttributes,
+}
+#[derive(Clone, Copy, PartialOrd, PartialEq, Ord, Eq)]
+
+pub struct SpriteAttributes {
+    pub palette_index: u8,
+    pub priority: bool,
+    pub flip_x: bool,
+    pub flip_y: bool,
+}
+#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
+
+pub struct TileData {
+    pub address: u16,
+    pub plane_0: u64,
+    pub plane_1: u64,
+}
+
+#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
+pub struct PaletteData {
+    pub colors: [u32; 4],
 }

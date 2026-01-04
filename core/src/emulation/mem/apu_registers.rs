@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::ops::{Add, BitAnd, Shr};
+use std::ops::{Add, BitAnd};
 
 use crate::emulation::mem::MemoryDevice;
 
@@ -41,7 +41,7 @@ impl MemoryDevice for ApuRegisters {
             }
             0x16 => {
                 let mut counter = self.read_counter.borrow().add(0);
-                let res = open_bus & self.input_a.shr(counter);
+                let res = open_bus & self.input_a.wrapping_shr(counter as u32);
 
                 counter += 1;
 
@@ -55,7 +55,7 @@ impl MemoryDevice for ApuRegisters {
             }
             0x17 => {
                 let mut counter = self.read_counter.borrow().add(0);
-                let res = open_bus & self.input_b.shr(counter);
+                let res = open_bus & self.input_b.wrapping_shr(counter as u32);
 
                 counter += 1;
 
