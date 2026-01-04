@@ -1,3 +1,4 @@
+use std::cmp::max;
 /// Egui-based frontend for the NES emulator using eframe.
 ///
 /// This frontend provides a modern, multi-window debugging interface with:
@@ -21,9 +22,8 @@
 use std::fmt::{Debug, Formatter};
 use std::time::{Duration, Instant};
 
-
 use crossbeam_channel::{Receiver, Sender};
-use egui::{ColorImage, TextureHandle, TextureOptions};
+use egui::{ColorImage, Context, TextureHandle, TextureOptions, Ui};
 
 use crate::emulation::channel_emu::ChannelEmulator;
 use crate::emulation::emu::{Console, Consoles, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
@@ -148,8 +148,20 @@ impl DebugSpeed {
             DebugSpeed::Default => 10,
             DebugSpeed::InStep => app.config.speed_config.app_speed.get_fps(app),
             DebugSpeed::Custom => {
-                app.config.speed_config.debug_custom_speed
-                    * app.config.speed_config.app_speed.get_fps(app)
+                if app.config.speed_config.debug_custom_speed == 0 {
+                    return 0;
+                }
+
+                if app.config.speed_config.app_speed == AppSpeed::Uncapped {
+                    return 10;
+                }
+
+                max(
+                    ((app.config.speed_config.debug_custom_speed as f64 / 100.0)
+                        * app.config.speed_config.app_speed.get_fps(app) as f64)
+                        as u16,
+                    1,
+                )
             }
         }
     }
@@ -198,7 +210,7 @@ impl EguiApp {
         }
     }
 
-    fn update_emulator_texture(&mut self, ctx: &egui::Context) {
+    fn update_emulator_texture(&mut self, ctx: &Context) {
         if let Some(ref frame) = self.current_frame {
             let image = Self::u32_to_color_image(
                 frame.as_ref(),
@@ -219,7 +231,7 @@ impl EguiApp {
         }
     }
 
-    fn update_pattern_table_texture(&mut self, ctx: &egui::Context) {
+    fn update_pattern_table_texture(&mut self, ctx: &Context) {
         if let Some(ref data) = self.pattern_table_data {
             let image = Self::u32_to_color_image(
                 data.as_ref(),
@@ -240,7 +252,7 @@ impl EguiApp {
         }
     }
 
-    fn update_nametable_texture(&mut self, ctx: &egui::Context) {
+    fn update_nametable_texture(&mut self, ctx: &Context) {
         if let Some(ref data) = self.nametable_data {
             let image = Self::u32_to_color_image(
                 data.as_ref(),
@@ -261,7 +273,7 @@ impl EguiApp {
         }
     }
 
-    fn handle_keyboard_input(&mut self, ctx: &egui::Context) {
+    fn handle_keyboard_input(&mut self, ctx: &Context) {
         ctx.input(|i| {
             // Emulator controls
             if i.key_pressed(egui::Key::N) {
@@ -336,52 +348,15 @@ impl EguiApp {
 
     fn get_debug_viewers_frame_budget(&mut self) -> Duration {
         let fps = self.config.speed_config.debug_speed.get_fps(self);
+
+        if fps == 0 {
+            return Duration::from_secs(5);
+        }
+
         Duration::from_nanos(1_000_000_000 / fps as u64)
     }
-}
 
-impl eframe::App for EguiApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Handle keyboard input
-        self.handle_keyboard_input(ctx);
-
-        // Check for escape to quit
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            let _ = self.to_emulator.send(FrontendMessage::Quit);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-        }
-
-        let now = Instant::now();
-        if !self.config.speed_config.is_paused {
-            let delta = now - self.last_frame_request;
-            self.accumulator += delta;
-            self.last_frame_request = now;
-
-            let frame_budget = self.get_frame_budget();
-
-            if frame_budget < Duration::from_secs(5) {
-                while self.accumulator >= frame_budget {
-                    let start = Instant::now();
-
-                    if let Err(e) = self.channel_emu.step_frame() {
-                        eprintln!("Emulator error: {}", e);
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                    }
-
-                    let step_time = start.elapsed();
-
-                    // Machine cannot keep up
-                    if step_time > frame_budget {
-                        self.accumulator = Duration::ZERO; // drop backlog
-                        break;
-                    }
-
-                    self.accumulator -= frame_budget;
-                }
-            }
-        }
-
-        // Process messages from emulator
+    fn process_emu_messages(&mut self, ctx: &Context) {
         while let Ok(msg) = self.from_emulator.try_recv() {
             match msg {
                 EmulatorMessage::FrameReady(frame) => {
@@ -402,98 +377,149 @@ impl eframe::App for EguiApp {
                 }
             }
         }
+    }
 
-        if self.config.show_pattern_table {
-            if now.duration_since(self.last_pattern_table_request)
-                >= self.get_debug_viewers_frame_budget()
-            {
-                let _ = self
-                    .to_emulator
-                    .send(FrontendMessage::RequestPatternTableData);
-                self.last_pattern_table_request = now;
-            }
-        } else if self.pattern_table_data.is_some() {
-            self.pattern_table_data = None;
-        }
+    fn update_emu_textures(&mut self, ctx: &Context) {
+        let now = Instant::now();
+        if !self.config.speed_config.is_paused {
+            let delta = now - self.last_frame_request;
+            self.accumulator += delta;
+            self.last_frame_request = now;
 
-        if self.config.show_nametable {
-            if now.duration_since(self.last_nametable_request)
-                >= self.get_debug_viewers_frame_budget()
-            {
-                let _ = self.to_emulator.send(FrontendMessage::RequestNametableData);
-                self.last_nametable_request = now;
-            }
-        } else if self.nametable_data.is_some() {
-            self.nametable_data = None;
-        }
+            let frame_budget = self.get_frame_budget();
 
-        // Main menu bar
-        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-            egui::containers::menu::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button("View", |ui| {
-                    ui.checkbox(&mut self.config.show_pattern_table, "Pattern Table Viewer");
-                    ui.checkbox(&mut self.config.show_nametable, "Nametable Viewer");
-                });
-                ui.menu_button("Settings", |ui| {
-                    ui.radio_value(
-                        &mut self.config.speed_config.app_speed,
-                        AppSpeed::Default,
-                        "Default (60fps)",
-                    );
-                    ui.radio_value(
-                        &mut self.config.speed_config.app_speed,
-                        AppSpeed::Custom,
-                        "Custom",
-                    );
-                    ui.radio_value(
-                        &mut self.config.speed_config.app_speed,
-                        AppSpeed::Uncapped,
-                        "Uncapped",
-                    );
+            //Effectively paused, so we skip
+            if frame_budget < Duration::from_secs(5) {
+                while self.accumulator >= frame_budget {
+                    let start = Instant::now();
 
-                    if self.config.speed_config.app_speed == AppSpeed::Custom {
-                        ui.add(
-                            egui::Slider::new(&mut self.config.speed_config.custom_speed, 0..=500)
-                                .text("Speed")
-                                .suffix("%")
-                                .fixed_decimals(0)
-                                .logarithmic(true),
-                        );
+                    if let Err(e) = self.channel_emu.step_frame() {
+                        eprintln!("Emulator error: {}", e);
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
-                    ui.separator();
+                    println!("Requested Frame");
 
-                    ui.radio_value(
-                        &mut self.config.speed_config.debug_speed,
-                        DebugSpeed::Default,
-                        "1x 60fpx",
-                    );
-                    ui.radio_value(
-                        &mut self.config.speed_config.debug_speed,
-                        DebugSpeed::Custom,
-                        "Custom",
-                    );
-                    ui.radio_value(
-                        &mut self.config.speed_config.debug_speed,
-                        DebugSpeed::InStep,
-                        "Realtime",
-                    );
-                    if self.config.speed_config.debug_speed == DebugSpeed::Custom {
-                        ui.add(
-                            egui::Slider::new(
-                                &mut self.config.speed_config.debug_custom_speed,
-                                0..=100,
-                            )
-                            .text("Debug Speed")
-                            .suffix("%")
-                            .fixed_decimals(0)
-                            .logarithmic(true),
-                        );
+                    let step_time = start.elapsed();
+
+                    // Machine cannot keep up
+                    if step_time > frame_budget {
+                        self.accumulator = Duration::ZERO; // drop backlog
+                        break;
                     }
-                })
-            });
+
+                    self.accumulator -= frame_budget;
+                }
+            }
+
+            let debug_frame_budget = self.get_debug_viewers_frame_budget();
+
+            //Effectively paused, so we skip
+            if debug_frame_budget < Duration::from_secs(5) {
+                if self.config.show_pattern_table
+                    && now.duration_since(self.last_pattern_table_request) >= debug_frame_budget
+                {
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::RequestPatternTableData);
+                    self.last_pattern_table_request = now;
+                    println!("Requested Pattern Table");
+                }
+
+                if self.config.show_nametable
+                    && now.duration_since(self.last_nametable_request) >= debug_frame_budget
+                {
+                    let _ = self.to_emulator.send(FrontendMessage::RequestNametableData);
+                    self.last_nametable_request = now;
+                    println!("Requested Nametable");
+                }
+            }
+        }
+    }
+
+    fn add_speed_settings(&mut self, ui: &mut Ui) {
+        ui.collapsing("Speed", |ui| {
+            ui.label("Emulation Speed")
+                .on_hover_text("Sets the speed at which the emulation runs");
+            ui.radio_value(
+                &mut self.config.speed_config.app_speed,
+                AppSpeed::Default,
+                "Default (60fps)",
+            );
+            ui.radio_value(
+                &mut self.config.speed_config.app_speed,
+                AppSpeed::Custom,
+                "Custom",
+            );
+            ui.radio_value(
+                &mut self.config.speed_config.app_speed,
+                AppSpeed::Uncapped,
+                "Uncapped",
+            );
+
+            if self.config.speed_config.app_speed == AppSpeed::Custom {
+                ui.add(
+                    egui::Slider::new(&mut self.config.speed_config.custom_speed, 0..=500)
+                        .text("Speed")
+                        .suffix("%")
+                        .fixed_decimals(0)
+                        .logarithmic(true),
+                );
+            }
+            ui.separator();
+            ui.label("Debug Viewer Speed")
+                .on_hover_text("Sets the speed at which the debug views update");
+            ui.radio_value(
+                &mut self.config.speed_config.debug_speed,
+                DebugSpeed::Default,
+                "10fps",
+            );
+            ui.radio_value(
+                &mut self.config.speed_config.debug_speed,
+                DebugSpeed::Custom,
+                "Custom",
+            );
+            ui.radio_value(
+                &mut self.config.speed_config.debug_speed,
+                DebugSpeed::InStep,
+                "Realtime",
+            );
+            if self.config.speed_config.debug_speed == DebugSpeed::Custom {
+                ui.add(
+                    egui::Slider::new(&mut self.config.speed_config.debug_custom_speed, 0..=100)
+                        .text("Debug Speed")
+                        .suffix("%")
+                        .fixed_decimals(0)
+                        .logarithmic(true),
+                )
+                .on_hover_text("% of main view fps");
+            }
         });
+    }
 
-        // Status bar at bottom
+    fn add_view_settings(&mut self, ui: &mut Ui) {
+        ui.collapsing("View", |ui| {
+            ui.checkbox(&mut self.config.show_pattern_table, "Pattern Table Viewer");
+            ui.checkbox(&mut self.config.show_nametable, "Nametable Viewer");
+        });
+    }
+
+    fn add_options_panel(&mut self, ctx: &Context) {
+        egui::SidePanel::right("options")
+            .min_width(100.0)
+            .default_width(200.0)
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.take_available_width();
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.label("Settings");
+
+                    self.add_view_settings(ui);
+                    self.add_speed_settings(ui)
+                });
+            });
+    }
+
+    fn add_status_bar(&mut self, ctx: &Context) {
         egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label(format!("FPS: {:.1}", self.fps_counter.fps()));
@@ -507,10 +533,11 @@ impl eframe::App for EguiApp {
                 }
             });
         });
+    }
 
-        // Emulator output window (always visible)
+    fn add_emulator_views(&mut self, ctx: &Context) {
         egui::Window::new("Emulator Output")
-            .default_size([640.0, 480.0])
+            .default_size([512.0, 480.0])
             .default_pos([50.0, 50.0])
             .show(ctx, |ui| {
                 if let Some(ref texture) = self.emulator_texture {
@@ -588,6 +615,33 @@ impl eframe::App for EguiApp {
                     }
                 });
         }
+    }
+}
+
+impl eframe::App for EguiApp {
+    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        // Handle keyboard input
+        self.handle_keyboard_input(ctx);
+
+        // Check for escape to quit
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            let _ = self.to_emulator.send(FrontendMessage::Quit);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+
+        self.update_emu_textures(ctx);
+
+        // Process messages from emulator
+        self.process_emu_messages(ctx);
+
+        // Options side panel
+        self.add_options_panel(ctx);
+
+        // Status bar at bottom
+        self.add_status_bar(ctx);
+
+        // Emulator output windows
+        self.add_emulator_views(ctx);
 
         // Request continuous repaint for animation
         ctx.request_repaint();
