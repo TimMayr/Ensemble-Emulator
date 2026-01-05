@@ -5,10 +5,9 @@ pub mod sdl_frontend;
 
 #[cfg(feature = "sdl2-frontend")]
 use std::cell::Ref;
-
 use crate::emulation::emu::InputEvent;
 #[cfg(feature = "sdl2-frontend")]
-use crate::emulation::emu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+use crate::emulation::messages::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 #[cfg(feature = "sdl2-frontend")]
 use crate::frontend::sdl_frontend::SdlFrontend;
 
@@ -40,7 +39,7 @@ impl Frontend for Frontends {
     #[inline(always)]
     fn show_frame(
         &mut self,
-        pixel_buffer: Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
+        pixel_buffer: Ref<'_, [u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT]>,
     ) -> Result<(), String> {
         match self {
             #[cfg(feature = "sdl2-frontend")]
@@ -65,7 +64,7 @@ pub trait Frontend {
     #[cfg(feature = "sdl2-frontend")]
     fn show_frame(
         &mut self,
-        pixel_buffer: Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>,
+        pixel_buffer: Ref<'_, [u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT]>,
     ) -> Result<(), String>;
 
     #[cfg(not(feature = "sdl2-frontend"))]
