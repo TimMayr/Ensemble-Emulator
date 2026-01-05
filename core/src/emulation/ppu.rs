@@ -7,8 +7,8 @@ use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, MemoryDevice, OpenBus, Ram};
 use crate::emulation::messages::{
-    PaletteData, PatternTableData, PatternTableViewerData, TileData, NAMETABLE_HEIGHT,
-    NAMETABLE_WIDTH, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
+    NAMETABLE_HEIGHT, NAMETABLE_WIDTH, PaletteData, PatternTableData, PatternTableViewerData,
+    TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData,
 };
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::PpuState;

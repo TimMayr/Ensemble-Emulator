@@ -5,6 +5,7 @@ pub mod sdl_frontend;
 
 #[cfg(feature = "sdl2-frontend")]
 use std::cell::Ref;
+
 use crate::emulation::emu::InputEvent;
 #[cfg(feature = "sdl2-frontend")]
 use crate::emulation::messages::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};

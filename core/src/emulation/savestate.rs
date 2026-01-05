@@ -1,14 +1,17 @@
 use std::collections::VecDeque;
 
-use bincode::{Decode, Encode, config};
-use serde::{Deserialize, Serialize};
+use rkyv::rancor::BoxedError;
+use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 
 use crate::emulation::cpu::{Cpu, MicroOp};
 use crate::emulation::messages::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::RomFile;
 
-#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+#[derive(Archive, RkyvSerialize, RkyvDeserialize, Clone)]
+#[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
+                        __S::Error: rkyv::rancor::Source))]
+#[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
 pub struct CpuState {
     pub program_counter: u16,
     pub stack_pointer: u8,
@@ -55,7 +58,10 @@ impl From<&Cpu> for CpuState {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+#[derive(Archive, RkyvSerialize, RkyvDeserialize, Clone)]
+#[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
+                        __S::Error: rkyv::rancor::Source))]
+#[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
 pub struct PpuState {
     pub cycle_counter: u128,
     pub vbl_reset_counter: u8,
@@ -106,7 +112,10 @@ impl From<&Ppu> for PpuState {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+#[derive(Archive, RkyvSerialize, RkyvDeserialize, Clone)]
+#[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
+                        __S::Error: rkyv::rancor::Source))]
+#[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
 pub struct SaveState {
     pub cpu: CpuState,
     pub ppu: PpuState,
@@ -117,15 +126,11 @@ pub struct SaveState {
 }
 
 pub fn save_state(state: SaveState, path: &str) {
-    let serialized =
-        bincode::encode_to_vec(state, config::standard()).expect("Failed to serialize SaveState");
-    std::fs::write(path, &serialized).expect("Failed to write save file");
+    let bytes = rkyv::to_bytes::<BoxedError>(&state).expect("Failed to serialize SaveState");
+    std::fs::write(path, &bytes).expect("Failed to write save file");
 }
 
 pub fn load_state(path: &str) -> SaveState {
     let encoded = std::fs::read(path).expect("Failed to read save file");
-
-    let (decoded, _): (SaveState, _) = bincode::decode_from_slice(&encoded, config::standard())
-        .expect("Failed to deserialize SaveState");
-    decoded
+    rkyv::from_bytes::<SaveState, BoxedError>(&encoded).expect("Failed to deserialize SaveState")
 }

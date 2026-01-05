@@ -26,7 +26,11 @@ impl Default for SdlFrontend {
 
         // Create window
         let window = video_subsystem
-            .window("NES Emulator", TOTAL_OUTPUT_WIDTH as u32, TOTAL_OUTPUT_HEIGHT as u32)
+            .window(
+                "NES Emulator",
+                TOTAL_OUTPUT_WIDTH as u32,
+                TOTAL_OUTPUT_HEIGHT as u32,
+            )
             .position_centered()
             .opengl()
             .resizable()
