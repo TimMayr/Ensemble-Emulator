@@ -96,7 +96,7 @@ impl Console for Consoles {
 pub trait Console {
     fn get_pixel_buffer(
         &self,
-    ) -> Ref<'_, [u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT) as usize]>;
+    ) -> Ref<'_, [u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT]>;
     #[allow(clippy::ptr_arg)]
     fn load_rom(&mut self, path: &String);
     fn reset(&mut self);
