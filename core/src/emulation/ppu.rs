@@ -44,6 +44,8 @@ pub const PALETTE_RAM_END_INDEX: u16 = 0x3FFF;
 pub const PALETTE_RAM_SIZE: u16 = 0x20;
 pub const VRAM_SIZE: usize = 0x800;
 pub const DOTS_PER_SCANLINE: u16 = 340;
+/// Number of dots in one scanline including dot 0 (341 total: dots 0-340)
+pub const DOTS_IN_SCANLINE: u16 = DOTS_PER_SCANLINE + 1;
 pub const SCANLINES_PER_FRAME: u16 = 261;
 pub const OPEN_BUS_DECAY_DELAY: u32 = 420_000;
 pub const SPRITE_OVERFLOW_FLAG: u8 = 0b0010_0000;
@@ -408,7 +410,8 @@ impl Ppu {
 
         self.update_nmi();
 
-        // Skip cycle on odd frames when rendering
+        // Skip cycle on odd frames when rendering (skips from dot 339 directly to next frame)
+        // This occurs at dot 339 of scanline 261 on odd frames when rendering is enabled
         let skip_cycle = self.dot == DOTS_PER_SCANLINE - 1
             && self.scanline == PRE_RENDER_SCANLINE
             && !self.even_frame
@@ -422,19 +425,19 @@ impl Ppu {
 
         self.dot_counter += 1;
         
-        // Check if we're at the end of frame before incrementing dot/scanline
-        let is_frame_end = self.dot == DOTS_PER_SCANLINE && self.scanline == PRE_RENDER_SCANLINE;
-        
         // Increment dot/scanline directly instead of recalculating from dot_counter
-        self.dot += 1;
-        if skip_cycle {
-            self.dot += 1;
-        }
+        // Handle skip_cycle by incrementing by 2 (skipping dot 340)
+        let increment = if skip_cycle { 2 } else { 1 };
+        self.dot += increment;
+        
+        // Handle wrap-around: dots 0-340 (341 total), scanlines 0-261 (262 total)
+        let mut is_frame_end = false;
         if self.dot > DOTS_PER_SCANLINE {
-            self.dot = 0;
+            self.dot -= DOTS_IN_SCANLINE;  // 341 -> 0, 342 -> 1
             self.scanline += 1;
             if self.scanline > PRE_RENDER_SCANLINE {
                 self.scanline = 0;
+                is_frame_end = true;  // Frame ends when we wrap to scanline 0
             }
         }
         

@@ -1080,9 +1080,10 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
     map
 }
 
-/// Initialize the fast lookup table - call once during setup
+/// Initialize the fast lookup table - call once during setup.
+/// Note: OPCODES_MAP.get_or_init(init) is required because init() populates the OPCODES vector.
 pub fn init_lookup_table() -> [Option<OpCode>; 256] {
-    // Ensure OPCODES is initialized
+    // Ensure OPCODES is initialized (init() populates both OPCODES and returns HashMap)
     OPCODES_MAP.get_or_init(init);
 
     let mut table: [Option<OpCode>; 256] = [None; 256];
