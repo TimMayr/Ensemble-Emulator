@@ -1,4 +1,3 @@
-
 use crate::emulation::nes::Nes;
 
 #[cfg(test)]

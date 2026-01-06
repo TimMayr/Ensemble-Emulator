@@ -1,9 +1,8 @@
 use egui::Context;
 
-use crate::emulation::messages::NAMETABLE_HEIGHT;
-use crate::emulation::messages::NAMETABLE_WIDTH;
-use crate::emulation::messages::TOTAL_OUTPUT_HEIGHT;
-use crate::emulation::messages::TOTAL_OUTPUT_WIDTH;
+use crate::emulation::messages::{
+    NAMETABLE_HEIGHT, NAMETABLE_WIDTH, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
+};
 use crate::frontend::egui::config::ViewConfig;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::ui::draw_pattern_table;
