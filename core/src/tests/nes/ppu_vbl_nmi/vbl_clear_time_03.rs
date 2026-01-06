@@ -1,6 +1,5 @@
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
-use crate::frontend::Frontends;
 
 #[test]
 fn test_03_vbl_clear_time() {

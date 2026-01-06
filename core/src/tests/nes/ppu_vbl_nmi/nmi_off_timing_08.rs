@@ -1,6 +1,5 @@
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
-use crate::frontend::Frontends;
 
 #[test]
 fn test_08_nmi_off_timing() {

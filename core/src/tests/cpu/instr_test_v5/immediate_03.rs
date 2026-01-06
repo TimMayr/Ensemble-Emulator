@@ -5,7 +5,6 @@ use crate::emulation::cpu::Cpu;
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
 use crate::emulation::ppu::Ppu;
-use crate::frontend::Frontends;
 
 #[test]
 fn test_03_immediate() {
