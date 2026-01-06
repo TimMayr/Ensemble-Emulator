@@ -17,5 +17,4 @@ crossbeam-channel = "0.5.15"
 
 eframe = { version = "0.33.3" }
 egui = { version = "0.33.3", features = ["bytemuck", "serde"] }
-egui_extras = { version = "0.33.3", features = ["image", "serde"] }
 clap = { version = "4.5.54", features = ["derive"] }
