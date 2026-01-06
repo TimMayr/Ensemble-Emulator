@@ -211,14 +211,13 @@ impl Ppu {
             self.t_register = 0;
         }
 
-        let frame_dot = self.dot_counter % DOTS_PER_FRAME;
+        // Direct increment of dot/scanline is much faster than u128 modulo
+        // Only need to track frame boundaries now
+        let is_frame_start = self.dot == 0 && self.scanline == 0;
 
-        if frame_dot == 0 {
+        if is_frame_start {
             self.even_frame = !self.even_frame;
         }
-
-        self.scanline = (frame_dot / (DOTS_PER_SCANLINE + 1) as u128) as u16;
-        self.dot = (frame_dot % (DOTS_PER_SCANLINE + 1) as u128) as u16;
 
         let res = false;
 
@@ -409,19 +408,37 @@ impl Ppu {
 
         self.update_nmi();
 
-        if self.dot == DOTS_PER_SCANLINE - 1
+        // Skip cycle on odd frames when rendering
+        let skip_cycle = self.dot == DOTS_PER_SCANLINE - 1
             && self.scanline == PRE_RENDER_SCANLINE
             && !self.even_frame
-            && self.is_rendering()
-        {
+            && self.is_rendering();
+
+        if skip_cycle {
             self.dot_counter += 1;
         }
 
         self.address_latch = self.mem_read(self.address_bus);
 
         self.dot_counter += 1;
-
-        frame_dot == DOTS_PER_FRAME - 1 || res
+        
+        // Check if we're at the end of frame before incrementing dot/scanline
+        let is_frame_end = self.dot == DOTS_PER_SCANLINE && self.scanline == PRE_RENDER_SCANLINE;
+        
+        // Increment dot/scanline directly instead of recalculating from dot_counter
+        self.dot += 1;
+        if skip_cycle {
+            self.dot += 1;
+        }
+        if self.dot > DOTS_PER_SCANLINE {
+            self.dot = 0;
+            self.scanline += 1;
+            if self.scanline > PRE_RENDER_SCANLINE {
+                self.scanline = 0;
+            }
+        }
+        
+        is_frame_end || res
     }
 
     #[inline]
