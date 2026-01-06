@@ -12,7 +12,7 @@ pub fn add_emulator_views(ctx: &Context, view_config: &mut ViewConfig, emu_textu
     add_main_output_window(ctx, emu_textures);
 
     if view_config.show_pattern_table {
-        add_pattern_table_window(ctx, emu_textures);
+        add_pattern_table_window(ctx, view_config, emu_textures);
     }
 
     if view_config.show_nametable {
@@ -54,11 +54,15 @@ fn add_main_output_window(ctx: &Context, emu_textures: &EmuTextures) {
 }
 
 /// Add the pattern table viewer window
-fn add_pattern_table_window(ctx: &Context, emu_textures: &EmuTextures) {
+fn add_pattern_table_window(
+    ctx: &Context,
+    view_config: &mut ViewConfig,
+    emu_textures: &EmuTextures,
+) {
     egui::Window::new("Pattern Table Viewer")
         .default_size([580.0, 300.0])
         .default_pos([700.0, 50.0])
-        .open(&mut true)
+        .open(&mut view_config.show_pattern_table)
         .resizable(true)
         .max_height(0.0)
         .show(ctx, |ui| {
