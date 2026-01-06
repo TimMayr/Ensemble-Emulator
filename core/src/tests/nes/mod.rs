@@ -10,3 +10,6 @@ mod oam_stress;
 mod ppu_open_bus;
 #[cfg(test)]
 mod ppu_vbl_nmi;
+
+#[cfg(test)]
+mod performance;
