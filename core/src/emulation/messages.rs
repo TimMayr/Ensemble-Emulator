@@ -116,3 +116,8 @@ pub struct TileData {
 pub struct PaletteData {
     pub colors: [u32; 4],
 }
+
+pub enum InputEvent {
+    IncPalette,
+    Quit,
+}

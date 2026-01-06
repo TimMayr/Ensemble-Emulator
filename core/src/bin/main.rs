@@ -3,7 +3,6 @@ use std::time::Instant;
 
 use clap::{Parser, value_parser};
 use egui::TextBuffer;
-use nes_core::emulation::emu::{Console, Consoles};
 use nes_core::emulation::nes::Nes;
 use nes_core::frontend::egui_frontend;
 
@@ -47,14 +46,13 @@ fn start_egui(file: PathBuf) -> Result<(), String> {
 }
 
 fn start_headless(file: PathBuf) -> Result<(), String> {
-    let mut emu = Consoles::Nes(Nes::default());
+    let mut emu = Nes::default();
 
     emu.load_rom(&file.to_string_lossy().take());
     emu.power();
 
     let start = Instant::now();
 
-    let Consoles::Nes(ref mut emu) = emu;
     let res = emu.run_until(700_119_365);
 
     let res = if let Err(e) = res { Err(e) } else { Ok(()) };

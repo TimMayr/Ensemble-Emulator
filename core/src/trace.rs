@@ -15,14 +15,14 @@ pub struct TraceLog {
     pub output: String,
 }
 impl Default for TraceLog {
-    fn default() -> Self { Self::new(String::from("./trace-log.txt")) }
+    fn default() -> Self { Self::new(&String::from("./trace-log.txt")) }
 }
 
 impl TraceLog {
-    pub fn new(path: String) -> Self {
+    pub fn new(path: &str) -> Self {
         Self {
             log: String::from(""),
-            output: path,
+            output: path.to_string(),
         }
     }
 
@@ -112,15 +112,25 @@ impl TraceLog {
         str
     }
 
-    pub fn flush(&mut self) {
-        let mut file = OpenOptions::new()
+    pub fn flush(&mut self) -> Result<(), String> {
+        let file = OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
-            .open(self.output.clone())
-            .unwrap_or_else(|e| panic!("Error saving log: \n{}", e));
+            .open(&self.output);
 
-        file.write_all(self.log.as_bytes()).expect("error");
+        let mut file = match file {
+            Ok(f) => f,
+            Err(e) => return Err(format!("Error opening log file: {}\n\t{}", self.output, e)),
+        };
+
+        match file.write_all(self.log.as_bytes()) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(format!(
+                "Error saving log to file: {}\n\t{}",
+                self.output, e
+            )),
+        }
     }
 }
 

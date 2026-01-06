@@ -1,4 +1,3 @@
-use crate::emulation::emu::Console;
 use crate::emulation::mem::{Memory, MemoryDevice, Rom};
 use crate::emulation::nes::Nes;
 
