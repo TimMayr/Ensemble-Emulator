@@ -13,6 +13,8 @@ use crate::emulation::cpu::{Condition, MicroOpCallback, OpType, Source, Target};
 
 pub static OPCODES: OnceLock<Vec<OpCode>> = OnceLock::new();
 pub static OPCODES_MAP: OnceLock<HashMap<u8, &'static OpCode>> = OnceLock::new();
+/// Direct lookup table for opcodes - O(1) array access vs HashMap
+pub static OPCODES_TABLE: OnceLock<[Option<OpCode>; 256]> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy)]
 pub struct OpCode {
@@ -1076,6 +1078,24 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
     }
 
     map
+}
+
+/// Initialize the fast lookup table - call once during setup
+pub fn init_lookup_table() -> [Option<OpCode>; 256] {
+    // Ensure OPCODES is initialized
+    OPCODES_MAP.get_or_init(init);
+
+    let mut table: [Option<OpCode>; 256] = [None; 256];
+    for opcode in OPCODES.get().unwrap() {
+        table[opcode.opcode as usize] = Some(*opcode);
+    }
+    table
+}
+
+/// Fast opcode lookup - O(1) array access
+#[inline(always)]
+pub fn get_opcode(opcode: u8) -> Option<OpCode> {
+    OPCODES_TABLE.get_or_init(init_lookup_table)[opcode as usize]
 }
 
 impl OpCode {

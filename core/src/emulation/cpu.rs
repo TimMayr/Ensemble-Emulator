@@ -12,7 +12,7 @@ use crate::emulation::mem::{Memory, Ram};
 use crate::emulation::nes::ExecutionFinishedType;
 use crate::emulation::nes::ExecutionFinishedType::CycleCompleted;
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OPCODES_MAP, OpCode};
+use crate::emulation::opcode::{OPCODES_MAP, OPCODES_TABLE, OpCode, get_opcode};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::CpuState;
@@ -74,7 +74,9 @@ pub struct Cpu {
 
 impl Default for Cpu {
     fn default() -> Self {
+        // Initialize both HashMap and fast lookup table
         OPCODES_MAP.get_or_init(opcode::init);
+        OPCODES_TABLE.get_or_init(opcode::init_lookup_table);
 
         Self {
             program_counter: 0,
@@ -114,6 +116,7 @@ impl Default for Cpu {
 impl Cpu {
     pub fn new() -> Self {
         OPCODES_MAP.get_or_init(opcode::init);
+        OPCODES_TABLE.get_or_init(opcode::init_lookup_table);
         Self::default()
     }
 
@@ -329,7 +332,8 @@ impl Cpu {
 
     #[inline(always)]
     fn get_instructions_for_op_type(&mut self) -> VecDeque<MicroOp> {
-        let mut instructions = VecDeque::new();
+        // Pre-allocate with capacity for the max instruction count (7) to avoid re-allocation
+        let mut instructions = VecDeque::with_capacity(8);
 
         let Some(op) = self.current_opcode else {
             return instructions;
@@ -1115,7 +1119,8 @@ impl Cpu {
                 let opcode = self.mem_read(self.program_counter);
                 self.program_counter = self.program_counter.wrapping_add(1);
 
-                self.current_opcode = Some(**OPCODES_MAP.get().unwrap().get(&opcode).unwrap());
+                // Fast O(1) array lookup instead of HashMap
+                self.current_opcode = get_opcode(opcode);
                 self.run_op(callback);
 
                 self.op_queue = self.get_instructions_for_op_type();
@@ -1786,15 +1791,12 @@ impl Cpu {
 impl Cpu {
     pub fn from(state: &CpuState, ppu: Rc<RefCell<Ppu>>, rom: &RomFile) -> Self {
         OPCODES_MAP.get_or_init(opcode::init);
+        OPCODES_TABLE.get_or_init(opcode::init_lookup_table);
         let mut opcode = None;
 
         if let Some(opcode_u8) = state.current_opcode {
-            opcode = Some(
-                **OPCODES_MAP
-                    .get_or_init(opcode::init)
-                    .get(&opcode_u8)
-                    .expect("Invalid State"),
-            );
+            // Use fast lookup table
+            opcode = get_opcode(opcode_u8);
         }
 
         let mut cpu = Self {

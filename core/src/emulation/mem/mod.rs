@@ -231,8 +231,9 @@ impl OpenBus {
 
     #[inline(always)]
     pub fn tick(&mut self, times: u8) {
+        let times_u32 = times as u32;
         for bit in &mut self.bits {
-            bit.decay_timer += times as u32;
+            bit.decay_timer += times_u32;
             if bit.decay_timer > self.decay_time {
                 bit.set = false;
                 bit.decay_timer = 0
