@@ -9,8 +9,7 @@ fn test_11_stack() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/11-stack.nes",
     ));
     emu.reset();
-    emu.run_until(&mut Frontends::default(), 69296933)
-        .expect("Error while running test");
+    emu.run_until(69296933).expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6016));
     let cpu_mem = whole_mem[0].as_slice();

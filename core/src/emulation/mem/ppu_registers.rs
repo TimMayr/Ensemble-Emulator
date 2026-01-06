@@ -1,10 +1,11 @@
 use std::cell::RefCell;
+use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
 use crate::emulation::mem::MemoryDevice;
 use crate::emulation::ppu::Ppu;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PpuRegisters {
     ppu: Rc<RefCell<Ppu>>,
 }
@@ -14,6 +15,17 @@ impl PpuRegisters {
         Self {
             ppu,
         }
+    }
+}
+
+impl Debug for PpuRegisters {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_map()
+            .entry(&"0x0", &self.snapshot(0, 0))
+            .entry(&"0x2", &self.snapshot(2, 0))
+            .entry(&"0x4", &self.snapshot(4, 0))
+            .entry(&"0x7", &self.snapshot(7, 0))
+            .finish()
     }
 }
 

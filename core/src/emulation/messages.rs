@@ -70,25 +70,25 @@ pub enum EmulatorMessage {
     SpritesReady(([Box<[u32]>; SPRITE_COUNT], usize)),
 }
 
-#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct SpriteViewerData {
     pub sprites: [SpriteData; 64],
     pub sprite_height: u8,
     pub palette: PaletteData,
 }
-#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 
 pub struct PatternTableViewerData {
     pub left: PatternTableData,
     pub right: PatternTableData,
     pub palette: PaletteData,
 }
-#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 
 pub struct PatternTableData {
     pub tiles: [TileData; 256],
 }
-#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 
 pub struct SpriteData {
     pub tile: TileData,
@@ -97,23 +97,22 @@ pub struct SpriteData {
     pub x_pos: usize,
     pub attributes: SpriteAttributes,
 }
-#[derive(Clone, Copy, PartialOrd, PartialEq, Ord, Eq)]
-
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct SpriteAttributes {
     pub palette_index: u8,
     pub priority: bool,
     pub flip_x: bool,
     pub flip_y: bool,
 }
-#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
 
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct TileData {
     pub address: u16,
     pub plane_0: u64,
     pub plane_1: u64,
 }
 
-#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct PaletteData {
     pub colors: [u32; 4],
 }

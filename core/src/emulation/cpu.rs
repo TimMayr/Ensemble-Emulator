@@ -40,7 +40,6 @@ pub const LOWER_BYTE: u16 = 0x00FF;
 pub const DMA_ADDRESS: u16 = 0x4014;
 pub const OAM_REG_ADDRESS: u16 = 0x2004;
 
-#[derive(Debug, Clone)]
 pub struct Cpu {
     pub program_counter: u16,
     pub stack_pointer: u8,
@@ -1560,7 +1559,7 @@ impl Cpu {
         }
 
         instr.push_back(MicroOp::Read(
-            AddressSource::Address((self.dma_page as u16) << 8 | 0xFFu16),
+            AddressSource::Address(((self.dma_page as u16) << 8) | 0xFFu16),
             Target::DmaTemp,
             MicroOpCallback::None,
         ));
@@ -1738,7 +1737,7 @@ pub enum Condition {
     OverflowClear,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OpType {
     ImmediateAddressing(Target, MicroOpCallback),
     AbsoluteRead(Target, MicroOpCallback),

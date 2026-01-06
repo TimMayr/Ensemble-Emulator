@@ -1,70 +1,63 @@
-#[cfg(not(any(feature = "egui-frontend")))]
+use std::path::PathBuf;
 use std::time::Instant;
 
-#[cfg(not(any(feature = "egui-frontend")))]
+use clap::{Parser, value_parser};
+use egui::TextBuffer;
 use nes_core::emulation::emu::{Console, Consoles};
-#[cfg(not(any(feature = "egui-frontend")))]
 use nes_core::emulation::nes::Nes;
-#[cfg(not(any(feature = "egui-frontend")))]
-use nes_core::frontend::Frontends;
-#[cfg(feature = "egui-frontend")]
 use nes_core::frontend::egui_frontend;
-#[cfg(feature = "sdl2-frontend")]
-use nes_core::frontend::sdl_frontend::SdlFrontend;
 
-#[cfg(feature = "egui-frontend")]
-fn main() { egui_frontend::run().expect("") }
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    ///Run in headless mode
+    #[arg(short = 'H', long, default_value_t = false)]
+    headless: bool,
 
-#[cfg(all(feature = "sdl2-frontend", not(feature = "egui-frontend")))]
-fn main() {
-    let mut emu = Consoles::Nes(Nes::default());
-    let mut frontend = Frontends::Sdl2(SdlFrontend::default());
-
-    emu.load_rom(&String::from("./core/tests/Mario Bros. (World).nes"));
-    emu.power();
-
-    let start = Instant::now();
-
-    emu.run_until(&mut frontend, u128::MAX)
-        .expect("TODO: panic message");
-
-    println!("{:?}", start.elapsed());
+    ///Rom File to load
+    #[arg(value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
+    file: PathBuf,
 }
 
-#[cfg(all(not(feature = "sdl2-frontend"), not(feature = "egui-frontend")))]
 fn main() {
+    let args = Args::parse();
+
+    let res = if args.headless {
+        start_headless(args.file)
+    } else {
+        start_egui(args.file)
+    };
+
+    match res {
+        Ok(_) => {
+            println!("Emulator finished execution")
+        }
+        Err(t) => {
+            println!("Emulator finished with error: \"{}\"", t)
+        }
+    }
+}
+
+fn start_egui(file: PathBuf) -> Result<(), String> {
+    if let Err(e) = egui_frontend::run(file) {
+        Err(e.to_string())
+    } else {
+        Ok(())
+    }
+}
+
+fn start_headless(file: PathBuf) -> Result<(), String> {
     let mut emu = Consoles::Nes(Nes::default());
 
-    let mut frontend = Frontends::default();
-
-    emu.load_rom(&String::from(
-        "./core/tests/nes-test-roms/oam_stress/oam_stress.nes",
-    ));
+    emu.load_rom(&file.to_string_lossy().take());
     emu.power();
 
     let start = Instant::now();
 
     let Consoles::Nes(ref mut emu) = emu;
+    let res = emu.run_until(700_119_365);
 
-    // for i in 0..u128::MAX {
-    //     emu.step(&mut frontend, u128::MAX).expect("panic message");
-    //     let val = emu.get_memory_debug(Some(0x6000..=0x6000))[0][0];
-    //
-    //     if val == 0x81 {
-    //         for _ in 0..8_000_000 {
-    //             emu.step(&mut frontend, u128::MAX).expect("panic message");
-    //         }
-    //
-    //         emu.reset();
-    //     }
-    //
-    //     if i > 4_000_000 && val != 0x80 && val != 0x81 {
-    //         break;
-    //     }
-    // }
-
-    emu.run_until(&mut frontend, 700_119_365)
-        .expect("panic message");
+    let res = if let Err(e) = res { Err(e) } else { Ok(()) };
 
     println!("{:?}", start.elapsed());
 
@@ -77,7 +70,9 @@ fn main() {
             }
             print!("    ");
         }
-        print!("0x{:02X}, ", n);
+        print!("{:02X} ", n);
     }
     println!();
+
+    res
 }

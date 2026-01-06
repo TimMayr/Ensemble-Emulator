@@ -32,7 +32,6 @@
 /// ```
 use crossbeam_channel::{Receiver, Sender};
 
-
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::messages::{ControllerEvent, EmulatorMessage, FrontendMessage};
 use crate::emulation::nes::ExecutionFinishedType;
@@ -59,7 +58,7 @@ impl ChannelEmulator {
             console,
             to_frontend: tx_from_emu,
             from_frontend: rx_from_frontend,
-            frontend: Frontends::None(),
+            frontend: Frontends::Egui,
             input: 0,
         };
 
@@ -139,7 +138,7 @@ impl ChannelEmulator {
     }
 
     fn execute_frame(&mut self) -> Result<(), String> {
-        match self.console.step_frame(&mut self.frontend) {
+        match self.console.step_frame() {
             Ok(
                 ExecutionFinishedType::CycleCompleted
                 | ExecutionFinishedType::ReachedLastCycle
@@ -171,7 +170,7 @@ impl ChannelEmulator {
             ControllerEvent::IncPalette => {
                 // Since we only have NES consoles for now, we can safely unwrap
                 let Consoles::Nes(ref mut nes) = self.console;
-                nes.inc_current_palette();
+                nes.inc_debug_palette();
             }
             ControllerEvent::Left => self.input |= 64,
             ControllerEvent::Right => self.input |= 128,
