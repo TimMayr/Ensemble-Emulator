@@ -1,9 +1,9 @@
-use crate::emulation::emu::{Console, Consoles};
+
 use crate::emulation::nes::Nes;
 
 #[test]
 fn test_ram_after_reset() {
-    let mut emu = Consoles::Nes(Nes::default());
+    let mut emu = Nes::default();
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/cpu_reset/ram_after_reset.nes",
     ));
@@ -42,7 +42,7 @@ fn test_ram_after_reset() {
 
 #[test]
 fn test_registers() {
-    let mut emu = Consoles::Nes(Nes::default());
+    let mut emu = Nes::default();
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/cpu_reset/registers.nes",
     ));

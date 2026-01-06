@@ -19,9 +19,19 @@ pub fn write_at_offset(path: &str, value: u8, offset: u16) -> std::io::Result<()
     Ok(())
 }
 
-pub fn write_to_file(path: &str, data: Vec<u8>) {
-    let mut file = File::create(path).expect("Error creating file");
-    file.write_all(&data).expect("Error writing to file")
+pub fn write_to_file(path: &str, data: Vec<u8>) -> Result<(), String> {
+    let file = File::create(path);
+
+    match file {
+        Ok(mut file) => {
+            let res = file.write_all(&data);
+            match res {
+                Ok(_) => Ok(()),
+                Err(e) => Err(format!("Error writing to file: {}\n\t{}", path, e)),
+            }
+        }
+        Err(e) => Err(format!("Error creating file: {}\n\t{}", path, e)),
+    }
 }
 
 #[inline(always)]

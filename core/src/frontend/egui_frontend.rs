@@ -28,15 +28,13 @@ use crossbeam_channel::{Receiver, Sender};
 use egui::{ColorImage, Context, Style, TextBuffer, TextureHandle, TextureOptions, Ui, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
-use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::messages::{
-    ControllerEvent, EmulatorMessage, FrontendMessage, NAMETABLE_HEIGHT, NAMETABLE_WIDTH,
-    PaletteData, PatternTableViewerData, SpriteData, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
-    TileData,
+    ControllerEvent, EmulatorMessage, FrontendMessage, PaletteData, PatternTableViewerData,
+    SpriteData, TileData, NAMETABLE_HEIGHT, NAMETABLE_WIDTH, TOTAL_OUTPUT_HEIGHT,
+    TOTAL_OUTPUT_WIDTH,
 };
 use crate::emulation::nes::Nes;
 use crate::emulation::ppu::TILE_SIZE;
-use crate::frontend::Frontends;
 
 /// FPS counter that tracks frame times over the last second
 #[derive(PartialEq, Clone)]
@@ -910,17 +908,14 @@ impl Debug for EguiApp {
 /// Run the egui frontend
 pub fn run(file: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     // Create the emulator instance
-    let mut console = Consoles::Nes(Nes::default());
+    let mut console = Nes::default();
 
     // Load a ROM
-    // TODO: Make this configurable via command line or file dialog
     console.load_rom(&file.to_string_lossy().take());
     console.power();
 
     // Create channel-based emulator wrapper
-    let (mut channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
-
-    channel_emu.set_frontend(Frontends::Egui);
+    let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
 
     // Configure eframe options
     let options = eframe::NativeOptions {

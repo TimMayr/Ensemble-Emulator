@@ -4,7 +4,6 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp};
-use crate::emulation::emu::Console;
 use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
@@ -28,15 +27,11 @@ pub struct Nes {
     pub ppu_cycle_counter: u8,
 }
 
-impl Console for Nes {
+impl Nes {
     #[inline]
-    fn get_pixel_buffer(&self) -> Vec<u32> { self.ppu.borrow().pixel_buffer.clone() }
+    pub fn get_pixel_buffer(&self) -> Vec<u32> { self.ppu.borrow().pixel_buffer.clone() }
 
-    fn load_rom(&mut self, path: &String) { self.load_rom(path); }
-
-    fn reset(&mut self) { self.reset() }
-
-    fn power(&mut self) {
+    pub fn power(&mut self) {
         self.cpu.ppu = Some(self.ppu.clone());
 
         self.cpu.memory.add_memory(
@@ -50,66 +45,61 @@ impl Console for Nes {
         self.cpu.reset();
     }
 
-    fn run(&mut self) -> Result<ExecutionFinishedType, String> { self.run_until(u128::MAX) }
+    pub fn run(&mut self) -> Result<ExecutionFinishedType, String> { self.run_until(u128::MAX) }
 
-    fn run_until(&mut self, last_cycle: u128) -> Result<ExecutionFinishedType, String> {
+    pub fn run_until(&mut self, last_cycle: u128) -> Result<ExecutionFinishedType, String> {
         loop {
-            let res = self.step(last_cycle);
+            let res = self.step_internal(last_cycle);
             match res {
                 Ok(ExecutionFinishedType::CycleCompleted) => {
                     continue;
                 }
                 Ok(res) => {
-                    if let Some(ref mut trace) = self.trace_log {
-                        trace.flush();
-                    }
-
+                    self.flush_trace_log();
                     return Ok(res);
                 }
                 Err(err) => {
-                    if let Some(ref mut trace) = self.trace_log {
-                        trace.flush();
-                    }
-
+                    self.flush_trace_log();
                     panic!("{}", err)
                 }
             };
         }
     }
 
-    fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>> {
+    pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>> {
         vec![
             self.cpu.get_memory_debug(range.clone()),
             self.ppu.borrow().get_memory_debug(range.clone()),
         ]
     }
 
-    fn set_trace_log_path(&mut self, path: Option<String>) {
+    pub fn set_trace_log_path(&mut self, path: Option<String>) {
         if path.is_none() {
             self.trace_log = None;
             return;
         }
 
+        let path = path.unwrap();
+
         if self.trace_log.is_none() {
-            self.trace_log = Some(TraceLog::new(path.clone().unwrap()));
+            self.trace_log = Some(TraceLog::new(&path));
         }
 
         if let Some(ref mut trace) = self.trace_log {
-            trace.output = path.unwrap();
+            trace.output = path;
         }
     }
 
     fn flush_trace_log(&mut self) {
-        if let Some(ref mut trace) = self.trace_log {
-            trace.flush()
+        if let Some(ref mut trace) = self.trace_log
+            && let Err(e) = trace.flush()
+        {
+            println!("{e}");
         }
     }
 
     #[inline]
-    fn step(&mut self) -> Result<ExecutionFinishedType, String> { self.step(u128::MAX) }
-
-    #[inline]
-    fn step_frame(&mut self) -> Result<ExecutionFinishedType, String> {
+    pub fn step_frame(&mut self) -> Result<ExecutionFinishedType, String> {
         self.run_until(self.total_cycles + MASTER_CYCLES_PER_FRAME as u128)
     }
 }
@@ -176,8 +166,13 @@ impl Nes {
         self.ppu.borrow_mut().memory.load(&state.ppu.memory);
     }
 
+    #[inline(always)]
+    pub fn step(&mut self) -> Result<ExecutionFinishedType, String> {
+        self.step_internal(u128::MAX)
+    }
+
     #[inline]
-    pub fn step(&mut self, last_cycle: u128) -> Result<ExecutionFinishedType, String> {
+    fn step_internal(&mut self, last_cycle: u128) -> Result<ExecutionFinishedType, String> {
         self.total_cycles += 1;
         self.cpu_cycle_counter = self.cpu_cycle_counter.wrapping_add(1);
         self.ppu_cycle_counter = self.ppu_cycle_counter.wrapping_add(1);

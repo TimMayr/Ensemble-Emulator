@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::emulation::cpu::Cpu;
-use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::nes::Nes;
 use crate::emulation::ppu::Ppu;
 
@@ -14,7 +13,7 @@ fn test_03_immediate() {
     };
 
     let ppu = Ppu::default();
-    let mut emu = Consoles::Nes(Nes::new(cpu, Rc::new(RefCell::new(ppu))));
+    let mut emu = Nes::new(cpu, Rc::new(RefCell::new(ppu)));
 
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/instr_test-v5/rom_singles/03-immediate.nes",

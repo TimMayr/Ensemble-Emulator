@@ -24,7 +24,7 @@
 /// use nes_core::emulation::emu::{Console, Consoles};
 /// use nes_core::emulation::nes::Nes;
 ///
-/// let console = Consoles::Nes(Nes::default());
+/// let console = Nes::default();
 /// let (mut emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
 ///
 /// // In your main loop:
@@ -32,40 +32,34 @@
 /// ```
 use crossbeam_channel::{Receiver, Sender};
 
-use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::messages::{ControllerEvent, EmulatorMessage, FrontendMessage};
-use crate::emulation::nes::ExecutionFinishedType;
-use crate::frontend::Frontends;
+use crate::emulation::nes::{ExecutionFinishedType, Nes};
 
 /// A non-threaded emulator wrapper that communicates via channels
 /// This provides a clean interface for the frontend without threading complications.
 /// The emulator runs in the same thread but is decoupled via message passing.
 pub struct ChannelEmulator {
-    console: Consoles,
+    nes: Nes,
     to_frontend: Sender<EmulatorMessage>,
     from_frontend: Receiver<FrontendMessage>,
-    frontend: Frontends,
     input: u8,
 }
 
 #[allow(irrefutable_let_patterns)]
 impl ChannelEmulator {
-    pub fn new(console: Consoles) -> (Self, Sender<FrontendMessage>, Receiver<EmulatorMessage>) {
+    pub fn new(nes: Nes) -> (Self, Sender<FrontendMessage>, Receiver<EmulatorMessage>) {
         let (tx_to_emu, rx_from_frontend) = crossbeam_channel::unbounded();
         let (tx_from_emu, rx_to_frontend) = crossbeam_channel::unbounded();
 
         let emu = Self {
-            console,
+            nes,
             to_frontend: tx_from_emu,
             from_frontend: rx_from_frontend,
-            frontend: Frontends::Egui,
             input: 0,
         };
 
         (emu, tx_to_emu, rx_to_frontend)
     }
-
-    pub fn set_frontend(&mut self, frontend: Frontends) { self.frontend = frontend; }
 
     /// Run one frame of emulation and handle messages
     pub fn step_frame(&mut self) -> Result<(), String> {
@@ -77,7 +71,7 @@ impl ChannelEmulator {
                     return Err("Quit requested".to_string());
                 }
                 FrontendMessage::Reset => {
-                    self.console.reset();
+                    self.nes.reset();
                 }
                 FrontendMessage::StepFrame => {
                     // Execute one frame regardless of pause state
@@ -87,37 +81,27 @@ impl ChannelEmulator {
                     self.handle_controller_event(event);
                 }
                 FrontendMessage::EnablePatternTableRendering(enabled) => {
-                    if let Consoles::Nes(ref mut nes) = self.console {
-                        nes.ppu.borrow_mut().set_render_pattern_tables(enabled);
-                    }
+                    self.nes.ppu.borrow_mut().set_render_pattern_tables(enabled);
                 }
                 FrontendMessage::EnableNametableRendering(enabled) => {
-                    if let Consoles::Nes(ref mut nes) = self.console {
-                        nes.ppu.borrow_mut().set_render_nametables(enabled);
-                    }
+                    self.nes.ppu.borrow_mut().set_render_nametables(enabled);
                 }
                 FrontendMessage::RequestPatternTableData => {
                     // Render pattern tables on demand and send
-                    match self.console {
-                        Consoles::Nes(ref nes) => {
-                            let ppu = nes.ppu.borrow_mut();
-                            let data = ppu.get_pattern_table_data_debug();
-                            let _ = self
-                                .to_frontend
-                                .send(EmulatorMessage::PatternTableReady(data));
-                        }
-                    }
+                    let ppu = self.nes.ppu.borrow_mut();
+                    let data = ppu.get_pattern_table_data_debug();
+                    let _ = self
+                        .to_frontend
+                        .send(EmulatorMessage::PatternTableReady(data));
                 }
                 FrontendMessage::RequestNametableData => {
                     // Render nametables on demand and send
-                    if let Consoles::Nes(ref mut nes) = self.console {
-                        let mut ppu = nes.ppu.borrow_mut();
-                        ppu.render_nametables();
-                        let nametable_data = (*ppu.get_nametable_buffer()).to_vec();
-                        let _ = self
-                            .to_frontend
-                            .send(EmulatorMessage::NametableReady(nametable_data));
-                    }
+                    let mut ppu = self.nes.ppu.borrow_mut();
+                    ppu.render_nametables();
+                    let nametable_data = (*ppu.get_nametable_buffer()).to_vec();
+                    let _ = self
+                        .to_frontend
+                        .send(EmulatorMessage::NametableReady(nametable_data));
                 }
                 FrontendMessage::RequestSpriteData => {
                     // if let Consoles::Nes(ref mut nes)  = self.console{
@@ -128,9 +112,8 @@ impl ChannelEmulator {
             }
         }
 
-        if let Consoles::Nes(ref mut nes) = self.console {
-            nes.cpu.memory.init(0x4016, self.input);
-        }
+        self.nes.cpu.memory.init(0x4016, self.input);
+
         self.execute_frame()?;
         self.input = 0;
 
@@ -138,14 +121,14 @@ impl ChannelEmulator {
     }
 
     fn execute_frame(&mut self) -> Result<(), String> {
-        match self.console.step_frame() {
+        match self.nes.step_frame() {
             Ok(
                 ExecutionFinishedType::CycleCompleted
                 | ExecutionFinishedType::ReachedLastCycle
                 | ExecutionFinishedType::ReachedHlt,
             ) => {
                 // Frame completed, send it to frontend
-                let frame = self.console.get_pixel_buffer();
+                let frame = self.nes.get_pixel_buffer();
                 let frame_data = (*frame).to_vec();
                 if self
                     .to_frontend
@@ -169,8 +152,7 @@ impl ChannelEmulator {
         match event {
             ControllerEvent::IncPalette => {
                 // Since we only have NES consoles for now, we can safely unwrap
-                let Consoles::Nes(ref mut nes) = self.console;
-                nes.inc_debug_palette();
+                self.nes.inc_debug_palette();
             }
             ControllerEvent::Left => self.input |= 64,
             ControllerEvent::Right => self.input |= 128,

@@ -2,12 +2,12 @@ use std::fs::File;
 use std::io;
 use std::io::BufRead;
 
-use crate::emulation::emu::{Console, Consoles};
+
 use crate::emulation::nes::Nes;
 
 #[test]
 fn nestest() {
-    let mut emu = Consoles::Nes(Nes::default());
+    let mut emu = Nes::default();
     emu.set_trace_log_path(Some(String::from("./tests/outputs/nestest_headless.log")));
 
     emu.load_rom(&String::from("./tests/nes-test-roms/nestest_headless.nes"));

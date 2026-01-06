@@ -1,4 +1,4 @@
-use crate::emulation::emu::{Console, Consoles};
+
 use crate::emulation::nes::Nes;
 
 #[cfg(test)]
@@ -24,7 +24,7 @@ mod vbl_set_time_02;
 
 #[test]
 fn test_ppu_vbl_nmi() {
-    let mut emu = Consoles::Nes(Nes::default());
+    let mut emu = Nes::default();
     emu.load_rom(&String::from(
         "./tests/nes-test-roms/ppu_vbl_nmi/ppu_vbl_nmi.nes",
     ));
