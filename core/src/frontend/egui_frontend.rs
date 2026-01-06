@@ -124,7 +124,7 @@ impl EguiApp {
             // Maximum time to spend emulating per UI update to keep UI responsive
             // For uncapped mode, allow more time; for normal mode, limit to prevent UI lag
             let max_emulation_time = if is_uncapped {
-                Duration::from_millis(100) // Allow up to 100ms of emulation per UI frame
+                Duration::from_millis(70) // Allow up to 70ms of emulation per UI frame
             } else {
                 Duration::from_millis(50) // More conservative for normal speeds
             };
