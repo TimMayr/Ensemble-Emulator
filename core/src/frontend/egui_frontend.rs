@@ -179,7 +179,7 @@ impl AppSpeed {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 enum DebugSpeed {
     #[default]
-    Default,
+    DefaultSpeed,
     InStep,
     Custom,
 }
@@ -187,7 +187,7 @@ enum DebugSpeed {
 impl DebugSpeed {
     pub fn get_fps(&self, app: &EguiApp) -> u16 {
         match self {
-            DebugSpeed::Default => 10,
+            DebugSpeed::DefaultSpeed => 10,
             DebugSpeed::InStep => app.config.speed_config.app_speed.get_fps(app),
             DebugSpeed::Custom => {
                 if app.config.speed_config.debug_custom_speed == 0 {
@@ -578,7 +578,7 @@ impl EguiApp {
                 .on_hover_text("Sets the speed at which the debug views update");
             ui.radio_value(
                 &mut self.config.speed_config.debug_speed,
-                DebugSpeed::Default,
+                DebugSpeed::DefaultSpeed,
                 "10fps",
             );
             ui.radio_value(
@@ -649,13 +649,13 @@ impl EguiApp {
         });
     }
 
-    fn draw_pattern_table(&self, ui: &mut Ui, pattern_table: usize) {
+    fn draw_pattern_table(emu_textures: &EmuTextures, ui: &mut Ui, pattern_table: usize) {
         let available = ui.available_width();
         let base_size = 32.0;
         let logical_width = 16.0 * base_size;
         let scale = available / logical_width;
         let tex_size = egui::vec2(base_size, base_size) * scale;
-        let pattern_data = &self.emu_textures.pattern_table_data;
+        let pattern_data = &emu_textures.pattern_table_data;
 
         egui::Grid::new("pattern_table")
             .num_columns(16)
@@ -664,10 +664,7 @@ impl EguiApp {
             .max_col_width(scale * base_size)
             .spacing(egui::vec2(0.0, 0.0))
             .show(ui, |ui| {
-                for (i, texture) in self.emu_textures.tile_textures[pattern_table]
-                    .iter()
-                    .enumerate()
-                {
+                for (i, texture) in emu_textures.tile_textures[pattern_table].iter().enumerate() {
                     let tile_data = if pattern_table == 0 {
                         pattern_data
                             .as_ref()
@@ -804,7 +801,7 @@ impl EguiApp {
             egui::Window::new("Pattern Table Viewer")
                 .default_size([580.0, 300.0])
                 .default_pos([700.0, 50.0])
-                .open(&mut true)
+                .open(&mut self.config.view_config.show_pattern_table)
                 .resizable(true)
                 .max_height(0.0)
                 .show(ctx, |ui| {
@@ -819,12 +816,12 @@ impl EguiApp {
 
                         ui.horizontal_top(|ui| {
                             ui.allocate_ui(egui::vec2(half_width, half_width), |ui| {
-                                self.draw_pattern_table(ui, 0);
+                                Self::draw_pattern_table(&self.emu_textures, ui, 0);
                             });
 
                             ui.separator();
                             ui.allocate_ui(egui::vec2(half_width, half_width), |ui| {
-                                self.draw_pattern_table(ui, 1);
+                                Self::draw_pattern_table(&self.emu_textures, ui, 1);
                             });
                         });
                     } else {
