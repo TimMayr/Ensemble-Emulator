@@ -1,8 +1,13 @@
 use std::time::Instant;
 use crate::emulation::nes::Nes;
 
+/// NES master clock frequency in Hz (NTSC)
+const NES_MASTER_CLOCK_HZ: f64 = 21_477_272.0;
+
+/// Performance benchmark test.
+/// Run with: `cargo test performance_baseline -- --ignored --nocapture`
 #[test]
-#[ignore] // Run with --ignored or explicitly named
+#[ignore]
 fn performance_baseline() {
     let mut emu = Nes::default();
     emu.load_rom(&String::from("./tests/nes-test-roms/nestest_headless.nes"));
@@ -27,7 +32,7 @@ fn performance_baseline() {
         
         // NES runs at ~21.47 MHz master clock
         // So 10M cycles = ~0.47 seconds of NES time
-        let nes_time_sec = cycles as f64 / 21_477_272.0;
+        let nes_time_sec = cycles as f64 / NES_MASTER_CLOCK_HZ;
         let speedup = nes_time_sec / duration.as_secs_f64();
         
         println!("Run {}: {} master cycles in {:?}", run, cycles, duration);
@@ -36,7 +41,7 @@ fn performance_baseline() {
     }
     
     let avg_secs = times.iter().map(|d| d.as_secs_f64()).sum::<f64>() / times.len() as f64;
-    let nes_time = cycles as f64 / 21_477_272.0;
+    let nes_time = cycles as f64 / NES_MASTER_CLOCK_HZ;
     
     println!("\n=== Performance Summary ===");
     println!("Average speed: {:.1}x realtime", nes_time / avg_secs);
