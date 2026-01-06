@@ -83,6 +83,45 @@ if self.cpu_cycle_counter == 10
 
 **Impact**: Cleaner code, marginal performance improvement.
 
+### 5. Frontend Frame Rate Throttling Fix (egui_frontend.rs)
+
+**Problem**: In "Uncapped" speed mode, the frame rate was capped at ~120 FPS instead of running as fast as possible. This was caused by:
+1. The throttling logic compared emulation time per NES frame (~2.4ms) against the target frame budget (~15µs for 65535 FPS), incorrectly detecting "cannot keep up"
+2. Vsync was enabled by default in eframe, limiting UI refresh rate
+
+**Solution**: 
+1. Replaced per-frame throttling with time-budget-based emulation loop:
+```rust
+// New approach: run as many frames as possible within a time budget
+let max_emulation_time = if is_uncapped {
+    Duration::from_millis(100)  // Allow more time for uncapped mode
+} else {
+    Duration::from_millis(50)   // Conservative for normal speeds
+};
+
+while self.accumulator >= frame_budget {
+    self.channel_emu.step_frame()?;
+    self.accumulator -= frame_budget;
+    
+    if emulation_start.elapsed() > max_emulation_time {
+        if !is_uncapped {
+            self.accumulator = Duration::ZERO;  // Drop backlog only in non-uncapped
+        }
+        break;
+    }
+}
+```
+
+2. Disabled vsync in eframe options:
+```rust
+let options = eframe::NativeOptions {
+    vsync: false,  // Allow uncapped frame rates
+    ...
+};
+```
+
+**Impact**: Uncapped mode now properly runs emulation as fast as possible, limited only by CPU performance.
+
 ---
 
 ## Architectural Recommendations for Future Improvements
