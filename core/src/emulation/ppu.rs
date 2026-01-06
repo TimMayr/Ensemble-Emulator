@@ -286,7 +286,7 @@ impl Ppu {
                     let mut sprite_pixel_pattern = 0u8;
                     let mut sprite_pixel_priority = 0;
 
-                    for (_i, s) in self.sprite_fifo.iter_mut().enumerate() {
+                    for s in self.sprite_fifo.iter_mut() {
                         if s.down_counter == 0 {
                             // if self.dot_counter > 207856807 - DOTS_PER_FRAME {
                             //     self.log += format!(
