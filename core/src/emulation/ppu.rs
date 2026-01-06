@@ -44,6 +44,8 @@ pub const PALETTE_RAM_END_INDEX: u16 = 0x3FFF;
 pub const PALETTE_RAM_SIZE: u16 = 0x20;
 pub const VRAM_SIZE: usize = 0x800;
 pub const DOTS_PER_SCANLINE: u16 = 340;
+/// Number of dots in one scanline including dot 0 (341 total: dots 0-340)
+pub const DOTS_IN_SCANLINE: u16 = DOTS_PER_SCANLINE + 1;
 pub const SCANLINES_PER_FRAME: u16 = 261;
 pub const OPEN_BUS_DECAY_DELAY: u32 = 420_000;
 pub const SPRITE_OVERFLOW_FLAG: u8 = 0b0010_0000;
@@ -211,14 +213,13 @@ impl Ppu {
             self.t_register = 0;
         }
 
-        let frame_dot = self.dot_counter % DOTS_PER_FRAME;
+        // Direct increment of dot/scanline is much faster than u128 modulo
+        // Only need to track frame boundaries now
+        let is_frame_start = self.dot == 0 && self.scanline == 0;
 
-        if frame_dot == 0 {
+        if is_frame_start {
             self.even_frame = !self.even_frame;
         }
-
-        self.scanline = (frame_dot / (DOTS_PER_SCANLINE + 1) as u128) as u16;
-        self.dot = (frame_dot % (DOTS_PER_SCANLINE + 1) as u128) as u16;
 
         let res = false;
 
@@ -409,19 +410,38 @@ impl Ppu {
 
         self.update_nmi();
 
-        if self.dot == DOTS_PER_SCANLINE - 1
+        // Skip cycle on odd frames when rendering (skips from dot 339 directly to next frame)
+        // This occurs at dot 339 of scanline 261 on odd frames when rendering is enabled
+        let skip_cycle = self.dot == DOTS_PER_SCANLINE - 1
             && self.scanline == PRE_RENDER_SCANLINE
             && !self.even_frame
-            && self.is_rendering()
-        {
+            && self.is_rendering();
+
+        if skip_cycle {
             self.dot_counter += 1;
         }
 
         self.address_latch = self.mem_read(self.address_bus);
 
         self.dot_counter += 1;
-
-        frame_dot == DOTS_PER_FRAME - 1 || res
+        
+        // Increment dot/scanline directly instead of recalculating from dot_counter
+        // Handle skip_cycle by incrementing by 2 (skipping dot 340)
+        let increment = if skip_cycle { 2 } else { 1 };
+        self.dot += increment;
+        
+        // Handle wrap-around: dots 0-340 (341 total), scanlines 0-261 (262 total)
+        let mut is_frame_end = false;
+        if self.dot > DOTS_PER_SCANLINE {
+            self.dot -= DOTS_IN_SCANLINE;  // 341 -> 0, 342 -> 1
+            self.scanline += 1;
+            if self.scanline > PRE_RENDER_SCANLINE {
+                self.scanline = 0;
+                is_frame_end = true;  // Frame ends when we wrap to scanline 0
+            }
+        }
+        
+        is_frame_end || res
     }
 
     #[inline]
