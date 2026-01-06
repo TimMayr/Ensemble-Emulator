@@ -60,11 +60,11 @@ pub enum ControllerEvent {
 /// Messages sent from the emulator to the frontend
 pub enum EmulatorMessage {
     /// A new frame is ready to be displayed
-    FrameReady(Box<[u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT]>),
+    FrameReady(Vec<u32>),
     /// Pattern table data is ready
-    PatternTableReady(PatternTableViewerData),
+    PatternTableReady(Box<PatternTableViewerData>),
     /// Nametable data is ready
-    NametableReady(Box<[u32; NAMETABLE_WIDTH * NAMETABLE_HEIGHT]>),
+    NametableReady(Vec<u32>),
     /// Emulator has stopped/quit
     Stopped,
     SpritesReady(([Box<[u32]>; SPRITE_COUNT], usize)),

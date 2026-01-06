@@ -49,6 +49,7 @@ pub struct ChannelEmulator {
     input: u8,
 }
 
+#[allow(irrefutable_let_patterns)]
 impl ChannelEmulator {
     pub fn new(console: Consoles) -> (Self, Sender<FrontendMessage>, Receiver<EmulatorMessage>) {
         let (tx_to_emu, rx_from_frontend) = crossbeam_channel::unbounded();
@@ -113,7 +114,7 @@ impl ChannelEmulator {
                     if let Consoles::Nes(ref mut nes) = self.console {
                         let mut ppu = nes.ppu.borrow_mut();
                         ppu.render_nametables();
-                        let nametable_data = Box::new(*ppu.get_nametable_buffer());
+                        let nametable_data = (*ppu.get_nametable_buffer()).to_vec();
                         let _ = self
                             .to_frontend
                             .send(EmulatorMessage::NametableReady(nametable_data));
@@ -146,7 +147,7 @@ impl ChannelEmulator {
             ) => {
                 // Frame completed, send it to frontend
                 let frame = self.console.get_pixel_buffer();
-                let frame_data = Box::new(*frame);
+                let frame_data = (*frame).to_vec();
                 if self
                     .to_frontend
                     .send(EmulatorMessage::FrameReady(frame_data))

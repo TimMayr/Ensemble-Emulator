@@ -287,7 +287,7 @@ impl Ppu {
                     let mut sprite_pixel_pattern = 0u8;
                     let mut sprite_pixel_priority = 0;
 
-                    for (i, s) in self.sprite_fifo.iter_mut().enumerate() {
+                    for (_i, s) in self.sprite_fifo.iter_mut().enumerate() {
                         if s.down_counter == 0 {
                             // if self.dot_counter > 207856807 - DOTS_PER_FRAME {
                             //     self.log += format!(
@@ -1237,7 +1237,7 @@ impl Ppu {
 }
 
 impl Ppu {
-    pub fn get_pattern_table_data_debug(&self) -> PatternTableViewerData {
+    pub fn get_pattern_table_data_debug(&self) -> Box<PatternTableViewerData> {
         // Build palette→color once
         let palette: PaletteData = PaletteData {
             colors: self.load_palette_colors(),
@@ -1278,11 +1278,11 @@ impl Ppu {
             pattern_tables.push(pattern_table);
         }
 
-        PatternTableViewerData {
+        Box::new(PatternTableViewerData {
             left: pattern_tables[0],
             right: pattern_tables[1],
             palette,
-        }
+        })
     }
 }
 
