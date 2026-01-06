@@ -19,7 +19,7 @@ use egui::{Context, Style, TextBuffer, Visuals};
 use crate::emulation::channel_emu::ChannelEmulator;
 use crate::emulation::messages::{EmulatorMessage, FrontendMessage};
 use crate::emulation::nes::Nes;
-use crate::frontend::egui::config::AppConfig;
+use crate::frontend::egui::config::{AppConfig, AppSpeed};
 use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
@@ -119,26 +119,38 @@ impl EguiApp {
             self.emu_textures.last_frame_request = now;
 
             let frame_budget = self.get_frame_budget();
+            let is_uncapped = self.config.speed_config.app_speed == AppSpeed::Uncapped;
+            
+            // Maximum time to spend emulating per UI update to keep UI responsive
+            // For uncapped mode, allow more time; for normal mode, limit to prevent UI lag
+            let max_emulation_time = if is_uncapped {
+                Duration::from_millis(100) // Allow up to 100ms of emulation per UI frame
+            } else {
+                Duration::from_millis(50) // More conservative for normal speeds
+            };
+            let emulation_start = Instant::now();
 
             // Effectively paused, so we skip
             if frame_budget < Duration::from_secs(5) {
                 while self.accumulator >= frame_budget {
-                    let start = Instant::now();
-
                     if let Err(e) = self.channel_emu.step_frame() {
                         eprintln!("Emulator error: {}", e);
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                    }
-
-                    let step_time = start.elapsed();
-
-                    // Machine cannot keep up
-                    if step_time > frame_budget {
-                        self.accumulator = Duration::ZERO; // drop backlog
                         break;
                     }
 
                     self.accumulator -= frame_budget;
+                    
+                    // For uncapped mode, keep running frames until we hit our time budget
+                    // For normal modes, check if we've spent too much time and need to drop frames
+                    let elapsed = emulation_start.elapsed();
+                    if elapsed > max_emulation_time {
+                        if !is_uncapped {
+                            // Drop backlog only in non-uncapped mode when falling behind
+                            self.accumulator = Duration::ZERO;
+                        }
+                        break;
+                    }
                 }
             }
 
@@ -242,10 +254,12 @@ pub fn run(file: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
 
     // Configure eframe options
+    // Disable vsync to allow uncapped frame rates - emulator handles its own timing
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1024.0, 768.0])
             .with_title("NES Emulator - Egui"),
+        vsync: false, // Disable vsync for uncapped performance
         ..Default::default()
     };
 
