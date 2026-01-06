@@ -13,8 +13,7 @@ fn nestest() {
 
     emu.load_rom(&String::from("./tests/nes-test-roms/nestest_headless.nes"));
     emu.power();
-    emu.run(&mut Frontends::default())
-        .expect("Error running test");
+    emu.run().expect("Error running test");
 
     let file1 = File::open("./tests/outputs/nestest_headless.log").expect("Error running test");
     let file2 = File::open("./tests/outputs-compare/nestest_headless_good.log")

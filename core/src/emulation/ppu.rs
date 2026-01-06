@@ -7,8 +7,8 @@ use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, MemoryDevice, OpenBus, Ram};
 use crate::emulation::messages::{
-    PaletteData, PatternTableData, PatternTableViewerData, TileData, NAMETABLE_HEIGHT,
-    NAMETABLE_WIDTH, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
+    NAMETABLE_HEIGHT, NAMETABLE_WIDTH, PaletteData, PatternTableData, PatternTableViewerData,
+    TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData,
 };
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::PpuState;
@@ -68,7 +68,6 @@ pub const ATTRIBUTE_TABLE_BASE_ADDRESS: u16 = 0x23C0;
 pub const SCREEN_RENDER_WIDTH: usize = 256;
 pub const SCREEN_RENDER_HEIGHT: usize = 220;
 
-#[derive(Debug)]
 pub struct Ppu {
     pub dot_counter: u128,
     pub ctrl_register: u8,
@@ -86,7 +85,7 @@ pub struct Ppu {
     pub fine_x_scroll: u8,
     pub even_frame: bool,
     pub reset_signal: bool,
-    pub pixel_buffer: Box<[u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT]>,
+    pub pixel_buffer: Vec<u32>,
     pub pattern_table_buffer: Box<[u32; ((256 + 16) * 128) as usize]>,
     pub nametable_buffer: Box<[u32; (512 * 480) as usize]>,
     pub render_pattern_tables_enabled: bool,
@@ -148,7 +147,7 @@ impl Ppu {
             t_register: 0,
             even_frame: false,
             reset_signal: false,
-            pixel_buffer: Box::from([0u32; (TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT)]),
+            pixel_buffer: [0u32; TOTAL_OUTPUT_HEIGHT * TOTAL_OUTPUT_WIDTH].to_vec(),
             pattern_table_buffer: Box::from([0u32; ((256 + 16) * 128) as usize]),
             nametable_buffer: Box::from([0u32; (512 * 480) as usize]),
             render_pattern_tables_enabled: false,
@@ -1023,15 +1022,13 @@ impl Ppu {
     pub fn reset(&mut self) { self.reset_signal = false; }
 
     #[inline]
-    pub fn get_pixel_buffer(&self) -> &[u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT] {
-        &self.pixel_buffer
-    }
+    pub fn get_pixel_buffer(&self) -> &Vec<u32> { &self.pixel_buffer }
 
     pub fn get_pattern_table_buffer(&self) -> &[u32; ((256 + 16) * 128) as usize] {
         &self.pattern_table_buffer
     }
 
-    pub fn get_nametable_buffer(&self) -> &[u32; (NAMETABLE_WIDTH * NAMETABLE_HEIGHT) as usize] {
+    pub fn get_nametable_buffer(&self) -> &[u32; NAMETABLE_WIDTH * NAMETABLE_HEIGHT] {
         &self.nametable_buffer
     }
 
@@ -1089,7 +1086,7 @@ impl Ppu {
 
     pub fn frame(&mut self) { self.render_pattern_tables() }
 
-    pub fn inc_current_palette(&mut self) { self.current_palette += 1; }
+    pub fn inc_debug_palette(&mut self) { self.current_palette += 1; }
 
     #[inline]
     fn load_palette_colors(&self) -> [u32; 4] {
@@ -1197,7 +1194,7 @@ impl Ppu {
             fine_x_scroll: state.fine_x_scroll,
             even_frame: state.even_frame,
             reset_signal: state.reset_signal,
-            pixel_buffer: state.pixel_buffer.clone().try_into().unwrap(),
+            pixel_buffer: state.pixel_buffer.clone(),
             pattern_table_buffer: Box::from([0u32; ((256 + 16) * 128) as usize]),
             nametable_buffer: Box::from([0u32; (512 * 480) as usize]),
             render_pattern_tables_enabled: false,

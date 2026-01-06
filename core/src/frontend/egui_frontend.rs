@@ -21,10 +21,11 @@ use std::collections::HashMap;
 /// The architecture supports future multi-threading once the emulator
 /// core is refactored to use `Arc<Mutex<>>` instead of `Rc<RefCell<>>`.
 use std::fmt::{Debug, Formatter};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
-use egui::{ColorImage, Context, Style, TextureHandle, TextureOptions, Ui, Visuals};
+use egui::{ColorImage, Context, Style, TextBuffer, TextureHandle, TextureOptions, Ui, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
 use crate::emulation::emu::{Console, Consoles};
@@ -81,7 +82,7 @@ pub struct EmuTextures {
     pattern_table_data: Option<Box<PatternTableViewerData>>,
     nametable_data: Option<Vec<u32>>,
     nametable_texture: Option<TextureHandle>,
-    sprite_viewer_data: Option<Vec<Box<SpriteData>>>,
+    sprite_viewer_data: Option<Vec<SpriteData>>,
     sprite_viewer_textures: Option<HashMap<u8, TextureHandle>>,
     last_pattern_table_request: Instant,
     last_nametable_request: Instant,
@@ -910,19 +911,19 @@ impl Debug for EguiApp {
 }
 
 /// Run the egui frontend
-pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(file: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     // Create the emulator instance
     let mut console = Consoles::Nes(Nes::default());
 
     // Load a ROM
     // TODO: Make this configurable via command line or file dialog
-    console.load_rom(&String::from("./core/tests/Pac-Man (USA) (Namco).nes"));
+    console.load_rom(&file.to_string_lossy().take());
     console.power();
 
     // Create channel-based emulator wrapper
     let (mut channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
 
-    channel_emu.set_frontend(Frontends::Egui());
+    channel_emu.set_frontend(Frontends::Egui);
 
     // Configure eframe options
     let options = eframe::NativeOptions {

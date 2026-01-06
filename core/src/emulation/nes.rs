@@ -1,21 +1,18 @@
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::ops::{Deref, RangeInclusive};
 use std::rc::Rc;
 use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp};
-use crate::emulation::emu::{Console, InputEvent};
+use crate::emulation::emu::Console;
+use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
-use crate::emulation::mem::Memory;
-use crate::emulation::messages::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate;
 use crate::emulation::savestate::{CpuState, PpuState, SaveState};
-use crate::frontend::{Frontend, Frontends};
 use crate::trace::TraceLog;
-use crate::util;
 
 pub const CPU_CYCLES_PER_FRAME: u16 = 29780;
 pub const FRAME_DURATION: Duration = Duration::from_nanos(16_666_667);
@@ -33,9 +30,7 @@ pub struct Nes {
 
 impl Console for Nes {
     #[inline]
-    fn get_pixel_buffer(&self) -> Ref<'_, [u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT]> {
-        Ref::map(self.ppu.borrow(), |ppu| ppu.get_pixel_buffer())
-    }
+    fn get_pixel_buffer(&self) -> Vec<u32> { self.ppu.borrow().pixel_buffer.clone() }
 
     fn load_rom(&mut self, path: &String) { self.load_rom(path); }
 
@@ -55,17 +50,11 @@ impl Console for Nes {
         self.cpu.reset();
     }
 
-    fn run(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
-        self.run_until(frontend, u128::MAX)
-    }
+    fn run(&mut self) -> Result<ExecutionFinishedType, String> { self.run_until(u128::MAX) }
 
-    fn run_until(
-        &mut self,
-        frontend: &mut Frontends,
-        last_cycle: u128,
-    ) -> Result<ExecutionFinishedType, String> {
+    fn run_until(&mut self, last_cycle: u128) -> Result<ExecutionFinishedType, String> {
         loop {
-            let res = self.step(frontend, last_cycle);
+            let res = self.step(last_cycle);
             match res {
                 Ok(ExecutionFinishedType::CycleCompleted) => {
                     continue;
@@ -117,16 +106,11 @@ impl Console for Nes {
     }
 
     #[inline]
-    fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
-        self.step(frontend, u128::MAX)
-    }
+    fn step(&mut self) -> Result<ExecutionFinishedType, String> { self.step(u128::MAX) }
 
     #[inline]
-    fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
-        self.run_until(
-            frontend,
-            self.total_cycles + MASTER_CYCLES_PER_FRAME as u128,
-        )
+    fn step_frame(&mut self) -> Result<ExecutionFinishedType, String> {
+        self.run_until(self.total_cycles + MASTER_CYCLES_PER_FRAME as u128)
     }
 }
 
@@ -193,11 +177,7 @@ impl Nes {
     }
 
     #[inline]
-    pub fn step(
-        &mut self,
-        frontend: &mut Frontends,
-        last_cycle: u128,
-    ) -> Result<ExecutionFinishedType, String> {
+    pub fn step(&mut self, last_cycle: u128) -> Result<ExecutionFinishedType, String> {
         self.total_cycles += 1;
         self.cpu_cycle_counter = self.cpu_cycle_counter.wrapping_add(1);
         self.ppu_cycle_counter = self.ppu_cycle_counter.wrapping_add(1);
@@ -216,38 +196,9 @@ impl Nes {
 
         let mut cpu_res = Ok(ExecutionFinishedType::CycleCompleted);
 
-        let mut frame_ready = false;
         if self.ppu_cycle_counter == 4 {
-            frame_ready = self.ppu.borrow_mut().step();
+            self.ppu.borrow_mut().step();
             self.ppu_cycle_counter = 0;
-        }
-
-        // if frame_ready && !matches!(frontend, Frontends::None()) {
-        //     self.ppu.borrow_mut().frame();
-        // }
-
-        if frame_ready && !matches!(frontend, Frontends::None()) {
-            // Debug views are now rendered on-demand only via explicit frontend requests
-            // This eliminates the massive performance cost of rendering 245,760+ pixels every frame
-            #[cfg(feature = "sdl2-frontend")]
-            {
-                let pixel_buffer = self.get_pixel_buffer();
-                frontend.show_frame(pixel_buffer)?;
-            }
-
-            #[cfg(not(feature = "sdl2-frontend"))]
-            {
-                frontend.show_frame()?;
-            }
-
-            let res = frontend.poll_input_events();
-            if let Ok(events) = res {
-                for event in events {
-                    self.handle_input_event(event);
-                }
-            } else if let Err(s) = res {
-                panic!("{s}")
-            }
         }
 
         if self.cpu_cycle_counter.wrapping_add(2) == 12 {
@@ -286,19 +237,7 @@ impl Nes {
         cpu_res
     }
 
-    pub fn handle_input_event(&mut self, input_event: InputEvent) {
-        match input_event {
-            InputEvent::IncPalette => {
-                self.inc_current_palette();
-            }
-            InputEvent::Quit => {
-                util::write_to_file("log/log.log", self.ppu.borrow().log.as_bytes().to_vec());
-                panic!()
-            }
-        }
-    }
-
-    pub fn inc_current_palette(&mut self) { self.ppu.borrow_mut().inc_current_palette(); }
+    pub fn inc_debug_palette(&mut self) { self.ppu.borrow_mut().inc_debug_palette() }
 }
 
 impl Default for Nes {

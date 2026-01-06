@@ -1,8 +1,6 @@
-use std::cell::Ref;
 use std::ops::RangeInclusive;
-use crate::emulation::messages::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+
 use crate::emulation::nes::{ExecutionFinishedType, Nes};
-use crate::frontend::Frontends;
 
 pub enum Consoles {
     Nes(Nes),
@@ -10,9 +8,7 @@ pub enum Consoles {
 
 impl Console for Consoles {
     #[inline(always)]
-    fn get_pixel_buffer(
-        &self,
-    ) -> Ref<'_, [u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT]> {
+    fn get_pixel_buffer(&self) -> Vec<u32> {
         match self {
             Consoles::Nes(nes) => nes.get_pixel_buffer(),
         }
@@ -40,20 +36,16 @@ impl Console for Consoles {
     }
 
     #[inline(always)]
-    fn run(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
+    fn run(&mut self) -> Result<ExecutionFinishedType, String> {
         match self {
-            Consoles::Nes(nes) => nes.run(frontend),
+            Consoles::Nes(nes) => nes.run(),
         }
     }
 
     #[inline(always)]
-    fn run_until(
-        &mut self,
-        frontend: &mut Frontends,
-        last_cycle: u128,
-    ) -> Result<ExecutionFinishedType, String> {
+    fn run_until(&mut self, last_cycle: u128) -> Result<ExecutionFinishedType, String> {
         match self {
-            Consoles::Nes(nes) => nes.run_until(frontend, last_cycle),
+            Consoles::Nes(nes) => nes.run_until(last_cycle),
         }
     }
 
@@ -79,42 +71,36 @@ impl Console for Consoles {
     }
 
     #[inline(always)]
-    fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
+    fn step(&mut self) -> Result<ExecutionFinishedType, String> {
         match self {
-            Consoles::Nes(nes) => nes.step(frontend, u128::MAX),
+            Consoles::Nes(nes) => nes.step(u128::MAX),
         }
     }
 
     #[inline(always)]
-    fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String> {
+    fn step_frame(&mut self) -> Result<ExecutionFinishedType, String> {
         match self {
-            Consoles::Nes(nes) => nes.step_frame(frontend),
+            Consoles::Nes(nes) => nes.step_frame(),
         }
     }
 }
 
 pub trait Console {
-    fn get_pixel_buffer(
-        &self,
-    ) -> Ref<'_, [u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT]>;
+    fn get_pixel_buffer(&self) -> Vec<u32>;
     #[allow(clippy::ptr_arg)]
     fn load_rom(&mut self, path: &String);
     fn reset(&mut self);
     fn power(&mut self);
 
-    fn run(&mut self, option: &mut Frontends) -> Result<ExecutionFinishedType, String>;
-    fn run_until(
-        &mut self,
-        frontend: &mut Frontends,
-        last_cycle: u128,
-    ) -> Result<ExecutionFinishedType, String>;
+    fn run(&mut self) -> Result<ExecutionFinishedType, String>;
+    fn run_until(&mut self, last_cycle: u128) -> Result<ExecutionFinishedType, String>;
 
     fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>>;
     fn set_trace_log_path(&mut self, path: Option<String>);
     fn flush_trace_log(&mut self);
 
-    fn step(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String>;
-    fn step_frame(&mut self, frontend: &mut Frontends) -> Result<ExecutionFinishedType, String>;
+    fn step(&mut self) -> Result<ExecutionFinishedType, String>;
+    fn step_frame(&mut self) -> Result<ExecutionFinishedType, String>;
 }
 
 pub enum InputEvent {
