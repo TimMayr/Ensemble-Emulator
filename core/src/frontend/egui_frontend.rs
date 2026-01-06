@@ -24,14 +24,14 @@ use std::fmt::{Debug, Formatter};
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
-use egui::{ColorImage, Context, TextureHandle, TextureOptions, Ui};
+use egui::{ColorImage, Context, Style, TextureHandle, TextureOptions, Ui, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
 use crate::emulation::emu::{Console, Consoles};
 use crate::emulation::messages::{
-    ControllerEvent, EmulatorMessage, FrontendMessage, PaletteData, PatternTableViewerData,
-    SpriteData, TileData, NAMETABLE_HEIGHT, NAMETABLE_WIDTH, SPRITE_COUNT,
-    TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
+    ControllerEvent, EmulatorMessage, FrontendMessage, NAMETABLE_HEIGHT, NAMETABLE_WIDTH,
+    PaletteData, PatternTableViewerData, SpriteData, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
+    TileData,
 };
 use crate::emulation::nes::Nes;
 use crate::emulation::ppu::TILE_SIZE;
@@ -76,12 +76,12 @@ impl FpsCounter {
 
 #[derive(Eq, PartialEq, Clone)]
 pub struct EmuTextures {
-    current_frame: Option<Box<[u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT]>>,
+    current_frame: Option<Vec<u32>>,
     emulator_texture: Option<TextureHandle>,
-    pattern_table_data: Option<PatternTableViewerData>,
-    nametable_data: Option<Box<[u32; NAMETABLE_WIDTH * NAMETABLE_HEIGHT]>>,
+    pattern_table_data: Option<Box<PatternTableViewerData>>,
+    nametable_data: Option<Vec<u32>>,
     nametable_texture: Option<TextureHandle>,
-    sprite_viewer_data: Option<[Box<SpriteData>; SPRITE_COUNT]>,
+    sprite_viewer_data: Option<Vec<Box<SpriteData>>>,
     sprite_viewer_textures: Option<HashMap<u8, TextureHandle>>,
     last_pattern_table_request: Instant,
     last_nametable_request: Instant,
@@ -452,7 +452,7 @@ impl EguiApp {
                     self.emu_textures.nametable_data = Some(data);
                     self.update_nametable_texture(ctx);
                 }
-                EmulatorMessage::SpritesReady(data) => {
+                EmulatorMessage::SpritesReady(_data) => {
                     // let (data, size) = data;
                     // self.emu_textures.sprite_height = size;
                     // self.emu_textures.sprite_viewer_data = Some(data);
@@ -654,7 +654,7 @@ impl EguiApp {
         let logical_width = 16.0 * base_size;
         let scale = available / logical_width;
         let tex_size = egui::vec2(base_size, base_size) * scale;
-        let pattern_data = self.emu_textures.pattern_table_data;
+        let pattern_data = &self.emu_textures.pattern_table_data;
 
         egui::Grid::new("pattern_table")
             .num_columns(16)
@@ -668,12 +668,18 @@ impl EguiApp {
                     .enumerate()
                 {
                     let tile_data = if pattern_table == 0 {
-                        pattern_data.map(|pattern_data| pattern_data.left.tiles[i])
+                        pattern_data
+                            .as_ref()
+                            .map(|pattern_data| pattern_data.left.tiles[i])
                     } else {
-                        pattern_data.map(|pattern_data| pattern_data.right.tiles[i])
+                        pattern_data
+                            .as_ref()
+                            .map(|pattern_data| pattern_data.right.tiles[i])
                     };
 
-                    let palette_data = pattern_data.map(|pattern_data| pattern_data.palette);
+                    let palette_data = pattern_data
+                        .as_ref()
+                        .map(|pattern_data| pattern_data.palette);
 
                     ui.image((texture.id(), tex_size)).on_hover_ui(|ui| {
                         if let Some(tile_data) = tile_data
@@ -699,8 +705,6 @@ impl EguiApp {
                                     res.push('\n');
                                     res_vec.push(res_line);
                                     res_line = String::new();
-                                } else {
-                                    res_line.push(' ');
                                 }
                             }
 
@@ -716,7 +720,7 @@ impl EguiApp {
                                 let mut current_line_height: f32 = 0.0;
 
                                 for (col, ch) in string.chars().enumerate() {
-                                    let bitmap_col = col / 3;
+                                    let bitmap_col = col / 2;
                                     let bit = 63 - (row * 8 + bitmap_col);
                                     let lo = (tile_data.plane_0 >> bit & 1) as u8;
                                     let hi = (tile_data.plane_1 >> bit & 1) as u8;
@@ -932,7 +936,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     eframe::run_native(
         "NES Emulator - Egui",
         options,
-        Box::new(|_cc| Ok(Box::new(EguiApp::new(channel_emu, tx_to_emu, rx_from_emu)))),
+        Box::new(|cc| {
+            let style = Style {
+                visuals: Visuals::dark(),
+                ..Default::default()
+            };
+            cc.egui_ctx.set_style(style);
+            cc.egui_ctx.set_theme(egui::Theme::Dark);
+            Ok(Box::new(EguiApp::new(channel_emu, tx_to_emu, rx_from_emu)))
+        }),
     )?;
 
     Ok(())
