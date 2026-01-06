@@ -120,7 +120,7 @@ fn add_sprite_viewer_window(ctx: &Context, view_config: &mut ViewConfig) {
     egui::Window::new("Sprite Viewer")
         .default_size([600.0, 560.0])
         .default_pos([700.0, 370.0])
-        .open(&mut view_config.show_nametable)
+        .open(&mut view_config.show_sprite_viewer)
         .show(ctx, |ui| {
             ui.label("Waiting for Sprite data...");
         });

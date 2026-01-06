@@ -25,6 +25,7 @@ use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::ui::{add_emulator_views, add_options_panel, add_status_bar};
+use crate::frontend::Frontends;
 
 /// Main egui application state
 pub struct EguiApp {
@@ -235,7 +236,9 @@ pub fn run(file: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     console.power();
 
     // Create channel-based emulator wrapper
-    let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
+    let (mut channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
+
+    channel_emu.set_frontend(Frontends::Egui);
 
     // Configure eframe options
     let options = eframe::NativeOptions {
