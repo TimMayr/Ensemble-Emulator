@@ -177,12 +177,15 @@ impl Nes {
         self.cpu_cycle_counter = self.cpu_cycle_counter.wrapping_add(1);
         self.ppu_cycle_counter = self.ppu_cycle_counter.wrapping_add(1);
 
-        let ppu = self.ppu.borrow();
-        if ppu.vbl_clear_scheduled.get().is_some() {
-            ppu.vbl_reset_counter.set(ppu.vbl_reset_counter.get() + 1);
-            ppu.process_vbl_clear_scheduled();
+        // Only borrow PPU when vbl_clear_scheduled might be active
+        // This check is only relevant immediately after reading PPU status
+        {
+            let ppu = self.ppu.borrow();
+            if ppu.vbl_clear_scheduled.get().is_some() {
+                ppu.vbl_reset_counter.set(ppu.vbl_reset_counter.get() + 1);
+                ppu.process_vbl_clear_scheduled();
+            }
         }
-        drop(ppu);
 
         if self.total_cycles > last_cycle {
             self.total_cycles -= 1;
@@ -196,32 +199,33 @@ impl Nes {
             self.ppu_cycle_counter = 0;
         }
 
-        if self.cpu_cycle_counter.wrapping_add(2) == 12 {
-            let mut do_trace = false;
-
-            if self.trace_log.is_some() && matches!(&self.cpu.current_op, &MicroOp::FetchOpcode(..))
-            {
-                do_trace = true;
-            }
+        // Check if CPU should step (every 12th master cycle, offset by 2)
+        // cpu_cycle_counter + 2 == 12  means cpu_cycle_counter == 10
+        if self.cpu_cycle_counter == 10 {
+            // Only check trace_log when actually needed
+            let do_trace = self.trace_log.is_some()
+                && matches!(&self.cpu.current_op, &MicroOp::FetchOpcode(..));
 
             cpu_res = self.cpu.step();
 
-            if do_trace && let Some(ref mut trace) = self.trace_log {
-                let ppu_state = {
-                    let ppu_ref = self.ppu.borrow();
-                    PpuState::from(ppu_ref.deref())
-                };
+            if do_trace {
+                if let Some(ref mut trace) = self.trace_log {
+                    let ppu_state = {
+                        let ppu_ref = self.ppu.borrow();
+                        PpuState::from(ppu_ref.deref())
+                    };
 
-                let state = SaveState {
-                    cpu: CpuState::from(&self.cpu),
-                    ppu: ppu_state,
-                    cycle: self.cpu_cycle_counter,
-                    total_cycles: self.total_cycles,
-                    rom_file: self.rom_file.as_ref().unwrap().clone(),
-                    version: 1,
-                };
+                    let state = SaveState {
+                        cpu: CpuState::from(&self.cpu),
+                        ppu: ppu_state,
+                        cycle: self.cpu_cycle_counter,
+                        total_cycles: self.total_cycles,
+                        rom_file: self.rom_file.as_ref().unwrap().clone(),
+                        version: 1,
+                    };
 
-                trace.trace(state)
+                    trace.trace(state)
+                }
             }
         }
 
