@@ -49,7 +49,7 @@ impl From<&Cpu> for CpuState {
             lo: cpu.lo,
             hi: cpu.hi,
             current_op: cpu.current_op,
-            op_queue: cpu.op_queue.to_vec_deque(),
+            op_queue: cpu.op_queue.clone(),
             current_opcode,
             temp: cpu.temp,
             ane_constant: cpu.ane_constant,
