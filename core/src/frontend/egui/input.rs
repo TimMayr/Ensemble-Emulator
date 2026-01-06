@@ -16,7 +16,9 @@ pub fn handle_keyboard_input(
     ctx.input(|i| {
         // Emulator controls
         if i.key_pressed(egui::Key::N) {
-            let _ = to_emulator.send(FrontendMessage::ControllerInput(ControllerEvent::IncPalette));
+            let _ = to_emulator.send(FrontendMessage::ControllerInput(
+                ControllerEvent::IncPalette,
+            ));
         }
         if i.key_pressed(egui::Key::Period) {
             speed_config.is_paused = !speed_config.is_paused;

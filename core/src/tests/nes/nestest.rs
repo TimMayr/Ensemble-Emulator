@@ -2,7 +2,6 @@ use std::fs::File;
 use std::io;
 use std::io::BufRead;
 
-
 use crate::emulation::nes::Nes;
 
 #[test]

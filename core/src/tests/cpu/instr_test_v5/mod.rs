@@ -31,7 +31,6 @@ mod zero_page_04;
 #[cfg(test)]
 mod zp_xy_05;
 
-
 use crate::emulation::nes::Nes;
 
 #[test]

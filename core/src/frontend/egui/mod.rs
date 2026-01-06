@@ -26,7 +26,6 @@
 /// - `input`: Input handling logic
 /// - `textures`: Texture storage and management
 /// - `ui`: UI rendering modules for different panels and windows
-
 pub mod config;
 pub mod fps_counter;
 pub mod input;

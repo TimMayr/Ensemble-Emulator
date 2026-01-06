@@ -4,8 +4,8 @@ use std::time::Instant;
 use egui::{ColorImage, Context, TextureHandle, TextureOptions};
 
 use crate::emulation::messages::{
-    PaletteData, PatternTableViewerData, SpriteData, TileData, NAMETABLE_HEIGHT, NAMETABLE_WIDTH,
-    TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
+    NAMETABLE_HEIGHT, NAMETABLE_WIDTH, PaletteData, PatternTableViewerData, SpriteData,
+    TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData,
 };
 use crate::emulation::ppu::TILE_SIZE;
 

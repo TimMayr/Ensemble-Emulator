@@ -34,7 +34,5 @@ impl FpsCounter {
         }
     }
 
-    pub fn fps(&self) -> f32 {
-        self.current_fps
-    }
+    pub fn fps(&self) -> f32 { self.current_fps }
 }
