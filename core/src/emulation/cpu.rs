@@ -1,5 +1,4 @@
 use std::cell::{Cell, RefCell};
-use std::collections::VecDeque;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
@@ -39,6 +38,130 @@ pub const LOWER_BYTE: u16 = 0x00FF;
 pub const DMA_ADDRESS: u16 = 0x4014;
 pub const OAM_REG_ADDRESS: u16 = 0x2004;
 
+/// Maximum number of micro-ops. Must accommodate DMA (256*2 + overhead = ~516)
+pub const MICRO_OP_QUEUE_CAPACITY: usize = 1024;
+
+/// Fixed-size ring buffer for micro-ops - avoids heap allocation overhead of VecDeque
+#[derive(Debug, Clone)]
+pub struct MicroOpQueue {
+    ops: Box<[MicroOp; MICRO_OP_QUEUE_CAPACITY]>,
+    head: u16,
+    tail: u16,
+    len: u16,
+}
+
+impl Default for MicroOpQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MicroOpQueue {
+    #[inline(always)]
+    pub fn new() -> Self {
+        Self {
+            ops: Box::new([MicroOp::FetchOpcode(MicroOpCallback::None); MICRO_OP_QUEUE_CAPACITY]),
+            head: 0,
+            tail: 0,
+            len: 0,
+        }
+    }
+
+    #[inline(always)]
+    pub fn push_back(&mut self, op: MicroOp) {
+        debug_assert!((self.len as usize) < MICRO_OP_QUEUE_CAPACITY, "MicroOpQueue overflow");
+        self.ops[self.tail as usize] = op;
+        self.tail = (self.tail + 1) % MICRO_OP_QUEUE_CAPACITY as u16;
+        self.len += 1;
+    }
+
+    #[inline(always)]
+    pub fn pop_front(&mut self) -> Option<MicroOp> {
+        if self.len == 0 {
+            return None;
+        }
+        let op = self.ops[self.head as usize];
+        self.head = (self.head + 1) % MICRO_OP_QUEUE_CAPACITY as u16;
+        self.len -= 1;
+        Some(op)
+    }
+
+    #[inline(always)]
+    pub fn clear(&mut self) {
+        self.head = 0;
+        self.tail = 0;
+        self.len = 0;
+    }
+
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.len as usize
+    }
+
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Prepend items from another queue to the front of this queue
+    /// Used for interrupt/DMA handling where new ops need to execute before existing ones
+    pub fn prepend(&mut self, other: &mut MicroOpQueue) {
+        let other_len = other.len as usize;
+        let self_len = self.len as usize;
+        debug_assert!(other_len + self_len <= MICRO_OP_QUEUE_CAPACITY, "MicroOpQueue overflow on prepend");
+        
+        // Move existing items to the end
+        if self_len > 0 && other_len > 0 {
+            // Collect items in order
+            let mut temp: Vec<MicroOp> = Vec::with_capacity(other_len + self_len);
+            
+            // Collect other's items first
+            while let Some(op) = other.pop_front() {
+                temp.push(op);
+            }
+            
+            // Then self's items
+            while let Some(op) = self.pop_front() {
+                temp.push(op);
+            }
+            
+            // Reset and refill
+            self.head = 0;
+            self.tail = 0;
+            self.len = 0;
+            for op in temp {
+                self.push_back(op);
+            }
+        } else if other_len > 0 {
+            // self is empty, just copy from other
+            while let Some(op) = other.pop_front() {
+                self.push_back(op);
+            }
+        }
+        // If other is empty, nothing to do
+    }
+
+    /// Convert to VecDeque for serialization
+    pub fn to_vec_deque(&self) -> std::collections::VecDeque<MicroOp> {
+        let mut deque = std::collections::VecDeque::with_capacity(self.len as usize);
+        let mut idx = self.head;
+        for _ in 0..self.len {
+            deque.push_back(self.ops[idx as usize]);
+            idx = (idx + 1) % MICRO_OP_QUEUE_CAPACITY as u16;
+        }
+        deque
+    }
+
+    /// Create from VecDeque for deserialization
+    pub fn from_vec_deque(deque: &std::collections::VecDeque<MicroOp>) -> Self {
+        let mut queue = Self::new();
+        for op in deque {
+            queue.push_back(*op);
+        }
+        queue
+    }
+}
+
 pub struct Cpu {
     pub program_counter: u16,
     pub stack_pointer: u8,
@@ -52,7 +175,7 @@ pub struct Cpu {
     pub lo: u8,
     pub hi: u8,
     pub current_op: MicroOp,
-    pub op_queue: VecDeque<MicroOp>,
+    pub op_queue: MicroOpQueue,
     pub current_opcode: Option<OpCode>,
     pub temp: u8,
     pub ane_constant: u8,
@@ -91,7 +214,7 @@ impl Default for Cpu {
             lo: 0,
             hi: 0,
             current_op: MicroOp::FetchOpcode(MicroOpCallback::None),
-            op_queue: VecDeque::new(),
+            op_queue: MicroOpQueue::new(),
             current_opcode: None,
             temp: 0,
             ane_constant: 0xEE,
@@ -331,9 +454,8 @@ impl Cpu {
     fn get_addr_latch(&self) -> u16 { ((self.hi as u16) << 8) | (self.lo as u16) }
 
     #[inline(always)]
-    fn get_instructions_for_op_type(&mut self) -> VecDeque<MicroOp> {
-        // Pre-allocate with capacity for the max instruction count (7) to avoid re-allocation
-        let mut instructions = VecDeque::with_capacity(8);
+    fn get_instructions_for_op_type(&mut self) -> MicroOpQueue {
+        let mut instructions = MicroOpQueue::new();
 
         let Some(op) = self.current_opcode else {
             return instructions;
@@ -910,8 +1032,8 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn get_instructions_for_irq(&mut self) -> VecDeque<MicroOp> {
-        let mut instructions = VecDeque::with_capacity(7);
+    fn get_instructions_for_irq(&mut self) -> MicroOpQueue {
+        let mut instructions = MicroOpQueue::new();
 
         instructions.push_back(MicroOp::ReadWithOffsetFromU16AndAddSomething(
             AddressSource::PC,
@@ -959,8 +1081,8 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn get_instructions_for_reset(&mut self) -> VecDeque<MicroOp> {
-        let mut instructions = VecDeque::with_capacity(7);
+    fn get_instructions_for_reset(&mut self) -> MicroOpQueue {
+        let mut instructions = MicroOpQueue::new();
 
         instructions.push_back(MicroOp::ReadWithOffsetFromU16AndAddSomething(
             AddressSource::PC,
@@ -1532,7 +1654,7 @@ impl Cpu {
     pub fn trigger_oam_dma(&mut self) {
         self.dma_triggered = false;
         self.is_in_irq = true;
-        let mut instr = VecDeque::new();
+        let mut instr = MicroOpQueue::new();
 
         instr.push_back(MicroOp::Read(
             AddressSource::None,
@@ -1574,8 +1696,9 @@ impl Cpu {
             MicroOpCallback::ExitIrq,
         ));
 
-        instr.append(&mut self.op_queue);
-        self.op_queue = instr;
+        // DMA instructions go first, followed by what was in op_queue
+        // prepend puts 'other' (old op_queue) after 'self' (instr)
+        self.op_queue.prepend(&mut instr);
     }
 }
 
@@ -1812,7 +1935,7 @@ impl Cpu {
             lo: state.lo,
             hi: state.hi,
             current_op: state.current_op,
-            op_queue: state.op_queue.clone(),
+            op_queue: MicroOpQueue::from_vec_deque(&state.op_queue),
             current_opcode: opcode,
             temp: state.temp,
             ane_constant: state.ane_constant,
