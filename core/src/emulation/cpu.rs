@@ -3,8 +3,7 @@ use std::collections::VecDeque;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
-use bincode::{Decode, Encode};
-use serde::{Deserialize, Serialize};
+use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 
 use crate::emulation::mem::apu_registers::ApuRegisters;
 use crate::emulation::mem::memory_map::MemoryMap;
@@ -1575,7 +1574,7 @@ impl Cpu {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Archive, RkyvSerialize, RkyvDeserialize)]
 pub enum MicroOp {
     FetchOpcode(MicroOpCallback),
     FetchOperandLo(MicroOpCallback),
@@ -1612,7 +1611,7 @@ pub enum MicroOp {
     FixHiBranch(u16),
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, RkyvSerialize, RkyvDeserialize)]
 pub enum Target {
     A,
     X,
@@ -1632,7 +1631,7 @@ pub enum Target {
     OamWrite,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, RkyvSerialize, RkyvDeserialize)]
 pub enum Source {
     PBrk,
     A,
@@ -1650,7 +1649,7 @@ pub enum Source {
     DmaTemp,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, RkyvSerialize, RkyvDeserialize)]
 pub enum AddressSource {
     AddressLatch,
     Address(u16),
@@ -1662,7 +1661,7 @@ pub enum AddressSource {
     IrqVec,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, RkyvSerialize, RkyvDeserialize)]
 pub enum MicroOpCallback {
     None,
     ADC,
@@ -1725,7 +1724,7 @@ pub enum MicroOpCallback {
     ExitIrq,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Archive, RkyvSerialize, RkyvDeserialize)]
 pub enum Condition {
     CarrySet,
     CarryClear,
