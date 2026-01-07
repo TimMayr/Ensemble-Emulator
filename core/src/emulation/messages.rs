@@ -64,10 +64,15 @@ pub enum EmulatorMessage {
     /// Pattern table data is ready
     PatternTableReady(Box<PatternTableViewerData>),
     /// Nametable data is ready
-    NametableReady(Vec<u32>),
+    NametableReady(Box<NametableData>),
     /// Emulator has stopped/quit
     Stopped,
     SpritesReady(([Box<[u32]>; SPRITE_COUNT], usize)),
+}
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct NametableData {
+    pub tiles: [[u16; 30 * 32]; 4],
+    pub palettes: [[PaletteData; (30 * 32) / 16]; 4],
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -76,20 +81,20 @@ pub struct SpriteViewerData {
     pub sprite_height: u8,
     pub palette: PaletteData,
 }
-#[derive(Copy, Clone, PartialEq, Eq)]
 
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct PatternTableViewerData {
     pub left: PatternTableData,
     pub right: PatternTableData,
     pub palette: PaletteData,
 }
-#[derive(Copy, Clone, PartialEq, Eq)]
 
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct PatternTableData {
     pub tiles: [TileData; 256],
 }
-#[derive(Copy, Clone, PartialEq, Eq)]
 
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct SpriteData {
     pub tile: TileData,
     pub tile_2: Option<TileData>,
@@ -97,6 +102,7 @@ pub struct SpriteData {
     pub x_pos: usize,
     pub attributes: SpriteAttributes,
 }
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct SpriteAttributes {
     pub palette_index: u8,

@@ -94,7 +94,7 @@ impl EguiApp {
                 }
                 EmulatorMessage::PatternTableReady(data) => {
                     self.emu_textures.pattern_table_data = Some(data);
-                    self.emu_textures.update_pattern_table_texture(ctx);
+                    self.emu_textures.update_tile_textures(ctx);
                 }
                 EmulatorMessage::NametableReady(data) => {
                     self.emu_textures.nametable_data = Some(data);

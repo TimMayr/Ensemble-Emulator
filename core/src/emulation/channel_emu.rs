@@ -97,11 +97,9 @@ impl ChannelEmulator {
                 FrontendMessage::RequestNametableData => {
                     // Render nametables on demand and send
                     let mut ppu = self.nes.ppu.borrow_mut();
-                    ppu.render_nametables();
-                    let nametable_data = (*ppu.get_nametable_buffer()).to_vec();
                     let _ = self
                         .to_frontend
-                        .send(EmulatorMessage::NametableReady(nametable_data));
+                        .send(EmulatorMessage::NametableReady(ppu.get_nametable_data_debug()));
                 }
                 FrontendMessage::RequestSpriteData => {
                     // if let Consoles::Nes(ref mut nes)  = self.console{
