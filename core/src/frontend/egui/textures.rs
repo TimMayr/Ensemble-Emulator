@@ -3,10 +3,7 @@ use std::time::Instant;
 
 use egui::{ColorImage, Context, TextureHandle, TextureOptions};
 
-use crate::emulation::messages::{
-    NAMETABLE_HEIGHT, NAMETABLE_WIDTH, PaletteData, PatternTableViewerData, SpriteData,
-    TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData,
-};
+use crate::emulation::messages::{NAMETABLE_HEIGHT, NAMETABLE_WIDTH, PaletteData, PatternTableViewerData, SpriteData, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData, NametableData};
 use crate::emulation::ppu::TILE_SIZE;
 
 /// Texture storage and management for the emulator display
@@ -15,8 +12,7 @@ pub struct EmuTextures {
     pub current_frame: Option<Vec<u32>>,
     pub emulator_texture: Option<TextureHandle>,
     pub pattern_table_data: Option<Box<PatternTableViewerData>>,
-    pub nametable_data: Option<Vec<u32>>,
-    pub nametable_texture: Option<TextureHandle>,
+    pub nametable_data: Option<NametableData>,
     pub sprite_viewer_data: Option<Vec<SpriteData>>,
     pub sprite_viewer_textures: Option<HashMap<u8, TextureHandle>>,
     pub last_pattern_table_request: Instant,
@@ -34,7 +30,6 @@ impl Default for EmuTextures {
             emulator_texture: Default::default(),
             pattern_table_data: Default::default(),
             nametable_data: Default::default(),
-            nametable_texture: Default::default(),
             sprite_viewer_data: Default::default(),
             sprite_viewer_textures: Default::default(),
             last_pattern_table_request: Instant::now(),
@@ -117,7 +112,7 @@ impl EmuTextures {
     }
 
     /// Update the pattern table textures
-    pub fn update_pattern_table_texture(&mut self, ctx: &Context) {
+    pub fn update_tile_textures(&mut self, ctx: &Context) {
         if let Some(ref data) = self.pattern_table_data {
             let palette = data.palette;
 
@@ -132,24 +127,6 @@ impl EmuTextures {
                 let texture = Self::get_texture_for_tile(&x, &palette, ctx);
                 self.tile_textures[1].push(texture);
             }
-        }
-    }
-
-    /// Update the nametable texture
-    pub fn update_nametable_texture(&mut self, ctx: &Context) {
-        if let Some(ref data) = self.nametable_data {
-            let image = Self::u32_to_color_image(data.as_ref(), NAMETABLE_WIDTH, NAMETABLE_HEIGHT);
-
-            let texture = ctx.load_texture(
-                "nametable",
-                image,
-                TextureOptions {
-                    magnification: egui::TextureFilter::Nearest,
-                    minification: egui::TextureFilter::Nearest,
-                    ..Default::default()
-                },
-            );
-            self.nametable_texture = Some(texture);
         }
     }
 }
