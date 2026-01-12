@@ -98,20 +98,35 @@ fn add_nametable_window(ctx: &Context, view_config: &mut ViewConfig, emu_texture
         .default_pos([700.0, 370.0])
         .open(&mut view_config.show_nametable)
         .show(ctx, |ui| {
-            if let Some(ref texture) = emu_textures.nametable_texture {
-                let available = ui.available_size();
-                let scale = (available.x / NAMETABLE_WIDTH as f32)
-                    .min(available.y / NAMETABLE_HEIGHT as f32);
-
-                let display_width = NAMETABLE_WIDTH as f32 * scale;
-                let display_height = NAMETABLE_HEIGHT as f32 * scale;
+            if let Some(ref data) = emu_textures.nametable_data {
+                let available = ui.available_width();
+                let base_size = 16.0;
+                let logical_width = 16.0 * base_size;
+                let scale = available / logical_width;
+                let tex_size = egui::vec2(base_size, base_size) * scale;
 
                 ui.label(format!(
                     "Nametables ({}x{} at {:.1}x)",
                     NAMETABLE_WIDTH, NAMETABLE_HEIGHT, scale
                 ));
 
-                ui.image((texture.id(), egui::vec2(display_width, display_height)));
+                for nametable in data.tiles {
+                    egui::Grid::new("nametable")
+                        .num_columns(32)
+                        .min_row_height(scale * base_size)
+                        .min_col_width(scale * base_size)
+                        .max_col_width(scale * base_size)
+                        .spacing(egui::vec2(0.0, 0.0))
+                        .show(ui, |ui| {
+                            for (i, tile) in nametable.iter().enumerate() {
+
+
+                                if (i + 1) % 32 == 0 {
+                                    ui.end_row();
+                                }
+                            }
+                        });
+                }
             } else {
                 ui.label("Waiting for nametable data...");
             }

@@ -20,7 +20,7 @@ fn foreground_for_background(bg: u32) -> egui::Color32 {
 /// Draw a pattern table (left or right) in the UI
 pub fn draw_pattern_table(ui: &mut Ui, pattern_table: usize, emu_textures: &EmuTextures) {
     let available = ui.available_width();
-    let base_size = 32.0;
+    let base_size = 16.0;
     let logical_width = 16.0 * base_size;
     let scale = available / logical_width;
     let tex_size = egui::vec2(base_size, base_size) * scale;

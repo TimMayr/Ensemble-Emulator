@@ -12,7 +12,7 @@ pub struct EmuTextures {
     pub current_frame: Option<Vec<u32>>,
     pub emulator_texture: Option<TextureHandle>,
     pub pattern_table_data: Option<Box<PatternTableViewerData>>,
-    pub nametable_data: Option<NametableData>,
+    pub nametable_data: Option<Box<NametableData>>,
     pub sprite_viewer_data: Option<Vec<SpriteData>>,
     pub sprite_viewer_textures: Option<HashMap<u8, TextureHandle>>,
     pub last_pattern_table_request: Instant,
