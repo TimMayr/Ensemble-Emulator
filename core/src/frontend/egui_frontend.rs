@@ -98,7 +98,6 @@ impl EguiApp {
                 }
                 EmulatorMessage::NametableReady(data) => {
                     self.emu_textures.nametable_data = Some(data);
-                    self.emu_textures.update_nametable_texture(ctx);
                 }
                 EmulatorMessage::SpritesReady(_data) => {
                     // Sprite viewer not yet implemented
