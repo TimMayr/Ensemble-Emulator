@@ -1254,7 +1254,7 @@ impl Ppu {
 }
 
 impl Ppu {
-    pub fn get_pattern_table_data_debug(&self) -> Box<PatternTableViewerData> {
+    pub fn get_tiles_debug(&self) -> Box<PatternTableViewerData> {
         // Build palette→color once
         let palette: PaletteData = PaletteData {
             colors: self.load_palette_colors(),
