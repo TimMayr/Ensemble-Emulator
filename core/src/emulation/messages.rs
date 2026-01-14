@@ -32,21 +32,12 @@ pub enum FrontendMessage {
     Reset,
     /// Request to step one frame
     StepFrame,
-    /// Enable pattern table rendering
-    EnablePatternTableRendering(bool),
-    /// Enable nametable rendering
-    EnableNametableRendering(bool),
-    /// Request pattern table data (frontend requests it, not sent every frame)
-    RequestPatternTableData,
-    /// Request nametable data (frontend requests it, not sent every frame)
-    RequestNametableData,
-    RequestSpriteData,
+    RequestDebugData(EmulatorFetchable),
 }
 
 /// Controller input events
 #[derive(Debug, Clone, Copy)]
 pub enum ControllerEvent {
-    IncPalette,
     Left,
     Right,
     Up,
@@ -59,71 +50,62 @@ pub enum ControllerEvent {
 
 /// Messages sent from the emulator to the frontend
 pub enum EmulatorMessage {
-    /// A new frame is ready to be displayed
     FrameReady(Vec<u32>),
-    /// Pattern table data is ready
-    PatternTableReady(Box<PatternTableViewerData>),
-    /// Nametable data is ready
-    NametableReady(Box<NametableData>),
     /// Emulator has stopped/quit
     Stopped,
-    SpritesReady(([Box<[u32]>; SPRITE_COUNT], usize)),
+    DebugData(EmulatorFetchable)
 }
-#[derive(Copy, Clone, PartialEq, Eq)]
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum EmulatorFetchable {
+    Palettes(Option<PaletteData>),
+    Tiles(Option<TileData>),
+    Nametables(Option<NametableData>),
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct NametableData {
     pub tiles: [[u16; 30 * 32]; 4],
-    pub palettes: [[PaletteData; (30 * 32) / 16]; 4],
+    pub palettes: [[u8; (30 * 32) / 16]; 4],
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub struct SpriteViewerData {
-    pub sprites: [SpriteData; 64],
-    pub sprite_height: u8,
-    pub palette: PaletteData,
-}
+// #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+// pub struct SpriteViewerData {
+//     pub sprites: [SpriteData; 64],
+//     pub sprite_height: u8,
+//     pub palette: PaletteData,
+// }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub struct PatternTableViewerData {
-    pub left: PatternTableData,
-    pub right: PatternTableData,
-    pub palette: PaletteData,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct PatternTableData {
-    pub tiles: [TileData; 256],
+    pub tiles: [TileData; 512],
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub struct SpriteData {
-    pub tile: TileData,
-    pub tile_2: Option<TileData>,
-    pub y_pos: usize,
-    pub x_pos: usize,
-    pub attributes: SpriteAttributes,
-}
+// #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+// pub struct SpriteData {
+//     pub tile: u16,
+//     pub tile_2: Option<u16>,
+//     pub y_pos: usize,
+//     pub x_pos: usize,
+//     pub attributes: SpriteAttributes,
+// }
+//
+// #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+// pub struct SpriteAttributes {
+//     pub palette_index: u8,
+//     pub priority: bool,
+//     pub flip_x: bool,
+//     pub flip_y: bool,
+// }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct SpriteAttributes {
-    pub palette_index: u8,
-    pub priority: bool,
-    pub flip_x: bool,
-    pub flip_y: bool,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct TileData {
     pub address: u16,
     pub plane_0: u64,
     pub plane_1: u64,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct PaletteData {
-    pub colors: [u32; 4],
-}
-
-pub enum InputEvent {
-    IncPalette,
-    Quit,
+    pub colors: [[u8; 4]; 8],
 }

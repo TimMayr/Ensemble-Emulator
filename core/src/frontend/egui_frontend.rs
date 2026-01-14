@@ -92,7 +92,7 @@ impl EguiApp {
                     self.fps_counter.update();
                     self.emu_textures.update_emulator_texture(ctx);
                 }
-                EmulatorMessage::PatternTableReady(data) => {
+                EmulatorMessage::TilesReady(data) => {
                     self.emu_textures.pattern_table_data = Some(data);
                     self.emu_textures.update_tile_textures(ctx);
                 }
@@ -169,7 +169,7 @@ impl EguiApp {
             {
                 let _ = self
                     .to_emulator
-                    .send(FrontendMessage::RequestPatternTableData);
+                    .send(FrontendMessage::RequestDebugData(Emul));
                 self.emu_textures.last_pattern_table_request = now;
             }
 
