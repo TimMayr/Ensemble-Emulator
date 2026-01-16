@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
 
 /// Channel-based emulator wrapper for clean frontend/emulator separation.
 ///
@@ -34,7 +35,6 @@ use std::collections::{HashMap, HashSet};
 /// ```
 use crossbeam_channel::{Receiver, Sender};
 
-
 use crate::emulation::messages::{
     ControllerEvent, EmulatorFetchable, EmulatorMessage, FrontendMessage,
 };
@@ -50,17 +50,24 @@ pub struct ChannelEmulator {
     input: u8,
 }
 
-const FETCH_DEPS: HashMap<EmulatorFetchable, Vec<EmulatorFetchable>> = HashMap::new();
+pub static FETCH_DEPS: OnceLock<HashMap<EmulatorFetchable, Vec<EmulatorFetchable>>> =
+    OnceLock::new();
 
 #[allow(irrefutable_let_patterns)]
 impl ChannelEmulator {
     fn setup_fetch_deps() {
-        FETCH_DEPS.insert(EmulatorFetchable::Tiles, vec![EmulatorFetchable::Palettes]);
-        FETCH_DEPS.insert(
-            EmulatorFetchable::Nametables,
-            vec![EmulatorFetchable::Tiles],
+        let mut deps = HashMap::new();
+
+        deps.insert(
+            EmulatorFetchable::Tiles(None),
+            vec![EmulatorFetchable::Palettes(None)],
         );
-        FETCH_DEPS.insert(EmulatorFetchable::Sprites, vec![EmulatorFetchable::Tiles]);
+        deps.insert(
+            EmulatorFetchable::Nametables(None),
+            vec![EmulatorFetchable::Tiles(None)],
+        );
+
+        FETCH_DEPS.get_or_init(|| deps);
     }
 
     pub fn new(nes: Nes) -> (Self, Sender<FrontendMessage>, Receiver<EmulatorMessage>) {
@@ -98,31 +105,23 @@ impl ChannelEmulator {
                 FrontendMessage::ControllerInput(event) => {
                     self.handle_controller_event(event);
                 }
-                FrontendMessage::EnableTileSending(enabled) => {
-                    self.nes.ppu.borrow_mut().set_render_pattern_tables(enabled);
-                }
-                FrontendMessage::EnableNametableRendering(enabled) => {
-                    self.nes.ppu.borrow_mut().set_render_nametables(enabled);
-                }
-                FrontendMessage::RequestTileData => {
-                    // Render pattern tables on demand and send
-                    let ppu = self.nes.ppu.borrow_mut();
-                    let data = ppu.get_tiles_debug();
-                    let _ = self.to_frontend.send(EmulatorMessage::TilesReady(data));
-                }
-                FrontendMessage::RequestNametableData => {
-                    // Render nametables on demand and send
-                    let mut ppu = self.nes.ppu.borrow_mut();
-                    let _ = self.to_frontend.send(EmulatorMessage::NametableReady(
-                        ppu.get_nametable_data_debug(),
-                    ));
-                }
-                FrontendMessage::RequestSpriteData => {
-                    // if let Consoles::Nes(ref mut nes)  = self.console{
-                    //     let ppu = nes.ppu.borrow_mut();
-                    //     let _ = self.to_frontend.send(EmulatorMessage::SpritesReady(ppu.render_sprites_debug()));
-                    // }
-                }
+                FrontendMessage::RequestDebugData(fetchable) => match fetchable {
+                    EmulatorFetchable::Palettes(_) => {
+                        let _ = self.to_frontend.send(EmulatorMessage::DebugData(
+                            self.nes.ppu.borrow().get_palettes_debug(),
+                        ));
+                    }
+                    EmulatorFetchable::Tiles(_) => {
+                        let _ = self.to_frontend.send(EmulatorMessage::DebugData(
+                            self.nes.ppu.borrow().get_tiles_debug(),
+                        ));
+                    }
+                    EmulatorFetchable::Nametables(_) => {
+                        let _ = self.to_frontend.send(EmulatorMessage::DebugData(
+                            self.nes.ppu.borrow().get_nametable_debug(),
+                        ));
+                    }
+                },
             }
         }
 
@@ -180,12 +179,18 @@ impl ChannelEmulator {
         deps: &HashMap<EmulatorFetchable, Vec<EmulatorFetchable>>,
     ) -> HashSet<EmulatorFetchable> {
         let mut fetch = HashSet::new();
-        let mut stack: Vec<_> = enabled.iter().copied().collect();
+        let mut stack: Vec<_> = Vec::with_capacity(fetch.len());
+
+        for x in enabled.iter() {
+            stack.push(EmulatorFetchable::get_empty(x));
+        }
 
         while let Some(to_fetch) = stack.pop() {
-            if fetch.insert(to_fetch) {
-                if let Some(reqs) = deps.get(&to_fetch) {
-                    stack.extend(reqs);
+            if fetch.insert(EmulatorFetchable::get_empty(&to_fetch))
+                && let Some(reqs) = deps.get(&to_fetch)
+            {
+                for x in reqs {
+                    fetch.insert(EmulatorFetchable::get_empty(x));
                 }
             }
         }

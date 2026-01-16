@@ -21,6 +21,13 @@ pub const SPRITE_WIDTH: usize = 8;
 pub const TOTAL_OUTPUT_WIDTH: usize = 256;
 pub const TOTAL_OUTPUT_HEIGHT: usize = 240;
 
+pub const TILE_COUNT: usize = 512;
+pub const PALETTE_COUNT: usize = 8;
+pub const NAMETABLE_COUNT: usize = 4;
+pub const NAMETABLE_ROWS: usize = 30;
+pub const NAMETABLE_COLS: usize = 32;
+pub const PATTERN_TABLE_SIZE: usize = 256;
+
 /// Messages sent from the frontend to the emulator
 #[derive(Debug, Clone)]
 pub enum FrontendMessage {
@@ -53,20 +60,32 @@ pub enum EmulatorMessage {
     FrameReady(Vec<u32>),
     /// Emulator has stopped/quit
     Stopped,
-    DebugData(EmulatorFetchable)
+    DebugData(EmulatorFetchable),
+    PatternTableChanged,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum EmulatorFetchable {
-    Palettes(Option<PaletteData>),
-    Tiles(Option<TileData>),
-    Nametables(Option<NametableData>),
+    Palettes(Option<Box<PaletteData>>),
+    Tiles(Option<Box<[TileData; TILE_COUNT]>>),
+    Nametables(Option<Box<NametableData>>),
+}
+
+impl EmulatorFetchable {
+    #[inline]
+    pub fn get_empty(emulator_fetchable: &EmulatorFetchable) -> EmulatorFetchable {
+        match emulator_fetchable {
+            EmulatorFetchable::Palettes(_) => EmulatorFetchable::Palettes(None),
+            EmulatorFetchable::Tiles(_) => EmulatorFetchable::Tiles(None),
+            EmulatorFetchable::Nametables(_) => EmulatorFetchable::Nametables(None),
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct NametableData {
-    pub tiles: [[u16; 30 * 32]; 4],
-    pub palettes: [[u8; (30 * 32) / 16]; 4],
+    pub tiles: [[u16; NAMETABLE_ROWS * NAMETABLE_COLS]; NAMETABLE_COUNT],
+    pub palettes: [[u8; 64]; NAMETABLE_COUNT],
 }
 
 // #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -75,11 +94,6 @@ pub struct NametableData {
 //     pub sprite_height: u8,
 //     pub palette: PaletteData,
 // }
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct PatternTableData {
-    pub tiles: [TileData; 512],
-}
 
 // #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 // pub struct SpriteData {
@@ -98,7 +112,7 @@ pub struct PatternTableData {
 //     pub flip_y: bool,
 // }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub struct TileData {
     pub address: u16,
     pub plane_0: u64,

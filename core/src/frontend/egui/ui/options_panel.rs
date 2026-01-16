@@ -1,5 +1,9 @@
+use std::collections::HashSet;
+
 use egui::{Context, Ui};
 
+use crate::emulation::channel_emu::{ChannelEmulator, FETCH_DEPS};
+use crate::emulation::messages::EmulatorFetchable;
 use crate::frontend::egui::config::{AppConfig, AppSpeed, DebugSpeed};
 
 /// Add speed settings to the options panel
@@ -65,13 +69,39 @@ fn add_speed_settings(config: &mut AppConfig, ui: &mut Ui) {
 
 /// Add view settings to the options panel
 fn add_view_settings(config: &mut AppConfig, ui: &mut Ui) {
+    let mut changed = false;
     ui.collapsing("View", |ui| {
-        ui.checkbox(
-            &mut config.view_config.show_pattern_table,
-            "Pattern Table Viewer",
-        );
-        ui.checkbox(&mut config.view_config.show_nametable, "Nametable Viewer");
+        changed |= ui
+            .checkbox(&mut config.view_config.show_palette, "Palette Visualizer")
+            .changed();
+        changed |= ui
+            .checkbox(
+                &mut config.view_config.show_pattern_table,
+                "Pattern Table Viewer",
+            )
+            .changed();
+        changed |= ui
+            .checkbox(&mut config.view_config.show_nametable, "Nametable Viewer")
+            .changed();
     });
+
+    if changed {
+        let mut explicit_fetches = HashSet::new();
+        if config.view_config.show_palette {
+            explicit_fetches.insert(EmulatorFetchable::Palettes(None));
+        }
+
+        if config.view_config.show_pattern_table {
+            explicit_fetches.insert(EmulatorFetchable::Tiles(None));
+        }
+
+        if config.view_config.show_nametable {
+            explicit_fetches.insert(EmulatorFetchable::Nametables(None));
+        }
+
+        config.view_config.required_debug_fetches =
+            ChannelEmulator::compute_required_fetches(&explicit_fetches, FETCH_DEPS.get().unwrap())
+    }
 }
 
 /// Add the options panel to the context

@@ -17,7 +17,7 @@ use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, TextBuffer, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
-use crate::emulation::messages::{EmulatorMessage, FrontendMessage};
+use crate::emulation::messages::{EmulatorFetchable, EmulatorMessage, FrontendMessage};
 use crate::emulation::nes::Nes;
 use crate::frontend::egui::config::{AppConfig, AppSpeed};
 use crate::frontend::egui::fps_counter::FpsCounter;
@@ -92,18 +92,26 @@ impl EguiApp {
                     self.fps_counter.update();
                     self.emu_textures.update_emulator_texture(ctx);
                 }
-                EmulatorMessage::TilesReady(data) => {
-                    self.emu_textures.pattern_table_data = Some(data);
-                    self.emu_textures.update_tile_textures(ctx);
-                }
-                EmulatorMessage::NametableReady(data) => {
-                    self.emu_textures.nametable_data = Some(data);
-                }
-                EmulatorMessage::SpritesReady(_data) => {
-                    // Sprite viewer not yet implemented
-                }
+                EmulatorMessage::DebugData(data) => match data {
+                    EmulatorFetchable::Palettes(p) => {
+                        self.emu_textures.palette_data = p;
+                    }
+                    EmulatorFetchable::Tiles(t) => {
+                        self.emu_textures.tile_data = t;
+                        self.emu_textures
+                            .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data);
+                    }
+                    EmulatorFetchable::Nametables(n) => {
+                        self.emu_textures.nametable_data = n;
+                    }
+                },
                 EmulatorMessage::Stopped => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+                EmulatorMessage::PatternTableChanged => {
+                    let _ = self.to_emulator.send(FrontendMessage::RequestDebugData(
+                        EmulatorFetchable::Tiles(None),
+                    ));
                 }
             }
         }
@@ -119,7 +127,7 @@ impl EguiApp {
 
             let frame_budget = self.get_frame_budget();
             let is_uncapped = self.config.speed_config.app_speed == AppSpeed::Uncapped;
-            
+
             // Maximum time to spend emulating per UI update to keep UI responsive
             // For uncapped mode, allow more time; for normal mode, limit to prevent UI lag
             let max_emulation_time = if is_uncapped {
@@ -139,7 +147,7 @@ impl EguiApp {
                     }
 
                     self.accumulator -= frame_budget;
-                    
+
                     // For uncapped mode, keep running frames until we hit our time budget
                     // For normal modes, check if we've spent too much time and need to drop frames
                     let elapsed = emulation_start.elapsed();
@@ -153,41 +161,30 @@ impl EguiApp {
                 }
             }
 
-            self.request_debug_data(now);
+            self.request_debug_views(now);
         }
     }
 
     /// Request debug data from the emulator based on timing and visibility
-    fn request_debug_data(&mut self, now: Instant) {
+    fn request_debug_views(&mut self, now: Instant) {
         let debug_frame_budget = self.get_debug_viewers_frame_budget();
 
         // Effectively paused, so we skip
-        if debug_frame_budget < Duration::from_secs(5) {
-            if self.config.view_config.show_pattern_table
-                && now.duration_since(self.emu_textures.last_pattern_table_request)
-                    >= debug_frame_budget
-            {
-                let _ = self
-                    .to_emulator
-                    .send(FrontendMessage::RequestDebugData(Emul));
-                self.emu_textures.last_pattern_table_request = now;
+        if debug_frame_budget < Duration::from_secs(5)
+            && now.duration_since(self.emu_textures.last_debug_request) >= debug_frame_budget
+        {
+            for to_fetch in &self.config.view_config.required_debug_fetches {
+                // We skip fetching tiles here since they very rarely change (at least for most mappers). They instead get fetched when the emulator notifies us of a change
+                if !(self.emu_textures.tile_textures.is_some()
+                    && matches!(to_fetch, EmulatorFetchable::Tiles(..)))
+                {
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::RequestDebugData(to_fetch.clone()));
+                }
             }
 
-            if self.config.view_config.show_nametable
-                && now.duration_since(self.emu_textures.last_nametable_request)
-                    >= debug_frame_budget
-            {
-                let _ = self.to_emulator.send(FrontendMessage::RequestNametableData);
-                self.emu_textures.last_nametable_request = now;
-            }
-
-            if self.config.view_config.show_sprite_viewer
-                && now.duration_since(self.emu_textures.last_sprite_viewer_request)
-                    >= debug_frame_budget
-            {
-                let _ = self.to_emulator.send(FrontendMessage::RequestSpriteData);
-                self.emu_textures.last_sprite_viewer_request = now;
-            }
+            self.emu_textures.last_debug_request = Instant::now();
         }
     }
 }
@@ -199,6 +196,7 @@ impl eframe::App for EguiApp {
             ctx,
             &self.to_emulator,
             &mut self.config.speed_config,
+            &mut self.config.view_config,
             &mut self.emu_textures.last_frame_request,
         );
 
