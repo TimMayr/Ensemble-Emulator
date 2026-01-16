@@ -182,8 +182,8 @@ impl EguiApp {
         {
             for to_fetch in &self.config.view_config.required_debug_fetches {
                 // We skip fetching tiles here since they very rarely change (at least for most mappers). They instead get fetched when the emulator notifies us of a change
-                if !(self.emu_textures.tile_textures.is_some()
-                    && matches!(to_fetch, EmulatorFetchable::Tiles(..)))
+                if self.emu_textures.tile_textures.is_none()
+                    || !matches!(to_fetch, EmulatorFetchable::Tiles(..))
                 {
                     let _ = self
                         .to_emulator
