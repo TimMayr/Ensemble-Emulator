@@ -18,18 +18,10 @@ pub enum Pane {
     EmulatorOutput,
     /// Options panel - closeable, can be reopened via menu
     Options,
-    /// Left pattern table viewer (CHR ROM $0000-$0FFF) - closeable debug viewer
-    PatternTableLeft,
-    /// Right pattern table viewer (CHR ROM $1000-$1FFF) - closeable debug viewer
-    PatternTableRight,
-    /// Nametable 0 viewer - closeable debug viewer
-    Nametable0,
-    /// Nametable 1 viewer - closeable debug viewer
-    Nametable1,
-    /// Nametable 2 viewer - closeable debug viewer
-    Nametable2,
-    /// Nametable 3 viewer - closeable debug viewer
-    Nametable3,
+    /// Pattern tables viewer (both tables side by side) - closeable debug viewer
+    PatternTables,
+    /// Nametables viewer (all 4 nametables in a grid) - closeable debug viewer
+    Nametables,
 }
 
 impl Pane {
@@ -37,7 +29,7 @@ impl Pane {
     pub fn is_closable(&self) -> bool {
         match self {
             Pane::EmulatorOutput => false,
-            _ => true,
+            Pane::Options | Pane::PatternTables | Pane::Nametables => true,
         }
     }
 
@@ -46,45 +38,8 @@ impl Pane {
         match self {
             Pane::EmulatorOutput => "Emulator Output",
             Pane::Options => "Options",
-            Pane::PatternTableLeft => "Pattern Table Left",
-            Pane::PatternTableRight => "Pattern Table Right",
-            Pane::Nametable0 => "Nametable 0",
-            Pane::Nametable1 => "Nametable 1",
-            Pane::Nametable2 => "Nametable 2",
-            Pane::Nametable3 => "Nametable 3",
-        }
-    }
-
-    /// Returns true if this is a pattern table pane
-    pub fn is_pattern_table(&self) -> bool {
-        matches!(self, Pane::PatternTableLeft | Pane::PatternTableRight)
-    }
-
-    /// Returns true if this is a nametable pane
-    pub fn is_nametable(&self) -> bool {
-        matches!(
-            self,
-            Pane::Nametable0 | Pane::Nametable1 | Pane::Nametable2 | Pane::Nametable3
-        )
-    }
-
-    /// Returns the pattern table index (0 or 1), if this is a pattern table pane
-    pub fn pattern_table_index(&self) -> Option<usize> {
-        match self {
-            Pane::PatternTableLeft => Some(0),
-            Pane::PatternTableRight => Some(1),
-            _ => None,
-        }
-    }
-
-    /// Returns the nametable index (0-3), if this is a nametable pane
-    pub fn nametable_index(&self) -> Option<usize> {
-        match self {
-            Pane::Nametable0 => Some(0),
-            Pane::Nametable1 => Some(1),
-            Pane::Nametable2 => Some(2),
-            Pane::Nametable3 => Some(3),
-            _ => None,
+            Pane::PatternTables => "Pattern Tables",
+            Pane::Nametables => "Nametables",
         }
     }
 }
@@ -113,15 +68,11 @@ impl Behavior<Pane> for TreeBehavior<'_> {
             Pane::Options => {
                 render_options(ui, self.config);
             }
-            Pane::PatternTableLeft | Pane::PatternTableRight => {
-                if let Some(index) = pane.pattern_table_index() {
-                    render_pattern_table(ui, self.config, self.emu_textures, index);
-                }
+            Pane::PatternTables => {
+                render_pattern_table(ui, self.config, self.emu_textures);
             }
-            Pane::Nametable0 | Pane::Nametable1 | Pane::Nametable2 | Pane::Nametable3 => {
-                if let Some(index) = pane.nametable_index() {
-                    render_nametable(ui, self.emu_textures, index);
-                }
+            Pane::Nametables => {
+                render_nametable(ui, self.emu_textures);
             }
         }
         UiResponse::None
@@ -211,44 +162,20 @@ pub fn add_pane_if_missing(tree: &mut egui_tiles::Tree<Pane>, pane_type: Pane) {
     }
 }
 
-/// Check if any pattern table pane exists in the tree
-fn has_any_pattern_table(tiles: &Tiles<Pane>) -> bool {
-    for (_tile_id, tile) in tiles.iter() {
-        if let egui_tiles::Tile::Pane(pane) = tile {
-            if pane.is_pattern_table() {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-/// Check if any nametable pane exists in the tree
-fn has_any_nametable(tiles: &Tiles<Pane>) -> bool {
-    for (_tile_id, tile) in tiles.iter() {
-        if let egui_tiles::Tile::Pane(pane) = tile {
-            if pane.is_nametable() {
-                return true;
-            }
-        }
-    }
-    false
-}
-
 /// Compute required debug fetches based on which panes are visible
 pub fn compute_required_fetches_from_tree(
     tree: &egui_tiles::Tree<Pane>,
 ) -> HashSet<EmulatorFetchable> {
     let mut explicit_fetches = HashSet::new();
 
-    // Check if any pattern table is visible
-    if has_any_pattern_table(&tree.tiles) {
+    // Check if pattern tables pane is visible
+    if find_pane(&tree.tiles, &Pane::PatternTables).is_some() {
         explicit_fetches.insert(EmulatorFetchable::Tiles(None));
         explicit_fetches.insert(EmulatorFetchable::Palettes(None));
     }
 
-    // Check if any nametable is visible
-    if has_any_nametable(&tree.tiles) {
+    // Check if nametables pane is visible
+    if find_pane(&tree.tiles, &Pane::Nametables).is_some() {
         explicit_fetches.insert(EmulatorFetchable::Nametables(None));
     }
 
