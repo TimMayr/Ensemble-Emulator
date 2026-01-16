@@ -7,8 +7,8 @@ use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, MemoryDevice, OpenBus, Ram};
 use crate::emulation::messages::{
-    EmulatorFetchable, NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, NametableData,
-    PATTERN_TABLE_SIZE, PaletteData, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData,
+    EmulatorFetchable, NametableData, PaletteData, TileData, NAMETABLE_COLS,
+    NAMETABLE_COUNT, NAMETABLE_ROWS, PATTERN_TABLE_SIZE, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
 };
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::PpuState;
@@ -1204,9 +1204,11 @@ impl Ppu {
                 + (NAMETABLE_ROWS - 1) * NAMETABLE_COLS
                 + (NAMETABLE_COLS - 1);
 
+            println!("{attr_addr_start_addr}");
             for (i, _) in attributes.clone().iter_mut().enumerate() {
+                println!("{:08X}", attr_addr_start_addr + i);
                 attributes[nametable_index][i] =
-                    self.mem_read_debug((attr_addr_start_addr + i) as u16)
+                    self.mem_read_debug((attr_addr_start_addr + i) as u16);
             }
         }
 

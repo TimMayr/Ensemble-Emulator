@@ -3,7 +3,7 @@
 use crate::frontend::egui::textures::EmuTextures;
 
 /// Render a single nametable viewer
-/// 
+///
 /// # Arguments
 /// * `ui` - The egui Ui context
 /// * `emu_textures` - Emulator texture data
@@ -38,7 +38,21 @@ pub fn render_nametable(ui: &mut egui::Ui, emu_textures: &EmuTextures, nametable
             .spacing(egui::vec2(0.0, 0.0))
             .show(ui, |ui| {
                 for (i, tile) in nametable.iter().enumerate() {
-                    let texture = &textures[0][*tile as usize];
+                    let col = (i % 32) / 4;
+                    let row = (i / 32) / 4;
+                    let attr_table_byte = data.palettes[nametable_index][row * 8 + col];
+
+                    let shift = match (((i % 32) / 2) % 2, ((i / 32) / 2) % 2) {
+                        (0, 0) => 0,
+                        (1, 0) => 2,
+                        (0, 1) => 4,
+                        (1, 1) => 6,
+                        _ => unreachable!(),
+                    };
+
+
+                    let palette = (attr_table_byte >> shift) & 0b0000_0011;
+                    let texture = &textures[palette as usize][*tile as usize];
                     ui.image((texture.id(), tex_size));
 
                     if (i + 1) % 32 == 0 {
