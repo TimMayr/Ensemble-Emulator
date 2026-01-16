@@ -208,24 +208,22 @@ impl Nes {
 
             cpu_res = self.cpu.step();
 
-            if do_trace {
-                if let Some(ref mut trace) = self.trace_log {
-                    let ppu_state = {
-                        let ppu_ref = self.ppu.borrow();
-                        PpuState::from(ppu_ref.deref())
-                    };
+            if do_trace && let Some(ref mut trace) = self.trace_log {
+                let ppu_state = {
+                    let ppu_ref = self.ppu.borrow();
+                    PpuState::from(ppu_ref.deref())
+                };
 
-                    let state = SaveState {
-                        cpu: CpuState::from(&self.cpu),
-                        ppu: ppu_state,
-                        cycle: self.cpu_cycle_counter,
-                        total_cycles: self.total_cycles,
-                        rom_file: self.rom_file.as_ref().unwrap().clone(),
-                        version: 1,
-                    };
+                let state = SaveState {
+                    cpu: CpuState::from(&self.cpu),
+                    ppu: ppu_state,
+                    cycle: self.cpu_cycle_counter,
+                    total_cycles: self.total_cycles,
+                    rom_file: self.rom_file.as_ref().unwrap().clone(),
+                    version: 1,
+                };
 
-                    trace.trace(state)
-                }
+                trace.trace(state)
             }
         }
 
@@ -235,8 +233,6 @@ impl Nes {
 
         cpu_res
     }
-
-    pub fn inc_debug_palette(&mut self) { self.ppu.borrow_mut().inc_debug_palette() }
 }
 
 impl Default for Nes {

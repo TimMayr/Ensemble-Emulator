@@ -18,10 +18,6 @@ pub fn add_emulator_views(ctx: &Context, view_config: &mut ViewConfig, emu_textu
     if view_config.show_nametable {
         add_nametable_window(ctx, view_config, emu_textures);
     }
-
-    if view_config.show_sprite_viewer {
-        add_sprite_viewer_window(ctx, view_config);
-    }
 }
 
 /// Add the main emulator output window
@@ -30,7 +26,7 @@ fn add_main_output_window(ctx: &Context, emu_textures: &EmuTextures) {
         .default_size([512.0, 480.0])
         .default_pos([50.0, 50.0])
         .show(ctx, |ui| {
-            if let Some(ref texture) = emu_textures.emulator_texture {
+            if let Some(ref texture) = emu_textures.frame_texture {
                 // Get available content region
                 let available = ui.available_size();
 
@@ -66,7 +62,9 @@ fn add_pattern_table_window(
         .resizable(true)
         .max_height(0.0)
         .show(ctx, |ui| {
-            if !emu_textures.tile_textures.is_empty() {
+            if emu_textures.tile_textures.is_some()
+                && let Some(palettes) = &emu_textures.palette_data
+            {
                 let full_width = ui.available_width();
                 let half_width = (full_width - ui.spacing().item_spacing.x * 3.0) * 0.5;
 
@@ -75,14 +73,30 @@ fn add_pattern_table_window(
                     (half_width / 256.0) - 0.1
                 ));
 
+                let selected_palette = palettes.colors[view_config.debug_active_palette];
+                let transformed_palette = selected_palette
+                    .map(|color_index| view_config.palette_rgb_data[color_index as usize]);
+
                 ui.horizontal_top(|ui| {
                     ui.allocate_ui(egui::vec2(half_width, half_width), |ui| {
-                        draw_pattern_table(ui, 0, emu_textures);
+                        draw_pattern_table(
+                            ui,
+                            0,
+                            emu_textures,
+                            view_config.debug_active_palette,
+                            transformed_palette,
+                        );
                     });
 
                     ui.separator();
                     ui.allocate_ui(egui::vec2(half_width, half_width), |ui| {
-                        draw_pattern_table(ui, 1, emu_textures);
+                        draw_pattern_table(
+                            ui,
+                            1,
+                            emu_textures,
+                            view_config.debug_active_palette,
+                            transformed_palette,
+                        );
                     });
                 });
             } else {
@@ -119,8 +133,6 @@ fn add_nametable_window(ctx: &Context, view_config: &mut ViewConfig, emu_texture
                         .spacing(egui::vec2(0.0, 0.0))
                         .show(ui, |ui| {
                             for (i, tile) in nametable.iter().enumerate() {
-
-
                                 if (i + 1) % 32 == 0 {
                                     ui.end_row();
                                 }
@@ -130,16 +142,5 @@ fn add_nametable_window(ctx: &Context, view_config: &mut ViewConfig, emu_texture
             } else {
                 ui.label("Waiting for nametable data...");
             }
-        });
-}
-
-/// Add the sprite viewer window
-fn add_sprite_viewer_window(ctx: &Context, view_config: &mut ViewConfig) {
-    egui::Window::new("Sprite Viewer")
-        .default_size([600.0, 560.0])
-        .default_pos([700.0, 370.0])
-        .open(&mut view_config.show_sprite_viewer)
-        .show(ctx, |ui| {
-            ui.label("Waiting for Sprite data...");
         });
 }

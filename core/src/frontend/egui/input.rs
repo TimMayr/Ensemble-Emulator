@@ -4,21 +4,21 @@ use crossbeam_channel::Sender;
 use egui::Context;
 
 use crate::emulation::messages::{ControllerEvent, FrontendMessage};
-use crate::frontend::egui::config::SpeedConfig;
+use crate::frontend::egui::config::{SpeedConfig, ViewConfig};
 
 /// Handle keyboard input from the user
 pub fn handle_keyboard_input(
     ctx: &Context,
     to_emulator: &Sender<FrontendMessage>,
     speed_config: &mut SpeedConfig,
+    view_config: &mut ViewConfig,
     last_frame_request: &mut Instant,
 ) {
     ctx.input(|i| {
         // Emulator controls
         if i.key_pressed(egui::Key::N) {
-            let _ = to_emulator.send(FrontendMessage::ControllerInput(
-                ControllerEvent::IncPalette,
-            ));
+            view_config.debug_active_palette += 1;
+            view_config.debug_active_palette &= 7;
         }
         if i.key_pressed(egui::Key::Period) {
             speed_config.is_paused = !speed_config.is_paused;
