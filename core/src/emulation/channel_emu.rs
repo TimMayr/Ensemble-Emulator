@@ -172,13 +172,14 @@ impl ChannelEmulator {
         if let EmulatorFetchable::Palettes(Some(current_palette)) =
             self.nes.ppu.borrow().get_palettes_debug()
         {
+            let current = *current_palette; // Copy the PaletteData (it's 32 bytes)
             let palette_changed = match &self.last_palette_data {
-                Some(last) => last != current_palette.as_ref(),
+                Some(last) => *last != current,
                 None => true, // First time, consider it changed
             };
 
             if palette_changed {
-                self.last_palette_data = Some(*current_palette);
+                self.last_palette_data = Some(current);
                 let _ = self.to_frontend.send(EmulatorMessage::PaletteChanged);
             }
         }
