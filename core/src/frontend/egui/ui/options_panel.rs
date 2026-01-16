@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+// NOTE: These functions are kept for reference, but functionality has been moved to tiles.rs
+
 use std::collections::HashSet;
 
 use egui::{Context, Ui};
