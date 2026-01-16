@@ -1069,8 +1069,8 @@ impl Ppu {
     fn load_palette_colors(&self) -> [[u8; 4]; 8] {
         let mut data = [[0; 4]; 8];
 
-        for palette in 0..7 {
-            let mut colors = [8; 4];
+        for palette in 0..8 {
+            let mut colors = [0; 4];
             let base = PALETTE_RAM_START_ADDRESS + palette * 4;
 
             for (i, color) in colors.iter_mut().enumerate() {
