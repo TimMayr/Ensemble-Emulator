@@ -168,7 +168,7 @@ impl ChannelEmulator {
         }
     }
 
-    /// Check if debug data has changed since last check, and send notifications if so.
+    /// Check if debug data has changed since last check, and send the data if so.
     /// This enables passive fetching of debug data - the frontend only rebuilds
     /// textures when data actually changes, rather than on a regular interval.
     fn check_debug_data_changed(&mut self) {
@@ -186,7 +186,7 @@ impl ChannelEmulator {
                 self.last_palette_data = Some(current);
                 let _ = self
                     .to_frontend
-                    .send(EmulatorMessage::DebugDataChanged(EmulatorFetchable::Palettes(None)));
+                    .send(EmulatorMessage::DebugData(EmulatorFetchable::Palettes(Some(Box::new(current)))));
             }
         }
 
@@ -202,9 +202,10 @@ impl ChannelEmulator {
 
         if tiles_changed {
             self.last_pattern_table_hash = Some(current_hash);
+            // Send the actual tile data directly to avoid a round-trip request
             let _ = self
                 .to_frontend
-                .send(EmulatorMessage::DebugDataChanged(EmulatorFetchable::Tiles(None)));
+                .send(EmulatorMessage::DebugData(self.nes.ppu.borrow().get_tiles_debug()));
         }
     }
 

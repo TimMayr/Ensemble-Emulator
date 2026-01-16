@@ -120,12 +120,6 @@ impl EguiApp {
                 EmulatorMessage::Stopped => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
-                EmulatorMessage::DebugDataChanged(fetchable) => {
-                    // Request the changed debug data from the emulator
-                    let _ = self.to_emulator.send(FrontendMessage::RequestDebugData(
-                        EmulatorFetchable::get_empty(&fetchable),
-                    ));
-                }
             }
         }
     }
