@@ -108,19 +108,16 @@ impl ChannelEmulator {
                 }
                 FrontendMessage::RequestDebugData(fetchable) => match fetchable {
                     EmulatorFetchable::Palettes(_) => {
-                        println!("${fetchable:?}");
                         let _ = self.to_frontend.send(EmulatorMessage::DebugData(
                             self.nes.ppu.borrow().get_palettes_debug(),
                         ));
                     }
                     EmulatorFetchable::Tiles(_) => {
-                        println!("${fetchable:?}");
                         let _ = self.to_frontend.send(EmulatorMessage::DebugData(
                             self.nes.ppu.borrow().get_tiles_debug(),
                         ));
                     }
                     EmulatorFetchable::Nametables(_) => {
-                        println!("${fetchable:?}");
                         let _ = self.to_frontend.send(EmulatorMessage::DebugData(
                             self.nes.ppu.borrow().get_nametable_debug(),
                         ));
