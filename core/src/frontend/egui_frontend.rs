@@ -230,31 +230,13 @@ impl eframe::App for EguiApp {
                         ui.close();
                     }
                     ui.separator();
-                    ui.label("Pattern Tables");
-                    if ui.button("Pattern Table Left").clicked() {
-                        add_pane_if_missing(&mut self.tree, Pane::PatternTableLeft);
+                    ui.label("Debug Viewers");
+                    if ui.button("Pattern Tables").clicked() {
+                        add_pane_if_missing(&mut self.tree, Pane::PatternTables);
                         ui.close();
                     }
-                    if ui.button("Pattern Table Right").clicked() {
-                        add_pane_if_missing(&mut self.tree, Pane::PatternTableRight);
-                        ui.close();
-                    }
-                    ui.separator();
-                    ui.label("Nametables");
-                    if ui.button("Nametable 0").clicked() {
-                        add_pane_if_missing(&mut self.tree, Pane::Nametable0);
-                        ui.close();
-                    }
-                    if ui.button("Nametable 1").clicked() {
-                        add_pane_if_missing(&mut self.tree, Pane::Nametable1);
-                        ui.close();
-                    }
-                    if ui.button("Nametable 2").clicked() {
-                        add_pane_if_missing(&mut self.tree, Pane::Nametable2);
-                        ui.close();
-                    }
-                    if ui.button("Nametable 3").clicked() {
-                        add_pane_if_missing(&mut self.tree, Pane::Nametable3);
+                    if ui.button("Nametables").clicked() {
+                        add_pane_if_missing(&mut self.tree, Pane::Nametables);
                         ui.close();
                     }
                 });
