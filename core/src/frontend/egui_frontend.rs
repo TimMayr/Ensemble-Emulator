@@ -102,6 +102,9 @@ impl EguiApp {
                 EmulatorMessage::DebugData(data) => match data {
                     EmulatorFetchable::Palettes(p) => {
                         self.emu_textures.palette_data = p;
+                        // Rebuild tile textures when palette changes
+                        self.emu_textures
+                            .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data);
                     }
                     EmulatorFetchable::Tiles(t) => {
                         self.emu_textures.tile_data = t;
