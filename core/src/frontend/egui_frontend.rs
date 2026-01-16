@@ -101,10 +101,12 @@ impl EguiApp {
                 }
                 EmulatorMessage::DebugData(data) => match data {
                     EmulatorFetchable::Palettes(p) => {
-                        self.emu_textures.palette_data = p;
-                        // Rebuild tile textures when palette changes
-                        self.emu_textures
-                            .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data);
+                        // Only rebuild textures if palette data actually changed
+                        if self.emu_textures.palette_data != p {
+                            self.emu_textures.palette_data = p;
+                            self.emu_textures
+                                .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data);
+                        }
                     }
                     EmulatorFetchable::Tiles(t) => {
                         self.emu_textures.tile_data = t;
@@ -121,6 +123,11 @@ impl EguiApp {
                 EmulatorMessage::PatternTableChanged => {
                     let _ = self.to_emulator.send(FrontendMessage::RequestDebugData(
                         EmulatorFetchable::Tiles(None),
+                    ));
+                }
+                EmulatorMessage::PaletteChanged => {
+                    let _ = self.to_emulator.send(FrontendMessage::RequestDebugData(
+                        EmulatorFetchable::Palettes(None),
                     ));
                 }
             }
@@ -175,7 +182,12 @@ impl EguiApp {
         }
     }
 
-    /// Request debug data from the emulator based on timing and visibility
+    /// Request debug data from the emulator based on timing and visibility.
+    ///
+    /// Active fetches (like nametables) are requested on a regular interval.
+    /// Passive fetches (like tiles and palettes) are only requested once initially,
+    /// then re-requested when the emulator notifies of changes via
+    /// `PatternTableChanged` or `PaletteChanged` messages.
     fn request_debug_views(&mut self, now: Instant) {
         let debug_frame_budget = self.get_debug_viewers_frame_budget();
 
@@ -184,10 +196,16 @@ impl EguiApp {
             && now.duration_since(self.emu_textures.last_debug_request) >= debug_frame_budget
         {
             for to_fetch in &self.config.view_config.required_debug_fetches {
-                // We skip fetching tiles here since they very rarely change (at least for most mappers). They instead get fetched when the emulator notifies us of a change
-                if self.emu_textures.tile_textures.is_none()
-                    || !matches!(to_fetch, EmulatorFetchable::Tiles(..))
-                {
+                // Passive fetches (tiles, palettes) are only requested once initially.
+                // After that, they're re-requested when the emulator notifies of changes.
+                let should_skip_passive = to_fetch.is_passive()
+                    && match to_fetch {
+                        EmulatorFetchable::Tiles(_) => self.emu_textures.tile_textures.is_some(),
+                        EmulatorFetchable::Palettes(_) => self.emu_textures.palette_data.is_some(),
+                        _ => false,
+                    };
+
+                if !should_skip_passive {
                     let _ = self
                         .to_emulator
                         .send(FrontendMessage::RequestDebugData(to_fetch.clone()));

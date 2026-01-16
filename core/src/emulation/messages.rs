@@ -61,7 +61,10 @@ pub enum EmulatorMessage {
     /// Emulator has stopped/quit
     Stopped,
     DebugData(EmulatorFetchable),
+    /// Pattern table (tiles) data has changed, frontend should request new data
     PatternTableChanged,
+    /// Palette data has changed, frontend should request new data
+    PaletteChanged,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -79,6 +82,19 @@ impl EmulatorFetchable {
             EmulatorFetchable::Tiles(_) => EmulatorFetchable::Tiles(None),
             EmulatorFetchable::Nametables(_) => EmulatorFetchable::Nametables(None),
         }
+    }
+
+    /// Returns true if this fetchable should only be fetched when the emulator
+    /// notifies that the data has changed (passive), rather than on a regular
+    /// interval (active).
+    ///
+    /// Passive fetches reduce CPU overhead for data that rarely changes.
+    #[inline]
+    pub fn is_passive(&self) -> bool {
+        matches!(
+            self,
+            EmulatorFetchable::Palettes(_) | EmulatorFetchable::Tiles(_)
+        )
     }
 }
 

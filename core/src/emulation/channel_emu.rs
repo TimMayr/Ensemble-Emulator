@@ -37,7 +37,7 @@ use crossbeam_channel::{Receiver, Sender};
 
 
 use crate::emulation::messages::{
-    ControllerEvent, EmulatorFetchable, EmulatorMessage, FrontendMessage,
+    ControllerEvent, EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData,
 };
 use crate::emulation::nes::{ExecutionFinishedType, Nes};
 
@@ -49,6 +49,8 @@ pub struct ChannelEmulator {
     to_frontend: Sender<EmulatorMessage>,
     from_frontend: Receiver<FrontendMessage>,
     input: u8,
+    /// Cached palette data for change detection
+    last_palette_data: Option<PaletteData>,
 }
 
 pub static FETCH_DEPS: OnceLock<HashMap<EmulatorFetchable, Vec<EmulatorFetchable>>> =
@@ -82,6 +84,7 @@ impl ChannelEmulator {
             to_frontend: tx_from_emu,
             from_frontend: rx_from_frontend,
             input: 0,
+            last_palette_data: None,
         };
 
         (emu, tx_to_emu, rx_to_frontend)
@@ -153,12 +156,31 @@ impl ChannelEmulator {
                     return Err("Frontend disconnected".to_string());
                 }
 
-                // Debug views are now sent only on explicit request via RequestPatternTableData/RequestNametableData
-                // This eliminates the overhead of rendering and sending large buffers every frame
+                // Check if palette data has changed and notify frontend
+                self.check_palette_changed();
 
                 Ok(())
             }
             Err(e) => Err(format!("Emulator error: {}", e)),
+        }
+    }
+
+    /// Check if palette data has changed since last check, and send notification if so.
+    /// This enables passive fetching of palette data - the frontend only rebuilds
+    /// tile textures when palettes actually change, rather than on a regular interval.
+    fn check_palette_changed(&mut self) {
+        if let EmulatorFetchable::Palettes(Some(current_palette)) =
+            self.nes.ppu.borrow().get_palettes_debug()
+        {
+            let palette_changed = match &self.last_palette_data {
+                Some(last) => last != current_palette.as_ref(),
+                None => true, // First time, consider it changed
+            };
+
+            if palette_changed {
+                self.last_palette_data = Some(*current_palette);
+                let _ = self.to_frontend.send(EmulatorMessage::PaletteChanged);
+            }
         }
     }
 
