@@ -30,4 +30,5 @@ pub mod config;
 pub mod fps_counter;
 pub mod input;
 pub mod textures;
+pub mod tiles;
 pub mod ui;

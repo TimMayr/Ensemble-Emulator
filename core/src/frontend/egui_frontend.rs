@@ -8,6 +8,7 @@
 /// - `egui::fps_counter`: FPS tracking
 /// - `egui::input`: Input handling
 /// - `egui::textures`: Texture management
+/// - `egui::tiles`: Tile tree behavior and pane management
 /// - `egui::ui`: UI rendering components
 use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
@@ -23,7 +24,10 @@ use crate::frontend::egui::config::{AppConfig, AppSpeed};
 use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
-use crate::frontend::egui::ui::{add_emulator_views, add_options_panel, add_status_bar};
+use crate::frontend::egui::tiles::{
+    Pane, TreeBehavior, add_pane_if_missing, compute_required_fetches_from_tree, create_tree,
+};
+use crate::frontend::egui::ui::add_status_bar;
 
 /// Main egui application state
 pub struct EguiApp {
@@ -34,6 +38,8 @@ pub struct EguiApp {
     fps_counter: FpsCounter,
     accumulator: Duration,
     config: AppConfig,
+    /// The tile tree for docking behavior
+    tree: egui_tiles::Tree<Pane>,
 }
 
 impl EguiApp {
@@ -50,6 +56,7 @@ impl EguiApp {
             fps_counter: Default::default(),
             accumulator: Default::default(),
             config: Default::default(),
+            tree: create_tree(),
         }
     }
 
@@ -211,8 +218,30 @@ impl eframe::App for EguiApp {
         // Process messages from emulator
         self.process_emu_messages(ctx);
 
-        // Options side panel
-        add_options_panel(ctx, &mut self.config);
+        // Update required debug fetches based on visible panes
+        self.config.view_config.required_debug_fetches = compute_required_fetches_from_tree(&self.tree);
+
+        // Menu bar at the top
+        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
+                ui.menu_button("View", |ui| {
+                    if ui.button("Options").clicked() {
+                        add_pane_if_missing(&mut self.tree, Pane::Options);
+                        ui.close();
+                    }
+                    ui.separator();
+                    ui.label("Debug Viewers");
+                    if ui.button("Pattern Table").clicked() {
+                        add_pane_if_missing(&mut self.tree, Pane::PatternTable);
+                        ui.close();
+                    }
+                    if ui.button("Nametable").clicked() {
+                        add_pane_if_missing(&mut self.tree, Pane::Nametable);
+                        ui.close();
+                    }
+                });
+            });
+        });
 
         // Status bar at bottom
         add_status_bar(
@@ -222,8 +251,11 @@ impl eframe::App for EguiApp {
             &self.emu_textures,
         );
 
-        // Emulator output windows
-        add_emulator_views(ctx, &mut self.config.view_config, &self.emu_textures);
+        // Central panel with tile tree
+        egui::CentralPanel::default().show(ctx, |ui| {
+            let mut behavior = TreeBehavior::new(&mut self.config, &self.emu_textures);
+            self.tree.ui(&mut behavior, ui);
+        });
 
         // Request continuous repaint for animation
         ctx.request_repaint();
