@@ -61,9 +61,6 @@ pub enum EmulatorMessage {
     /// Emulator has stopped/quit
     Stopped,
     DebugData(EmulatorFetchable),
-    /// Debug data has changed, frontend should request new data.
-    /// The EmulatorFetchable variant (with None payload) indicates which type of data changed.
-    DebugDataChanged(EmulatorFetchable),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
