@@ -346,7 +346,12 @@ pub fn compute_required_fetches_from_tree(tree: &egui_tiles::Tree<Pane>) -> Hash
     }
 
     if !explicit_fetches.is_empty() {
-        ChannelEmulator::compute_required_fetches(&explicit_fetches, FETCH_DEPS.get().unwrap())
+        if let Some(fetch_deps) = FETCH_DEPS.get() {
+            ChannelEmulator::compute_required_fetches(&explicit_fetches, fetch_deps)
+        } else {
+            // FETCH_DEPS not yet initialized, return explicit fetches as-is
+            explicit_fetches
+        }
     } else {
         explicit_fetches
     }
