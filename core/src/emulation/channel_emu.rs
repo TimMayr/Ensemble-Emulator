@@ -51,6 +51,8 @@ pub struct ChannelEmulator {
     input: u8,
     /// Cached palette data for change detection
     last_palette_data: Option<PaletteData>,
+    /// Cached hash of pattern table data for efficient change detection
+    last_pattern_table_hash: Option<u64>,
 }
 
 pub static FETCH_DEPS: OnceLock<HashMap<EmulatorFetchable, Vec<EmulatorFetchable>>> =
@@ -85,6 +87,7 @@ impl ChannelEmulator {
             from_frontend: rx_from_frontend,
             input: 0,
             last_palette_data: None,
+            last_pattern_table_hash: None,
         };
 
         (emu, tx_to_emu, rx_to_frontend)
@@ -156,8 +159,8 @@ impl ChannelEmulator {
                     return Err("Frontend disconnected".to_string());
                 }
 
-                // Check if palette data has changed and notify frontend
-                self.check_palette_changed();
+                // Check if debug data has changed and notify frontend
+                self.check_debug_data_changed();
 
                 Ok(())
             }
@@ -165,10 +168,11 @@ impl ChannelEmulator {
         }
     }
 
-    /// Check if palette data has changed since last check, and send notification if so.
-    /// This enables passive fetching of palette data - the frontend only rebuilds
-    /// tile textures when palettes actually change, rather than on a regular interval.
-    fn check_palette_changed(&mut self) {
+    /// Check if debug data has changed since last check, and send notifications if so.
+    /// This enables passive fetching of debug data - the frontend only rebuilds
+    /// textures when data actually changes, rather than on a regular interval.
+    fn check_debug_data_changed(&mut self) {
+        // Check palette data (32 bytes, cheap comparison)
         if let EmulatorFetchable::Palettes(Some(current_palette)) =
             self.nes.ppu.borrow().get_palettes_debug()
         {
@@ -180,9 +184,43 @@ impl ChannelEmulator {
 
             if palette_changed {
                 self.last_palette_data = Some(current);
-                let _ = self.to_frontend.send(EmulatorMessage::PaletteChanged);
+                let _ = self
+                    .to_frontend
+                    .send(EmulatorMessage::DebugDataChanged(EmulatorFetchable::Palettes(None)));
             }
         }
+
+        // Check tile/pattern table data using a fast hash of raw PPU memory
+        // Pattern tables occupy 0x0000-0x1FFF (8KB) in PPU address space
+        let pattern_table_memory = self.nes.ppu.borrow().get_memory_debug(Some(0x0000..=0x1FFF));
+        let current_hash = Self::compute_hash(&pattern_table_memory);
+
+        let tiles_changed = match self.last_pattern_table_hash {
+            Some(last_hash) => last_hash != current_hash,
+            None => true, // First time, consider it changed
+        };
+
+        if tiles_changed {
+            self.last_pattern_table_hash = Some(current_hash);
+            let _ = self
+                .to_frontend
+                .send(EmulatorMessage::DebugDataChanged(EmulatorFetchable::Tiles(None)));
+        }
+    }
+
+    /// Compute a fast hash of the given data for change detection.
+    /// Uses FNV-1a algorithm which is fast and has good distribution.
+    #[inline]
+    fn compute_hash(data: &[u8]) -> u64 {
+        const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+        const FNV_PRIME: u64 = 0x100000001b3;
+
+        let mut hash = FNV_OFFSET_BASIS;
+        for &byte in data {
+            hash ^= byte as u64;
+            hash = hash.wrapping_mul(FNV_PRIME);
+        }
+        hash
     }
 
     fn handle_controller_event(&mut self, event: ControllerEvent) {
