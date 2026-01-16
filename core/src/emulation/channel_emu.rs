@@ -183,18 +183,24 @@ impl ChannelEmulator {
         deps: &HashMap<EmulatorFetchable, Vec<EmulatorFetchable>>,
     ) -> HashSet<EmulatorFetchable> {
         let mut fetch = HashSet::new();
-        let mut stack: Vec<_> = Vec::with_capacity(fetch.len());
+        let mut stack: Vec<_> = Vec::with_capacity(enabled.len());
 
         for x in enabled.iter() {
             stack.push(EmulatorFetchable::get_empty(x));
         }
 
         while let Some(to_fetch) = stack.pop() {
-            if fetch.insert(EmulatorFetchable::get_empty(&to_fetch))
-                && let Some(reqs) = deps.get(&to_fetch)
-            {
-                for x in reqs {
-                    fetch.insert(EmulatorFetchable::get_empty(x));
+            // Only process if we haven't seen this fetchable before
+            if fetch.insert(EmulatorFetchable::get_empty(&to_fetch)) {
+                // If this fetchable has dependencies, add them to the stack for processing
+                if let Some(reqs) = deps.get(&to_fetch) {
+                    for x in reqs {
+                        let empty = EmulatorFetchable::get_empty(x);
+                        // Only add to stack if not already in fetch set
+                        if !fetch.contains(&empty) {
+                            stack.push(empty);
+                        }
+                    }
                 }
             }
         }

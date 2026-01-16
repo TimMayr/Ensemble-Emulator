@@ -4,12 +4,12 @@ use egui::WidgetText;
 use egui_tiles::{Behavior, SimplificationOptions, TileId, Tiles, UiResponse};
 
 use crate::emulation::channel_emu::{ChannelEmulator, FETCH_DEPS};
-use crate::emulation::messages::{
-    EmulatorFetchable, NAMETABLE_HEIGHT, NAMETABLE_WIDTH, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
-};
+use crate::emulation::messages::EmulatorFetchable;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
-use crate::frontend::egui::ui::draw_pattern_table;
+use crate::frontend::egui::ui::{
+    render_emulator_output, render_nametable, render_options, render_pattern_table,
+};
 
 /// The different pane types that can be displayed in the tile tree
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,16 +63,16 @@ impl Behavior<Pane> for TreeBehavior<'_> {
     fn pane_ui(&mut self, ui: &mut egui::Ui, _tile_id: TileId, pane: &mut Pane) -> UiResponse {
         match pane {
             Pane::EmulatorOutput => {
-                self.render_emulator_output(ui);
+                render_emulator_output(ui, self.emu_textures);
             }
             Pane::Options => {
-                self.render_options(ui);
+                render_options(ui, self.config);
             }
             Pane::PatternTable => {
-                self.render_pattern_table(ui);
+                render_pattern_table(ui, self.config, self.emu_textures);
             }
             Pane::Nametable => {
-                self.render_nametable(ui);
+                render_nametable(ui, self.emu_textures);
             }
         }
         UiResponse::None
@@ -97,188 +97,6 @@ impl Behavior<Pane> for TreeBehavior<'_> {
         SimplificationOptions {
             all_panes_must_have_tabs: true,
             ..Default::default()
-        }
-    }
-}
-
-impl TreeBehavior<'_> {
-    fn render_emulator_output(&self, ui: &mut egui::Ui) {
-        if let Some(ref texture) = self.emu_textures.frame_texture {
-            let available = ui.available_size();
-
-            let scale = (available.x / TOTAL_OUTPUT_WIDTH as f32)
-                .min(available.y / TOTAL_OUTPUT_HEIGHT as f32);
-
-            let display_width = TOTAL_OUTPUT_WIDTH as f32 * scale;
-            let display_height = TOTAL_OUTPUT_HEIGHT as f32 * scale;
-
-            ui.label(format!(
-                "{}x{} at {:.1}x scale",
-                TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT, scale
-            ));
-
-            ui.image((texture.id(), egui::vec2(display_width, display_height)));
-        } else {
-            ui.label("Waiting for first frame...");
-        }
-    }
-
-    fn render_options(&mut self, ui: &mut egui::Ui) {
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.label("Settings");
-            self.add_speed_settings(ui);
-        });
-    }
-
-    fn add_speed_settings(&mut self, ui: &mut egui::Ui) {
-        use crate::frontend::egui::config::{AppSpeed, DebugSpeed};
-
-        ui.collapsing("Speed", |ui| {
-            ui.label("Emulation Speed")
-                .on_hover_text("Sets the speed at which the emulation runs");
-            ui.radio_value(
-                &mut self.config.speed_config.app_speed,
-                AppSpeed::DefaultSpeed,
-                "Default (60fps)",
-            );
-            ui.radio_value(
-                &mut self.config.speed_config.app_speed,
-                AppSpeed::Custom,
-                "Custom",
-            );
-            ui.radio_value(
-                &mut self.config.speed_config.app_speed,
-                AppSpeed::Uncapped,
-                "Uncapped",
-            );
-
-            if self.config.speed_config.app_speed == AppSpeed::Custom {
-                ui.add(
-                    egui::Slider::new(&mut self.config.speed_config.custom_speed, 0..=500)
-                        .text("Speed")
-                        .suffix("%")
-                        .fixed_decimals(0)
-                        .logarithmic(true),
-                );
-            }
-            ui.separator();
-            ui.label("Debug Viewer Speed")
-                .on_hover_text("Sets the speed at which the debug views update");
-            ui.radio_value(
-                &mut self.config.speed_config.debug_speed,
-                DebugSpeed::Default,
-                "10fps",
-            );
-            ui.radio_value(
-                &mut self.config.speed_config.debug_speed,
-                DebugSpeed::Custom,
-                "Custom",
-            );
-            ui.radio_value(
-                &mut self.config.speed_config.debug_speed,
-                DebugSpeed::InStep,
-                "Realtime",
-            );
-            if self.config.speed_config.debug_speed == DebugSpeed::Custom {
-                ui.add(
-                    egui::Slider::new(&mut self.config.speed_config.debug_custom_speed, 0..=100)
-                        .text("Debug Speed")
-                        .suffix("%")
-                        .fixed_decimals(0)
-                        .logarithmic(true),
-                )
-                .on_hover_text("% of main view fps");
-            }
-        });
-    }
-
-    fn render_pattern_table(&mut self, ui: &mut egui::Ui) {
-        if self.emu_textures.tile_textures.is_some()
-            && let Some(palettes) = &self.emu_textures.palette_data
-        {
-            let full_width = ui.available_width();
-            let half_width = (full_width - ui.spacing().item_spacing.x * 3.0) * 0.5;
-
-            ui.label(format!(
-                "Pattern Tables (128x128x2 at {:.1}x scale)",
-                (half_width / 256.0) - 0.1
-            ));
-
-            let selected_palette = palettes.colors[self.config.view_config.debug_active_palette];
-            let transformed_palette = selected_palette
-                .map(|color_index| self.config.view_config.palette_rgb_data[color_index as usize]);
-
-            ui.horizontal_top(|ui| {
-                ui.allocate_ui(egui::vec2(half_width, half_width), |ui| {
-                    draw_pattern_table(
-                        ui,
-                        0,
-                        self.emu_textures,
-                        self.config.view_config.debug_active_palette,
-                        transformed_palette,
-                    );
-                });
-
-                ui.separator();
-                ui.allocate_ui(egui::vec2(half_width, half_width), |ui| {
-                    draw_pattern_table(
-                        ui,
-                        1,
-                        self.emu_textures,
-                        self.config.view_config.debug_active_palette,
-                        transformed_palette,
-                    );
-                });
-            });
-        } else {
-            ui.label("Waiting for pattern table data...");
-        }
-    }
-
-    fn render_nametable(&self, ui: &mut egui::Ui) {
-        if let Some(ref data) = self.emu_textures.nametable_data
-            && let Some(ref textures) = self.emu_textures.tile_textures
-        {
-            let available = ui.available_width();
-            let base_size = 4.0;
-            let logical_width = 16.0 * base_size;
-            let scale = available / logical_width;
-            let tex_size = egui::vec2(base_size, base_size) * scale;
-
-            ui.label(format!(
-                "Nametables ({}x{} at {:.1}x)",
-                NAMETABLE_WIDTH, NAMETABLE_HEIGHT, scale
-            ));
-
-            egui::Grid::new("nametables")
-                .num_columns(2)
-                .spacing(egui::vec2(0.0, 0.0))
-                .show(ui, |ui| {
-                    for (nametable_id, nametable) in data.tiles.iter().enumerate() {
-                        egui::Grid::new("nametable")
-                            .num_columns(32)
-                            .min_row_height(scale * base_size)
-                            .min_col_width(scale * base_size)
-                            .max_col_width(scale * base_size)
-                            .spacing(egui::vec2(0.0, 0.0))
-                            .show(ui, |ui| {
-                                for (i, tile) in nametable.iter().enumerate() {
-                                    let texture = &textures[0][*tile as usize];
-
-                                    ui.image((texture.id(), tex_size));
-
-                                    if (i + 1) % 32 == 0 {
-                                        ui.end_row();
-                                    }
-                                }
-                            });
-                        if nametable_id + 1 % 2 == 0 {
-                            ui.end_row()
-                        }
-                    }
-                });
-        } else {
-            ui.label("Waiting for nametable data...");
         }
     }
 }
