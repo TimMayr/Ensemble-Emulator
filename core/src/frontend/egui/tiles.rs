@@ -115,11 +115,11 @@ pub fn create_tree() -> egui_tiles::Tree<Pane> {
     let root = tiles.insert_horizontal_tile(vec![emulator_output, options]);
 
     // Set shares so emulator takes most of the space
-    if let Some(egui_tiles::Tile::Container(container)) = tiles.get_mut(root) {
-        if let egui_tiles::Container::Linear(linear) = container {
-            linear.shares.set_share(emulator_output, 3.0);
-            linear.shares.set_share(options, 1.0);
-        }
+    if let Some(egui_tiles::Tile::Container(egui_tiles::Container::Linear(linear))) =
+        tiles.get_mut(root)
+    {
+        linear.shares.set_share(emulator_output, 3.0);
+        linear.shares.set_share(options, 1.0);
     }
 
     egui_tiles::Tree::new("emulator_tiles", root, tiles)
@@ -128,10 +128,10 @@ pub fn create_tree() -> egui_tiles::Tree<Pane> {
 /// Find a pane in the tree by its type
 pub fn find_pane(tiles: &Tiles<Pane>, pane_type: &Pane) -> Option<TileId> {
     for (tile_id, tile) in tiles.iter() {
-        if let egui_tiles::Tile::Pane(pane) = tile {
-            if pane == pane_type {
-                return Some(*tile_id);
-            }
+        if let egui_tiles::Tile::Pane(pane) = tile
+            && pane == pane_type
+        {
+            return Some(*tile_id);
         }
     }
     None
@@ -143,19 +143,19 @@ pub fn add_pane_if_missing(tree: &mut egui_tiles::Tree<Pane>, pane_type: Pane) {
         let new_tile_id = tree.tiles.insert_pane(pane_type);
 
         // Add to root container
-        if let Some(root) = tree.root() {
-            if let Some(egui_tiles::Tile::Container(container)) = tree.tiles.get_mut(root) {
-                match container {
-                    egui_tiles::Container::Tabs(tabs) => {
-                        tabs.add_child(new_tile_id);
-                        tabs.set_active(new_tile_id);
-                    }
-                    egui_tiles::Container::Linear(linear) => {
-                        linear.children.push(new_tile_id);
-                    }
-                    egui_tiles::Container::Grid(grid) => {
-                        grid.add_child(new_tile_id);
-                    }
+        if let Some(root) = tree.root()
+            && let Some(egui_tiles::Tile::Container(container)) = tree.tiles.get_mut(root)
+        {
+            match container {
+                egui_tiles::Container::Tabs(tabs) => {
+                    tabs.add_child(new_tile_id);
+                    tabs.set_active(new_tile_id);
+                }
+                egui_tiles::Container::Linear(linear) => {
+                    linear.children.push(new_tile_id);
+                }
+                egui_tiles::Container::Grid(grid) => {
+                    grid.add_child(new_tile_id);
                 }
             }
         }

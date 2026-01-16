@@ -1184,29 +1184,30 @@ impl Ppu {
     }
 
     pub fn get_nametable_debug(&self) -> EmulatorFetchable {
-        let nametable_start = 0x2000;
+        let nametable_start = 0x2000u16;
         let pattern_table = ((self.ctrl_register & 0b1_0000) as u16) << 4;
         let mut nametables = [[0; NAMETABLE_ROWS * NAMETABLE_COLS]; NAMETABLE_COUNT];
         let mut attributes = [[0; 64]; NAMETABLE_COUNT];
-        for nametable_index in 0..3usize {
+
+        // Attribute table offset within each nametable (0x3C0 = 960 = 30 * 32)
+        let attr_offset = NAMETABLE_TILE_AREA_SIZE;
+
+        for nametable_index in 0..NAMETABLE_COUNT {
+            let nametable_base = nametable_start + (nametable_index as u16) * NAMETABLE_SIZE;
+
+            // Read tile indices
             for row in 0..NAMETABLE_ROWS {
                 for col in 0..NAMETABLE_COLS {
-                    let addr = nametable_start
-                        + nametable_index * (NAMETABLE_SIZE as usize)
-                        + row * NAMETABLE_COLS
-                        + col;
-                    let tile = (self.mem_read_debug(addr as u16) as u16) | pattern_table;
+                    let addr = nametable_base + (row * NAMETABLE_COLS + col) as u16;
+                    let tile = (self.mem_read_debug(addr) as u16) | pattern_table;
                     nametables[nametable_index][row * NAMETABLE_COLS + col] = tile;
                 }
             }
 
-            let attr_addr_start_addr = nametable_index * (NAMETABLE_SIZE as usize)
-                + (NAMETABLE_ROWS - 1) * NAMETABLE_COLS
-                + (NAMETABLE_COLS - 1);
-
-            for (i, _) in attributes.clone().iter_mut().enumerate() {
-                attributes[nametable_index][i] =
-                    self.mem_read_debug((attr_addr_start_addr + i) as u16);
+            // Read attribute table (64 bytes per nametable)
+            let attr_base = nametable_base + attr_offset;
+            for (i, attr) in attributes[nametable_index].iter_mut().enumerate() {
+                *attr = self.mem_read_debug(attr_base + i as u16);
             }
         }
 
