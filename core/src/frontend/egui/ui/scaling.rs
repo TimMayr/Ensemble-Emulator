@@ -13,8 +13,8 @@
 /// Always returns at least 1 to ensure content is visible.
 ///
 /// # Arguments
-/// * `content_width` - The native width of the content in pixels
-/// * `content_height` - The native height of the content in pixels
+/// * `content_width` - The native width of the content in pixels (must be > 0)
+/// * `content_height` - The native height of the content in pixels (must be > 0)
 /// * `available_width` - The maximum available width
 /// * `available_height` - The maximum available height
 ///
@@ -26,15 +26,29 @@ pub fn calculate_integer_scale(
     available_width: f32,
     available_height: f32,
 ) -> u32 {
+    // Guard against invalid content dimensions
+    if content_width <= 0.0 || content_height <= 0.0 {
+        return 1;
+    }
+
+    // Guard against invalid available dimensions
+    if available_width <= 0.0 || available_height <= 0.0 {
+        return 1;
+    }
+
     // Calculate the maximum scale that fits in each dimension
-    let max_scale_x = (available_width / content_width).floor();
-    let max_scale_y = (available_height / content_height).floor();
+    let max_scale_x = available_width / content_width;
+    let max_scale_y = available_height / content_height;
 
     // Take the minimum of both to ensure it fits in both dimensions
-    let scale = max_scale_x.min(max_scale_y) as u32;
+    let scale = max_scale_x.min(max_scale_y).floor();
 
-    // Ensure minimum scale of 1
-    scale.max(1)
+    // Handle NaN or infinity cases, and ensure minimum scale of 1
+    if scale.is_finite() && scale >= 1.0 {
+        scale as u32
+    } else {
+        1
+    }
 }
 
 #[cfg(test)]
@@ -99,5 +113,38 @@ mod tests {
     fn test_nametable_dimensions() {
         // Nametables: 512x480 (2x2 grid of 256x240)
         assert_eq!(calculate_integer_scale(512.0, 480.0, 1024.0, 960.0), 2);
+    }
+
+    #[test]
+    fn test_zero_content_width() {
+        // Zero content width should return 1
+        assert_eq!(calculate_integer_scale(0.0, 240.0, 512.0, 480.0), 1);
+    }
+
+    #[test]
+    fn test_zero_content_height() {
+        // Zero content height should return 1
+        assert_eq!(calculate_integer_scale(256.0, 0.0, 512.0, 480.0), 1);
+    }
+
+    #[test]
+    fn test_negative_content_dimensions() {
+        // Negative content dimensions should return 1
+        assert_eq!(calculate_integer_scale(-256.0, 240.0, 512.0, 480.0), 1);
+        assert_eq!(calculate_integer_scale(256.0, -240.0, 512.0, 480.0), 1);
+    }
+
+    #[test]
+    fn test_zero_available_dimensions() {
+        // Zero available dimensions should return 1
+        assert_eq!(calculate_integer_scale(256.0, 240.0, 0.0, 480.0), 1);
+        assert_eq!(calculate_integer_scale(256.0, 240.0, 512.0, 0.0), 1);
+    }
+
+    #[test]
+    fn test_negative_available_dimensions() {
+        // Negative available dimensions should return 1
+        assert_eq!(calculate_integer_scale(256.0, 240.0, -512.0, 480.0), 1);
+        assert_eq!(calculate_integer_scale(256.0, 240.0, 512.0, -480.0), 1);
     }
 }
