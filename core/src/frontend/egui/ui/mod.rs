@@ -13,5 +13,5 @@ pub use nametable_pane::render_nametable;
 pub use options_pane::render_options;
 pub use pattern_table::draw_pattern_table;
 pub use pattern_table_pane::render_pattern_table;
-pub use snapping::snap_graphics_pane_sizes;
+pub use snapping::{snap_graphics_pane_sizes, SnapState};
 pub use status_bar::add_status_bar;

@@ -4,6 +4,11 @@
 //! when resizing. This ensures pixel-perfect rendering by having panes snap
 //! to sizes that result in clean integer scales (1x, 2x, 3x, etc.) when the
 //! user is within a small threshold of those sizes.
+//!
+//! The snapping behavior is "sticky": once snapped, the pane stays at the integer
+//! scale until the user drags far enough to exit the threshold zone.
+
+use std::collections::HashMap;
 
 use egui_tiles::{Container, Tile, TileId, Tree};
 
@@ -13,15 +18,25 @@ use crate::frontend::egui::tiles::Pane;
 /// Threshold for snapping - if within this fraction of an integer scale, snap to it
 const SNAP_THRESHOLD: f32 = 0.1;
 
-/// Minimum pixel delta to trigger snapping - prevents oscillation when already snapped
-const MIN_SNAP_DELTA_PIXELS: f32 = 0.5;
-
 /// Minimum share value to ensure tiles remain visible after snapping
 const MIN_TILE_SHARE: f32 = 0.1;
 
 /// Approximate height of UI chrome (labels, padding) subtracted from pane height
 /// when calculating available space for graphics
 const UI_CHROME_HEIGHT: f32 = 20.0;
+
+/// State for tracking snapped panes
+#[derive(Default)]
+pub struct SnapState {
+    /// Map from pane tile_id to the integer scale it's snapped to (if any)
+    snapped_scales: HashMap<TileId, f32>,
+}
+
+impl SnapState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
 
 /// Native dimensions for each graphics pane type
 #[derive(Clone, Copy)]
@@ -58,27 +73,28 @@ fn calculate_scale(available_width: f32, available_height: f32, dims: PaneDimens
 }
 
 /// Check if a scale is close to an integer and return the snapped scale if so
-fn snap_scale_if_close(scale: f32) -> Option<f32> {
-    let rounded = scale.round();
-    if rounded >= 1.0 && (scale - rounded).abs() < SNAP_THRESHOLD {
-        Some(rounded)
-    } else {
-        None
-    }
+fn get_nearest_integer_scale(scale: f32) -> f32 {
+    scale.round().max(1.0)
 }
 
-/// Snap the shares of graphics panes in a tree to achieve integer scale factors
-/// when the current size is within SNAP_THRESHOLD of an integer scale.
+/// Check if a scale is within the snap threshold of an integer
+fn is_within_snap_threshold(scale: f32, target_integer: f32) -> bool {
+    (scale - target_integer).abs() < SNAP_THRESHOLD
+}
+
+/// Snap the shares of graphics panes in a tree to achieve integer scale factors.
+/// Uses sticky snapping: once snapped, stays snapped until user drags outside threshold.
 ///
 /// This function modifies the tree's shares in-place.
-pub fn snap_graphics_pane_sizes(tree: &mut Tree<Pane>) {
+pub fn snap_graphics_pane_sizes(tree: &mut Tree<Pane>, snap_state: &mut SnapState) {
     let Some(_root_id) = tree.root else {
         return;
     };
 
-    // Collect all panes that need snapping and their parent containers
-    // (tile_in_linear, linear_parent_id, size_delta)
-    let mut snap_adjustments: Vec<(TileId, TileId, f32)> = Vec::new();
+    // Collect all adjustments to make
+    // (tile_in_linear, linear_parent_id, target_scale, pane_tile_id)
+    let mut snap_adjustments: Vec<(TileId, TileId, f32, TileId, PaneDimensions, Direction)> = Vec::new();
+    let mut to_unsnap: Vec<TileId> = Vec::new();
 
     for (tile_id, tile) in tree.tiles.iter() {
         if let Tile::Pane(pane) = tile {
@@ -89,32 +105,30 @@ pub fn snap_graphics_pane_sizes(tree: &mut Tree<Pane>) {
                     let available_height = rect.height() - UI_CHROME_HEIGHT;
 
                     let current_scale = calculate_scale(available_width, available_height, dims);
+                    let nearest_integer = get_nearest_integer_scale(current_scale);
 
-                    if let Some(target_scale) = snap_scale_if_close(current_scale) {
-                        // Find the parent linear container and the tile that's directly in it
-                        if let Some((linear_id, tile_in_linear, direction)) =
-                            find_parent_linear_and_child(tree, *tile_id)
-                        {
-                            // Calculate the size difference we need to achieve
-                            let (current_size, target_size) = match direction {
-                                Direction::Horizontal => {
-                                    (rect.width(), dims.width * target_scale)
-                                }
-                                Direction::Vertical => {
-                                    (rect.height(), dims.height * target_scale + UI_CHROME_HEIGHT)
-                                }
-                            };
-
-                            let size_delta = target_size - current_size;
-                            
-                            // Only snap if the delta is small enough (within threshold)
-                            let threshold_pixels = SNAP_THRESHOLD * match direction {
-                                Direction::Horizontal => dims.width,
-                                Direction::Vertical => dims.height,
-                            };
-                            
-                            if size_delta.abs() <= threshold_pixels && size_delta.abs() > MIN_SNAP_DELTA_PIXELS {
-                                snap_adjustments.push((tile_in_linear, linear_id, size_delta));
+                    // Check if this pane is currently snapped
+                    if let Some(&snapped_scale) = snap_state.snapped_scales.get(tile_id) {
+                        // Currently snapped - check if we should unsnap
+                        if !is_within_snap_threshold(current_scale, snapped_scale) {
+                            // User has dragged outside the threshold - unsnap
+                            to_unsnap.push(*tile_id);
+                        } else {
+                            // Still within threshold - keep snapped by adjusting back to integer
+                            if let Some((linear_id, tile_in_linear, direction)) =
+                                find_parent_linear_and_child(tree, *tile_id)
+                            {
+                                snap_adjustments.push((tile_in_linear, linear_id, snapped_scale, *tile_id, dims, direction));
+                            }
+                        }
+                    } else {
+                        // Not currently snapped - check if we should snap
+                        if is_within_snap_threshold(current_scale, nearest_integer) {
+                            // Enter snap zone - snap to integer
+                            if let Some((linear_id, tile_in_linear, direction)) =
+                                find_parent_linear_and_child(tree, *tile_id)
+                            {
+                                snap_adjustments.push((tile_in_linear, linear_id, nearest_integer, *tile_id, dims, direction));
                             }
                         }
                     }
@@ -123,9 +137,17 @@ pub fn snap_graphics_pane_sizes(tree: &mut Tree<Pane>) {
         }
     }
 
-    // Apply the snap adjustments
-    for (tile_in_linear, linear_id, size_delta) in snap_adjustments {
-        apply_snap_adjustment(tree, tile_in_linear, linear_id, size_delta);
+    // Remove unsnapped panes from state
+    for tile_id in to_unsnap {
+        snap_state.snapped_scales.remove(&tile_id);
+    }
+
+    // Apply the snap adjustments and update state
+    for (tile_in_linear, linear_id, target_scale, pane_tile_id, dims, direction) in snap_adjustments {
+        if apply_snap_to_scale(tree, tile_in_linear, linear_id, pane_tile_id, target_scale, dims, direction) {
+            // Successfully snapped - record in state
+            snap_state.snapped_scales.insert(pane_tile_id, target_scale);
+        }
     }
 }
 
@@ -188,21 +210,42 @@ fn find_immediate_parent(tree: &Tree<Pane>, tile_id: TileId) -> Option<TileId> {
     None
 }
 
-/// Apply a snap adjustment by modifying shares to achieve the target size delta
-fn apply_snap_adjustment(
+/// Apply snapping to achieve a specific target scale
+/// Returns true if successfully applied
+fn apply_snap_to_scale(
     tree: &mut Tree<Pane>,
-    tile_id: TileId,
-    parent_id: TileId,
-    size_delta: f32,
-) {
-    // Get the parent rect to calculate total available size
-    let Some(parent_rect) = tree.tiles.rect(parent_id) else {
-        return;
+    tile_in_linear: TileId,
+    linear_id: TileId,
+    pane_tile_id: TileId,
+    target_scale: f32,
+    dims: PaneDimensions,
+    direction: Direction,
+) -> bool {
+    // Get the pane rect to calculate current size
+    let Some(pane_rect) = tree.tiles.rect(pane_tile_id) else {
+        return false;
     };
 
+    // Get the parent rect to calculate total available size
+    let Some(parent_rect) = tree.tiles.rect(linear_id) else {
+        return false;
+    };
+
+    // Calculate current and target sizes
+    let (current_size, target_size) = match direction {
+        Direction::Horizontal => {
+            (pane_rect.width(), dims.width * target_scale)
+        }
+        Direction::Vertical => {
+            (pane_rect.height(), dims.height * target_scale + UI_CHROME_HEIGHT)
+        }
+    };
+
+    let size_delta = target_size - current_size;
+
     // Get the parent container
-    let Some(Tile::Container(Container::Linear(linear))) = tree.tiles.get(parent_id) else {
-        return;
+    let Some(Tile::Container(Container::Linear(linear))) = tree.tiles.get(linear_id) else {
+        return false;
     };
 
     // Calculate the total shares and the share-to-pixel ratio
@@ -220,7 +263,7 @@ fn apply_snap_adjustment(
     }
 
     if total_shares <= 0.0 || total_size <= 0.0 {
-        return;
+        return false;
     }
 
     // Calculate shares per pixel
@@ -230,12 +273,14 @@ fn apply_snap_adjustment(
     let share_delta = size_delta * shares_per_pixel;
 
     // Get mutable reference and apply the change
-    let Some(Tile::Container(Container::Linear(linear))) = tree.tiles.get_mut(parent_id) else {
-        return;
+    let Some(Tile::Container(Container::Linear(linear))) = tree.tiles.get_mut(linear_id) else {
+        return false;
     };
 
     // Adjust the share for this tile
-    let current_share = linear.shares[tile_id];
+    let current_share = linear.shares[tile_in_linear];
     let new_share = (current_share + share_delta).max(MIN_TILE_SHARE);
-    linear.shares.set_share(tile_id, new_share);
+    linear.shares.set_share(tile_in_linear, new_share);
+
+    true
 }

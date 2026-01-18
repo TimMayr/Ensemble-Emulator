@@ -27,7 +27,7 @@ use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
     Pane, TreeBehavior, add_pane_if_missing, compute_required_fetches_from_tree, create_tree,
 };
-use crate::frontend::egui::ui::{add_status_bar, snap_graphics_pane_sizes};
+use crate::frontend::egui::ui::{add_status_bar, snap_graphics_pane_sizes, SnapState};
 
 /// Main egui application state
 pub struct EguiApp {
@@ -40,6 +40,8 @@ pub struct EguiApp {
     config: AppConfig,
     /// The tile tree for docking behavior
     tree: egui_tiles::Tree<Pane>,
+    /// State for pane size snapping
+    snap_state: SnapState,
 }
 
 impl EguiApp {
@@ -57,6 +59,7 @@ impl EguiApp {
             accumulator: Default::default(),
             config: Default::default(),
             tree: create_tree(),
+            snap_state: SnapState::new(),
         }
     }
 
@@ -268,8 +271,8 @@ impl eframe::App for EguiApp {
             self.tree.ui(&mut behavior, ui);
         });
 
-        // Snap graphics pane sizes to integer scales when close
-        snap_graphics_pane_sizes(&mut self.tree);
+        // Snap graphics pane sizes to integer scales when close (sticky snapping)
+        snap_graphics_pane_sizes(&mut self.tree, &mut self.snap_state);
 
         // Request continuous repaint for animation
         ctx.request_repaint();
