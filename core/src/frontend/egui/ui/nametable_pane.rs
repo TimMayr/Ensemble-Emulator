@@ -1,26 +1,43 @@
 //! Nametable viewer pane rendering
 
 use crate::frontend::egui::textures::EmuTextures;
+use crate::frontend::egui::ui::calculate_integer_scale;
+
+/// Single nametable native dimensions: 32x30 tiles at 8px each = 256x240 pixels
+/// Full nametable grid: 2x2 nametables = 512x480 pixels (without spacing)
+const NAMETABLE_GRID_WIDTH: f32 = 512.0;
+const NAMETABLE_GRID_HEIGHT: f32 = 480.0;
 
 /// Render all 4 nametables in a 2x2 grid layout
 pub fn render_nametable(ui: &mut egui::Ui, emu_textures: &EmuTextures) {
     if let Some(ref data) = emu_textures.nametable_data
         && let Some(ref textures) = emu_textures.tile_textures
     {
-        let available = ui.available_width();
-        // Each nametable is 32x30 tiles, we show 2 side by side
-        let base_size = 8.0;
-        let tile_cols = 32;
-        let logical_width = (tile_cols as f32 * base_size) * 2.0; // 2 nametables side by side
-        let scale = available / logical_width;
-        let tex_size = egui::vec2(base_size, base_size) * scale;
+        let available = ui.available_size();
+        // Account for spacing between nametables (4px spacing in 2x2 grid = 4px horizontal, 4px vertical)
+        let spacing = 4.0;
+        let available_width = available.x - spacing;
+        let available_height = available.y - spacing;
 
-        ui.label(format!("Nametables (256x240 x4 at {:.1}x scale)", scale));
+        // Calculate integer scale for the full 2x2 nametable grid
+        let scale = calculate_integer_scale(
+            NAMETABLE_GRID_WIDTH,
+            NAMETABLE_GRID_HEIGHT,
+            available_width,
+            available_height,
+        );
+        let scale_f32 = scale as f32;
+
+        // Each tile is 8x8 pixels, scaled by the integer factor
+        let tile_size = 8.0 * scale_f32;
+        let tex_size = egui::vec2(tile_size, tile_size);
+
+        ui.label(format!("Nametables (256x240 x4 at {}x scale)", scale));
 
         // Render 4 nametables in a 2x2 grid
         egui::Grid::new("nametables_container")
             .num_columns(2)
-            .spacing(egui::vec2(4.0, 4.0))
+            .spacing(egui::vec2(spacing, spacing))
             .show(ui, |ui| {
                 for nametable_index in 0..4 {
                     if nametable_index < data.tiles.len() {
@@ -28,9 +45,9 @@ pub fn render_nametable(ui: &mut egui::Ui, emu_textures: &EmuTextures) {
 
                         egui::Grid::new(format!("nametable_{}", nametable_index))
                             .num_columns(32)
-                            .min_row_height(scale * base_size)
-                            .min_col_width(scale * base_size)
-                            .max_col_width(scale * base_size)
+                            .min_row_height(tile_size)
+                            .min_col_width(tile_size)
+                            .max_col_width(tile_size)
                             .spacing(egui::vec2(0.0, 0.0))
                             .show(ui, |ui| {
                                 for (i, tile) in nametable.iter().enumerate() {
