@@ -62,16 +62,60 @@ fn snap_scale_if_close(scale: f32) -> Option<f32> {
 ///
 /// This function modifies the tree's shares in-place.
 pub fn snap_graphics_pane_sizes(tree: &mut Tree<Pane>) {
-    let Some(root_id) = tree.root else {
+    let Some(_root_id) = tree.root else {
         return;
     };
 
-    // First, collect information about which panes need snapping
-    let snap_info = collect_snap_info(tree, root_id);
+    // Collect all panes that need snapping and their parent containers
+    // (tile_in_linear, linear_parent_id, size_delta)
+    let mut snap_adjustments: Vec<(TileId, TileId, f32)> = Vec::new();
 
-    // Then apply the snapping by adjusting shares
-    for (tile_id, target_scale, dims, direction) in snap_info {
-        apply_snap(tree, tile_id, target_scale, dims, direction);
+    for (tile_id, tile) in tree.tiles.iter() {
+        if let Tile::Pane(pane) = tile {
+            if let Some(dims) = PaneDimensions::for_pane(pane) {
+                if let Some(rect) = tree.tiles.rect(*tile_id) {
+                    // Account for UI chrome (label, padding, etc.)
+                    let available_width = rect.width();
+                    let available_height = rect.height() - 20.0;
+
+                    let current_scale = calculate_scale(available_width, available_height, dims);
+
+                    if let Some(target_scale) = snap_scale_if_close(current_scale) {
+                        // Find the parent linear container and the tile that's directly in it
+                        if let Some((linear_id, tile_in_linear, direction)) =
+                            find_parent_linear_and_child(tree, *tile_id)
+                        {
+                            // Calculate the size difference we need to achieve
+                            let (current_size, target_size) = match direction {
+                                Direction::Horizontal => {
+                                    (rect.width(), dims.width * target_scale)
+                                }
+                                Direction::Vertical => {
+                                    (rect.height(), dims.height * target_scale + 20.0)
+                                }
+                            };
+
+                            let size_delta = target_size - current_size;
+                            
+                            // Only snap if the delta is small enough (within threshold)
+                            let threshold_pixels = SNAP_THRESHOLD * match direction {
+                                Direction::Horizontal => dims.width,
+                                Direction::Vertical => dims.height,
+                            };
+                            
+                            if size_delta.abs() <= threshold_pixels && size_delta.abs() > 0.5 {
+                                snap_adjustments.push((tile_in_linear, linear_id, size_delta));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Apply the snap adjustments
+    for (tile_in_linear, linear_id, size_delta) in snap_adjustments {
+        apply_snap_adjustment(tree, tile_in_linear, linear_id, size_delta);
     }
 }
 
@@ -82,104 +126,106 @@ enum Direction {
     Vertical,
 }
 
-/// Collect information about panes that need snapping
-fn collect_snap_info(
-    tree: &Tree<Pane>,
-    _root_id: TileId,
-) -> Vec<(TileId, f32, PaneDimensions, Direction)> {
-    let mut result = Vec::new();
-
-    for (tile_id, tile) in tree.tiles.iter() {
-        if let Tile::Pane(pane) = tile {
-            if let Some(dims) = PaneDimensions::for_pane(pane) {
-                if let Some(rect) = tree.tiles.rect(*tile_id) {
-                    // Account for UI chrome (label, padding, etc.)
-                    // The actual available size for the image is less than the pane rect
-                    let available_width = rect.width();
-                    let available_height = rect.height() - 20.0; // Approximate label height
-
-                    let current_scale = calculate_scale(available_width, available_height, dims);
-
-                    if let Some(target_scale) = snap_scale_if_close(current_scale) {
-                        // Find the parent linear container and its direction
-                        if let Some((_parent_id, direction)) =
-                            find_parent_linear_container(tree, *tile_id)
-                        {
-                            result.push((*tile_id, target_scale, dims, direction));
-                        }
-                    }
-                }
+/// Find the parent linear container of a tile and its direction, along with the
+/// child tile that's directly in the Linear container.
+/// This handles the case where panes are wrapped in Tabs containers.
+/// Returns: (linear_id, tile_in_linear, direction)
+fn find_parent_linear_and_child(tree: &Tree<Pane>, tile_id: TileId) -> Option<(TileId, TileId, Direction)> {
+    // First, find the immediate parent of the tile
+    let parent_id = find_immediate_parent(tree, tile_id)?;
+    
+    // If the immediate parent is a Linear, the tile itself is the child
+    if let Some(Tile::Container(Container::Linear(linear))) = tree.tiles.get(parent_id) {
+        let direction = match linear.dir {
+            egui_tiles::LinearDir::Horizontal => Direction::Horizontal,
+            egui_tiles::LinearDir::Vertical => Direction::Vertical,
+        };
+        return Some((parent_id, tile_id, direction));
+    }
+    
+    // If the immediate parent is a Tabs container, look for its Linear parent
+    if let Some(Tile::Container(Container::Tabs(_))) = tree.tiles.get(parent_id) {
+        // Find the Linear parent of the Tabs container
+        if let Some(grandparent_id) = find_immediate_parent(tree, parent_id) {
+            if let Some(Tile::Container(Container::Linear(linear))) = tree.tiles.get(grandparent_id) {
+                let direction = match linear.dir {
+                    egui_tiles::LinearDir::Horizontal => Direction::Horizontal,
+                    egui_tiles::LinearDir::Vertical => Direction::Vertical,
+                };
+                // The Tabs container is the child that's directly in the Linear
+                return Some((grandparent_id, parent_id, direction));
             }
         }
     }
-
-    result
+    
+    None
 }
 
-/// Find the parent linear container of a tile and its direction
-fn find_parent_linear_container(tree: &Tree<Pane>, tile_id: TileId) -> Option<(TileId, Direction)> {
+/// Find the immediate parent container of a tile
+fn find_immediate_parent(tree: &Tree<Pane>, tile_id: TileId) -> Option<TileId> {
     for (container_id, tile) in tree.tiles.iter() {
         if let Tile::Container(container) = tile {
-            if let Container::Linear(linear) = container {
-                if linear.children.contains(&tile_id) {
-                    let direction = match linear.dir {
-                        egui_tiles::LinearDir::Horizontal => Direction::Horizontal,
-                        egui_tiles::LinearDir::Vertical => Direction::Vertical,
-                    };
-                    return Some((*container_id, direction));
-                }
+            let contains = match container {
+                Container::Linear(linear) => linear.children.contains(&tile_id),
+                Container::Tabs(tabs) => tabs.children.contains(&tile_id),
+                Container::Grid(grid) => grid.children().any(|id| *id == tile_id),
+            };
+            if contains {
+                return Some(*container_id);
             }
         }
     }
     None
 }
 
-/// Apply snapping by adjusting shares to achieve the target scale
-fn apply_snap(
+/// Apply a snap adjustment by modifying shares to achieve the target size delta
+fn apply_snap_adjustment(
     tree: &mut Tree<Pane>,
     tile_id: TileId,
-    target_scale: f32,
-    dims: PaneDimensions,
-    direction: Direction,
+    parent_id: TileId,
+    size_delta: f32,
 ) {
-    // Get the current pane rect
-    let Some(current_rect) = tree.tiles.rect(tile_id) else {
+    // Get the parent rect to calculate total available size
+    let Some(parent_rect) = tree.tiles.rect(parent_id) else {
         return;
     };
 
-    // Calculate the target size based on the target scale
-    let (current_size, target_size) = match direction {
-        Direction::Horizontal => {
-            let target_width = dims.width * target_scale;
-            (current_rect.width(), target_width)
-        }
-        Direction::Vertical => {
-            // Add back the chrome height for vertical snapping
-            let target_height = dims.height * target_scale + 20.0;
-            (current_rect.height(), target_height)
-        }
+    // Get the parent container
+    let Some(Tile::Container(Container::Linear(linear))) = tree.tiles.get(parent_id) else {
+        return;
     };
 
-    // Only snap if we're actually close to the target
-    let size_diff = (current_size - target_size).abs();
-    let threshold_in_pixels = SNAP_THRESHOLD * match direction {
-        Direction::Horizontal => dims.width,
-        Direction::Vertical => dims.height,
+    // Calculate the total shares and the share-to-pixel ratio
+    let total_size = match linear.dir {
+        egui_tiles::LinearDir::Horizontal => parent_rect.width(),
+        egui_tiles::LinearDir::Vertical => parent_rect.height(),
     };
 
-    if size_diff > threshold_in_pixels {
+    // Calculate total shares for visible children
+    let mut total_shares = 0.0;
+    for child_id in &linear.children {
+        if tree.tiles.is_visible(*child_id) {
+            total_shares += linear.shares[*child_id];
+        }
+    }
+
+    if total_shares <= 0.0 || total_size <= 0.0 {
         return;
     }
 
-    // Find the parent container and adjust shares
-    if let Some((parent_id, _)) = find_parent_linear_container(tree, tile_id) {
-        if let Some(Tile::Container(Container::Linear(linear))) = tree.tiles.get_mut(parent_id) {
-            // Calculate the ratio to adjust the share
-            if current_size > 0.0 {
-                let ratio = target_size / current_size;
-                let current_share = linear.shares[tile_id];
-                linear.shares.set_share(tile_id, current_share * ratio);
-            }
-        }
-    }
+    // Calculate shares per pixel
+    let shares_per_pixel = total_shares / total_size;
+    
+    // Calculate the share delta needed
+    let share_delta = size_delta * shares_per_pixel;
+
+    // Get mutable reference and apply the change
+    let Some(Tile::Container(Container::Linear(linear))) = tree.tiles.get_mut(parent_id) else {
+        return;
+    };
+
+    // Adjust the share for this tile
+    let current_share = linear.shares[tile_id];
+    let new_share = (current_share + share_delta).max(0.1); // Ensure minimum share
+    linear.shares.set_share(tile_id, new_share);
 }
