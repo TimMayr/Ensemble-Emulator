@@ -13,6 +13,16 @@ use crate::frontend::egui::tiles::Pane;
 /// Threshold for snapping - if within this fraction of an integer scale, snap to it
 const SNAP_THRESHOLD: f32 = 0.1;
 
+/// Minimum pixel delta to trigger snapping - prevents oscillation when already snapped
+const MIN_SNAP_DELTA_PIXELS: f32 = 0.5;
+
+/// Minimum share value to ensure tiles remain visible after snapping
+const MIN_TILE_SHARE: f32 = 0.1;
+
+/// Approximate height of UI chrome (labels, padding) subtracted from pane height
+/// when calculating available space for graphics
+const UI_CHROME_HEIGHT: f32 = 20.0;
+
 /// Native dimensions for each graphics pane type
 #[derive(Clone, Copy)]
 struct PaneDimensions {
@@ -76,7 +86,7 @@ pub fn snap_graphics_pane_sizes(tree: &mut Tree<Pane>) {
                 if let Some(rect) = tree.tiles.rect(*tile_id) {
                     // Account for UI chrome (label, padding, etc.)
                     let available_width = rect.width();
-                    let available_height = rect.height() - 20.0;
+                    let available_height = rect.height() - UI_CHROME_HEIGHT;
 
                     let current_scale = calculate_scale(available_width, available_height, dims);
 
@@ -91,7 +101,7 @@ pub fn snap_graphics_pane_sizes(tree: &mut Tree<Pane>) {
                                     (rect.width(), dims.width * target_scale)
                                 }
                                 Direction::Vertical => {
-                                    (rect.height(), dims.height * target_scale + 20.0)
+                                    (rect.height(), dims.height * target_scale + UI_CHROME_HEIGHT)
                                 }
                             };
 
@@ -103,7 +113,7 @@ pub fn snap_graphics_pane_sizes(tree: &mut Tree<Pane>) {
                                 Direction::Vertical => dims.height,
                             };
                             
-                            if size_delta.abs() <= threshold_pixels && size_delta.abs() > 0.5 {
+                            if size_delta.abs() <= threshold_pixels && size_delta.abs() > MIN_SNAP_DELTA_PIXELS {
                                 snap_adjustments.push((tile_in_linear, linear_id, size_delta));
                             }
                         }
@@ -226,6 +236,6 @@ fn apply_snap_adjustment(
 
     // Adjust the share for this tile
     let current_share = linear.shares[tile_id];
-    let new_share = (current_share + share_delta).max(0.1); // Ensure minimum share
+    let new_share = (current_share + share_delta).max(MIN_TILE_SHARE);
     linear.shares.set_share(tile_id, new_share);
 }
