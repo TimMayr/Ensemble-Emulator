@@ -32,10 +32,14 @@ pub struct SnapState {
     snapped_scales: HashMap<TileId, f32>,
 }
 
-impl SnapState {
-    pub fn new() -> Self {
-        Self::default()
-    }
+/// Information needed to apply a snap adjustment
+struct SnapAdjustment {
+    tile_in_linear: TileId,
+    linear_parent_id: TileId,
+    target_scale: f32,
+    pane_tile_id: TileId,
+    dims: PaneDimensions,
+    direction: Direction,
 }
 
 /// Native dimensions for each graphics pane type
@@ -92,8 +96,7 @@ pub fn snap_graphics_pane_sizes(tree: &mut Tree<Pane>, snap_state: &mut SnapStat
     };
 
     // Collect all adjustments to make
-    // (tile_in_linear, linear_parent_id, target_scale, pane_tile_id)
-    let mut snap_adjustments: Vec<(TileId, TileId, f32, TileId, PaneDimensions, Direction)> = Vec::new();
+    let mut snap_adjustments: Vec<SnapAdjustment> = Vec::new();
     let mut to_unsnap: Vec<TileId> = Vec::new();
 
     for (tile_id, tile) in tree.tiles.iter() {
@@ -118,7 +121,14 @@ pub fn snap_graphics_pane_sizes(tree: &mut Tree<Pane>, snap_state: &mut SnapStat
                             if let Some((linear_id, tile_in_linear, direction)) =
                                 find_parent_linear_and_child(tree, *tile_id)
                             {
-                                snap_adjustments.push((tile_in_linear, linear_id, snapped_scale, *tile_id, dims, direction));
+                                snap_adjustments.push(SnapAdjustment {
+                                    tile_in_linear,
+                                    linear_parent_id: linear_id,
+                                    target_scale: snapped_scale,
+                                    pane_tile_id: *tile_id,
+                                    dims,
+                                    direction,
+                                });
                             }
                         }
                     } else {
@@ -128,7 +138,14 @@ pub fn snap_graphics_pane_sizes(tree: &mut Tree<Pane>, snap_state: &mut SnapStat
                             if let Some((linear_id, tile_in_linear, direction)) =
                                 find_parent_linear_and_child(tree, *tile_id)
                             {
-                                snap_adjustments.push((tile_in_linear, linear_id, nearest_integer, *tile_id, dims, direction));
+                                snap_adjustments.push(SnapAdjustment {
+                                    tile_in_linear,
+                                    linear_parent_id: linear_id,
+                                    target_scale: nearest_integer,
+                                    pane_tile_id: *tile_id,
+                                    dims,
+                                    direction,
+                                });
                             }
                         }
                     }
@@ -143,10 +160,18 @@ pub fn snap_graphics_pane_sizes(tree: &mut Tree<Pane>, snap_state: &mut SnapStat
     }
 
     // Apply the snap adjustments and update state
-    for (tile_in_linear, linear_id, target_scale, pane_tile_id, dims, direction) in snap_adjustments {
-        if apply_snap_to_scale(tree, tile_in_linear, linear_id, pane_tile_id, target_scale, dims, direction) {
+    for adj in snap_adjustments {
+        if apply_snap_to_scale(
+            tree,
+            adj.tile_in_linear,
+            adj.linear_parent_id,
+            adj.pane_tile_id,
+            adj.target_scale,
+            adj.dims,
+            adj.direction,
+        ) {
             // Successfully snapped - record in state
-            snap_state.snapped_scales.insert(pane_tile_id, target_scale);
+            snap_state.snapped_scales.insert(adj.pane_tile_id, adj.target_scale);
         }
     }
 }

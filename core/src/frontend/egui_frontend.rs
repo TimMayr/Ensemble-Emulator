@@ -59,7 +59,7 @@ impl EguiApp {
             accumulator: Default::default(),
             config: Default::default(),
             tree: create_tree(),
-            snap_state: SnapState::new(),
+            snap_state: Default::default(),
         }
     }
 
