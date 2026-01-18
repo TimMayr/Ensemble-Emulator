@@ -2,7 +2,6 @@ use egui::Ui;
 
 use crate::emulation::messages::PATTERN_TABLE_SIZE;
 use crate::frontend::egui::textures::EmuTextures;
-use crate::frontend::egui::ui::calculate_integer_scale;
 
 /// Calculate foreground color (black or white) based on background luminance
 fn foreground_for_background(bg: u32) -> egui::Color32 {
@@ -19,10 +18,6 @@ fn foreground_for_background(bg: u32) -> egui::Color32 {
     }
 }
 
-/// Pattern table native dimensions: 16x16 tiles at 8px each = 128x128 pixels
-const PATTERN_TABLE_WIDTH: f32 = 128.0;
-const PATTERN_TABLE_HEIGHT: f32 = 128.0;
-
 /// Draw a pattern table (left or right) in the UI
 pub fn draw_pattern_table(
     ui: &mut Ui,
@@ -31,25 +26,18 @@ pub fn draw_pattern_table(
     active_palette: usize,
     palette: [u32; 4],
 ) {
-    let available = ui.available_size();
-    // Use integer scaling for crisp pixel-perfect display
-    let scale = calculate_integer_scale(
-        PATTERN_TABLE_WIDTH,
-        PATTERN_TABLE_HEIGHT,
-        available.x,
-        available.y,
-    );
-    let scale_f32 = scale as f32;
-    // Each tile is 8x8 pixels, scaled by the integer factor
-    let tile_size = 8.0 * scale_f32;
-    let tex_size = egui::vec2(tile_size, tile_size);
+    let available = ui.available_width();
+    let base_size = 16.0;
+    let logical_width = 16.0 * base_size;
+    let scale = available / logical_width;
+    let tex_size = egui::vec2(base_size, base_size) * scale;
     let tile = &emu_textures.tile_data;
 
     egui::Grid::new("pattern_table")
         .num_columns(16)
-        .min_row_height(tile_size)
-        .min_col_width(tile_size)
-        .max_col_width(tile_size)
+        .min_row_height(scale * base_size)
+        .min_col_width(scale * base_size)
+        .max_col_width(scale * base_size)
         .spacing(egui::vec2(0.0, 0.0))
         .show(ui, |ui| {
             if let Some(tile_textures) = &emu_textures.tile_textures {

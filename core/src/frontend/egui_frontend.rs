@@ -27,7 +27,7 @@ use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
     Pane, TreeBehavior, add_pane_if_missing, compute_required_fetches_from_tree, create_tree,
 };
-use crate::frontend::egui::ui::add_status_bar;
+use crate::frontend::egui::ui::{add_status_bar, snap_graphics_pane_sizes};
 
 /// Main egui application state
 pub struct EguiApp {
@@ -267,6 +267,9 @@ impl eframe::App for EguiApp {
             let mut behavior = TreeBehavior::new(&mut self.config, &self.emu_textures);
             self.tree.ui(&mut behavior, ui);
         });
+
+        // Snap graphics pane sizes to integer scales when close
+        snap_graphics_pane_sizes(&mut self.tree);
 
         // Request continuous repaint for animation
         ctx.request_repaint();
