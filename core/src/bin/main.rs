@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use clap::{Parser, value_parser};
+use clap::{value_parser, Parser};
 use egui::TextBuffer;
 use nes_core::emulation::nes::Nes;
 use nes_core::frontend::egui_frontend;
@@ -15,16 +15,20 @@ struct Args {
 
     ///Rom File to load
     #[arg(value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
-    file: PathBuf,
+    rom: PathBuf,
+
+    ///RGB Palette to load
+    #[arg(value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath, short, long)]
+    palette: Option<PathBuf>,
 }
 
 fn main() {
     let args = Args::parse();
 
     let res = if args.headless {
-        start_headless(args.file)
+        start_headless(args.rom)
     } else {
-        start_egui(args.file)
+        start_egui(args.rom, args.palette)
     };
 
     match res {
@@ -37,8 +41,8 @@ fn main() {
     }
 }
 
-fn start_egui(file: PathBuf) -> Result<(), String> {
-    if let Err(e) = egui_frontend::run(file) {
+fn start_egui(rom: PathBuf, palette: Option<PathBuf>) -> Result<(), String> {
+    if let Err(e) = egui_frontend::run(rom, palette) {
         Err(e.to_string())
     } else {
         Ok(())

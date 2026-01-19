@@ -7,23 +7,11 @@ use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, MemoryDevice, OpenBus, Ram};
 use crate::emulation::messages::{
-    EmulatorFetchable, NametableData, PaletteData, TileData, NAMETABLE_COLS,
-    NAMETABLE_COUNT, NAMETABLE_ROWS, PATTERN_TABLE_SIZE, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
+    EmulatorFetchable, NametableData, PaletteData, RgbPalette, TileData,
+    NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, PATTERN_TABLE_SIZE, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
 };
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::PpuState;
-
-const NES_PALETTE: [u32; 64] = [
-    0xFF545454, 0xFF001E74, 0xFF081090, 0xFF300088, 0xFF440064, 0xFF5C0030, 0xFF540400, 0xFF3C1800,
-    0xFF202A00, 0xFF083A00, 0xFF004000, 0xFF003C00, 0xFF00323C, 0xFF000000, 0xFF000000, 0xFF000000,
-    0xFF989698, 0xFF084CC4, 0xFF3032EC, 0xFF5C1EE4, 0xFF8814B0, 0xFFA01464, 0xFF982220, 0xFF783C00,
-    0xFF545A00, 0xFF287200, 0xFF087C00, 0xFF007628, 0xFF006678, 0xFF000000, 0xFF000000, 0xFF000000,
-    0xFFECEEEC, 0xFF4C9AEC, 0xFF787CEC, 0xFFB062EC, 0xFFE454EC, 0xFFEC58B4, 0xFFEC6A64, 0xFFD48820,
-    0xFFA0AA00, 0xFF74C400, 0xFF4CD020, 0xFF38CC6C, 0xFF38B4CC, 0xFF3C3C3C, 0xFF000000, 0xFF000000,
-    0xFFECEEEC, 0xFFA8CCEC, 0xFFBCBCEC, 0xFFD4B2EC, 0xFFECAEEC, 0xFFECAED4, 0xFFECB4B0, 0xFFE4C490,
-    0xFFCCD278, 0xFFB4DE78, 0xFFA8E290, 0xFF98E2B4, 0xFFA0D6E4, 0xFFA0A2A0, 0xFF000000, 0xFF000000,
-];
-
 pub const VBLANK_NMI_BIT: u8 = 0x80;
 pub const VRAM_ADDR_INC_BIT: u8 = 0x4;
 pub const UPPER_BYTE: u16 = 0xFF00;
@@ -116,6 +104,7 @@ pub struct Ppu {
     pub current_sprite_tile_id: u8,
     pub oam_fetch: u8,
     pub log: String,
+    pub rgb_palette: RgbPalette
 }
 
 impl Default for Ppu {
@@ -170,6 +159,7 @@ impl Ppu {
             current_sprite_tile_id: 0,
             oam_fetch: 0,
             log: "".to_string(),
+            rgb_palette: Default::default(),
         }
     }
 
@@ -359,7 +349,7 @@ impl Ppu {
 
                     self.pixel_buffer
                         [self.scanline as usize * SCREEN_RENDER_WIDTH + (self.dot - 1) as usize] =
-                        NES_PALETTE[pixel_color as usize];
+                        self.rgb_palette.colors[0][pixel_color as usize];
                 }
 
                 self.shift_bg_shifters();
@@ -1138,6 +1128,7 @@ impl Ppu {
             sprite_fifo: [SpriteFifo::default(); 8],
             oam_fetch: 0,
             log: "".to_string(),
+            rgb_palette: Default::default(),
         };
 
         ppu.load_rom(rom);

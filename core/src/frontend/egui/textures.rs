@@ -2,10 +2,7 @@ use std::time::Instant;
 
 use egui::{ColorImage, Context, TextureHandle, TextureOptions};
 
-use crate::emulation::messages::{
-    NametableData, PALETTE_COUNT, PaletteData, TILE_COUNT, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
-    TileData,
-};
+use crate::emulation::messages::{NametableData, PALETTE_COUNT, PaletteData, TILE_COUNT, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData, RgbPalette};
 use crate::emulation::ppu::TILE_SIZE;
 
 /// Texture storage and management for the emulator display
@@ -80,7 +77,7 @@ impl EmuTextures {
     pub fn get_texture_for_tile(
         tile: &TileData,
         palette: &[u8; 4],
-        rgb_palette_map: &[u32; 64],
+        rgb_palette_map: &RgbPalette,
         ctx: &Context,
     ) -> TextureHandle {
         let mut data = [0u32; 64];
@@ -92,7 +89,7 @@ impl EmuTextures {
             let hi = ((tile.plane_1 >> bit) & 1) as usize;
 
             let color_index = lo | (hi << 1);
-            *color = rgb_palette_map[palette[color_index] as usize];
+            *color = rgb_palette_map.colors[0][palette[color_index] as usize];
         }
 
         let image = Self::u32_to_color_image(data.as_ref(), TILE_SIZE, TILE_SIZE);
@@ -109,7 +106,7 @@ impl EmuTextures {
     }
 
     /// Update the pattern table textures
-    pub fn update_tile_textures(&mut self, ctx: &Context, rgb_palette_map: &[u32; 64]) {
+    pub fn update_tile_textures(&mut self, ctx: &Context, rgb_palette_map: &RgbPalette) {
         if let Some(ref palettes) = self.palette_data
             && let Some(ref tiles) = self.tile_data
         {

@@ -1,6 +1,6 @@
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
-use crate::frontend::egui_frontend::FromU32;
+use crate::frontend::util::FromU32;
 
 pub fn render_palettes(ui: &mut egui::Ui, config: &AppConfig, emu_textures: &EmuTextures) {
     if let Some(palette_data) = &emu_textures.palette_data {
@@ -26,7 +26,7 @@ pub fn render_palettes(ui: &mut egui::Ui, config: &AppConfig, emu_textures: &Emu
                 painter.rect_filled(
                     rect,
                     0.0,
-                    egui::Color32::from_u32(config.view_config.palette_rgb_data[*color as usize]),
+                    egui::Color32::from_u32(config.view_config.palette_rgb_data.colors[0][*color as usize]),
                 );
             }
             ui.allocate_space(egui::vec2(4.0 * single_color_width, single_color_height));
