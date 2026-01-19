@@ -13,7 +13,6 @@ pub struct ViewConfig {
     pub debug_active_palette: usize,
 }
 
-
 /// Main application configuration
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct AppConfig {
