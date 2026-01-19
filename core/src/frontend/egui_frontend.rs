@@ -14,6 +14,7 @@ use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+
 use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, TextBuffer, Visuals};
 
@@ -25,7 +26,7 @@ use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
-    Pane, TreeBehavior, add_pane_if_missing, compute_required_fetches_from_tree, create_tree,
+    add_pane_if_missing, compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
 };
 use crate::frontend::egui::ui::add_status_bar;
 
@@ -104,8 +105,10 @@ impl EguiApp {
                         // Only rebuild textures if palette data actually changed
                         if self.emu_textures.palette_data != p {
                             self.emu_textures.palette_data = p;
-                            self.emu_textures
-                                .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data);
+                            self.emu_textures.update_tile_textures(
+                                ctx,
+                                &self.config.view_config.palette_rgb_data,
+                            );
                         }
                     }
                     EmulatorFetchable::Tiles(t) => {
@@ -230,7 +233,8 @@ impl eframe::App for EguiApp {
         self.process_emu_messages(ctx);
 
         // Update required debug fetches based on visible panes
-        self.config.view_config.required_debug_fetches = compute_required_fetches_from_tree(&self.tree);
+        self.config.view_config.required_debug_fetches =
+            compute_required_fetches_from_tree(&self.tree);
 
         // Menu bar at the top
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
@@ -242,6 +246,10 @@ impl eframe::App for EguiApp {
                     }
                     ui.separator();
                     ui.label("Debug Viewers");
+                    if ui.button("Palettes").clicked() {
+                        add_pane_if_missing(&mut self.tree, Pane::Palettes);
+                        ui.close();
+                    }
                     if ui.button("Pattern Tables").clicked() {
                         add_pane_if_missing(&mut self.tree, Pane::PatternTables);
                         ui.close();
@@ -319,4 +327,12 @@ pub fn run(file: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     Ok(())
+}
+
+pub trait FromU32 {
+    fn from_u32(d: u32) -> Self;
+}
+
+impl FromU32 for egui::Color32 {
+    fn from_u32(d: u32) -> Self { egui::Color32::from_rgb((d >> 16) as u8, (d >> 8) as u8, d as u8) }
 }
