@@ -8,8 +8,8 @@ pub fn render_emulator_output(ui: &mut egui::Ui, emu_textures: &EmuTextures) {
     if let Some(ref texture) = emu_textures.frame_texture {
         let available = ui.available_size();
 
-        let scale = (available.x / TOTAL_OUTPUT_WIDTH as f32)
-            .min(available.y / TOTAL_OUTPUT_HEIGHT as f32);
+        let scale =
+            (available.x / TOTAL_OUTPUT_WIDTH as f32).min(available.y / TOTAL_OUTPUT_HEIGHT as f32);
 
         let display_width = TOTAL_OUTPUT_WIDTH as f32 * scale;
         let display_height = TOTAL_OUTPUT_HEIGHT as f32 * scale;

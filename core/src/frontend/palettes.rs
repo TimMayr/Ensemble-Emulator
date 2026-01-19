@@ -31,12 +31,12 @@ pub fn parse_palette_from_file(path: Option<PathBuf>) -> RgbPalette {
                 data.get(base_index + 1),
                 data.get(base_index + 2),
             ) {
-                (0xFFu32 << 24) | ((*r as u32) << 16) | ((*g as u32) << 8) | ((*b as u32) << 0)
+                (0xFFu32 << 24) | ((*r as u32) << 16) | ((*g as u32) << 8) | (*b as u32)
             } else {
                 (0xFFu32 << 24)
-                    | ((DEFAULT_PALETTE[base_index + 0] as u32) << 16)
+                    | ((DEFAULT_PALETTE[base_index] as u32) << 16)
                     | ((DEFAULT_PALETTE[base_index + 1] as u32) << 8)
-                    | ((DEFAULT_PALETTE[base_index + 2] as u32) << 0)
+                    | (DEFAULT_PALETTE[base_index + 2] as u32)
             };
 
             *color = read_color;

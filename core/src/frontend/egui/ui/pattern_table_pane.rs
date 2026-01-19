@@ -5,11 +5,7 @@ use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::ui::draw_pattern_table;
 
 /// Render both pattern tables side by side
-pub fn render_pattern_table(
-    ui: &mut egui::Ui,
-    config: &AppConfig,
-    emu_textures: &EmuTextures,
-) {
+pub fn render_pattern_table(ui: &mut egui::Ui, config: &AppConfig, emu_textures: &EmuTextures) {
     if emu_textures.tile_textures.is_some()
         && let Some(palettes) = &emu_textures.palette_data
     {

@@ -7,8 +7,8 @@ use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, MemoryDevice, OpenBus, Ram};
 use crate::emulation::messages::{
-    EmulatorFetchable, NametableData, PaletteData, RgbPalette, TileData,
-    NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, PATTERN_TABLE_SIZE, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
+    EmulatorFetchable, NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, NametableData,
+    PATTERN_TABLE_SIZE, PaletteData, RgbPalette, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData,
 };
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::PpuState;
@@ -104,7 +104,7 @@ pub struct Ppu {
     pub current_sprite_tile_id: u8,
     pub oam_fetch: u8,
     pub log: String,
-    pub rgb_palette: RgbPalette
+    pub rgb_palette: RgbPalette,
 }
 
 impl Default for Ppu {

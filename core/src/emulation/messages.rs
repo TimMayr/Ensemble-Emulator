@@ -42,7 +42,7 @@ pub enum FrontendMessage {
     /// Request to step one frame
     StepFrame,
     RequestDebugData(EmulatorFetchable),
-    SetPalette(RgbPalette),
+    SetPalette(Box<RgbPalette>),
 }
 
 /// Controller input events
