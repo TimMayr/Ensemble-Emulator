@@ -8,7 +8,7 @@ use crate::emulation::messages::EmulatorFetchable;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::ui::{
-    render_emulator_output, render_nametable, render_options, render_pattern_table,
+    render_emulator_output, render_nametable, render_options, render_palettes, render_pattern_table,
 };
 
 /// The different pane types that can be displayed in the tile tree
@@ -22,6 +22,7 @@ pub enum Pane {
     PatternTables,
     /// Nametables viewer (all 4 nametables in a grid) - closeable debug viewer
     Nametables,
+    Palettes,
 }
 
 impl Pane {
@@ -29,7 +30,7 @@ impl Pane {
     pub fn is_closable(&self) -> bool {
         match self {
             Pane::EmulatorOutput => false,
-            Pane::Options | Pane::PatternTables | Pane::Nametables => true,
+            Pane::Options | Pane::PatternTables | Pane::Nametables | Pane::Palettes => true,
         }
     }
 
@@ -40,6 +41,7 @@ impl Pane {
             Pane::Options => "Options",
             Pane::PatternTables => "Pattern Tables",
             Pane::Nametables => "Nametables",
+            Pane::Palettes => "Palettes",
         }
     }
 }
@@ -74,6 +76,7 @@ impl Behavior<Pane> for TreeBehavior<'_> {
             Pane::Nametables => {
                 render_nametable(ui, self.emu_textures);
             }
+            Pane::Palettes => render_palettes(ui, self.config, self.emu_textures),
         }
         UiResponse::None
     }
@@ -177,6 +180,10 @@ pub fn compute_required_fetches_from_tree(
     // Check if nametables pane is visible
     if find_pane(&tree.tiles, &Pane::Nametables).is_some() {
         explicit_fetches.insert(EmulatorFetchable::Nametables(None));
+    }
+
+    if find_pane(&tree.tiles, &Pane::Palettes).is_some() {
+        explicit_fetches.insert(EmulatorFetchable::Palettes(None));
     }
 
     if !explicit_fetches.is_empty() {

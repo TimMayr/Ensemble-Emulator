@@ -5,7 +5,6 @@ use crate::frontend::egui::config::{AppConfig, AppSpeed, DebugSpeed};
 /// Render the options panel
 pub fn render_options(ui: &mut egui::Ui, config: &mut AppConfig) {
     egui::ScrollArea::vertical().show(ui, |ui| {
-        ui.label("Settings");
         render_speed_settings(ui, config);
     });
 }

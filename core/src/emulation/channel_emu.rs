@@ -140,6 +140,7 @@ impl ChannelEmulator {
         Ok(())
     }
 
+
     fn execute_frame(&mut self) -> Result<(), String> {
         match self.nes.step_frame() {
             Ok(

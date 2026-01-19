@@ -18,7 +18,7 @@ pub fn render_pattern_table(
 
         ui.label(format!(
             "Pattern Tables (128x128x2 at {:.1}x scale)",
-            (half_width / 128.0)
+            half_width / 128.0
         ));
 
         let selected_palette = palettes.colors[config.view_config.debug_active_palette];

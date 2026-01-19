@@ -2,6 +2,7 @@ use egui::Ui;
 
 use crate::emulation::messages::PATTERN_TABLE_SIZE;
 use crate::frontend::egui::textures::EmuTextures;
+use crate::frontend::egui_frontend::FromU32;
 
 /// Calculate foreground color (black or white) based on background luminance
 fn foreground_for_background(bg: u32) -> egui::Color32 {
@@ -109,11 +110,7 @@ pub fn draw_pattern_table(
                                     painter.rect_filled(
                                         rect,
                                         0.0,
-                                        egui::Color32::from_rgb(
-                                            (color >> 16) as u8,
-                                            (color >> 8) as u8,
-                                            color as u8,
-                                        ),
+                                        egui::Color32::from_u32(color)
                                     );
                                     painter.galley(rect.min, galley, egui::Color32::WHITE);
 
