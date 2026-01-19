@@ -3,7 +3,7 @@ use std::collections::HashSet;
 
 use crate::emulation::messages::{EmulatorFetchable, RgbPalette};
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct ViewConfig {
     pub show_palette: bool,
     pub show_pattern_table: bool,
@@ -13,18 +13,6 @@ pub struct ViewConfig {
     pub debug_active_palette: usize,
 }
 
-impl Default for ViewConfig {
-    fn default() -> Self {
-        Self {
-            show_palette: false,
-            show_pattern_table: false,
-            show_nametable: false,
-            required_debug_fetches: Default::default(),
-            palette_rgb_data: Default::default(),
-            debug_active_palette: 0,
-        }
-    }
-}
 
 /// Main application configuration
 #[derive(Default, Debug, Clone, Eq, PartialEq)]

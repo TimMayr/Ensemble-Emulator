@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use clap::{value_parser, Parser};
+use clap::{Parser, value_parser};
 use egui::TextBuffer;
 use nes_core::emulation::nes::Nes;
 use nes_core::frontend::egui_frontend;

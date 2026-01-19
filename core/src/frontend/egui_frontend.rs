@@ -14,7 +14,6 @@ use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-
 use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, TextBuffer, Visuals};
 
@@ -26,7 +25,7 @@ use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
-    add_pane_if_missing, compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
+    Pane, TreeBehavior, add_pane_if_missing, compute_required_fetches_from_tree, create_tree,
 };
 use crate::frontend::egui::ui::add_status_bar;
 use crate::frontend::palettes::parse_palette_from_file;
@@ -308,7 +307,7 @@ pub fn run(rom: PathBuf, palette: Option<PathBuf>) -> Result<(), Box<dyn std::er
 
     // Create channel-based emulator wrapper
     let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
-    let _ = tx_to_emu.send(FrontendMessage::SetPalette(palette));
+    let _ = tx_to_emu.send(FrontendMessage::SetPalette(Box::new(palette)));
 
     // Configure eframe options
     // Disable vsync to allow uncapped frame rates - emulator handles its own timing

@@ -107,11 +107,7 @@ pub fn draw_pattern_table(
                                     let rect =
                                         egui::Rect::from_min_size(egui::pos2(x, y), galley.size());
 
-                                    painter.rect_filled(
-                                        rect,
-                                        0.0,
-                                        egui::Color32::from_u32(color)
-                                    );
+                                    painter.rect_filled(rect, 0.0, egui::Color32::from_u32(color));
                                     painter.galley(rect.min, galley, egui::Color32::WHITE);
 
                                     x += rect.width();
