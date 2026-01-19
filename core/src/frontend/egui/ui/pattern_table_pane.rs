@@ -23,7 +23,7 @@ pub fn render_pattern_table(
 
         let selected_palette = palettes.colors[config.view_config.debug_active_palette];
         let transformed_palette = selected_palette
-            .map(|color_index| config.view_config.palette_rgb_data[color_index as usize]);
+            .map(|color_index| config.view_config.palette_rgb_data.colors[0][color_index as usize]);
 
         ui.horizontal_top(|ui| {
             ui.allocate_ui(egui::vec2(half_width, half_width), |ui| {

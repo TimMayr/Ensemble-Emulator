@@ -1,3 +1,5 @@
+use crate::frontend::palettes::parse_palette_from_file;
+
 /// Message types for communication between the frontend and emulator.
 ///
 /// This module defines the message protocol for bidirectional communication:
@@ -40,6 +42,7 @@ pub enum FrontendMessage {
     /// Request to step one frame
     StepFrame,
     RequestDebugData(EmulatorFetchable),
+    SetPalette(RgbPalette),
 }
 
 /// Controller input events
@@ -134,4 +137,13 @@ pub struct TileData {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct PaletteData {
     pub colors: [[u8; 4]; 8],
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct RgbPalette {
+    pub colors: [[u32; 64]; 8],
+}
+
+impl Default for RgbPalette {
+    fn default() -> Self { parse_palette_from_file(None) }
 }

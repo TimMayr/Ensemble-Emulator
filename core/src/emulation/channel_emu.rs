@@ -35,7 +35,6 @@ use std::sync::OnceLock;
 /// ```
 use crossbeam_channel::{Receiver, Sender};
 
-
 use crate::emulation::messages::{
     ControllerEvent, EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData,
 };
@@ -129,6 +128,9 @@ impl ChannelEmulator {
                         ));
                     }
                 },
+                FrontendMessage::SetPalette(p) => {
+                    self.nes.ppu.borrow_mut().rgb_palette = p;
+                }
             }
         }
 
@@ -139,7 +141,6 @@ impl ChannelEmulator {
 
         Ok(())
     }
-
 
     fn execute_frame(&mut self) -> Result<(), String> {
         match self.nes.step_frame() {
@@ -185,15 +186,21 @@ impl ChannelEmulator {
 
             if palette_changed {
                 self.last_palette_data = Some(current);
-                let _ = self
-                    .to_frontend
-                    .send(EmulatorMessage::DebugData(EmulatorFetchable::Palettes(Some(Box::new(current)))));
+                let _ =
+                    self.to_frontend
+                        .send(EmulatorMessage::DebugData(EmulatorFetchable::Palettes(
+                            Some(Box::new(current)),
+                        )));
             }
         }
 
         // Check tile/pattern table data using a fast hash of raw PPU memory
         // Pattern tables occupy 0x0000-0x1FFF (8KB) in PPU address space
-        let pattern_table_memory = self.nes.ppu.borrow().get_memory_debug(Some(0x0000..=0x1FFF));
+        let pattern_table_memory = self
+            .nes
+            .ppu
+            .borrow()
+            .get_memory_debug(Some(0x0000..=0x1FFF));
         let current_hash = Self::compute_hash(&pattern_table_memory);
 
         let tiles_changed = match self.last_pattern_table_hash {
@@ -204,9 +211,9 @@ impl ChannelEmulator {
         if tiles_changed {
             self.last_pattern_table_hash = Some(current_hash);
             // Send the actual tile data directly to avoid a round-trip request
-            let _ = self
-                .to_frontend
-                .send(EmulatorMessage::DebugData(self.nes.ppu.borrow().get_tiles_debug()));
+            let _ = self.to_frontend.send(EmulatorMessage::DebugData(
+                self.nes.ppu.borrow().get_tiles_debug(),
+            ));
         }
     }
 
@@ -214,8 +221,8 @@ impl ChannelEmulator {
     /// Uses FNV-1a algorithm which is fast and has good distribution.
     #[inline]
     fn compute_hash(data: &[u8]) -> u64 {
-        const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
-        const FNV_PRIME: u64 = 0x100000001b3;
+        const FNV_OFFSET_BASIS: u64 = 0xCBF29CE484222325;
+        const FNV_PRIME: u64 = 0x100000001B3;
 
         let mut hash = FNV_OFFSET_BASIS;
         for &byte in data {

@@ -2,7 +2,7 @@ use egui::Ui;
 
 use crate::emulation::messages::PATTERN_TABLE_SIZE;
 use crate::frontend::egui::textures::EmuTextures;
-use crate::frontend::egui_frontend::FromU32;
+use crate::frontend::util::FromU32;
 
 /// Calculate foreground color (black or white) based on background luminance
 fn foreground_for_background(bg: u32) -> egui::Color32 {

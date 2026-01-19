@@ -19,7 +19,7 @@ use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, TextBuffer, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
-use crate::emulation::messages::{EmulatorFetchable, EmulatorMessage, FrontendMessage};
+use crate::emulation::messages::{EmulatorFetchable, EmulatorMessage, FrontendMessage, RgbPalette};
 use crate::emulation::nes::Nes;
 use crate::frontend::egui::config::{AppConfig, AppSpeed};
 use crate::frontend::egui::fps_counter::FpsCounter;
@@ -29,6 +29,7 @@ use crate::frontend::egui::tiles::{
     add_pane_if_missing, compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
 };
 use crate::frontend::egui::ui::add_status_bar;
+use crate::frontend::palettes::parse_palette_from_file;
 
 /// Main egui application state
 pub struct EguiApp {
@@ -48,8 +49,9 @@ impl EguiApp {
         channel_emu: ChannelEmulator,
         to_emulator: Sender<FrontendMessage>,
         from_emulator: Receiver<EmulatorMessage>,
+        rgb_palette: RgbPalette,
     ) -> Self {
-        Self {
+        let mut s = Self {
             channel_emu,
             to_emulator,
             from_emulator,
@@ -58,7 +60,11 @@ impl EguiApp {
             accumulator: Default::default(),
             config: Default::default(),
             tree: create_tree(),
-        }
+        };
+
+        s.config.view_config.palette_rgb_data = rgb_palette;
+
+        s
     }
 
     /// Calculate the frame budget based on current speed settings
@@ -290,16 +296,19 @@ impl Debug for EguiApp {
 }
 
 /// Run the egui frontend
-pub fn run(file: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(rom: PathBuf, palette: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
     // Create the emulator instance
     let mut console = Nes::default();
 
+    let palette = parse_palette_from_file(palette);
+
     // Load a ROM
-    console.load_rom(&file.to_string_lossy().take());
+    console.load_rom(&rom.to_string_lossy().take());
     console.power();
 
     // Create channel-based emulator wrapper
     let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
+    let _ = tx_to_emu.send(FrontendMessage::SetPalette(palette));
 
     // Configure eframe options
     // Disable vsync to allow uncapped frame rates - emulator handles its own timing
@@ -322,17 +331,14 @@ pub fn run(file: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
             };
             cc.egui_ctx.set_style(style);
             cc.egui_ctx.set_theme(egui::Theme::Dark);
-            Ok(Box::new(EguiApp::new(channel_emu, tx_to_emu, rx_from_emu)))
+            Ok(Box::new(EguiApp::new(
+                channel_emu,
+                tx_to_emu,
+                rx_from_emu,
+                palette,
+            )))
         }),
     )?;
 
     Ok(())
-}
-
-pub trait FromU32 {
-    fn from_u32(d: u32) -> Self;
-}
-
-impl FromU32 for egui::Color32 {
-    fn from_u32(d: u32) -> Self { egui::Color32::from_rgb((d >> 16) as u8, (d >> 8) as u8, d as u8) }
 }
