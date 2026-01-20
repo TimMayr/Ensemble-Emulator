@@ -35,11 +35,11 @@ use std::sync::OnceLock;
 /// ```
 use crossbeam_channel::{Receiver, Sender};
 
-
 use crate::emulation::messages::{
     ControllerEvent, EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData,
 };
 use crate::emulation::nes::{ExecutionFinishedType, Nes};
+use crate::frontend::util;
 
 /// A non-threaded emulator wrapper that communicates via channels
 /// This provides a clean interface for the frontend without threading complications.
@@ -213,7 +213,7 @@ impl ChannelEmulator {
             .ppu
             .borrow()
             .get_memory_debug(Some(0x0000..=0x1FFF));
-        let current_hash = Self::compute_hash(&pattern_table_memory);
+        let current_hash = util::compute_hash(&pattern_table_memory);
 
         let tiles_changed = match self.last_pattern_table_hash {
             Some(last_hash) => last_hash != current_hash,
@@ -227,21 +227,6 @@ impl ChannelEmulator {
                 self.nes.ppu.borrow().get_tiles_debug(),
             ));
         }
-    }
-
-    /// Compute a fast hash of the given data for change detection.
-    /// Uses FNV-1a algorithm which is fast and has good distribution.
-    #[inline]
-    fn compute_hash(data: &[u8]) -> u64 {
-        const FNV_OFFSET_BASIS: u64 = 0xCBF29CE484222325;
-        const FNV_PRIME: u64 = 0x100000001B3;
-
-        let mut hash = FNV_OFFSET_BASIS;
-        for &byte in data {
-            hash ^= byte as u64;
-            hash = hash.wrapping_mul(FNV_PRIME);
-        }
-        hash
     }
 
     fn handle_controller_event(&mut self, event: ControllerEvent) {

@@ -14,7 +14,6 @@ use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-
 use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, Visuals};
 
@@ -26,7 +25,7 @@ use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
-    add_pane_if_missing, compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
+    Pane, TreeBehavior, add_pane_if_missing, compute_required_fetches_from_tree, create_tree,
 };
 use crate::frontend::egui::ui::add_status_bar;
 use crate::frontend::messages::AsyncFrontendMessage;
@@ -118,16 +117,22 @@ impl EguiApp {
                     let _ = self
                         .to_emulator
                         .send(FrontendMessage::SetPalette(Box::new(palette)));
+                    self.emu_textures
+                        .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data);
                 }
                 AsyncFrontendMessage::LoadRom(p) => {
-                    if let Some(p) = p {
-                        if let Ok(p) = p.canonicalize() {
-                            let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-                            let _ = self.to_emulator.send(FrontendMessage::LoadRom(p.clone()));
-                            let _ = self.to_emulator.send(FrontendMessage::Power);
-                            self.config.user_config.previous_rom_path = p
-                        }
+                    if let Some(p) = p
+                        && let Ok(p) = p.canonicalize()
+                    {
+                        let _ = self.to_emulator.send(FrontendMessage::PowerOff);
+                        let _ = self.to_emulator.send(FrontendMessage::LoadRom(p.clone()));
+                        let _ = self.to_emulator.send(FrontendMessage::Power);
+                        self.config.user_config.previous_rom_path = p
                     }
+                }
+                AsyncFrontendMessage::RefreshPalette => {
+                    self.emu_textures
+                        .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data);
                 }
             }
         }

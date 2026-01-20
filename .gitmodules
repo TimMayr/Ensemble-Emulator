@@ -1,3 +1,0 @@
-[submodule "imgui-examples"]
-	path = imgui-examples
-	url = git@github.com:imgui-rs/imgui-examples.git

@@ -2,14 +2,16 @@ use std::path::PathBuf;
 
 use rfd::FileDialog;
 
+use crate::emulation::messages::RgbPalette;
+
 pub trait Contrastable {
     fn get_contrast(&self) -> Self;
 }
 
 impl Contrastable for egui::Color32 {
+    /// Calculate foreground color (black or white) based on background luminance
     fn get_contrast(&self) -> Self {
         let bg = self.as_u32();
-        /// Calculate foreground color (black or white) based on background luminance
         let r = (bg >> 16) & 0xFF;
         let g = (bg >> 8) & 0xFF;
         let b = bg & 0xFF;
@@ -30,6 +32,55 @@ pub trait FromU32 {
 
 pub trait AsU32 {
     fn as_u32(&self) -> u32;
+}
+
+pub trait Hashable {
+    fn hash(&self) -> u64;
+}
+
+pub trait ToBytes {
+    fn to_bytes(&self) -> Vec<u8>;
+}
+
+impl ToBytes for RgbPalette {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.colors
+            .iter()
+            .flatten()
+            .flat_map(|d| {
+                let mut bytes = [0u8; 3];
+                bytes[0] = ((d >> 16) & 0xFF) as u8;
+                bytes[1] = ((d >> 8) & 0xFF) as u8;
+                bytes[2] = (d & 0xFF) as u8;
+                bytes
+            })
+            .collect()
+    }
+}
+
+impl Hashable for RgbPalette {
+    /// Compute a fast hash of the given data for change detection.
+    /// Uses FNV-1a algorithm which is fast and has good distribution.
+    #[inline]
+    fn hash(&self) -> u64 {
+        let bytes = self.to_bytes();
+        compute_hash(&bytes[..])
+    }
+}
+
+/// Compute a fast hash of the given data for change detection.
+/// Uses FNV-1a algorithm which is fast and has good distribution.
+#[inline]
+pub fn compute_hash(data: &[u8]) -> u64 {
+    const FNV_OFFSET_BASIS: u64 = 0xCBF29CE484222325;
+    const FNV_PRIME: u64 = 0x100000001B3;
+
+    let mut hash = FNV_OFFSET_BASIS;
+    for &byte in data {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(FNV_PRIME);
+    }
+    hash
 }
 
 impl FromU32 for egui::Color32 {
@@ -59,4 +110,12 @@ pub fn pick_palette(previous: PathBuf) -> Option<PathBuf> {
         .add_filter("NES Palette File", &["pal"])
         .set_directory(previous)
         .pick_file()
+}
+
+pub fn create_new(previous: PathBuf) -> Option<PathBuf> {
+    FileDialog::new()
+        .set_directory(previous)
+        .set_can_create_directories(true)
+        .set_file_name("palette.pal")
+        .save_file()
 }

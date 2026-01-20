@@ -13,8 +13,8 @@ use crate::emulation::mem::nametable_memory::{NametableArrangement, NametableMem
 use crate::emulation::mem::{Memory, MemoryDevice, Ram, Rom};
 use crate::emulation::rom::formats::archaic_ines::ArchaicInes;
 use crate::emulation::rom::formats::ines::Ines;
-use crate::emulation::rom::formats::ines2::Ines2;
 use crate::emulation::rom::formats::ines_07::Ines07;
+use crate::emulation::rom::formats::ines2::Ines2;
 
 #[derive(Debug, Clone)]
 pub enum ParseError {

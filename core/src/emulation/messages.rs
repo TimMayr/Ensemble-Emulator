@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+
 use crate::frontend::palettes::parse_palette_from_file;
 
 /// Message types for communication between the frontend and emulator.
