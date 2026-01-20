@@ -34,7 +34,7 @@ pub fn draw_pattern_table(
     let tex_size = egui::vec2(base_size, base_size) * scale;
     let tile = &emu_textures.tile_data;
 
-    egui::Grid::new("pattern_table")
+    egui::Grid::new(format!("pattern_table_{pattern_table}"))
         .num_columns(16)
         .min_row_height(scale * base_size)
         .min_col_width(scale * base_size)
