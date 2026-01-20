@@ -2,22 +2,7 @@ use egui::Ui;
 
 use crate::emulation::messages::PATTERN_TABLE_SIZE;
 use crate::frontend::egui::textures::EmuTextures;
-use crate::frontend::util::FromU32;
-
-/// Calculate foreground color (black or white) based on background luminance
-fn foreground_for_background(bg: u32) -> egui::Color32 {
-    let r = (bg >> 16) & 0xFF;
-    let g = (bg >> 8) & 0xFF;
-    let b = bg & 0xFF;
-
-    let luminance = 0.299 * r as f32 + 0.587 * g as f32 + 0.114 * b as f32;
-
-    if luminance > 128.0 {
-        egui::Color32::BLACK
-    } else {
-        egui::Color32::WHITE
-    }
-}
+use crate::frontend::util::{Contrastable, FromU32};
 
 /// Draw a pattern table (left or right) in the UI
 pub fn draw_pattern_table(
@@ -101,7 +86,7 @@ pub fn draw_pattern_table(
                                         f.layout_no_wrap(
                                             ch.to_string(),
                                             font_id.clone(),
-                                            foreground_for_background(color),
+                                            egui::Color32::from_u32(color).get_contrast(),
                                         )
                                     });
                                     let rect =
