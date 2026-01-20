@@ -1,3 +1,6 @@
+use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
+
 /// Channel-based emulator wrapper for clean frontend/emulator separation.
 ///
 /// This module provides a non-threaded emulator wrapper that uses channels for
@@ -32,8 +35,11 @@
 /// ```
 use crossbeam_channel::{Receiver, Sender};
 
-use crate::emulation::messages::{ControllerEvent, EmulatorMessage, FrontendMessage};
+use crate::emulation::messages::{
+    ControllerEvent, EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData,
+};
 use crate::emulation::nes::{ExecutionFinishedType, Nes};
+use crate::frontend::util;
 
 /// A non-threaded emulator wrapper that communicates via channels
 /// This provides a clean interface for the frontend without threading complications.
@@ -43,11 +49,35 @@ pub struct ChannelEmulator {
     to_frontend: Sender<EmulatorMessage>,
     from_frontend: Receiver<FrontendMessage>,
     input: u8,
+    /// Cached palette data for change detection
+    last_palette_data: Option<PaletteData>,
+    /// Cached hash of pattern table data for efficient change detection
+    last_pattern_table_hash: Option<u64>,
 }
+
+pub static FETCH_DEPS: OnceLock<HashMap<EmulatorFetchable, Vec<EmulatorFetchable>>> =
+    OnceLock::new();
 
 #[allow(irrefutable_let_patterns)]
 impl ChannelEmulator {
+    fn setup_fetch_deps() {
+        let mut deps = HashMap::new();
+
+        deps.insert(
+            EmulatorFetchable::Tiles(None),
+            vec![EmulatorFetchable::Palettes(None)],
+        );
+        deps.insert(
+            EmulatorFetchable::Nametables(None),
+            vec![EmulatorFetchable::Tiles(None)],
+        );
+
+        FETCH_DEPS.get_or_init(|| deps);
+    }
+
     pub fn new(nes: Nes) -> (Self, Sender<FrontendMessage>, Receiver<EmulatorMessage>) {
+        Self::setup_fetch_deps();
+
         let (tx_to_emu, rx_from_frontend) = crossbeam_channel::unbounded();
         let (tx_from_emu, rx_to_frontend) = crossbeam_channel::unbounded();
 
@@ -56,6 +86,8 @@ impl ChannelEmulator {
             to_frontend: tx_from_emu,
             from_frontend: rx_from_frontend,
             input: 0,
+            last_palette_data: None,
+            last_pattern_table_hash: None,
         };
 
         (emu, tx_to_emu, rx_to_frontend)
@@ -80,35 +112,37 @@ impl ChannelEmulator {
                 FrontendMessage::ControllerInput(event) => {
                     self.handle_controller_event(event);
                 }
-                FrontendMessage::EnablePatternTableRendering(enabled) => {
-                    self.nes.ppu.borrow_mut().set_render_pattern_tables(enabled);
+                FrontendMessage::RequestDebugData(fetchable) => match fetchable {
+                    EmulatorFetchable::Palettes(_) => {
+                        let _ = self.to_frontend.send(EmulatorMessage::DebugData(
+                            self.nes.ppu.borrow().get_palettes_debug(),
+                        ));
+                    }
+                    EmulatorFetchable::Tiles(_) => {
+                        let _ = self.to_frontend.send(EmulatorMessage::DebugData(
+                            self.nes.ppu.borrow().get_tiles_debug(),
+                        ));
+                    }
+                    EmulatorFetchable::Nametables(_) => {
+                        let _ = self.to_frontend.send(EmulatorMessage::DebugData(
+                            self.nes.ppu.borrow().get_nametable_debug(),
+                        ));
+                    }
+                },
+                FrontendMessage::SetPalette(p) => {
+                    self.nes.ppu.borrow_mut().rgb_palette = *p;
                 }
-                FrontendMessage::EnableNametableRendering(enabled) => {
-                    self.nes.ppu.borrow_mut().set_render_nametables(enabled);
+                FrontendMessage::WritePpu(address, data) => {
+                    self.nes.ppu.borrow_mut().mem_write(address, data)
                 }
-                FrontendMessage::RequestPatternTableData => {
-                    // Render pattern tables on demand and send
-                    let ppu = self.nes.ppu.borrow_mut();
-                    let data = ppu.get_pattern_table_data_debug();
-                    let _ = self
-                        .to_frontend
-                        .send(EmulatorMessage::PatternTableReady(data));
+                FrontendMessage::WriteCpu(address, data) => self.nes.cpu.mem_write(address, data),
+                FrontendMessage::LoadRom(path) => {
+                    self.nes.load_rom(&path);
                 }
-                FrontendMessage::RequestNametableData => {
-                    // Render nametables on demand and send
-                    let mut ppu = self.nes.ppu.borrow_mut();
-                    ppu.render_nametables();
-                    let nametable_data = (*ppu.get_nametable_buffer()).to_vec();
-                    let _ = self
-                        .to_frontend
-                        .send(EmulatorMessage::NametableReady(nametable_data));
+                FrontendMessage::Power => {
+                    self.nes.power();
                 }
-                FrontendMessage::RequestSpriteData => {
-                    // if let Consoles::Nes(ref mut nes)  = self.console{
-                    //     let ppu = nes.ppu.borrow_mut();
-                    //     let _ = self.to_frontend.send(EmulatorMessage::SpritesReady(ppu.render_sprites_debug()));
-                    // }
-                }
+                FrontendMessage::PowerOff => self.nes.power_off(),
             }
         }
 
@@ -139,8 +173,8 @@ impl ChannelEmulator {
                     return Err("Frontend disconnected".to_string());
                 }
 
-                // Debug views are now sent only on explicit request via RequestPatternTableData/RequestNametableData
-                // This eliminates the overhead of rendering and sending large buffers every frame
+                // Check if debug data has changed and notify frontend
+                self.check_debug_data_changed();
 
                 Ok(())
             }
@@ -148,12 +182,55 @@ impl ChannelEmulator {
         }
     }
 
+    /// Check if debug data has changed since last check, and send the data if so.
+    /// This enables passive fetching of debug data - the frontend only rebuilds
+    /// textures when data actually changes, rather than on a regular interval.
+    fn check_debug_data_changed(&mut self) {
+        // Check palette data (32 bytes, cheap comparison)
+        if let EmulatorFetchable::Palettes(Some(current_palette)) =
+            self.nes.ppu.borrow().get_palettes_debug()
+        {
+            let current = *current_palette; // Copy the PaletteData (it's 32 bytes)
+            let palette_changed = match &self.last_palette_data {
+                Some(last) => *last != current,
+                None => true, // First time, consider it changed
+            };
+
+            if palette_changed {
+                self.last_palette_data = Some(current);
+                let _ =
+                    self.to_frontend
+                        .send(EmulatorMessage::DebugData(EmulatorFetchable::Palettes(
+                            Some(Box::new(current)),
+                        )));
+            }
+        }
+
+        // Check tile/pattern table data using a fast hash of raw PPU memory
+        // Pattern tables occupy 0x0000-0x1FFF (8KB) in PPU address space
+        let pattern_table_memory = self
+            .nes
+            .ppu
+            .borrow()
+            .get_memory_debug(Some(0x0000..=0x1FFF));
+        let current_hash = util::compute_hash(&pattern_table_memory);
+
+        let tiles_changed = match self.last_pattern_table_hash {
+            Some(last_hash) => last_hash != current_hash,
+            None => true, // First time, consider it changed
+        };
+
+        if tiles_changed {
+            self.last_pattern_table_hash = Some(current_hash);
+            // Send the actual tile data directly to avoid a round-trip request
+            let _ = self.to_frontend.send(EmulatorMessage::DebugData(
+                self.nes.ppu.borrow().get_tiles_debug(),
+            ));
+        }
+    }
+
     fn handle_controller_event(&mut self, event: ControllerEvent) {
         match event {
-            ControllerEvent::IncPalette => {
-                // Since we only have NES consoles for now, we can safely unwrap
-                self.nes.inc_debug_palette();
-            }
             ControllerEvent::Left => self.input |= 64,
             ControllerEvent::Right => self.input |= 128,
             ControllerEvent::Up => self.input |= 16,
@@ -163,5 +240,35 @@ impl ChannelEmulator {
             ControllerEvent::A => self.input |= 1,
             ControllerEvent::B => self.input |= 2,
         }
+    }
+
+    pub fn compute_required_fetches(
+        enabled: &HashSet<EmulatorFetchable>,
+        deps: &HashMap<EmulatorFetchable, Vec<EmulatorFetchable>>,
+    ) -> HashSet<EmulatorFetchable> {
+        let mut fetch = HashSet::new();
+        let mut stack: Vec<_> = Vec::with_capacity(enabled.len());
+
+        for x in enabled.iter() {
+            stack.push(EmulatorFetchable::get_empty(x));
+        }
+
+        while let Some(to_fetch) = stack.pop() {
+            // Only process if we haven't seen this fetchable before
+            if fetch.insert(EmulatorFetchable::get_empty(&to_fetch)) {
+                // If this fetchable has dependencies, add them to the stack for processing
+                if let Some(reqs) = deps.get(&to_fetch) {
+                    for x in reqs {
+                        let empty = EmulatorFetchable::get_empty(x);
+                        // Only add to stack if not already in fetch set
+                        if !fetch.contains(&empty) {
+                            stack.push(empty);
+                        }
+                    }
+                }
+            }
+        }
+
+        fetch
     }
 }

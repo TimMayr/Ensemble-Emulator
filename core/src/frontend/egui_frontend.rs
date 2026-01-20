@@ -8,32 +8,43 @@
 /// - `egui::fps_counter`: FPS tracking
 /// - `egui::input`: Input handling
 /// - `egui::textures`: Texture management
+/// - `egui::tiles`: Tile tree behavior and pane management
 /// - `egui::ui`: UI rendering components
 use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
-use egui::{Context, Style, TextBuffer, Visuals};
+use egui::{Context, Style, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
-use crate::emulation::messages::{EmulatorMessage, FrontendMessage};
+use crate::emulation::messages::{EmulatorFetchable, EmulatorMessage, FrontendMessage, RgbPalette};
 use crate::emulation::nes::Nes;
-use crate::frontend::egui::config::AppConfig;
+use crate::frontend::egui::config::{AppConfig, AppSpeed};
 use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
-use crate::frontend::egui::ui::{add_emulator_views, add_options_panel, add_status_bar};
+use crate::frontend::egui::tiles::{
+    Pane, TreeBehavior, add_pane_if_missing, compute_required_fetches_from_tree, create_tree,
+};
+use crate::frontend::egui::ui::add_status_bar;
+use crate::frontend::messages::AsyncFrontendMessage;
+use crate::frontend::palettes::parse_palette_from_file;
+use crate::frontend::util::pick_rom;
 
 /// Main egui application state
 pub struct EguiApp {
     channel_emu: ChannelEmulator,
     to_emulator: Sender<FrontendMessage>,
     from_emulator: Receiver<EmulatorMessage>,
+    from_async: Receiver<AsyncFrontendMessage>,
+    async_sender: Sender<AsyncFrontendMessage>,
     emu_textures: EmuTextures,
     fps_counter: FpsCounter,
     accumulator: Duration,
     config: AppConfig,
+    /// The tile tree for docking behavior
+    tree: egui_tiles::Tree<Pane>,
 }
 
 impl EguiApp {
@@ -41,16 +52,26 @@ impl EguiApp {
         channel_emu: ChannelEmulator,
         to_emulator: Sender<FrontendMessage>,
         from_emulator: Receiver<EmulatorMessage>,
+        to_async: Sender<AsyncFrontendMessage>,
+        from_async: Receiver<AsyncFrontendMessage>,
+        rgb_palette: RgbPalette,
     ) -> Self {
-        Self {
+        let mut s = Self {
             channel_emu,
             to_emulator,
             from_emulator,
+            from_async,
+            async_sender: to_async,
             emu_textures: Default::default(),
             fps_counter: Default::default(),
             accumulator: Default::default(),
             config: Default::default(),
-        }
+            tree: create_tree(),
+        };
+
+        s.config.view_config.palette_rgb_data = rgb_palette;
+
+        s
     }
 
     /// Calculate the frame budget based on current speed settings
@@ -84,7 +105,38 @@ impl EguiApp {
     }
 
     /// Process messages received from the emulator
-    fn process_emu_messages(&mut self, ctx: &Context) {
+    fn process_messages(&mut self, ctx: &Context) {
+        while let Ok(msg) = self.from_async.try_recv() {
+            match msg {
+                AsyncFrontendMessage::LoadPalette(p) => {
+                    let palette = parse_palette_from_file(p.clone());
+                    self.config.view_config.palette_rgb_data = palette;
+                    if let Some(p) = p {
+                        self.config.user_config.previous_palette_path = p
+                    }
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::SetPalette(Box::new(palette)));
+                    self.emu_textures
+                        .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data);
+                }
+                AsyncFrontendMessage::LoadRom(p) => {
+                    if let Some(p) = p
+                        && let Ok(p) = p.canonicalize()
+                    {
+                        let _ = self.to_emulator.send(FrontendMessage::PowerOff);
+                        let _ = self.to_emulator.send(FrontendMessage::LoadRom(p.clone()));
+                        let _ = self.to_emulator.send(FrontendMessage::Power);
+                        self.config.user_config.previous_rom_path = p
+                    }
+                }
+                AsyncFrontendMessage::RefreshPalette => {
+                    self.emu_textures
+                        .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data);
+                }
+            }
+        }
+
         while let Ok(msg) = self.from_emulator.try_recv() {
             match msg {
                 EmulatorMessage::FrameReady(frame) => {
@@ -92,17 +144,26 @@ impl EguiApp {
                     self.fps_counter.update();
                     self.emu_textures.update_emulator_texture(ctx);
                 }
-                EmulatorMessage::PatternTableReady(data) => {
-                    self.emu_textures.pattern_table_data = Some(data);
-                    self.emu_textures.update_pattern_table_texture(ctx);
-                }
-                EmulatorMessage::NametableReady(data) => {
-                    self.emu_textures.nametable_data = Some(data);
-                    self.emu_textures.update_nametable_texture(ctx);
-                }
-                EmulatorMessage::SpritesReady(_data) => {
-                    // Sprite viewer not yet implemented
-                }
+                EmulatorMessage::DebugData(data) => match data {
+                    EmulatorFetchable::Palettes(p) => {
+                        // Only rebuild textures if palette data actually changed
+                        if self.emu_textures.palette_data != p {
+                            self.emu_textures.palette_data = p;
+                            self.emu_textures.update_tile_textures(
+                                ctx,
+                                &self.config.view_config.palette_rgb_data,
+                            );
+                        }
+                    }
+                    EmulatorFetchable::Tiles(t) => {
+                        self.emu_textures.tile_data = t;
+                        self.emu_textures
+                            .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data);
+                    }
+                    EmulatorFetchable::Nametables(n) => {
+                        self.emu_textures.nametable_data = n;
+                    }
+                },
                 EmulatorMessage::Stopped => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
@@ -119,64 +180,76 @@ impl EguiApp {
             self.emu_textures.last_frame_request = now;
 
             let frame_budget = self.get_frame_budget();
+            let is_uncapped = self.config.speed_config.app_speed == AppSpeed::Uncapped;
+
+            // Maximum time to spend emulating per UI update to keep UI responsive
+            // For uncapped mode, allow more time; for normal mode, limit to prevent UI lag
+            let max_emulation_time = if is_uncapped {
+                Duration::from_millis(70) // Allow up to 70ms of emulation per UI frame
+            } else {
+                Duration::from_millis(50) // More conservative for normal speeds
+            };
+            let emulation_start = Instant::now();
 
             // Effectively paused, so we skip
             if frame_budget < Duration::from_secs(5) {
                 while self.accumulator >= frame_budget {
-                    let start = Instant::now();
-
                     if let Err(e) = self.channel_emu.step_frame() {
                         eprintln!("Emulator error: {}", e);
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                    }
-
-                    let step_time = start.elapsed();
-
-                    // Machine cannot keep up
-                    if step_time > frame_budget {
-                        self.accumulator = Duration::ZERO; // drop backlog
                         break;
                     }
 
                     self.accumulator -= frame_budget;
+
+                    // For uncapped mode, keep running frames until we hit our time budget
+                    // For normal modes, check if we've spent too much time and need to drop frames
+                    let elapsed = emulation_start.elapsed();
+                    if elapsed > max_emulation_time {
+                        if !is_uncapped {
+                            // Drop backlog only in non-uncapped mode when falling behind
+                            self.accumulator = Duration::ZERO;
+                        }
+                        break;
+                    }
                 }
             }
 
-            self.request_debug_data(now);
+            self.request_debug_views(now);
         }
     }
 
-    /// Request debug data from the emulator based on timing and visibility
-    fn request_debug_data(&mut self, now: Instant) {
+    /// Request debug data from the emulator based on timing and visibility.
+    ///
+    /// Active fetches (like nametables) are requested on a regular interval.
+    /// Passive fetches (like tiles and palettes) are only requested once initially,
+    /// then re-requested when the emulator notifies of changes via
+    /// `PatternTableChanged` or `PaletteChanged` messages.
+    fn request_debug_views(&mut self, now: Instant) {
         let debug_frame_budget = self.get_debug_viewers_frame_budget();
 
         // Effectively paused, so we skip
-        if debug_frame_budget < Duration::from_secs(5) {
-            if self.config.view_config.show_pattern_table
-                && now.duration_since(self.emu_textures.last_pattern_table_request)
-                    >= debug_frame_budget
-            {
-                let _ = self
-                    .to_emulator
-                    .send(FrontendMessage::RequestPatternTableData);
-                self.emu_textures.last_pattern_table_request = now;
+        if debug_frame_budget < Duration::from_secs(5)
+            && now.duration_since(self.emu_textures.last_debug_request) >= debug_frame_budget
+        {
+            for to_fetch in &self.config.view_config.required_debug_fetches {
+                // Passive fetches (tiles, palettes) are only requested once initially.
+                // After that, they're re-requested when the emulator notifies of changes.
+                let should_skip_passive = to_fetch.is_passive()
+                    && match to_fetch {
+                        EmulatorFetchable::Tiles(_) => self.emu_textures.tile_textures.is_some(),
+                        EmulatorFetchable::Palettes(_) => self.emu_textures.palette_data.is_some(),
+                        _ => false,
+                    };
+
+                if !should_skip_passive {
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::RequestDebugData(to_fetch.clone()));
+                }
             }
 
-            if self.config.view_config.show_nametable
-                && now.duration_since(self.emu_textures.last_nametable_request)
-                    >= debug_frame_budget
-            {
-                let _ = self.to_emulator.send(FrontendMessage::RequestNametableData);
-                self.emu_textures.last_nametable_request = now;
-            }
-
-            if self.config.view_config.show_sprite_viewer
-                && now.duration_since(self.emu_textures.last_sprite_viewer_request)
-                    >= debug_frame_budget
-            {
-                let _ = self.to_emulator.send(FrontendMessage::RequestSpriteData);
-                self.emu_textures.last_sprite_viewer_request = now;
-            }
+            self.emu_textures.last_debug_request = Instant::now();
         }
     }
 }
@@ -188,6 +261,7 @@ impl eframe::App for EguiApp {
             ctx,
             &self.to_emulator,
             &mut self.config.speed_config,
+            &mut self.config.view_config,
             &mut self.emu_textures.last_frame_request,
         );
 
@@ -200,10 +274,55 @@ impl eframe::App for EguiApp {
         self.update_emu_textures(ctx);
 
         // Process messages from emulator
-        self.process_emu_messages(ctx);
+        self.process_messages(ctx);
 
-        // Options side panel
-        add_options_panel(ctx, &mut self.config);
+        // Update required debug fetches based on visible panes
+        self.config.view_config.required_debug_fetches =
+            compute_required_fetches_from_tree(&self.tree);
+
+        // Menu bar at the top
+        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
+                ui.menu_button("File", |ui| {
+                    if ui.button("Load Rom").clicked() {
+                        std::thread::spawn({
+                            let sender = self.async_sender.clone();
+                            let prev_path = self.config.user_config.previous_rom_path.clone();
+                            let prev_dir = if let Some(prev_path) = prev_path.parent() {
+                                prev_path.to_path_buf()
+                            } else {
+                                PathBuf::default()
+                            };
+
+                            move || {
+                                let path = pick_rom(prev_dir);
+                                sender.send(AsyncFrontendMessage::LoadRom(path))
+                            }
+                        });
+                    }
+                });
+                ui.menu_button("View", |ui| {
+                    if ui.button("Options").clicked() {
+                        add_pane_if_missing(&mut self.tree, Pane::Options);
+                        ui.close();
+                    }
+                    ui.separator();
+                    ui.label("Debug Viewers");
+                    if ui.button("Palettes").clicked() {
+                        add_pane_if_missing(&mut self.tree, Pane::Palettes);
+                        ui.close();
+                    }
+                    if ui.button("Pattern Tables").clicked() {
+                        add_pane_if_missing(&mut self.tree, Pane::PatternTables);
+                        ui.close();
+                    }
+                    if ui.button("Nametables").clicked() {
+                        add_pane_if_missing(&mut self.tree, Pane::Nametables);
+                        ui.close();
+                    }
+                });
+            });
+        });
 
         // Status bar at bottom
         add_status_bar(
@@ -213,8 +332,16 @@ impl eframe::App for EguiApp {
             &self.emu_textures,
         );
 
-        // Emulator output windows
-        add_emulator_views(ctx, &mut self.config.view_config, &self.emu_textures);
+        // Central panel with tile tree
+        egui::CentralPanel::default().show(ctx, |ui| {
+            let mut behavior = TreeBehavior::new(
+                &mut self.config,
+                &self.emu_textures,
+                &self.to_emulator,
+                &self.async_sender,
+            );
+            self.tree.ui(&mut behavior, ui);
+        });
 
         // Request continuous repaint for animation
         ctx.request_repaint();
@@ -230,22 +357,31 @@ impl Debug for EguiApp {
 }
 
 /// Run the egui frontend
-pub fn run(file: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(
+    rom: Option<PathBuf>,
+    palette: Option<PathBuf>,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Create the emulator instance
-    let mut console = Nes::default();
+    let console = Nes::default();
 
-    // Load a ROM
-    console.load_rom(&file.to_string_lossy().take());
-    console.power();
+    let palette = parse_palette_from_file(palette);
 
     // Create channel-based emulator wrapper
     let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
+    let (to_frontend, from_async) = crossbeam_channel::unbounded();
+
+    // Setup Emulator State via messages
+    let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(rom));
+    let _ = tx_to_emu.send(FrontendMessage::SetPalette(Box::new(palette)));
 
     // Configure eframe options
+    // Disable vsync to allow uncapped frame rates - emulator handles its own timing
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1024.0, 768.0])
-            .with_title("NES Emulator - Egui"),
+            .with_title("NES Emulator - Egui")
+            .with_app_id("nes-emulator"),
+        vsync: false, // Disable vsync for uncapped performance
         ..Default::default()
     };
 
@@ -260,7 +396,14 @@ pub fn run(file: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
             };
             cc.egui_ctx.set_style(style);
             cc.egui_ctx.set_theme(egui::Theme::Dark);
-            Ok(Box::new(EguiApp::new(channel_emu, tx_to_emu, rx_from_emu)))
+            Ok(Box::new(EguiApp::new(
+                channel_emu,
+                tx_to_emu,
+                rx_from_emu,
+                to_frontend,
+                from_async,
+                palette,
+            )))
         }),
     )?;
 

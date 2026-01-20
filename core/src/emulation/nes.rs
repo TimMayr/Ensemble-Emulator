@@ -45,6 +45,14 @@ impl Nes {
         self.cpu.reset();
     }
 
+    pub fn power_off(&mut self) {
+        self.cpu = Cpu::default();
+        self.ppu = Rc::new(RefCell::new(Ppu::default()));
+        self.total_cycles = 0;
+        self.cpu_cycle_counter = 0;
+        self.ppu_cycle_counter = 0;
+    }
+
     pub fn run(&mut self) -> Result<ExecutionFinishedType, String> { self.run_until(u128::MAX) }
 
     pub fn run_until(&mut self, last_cycle: u128) -> Result<ExecutionFinishedType, String> {
@@ -177,12 +185,15 @@ impl Nes {
         self.cpu_cycle_counter = self.cpu_cycle_counter.wrapping_add(1);
         self.ppu_cycle_counter = self.ppu_cycle_counter.wrapping_add(1);
 
-        let ppu = self.ppu.borrow();
-        if ppu.vbl_clear_scheduled.get().is_some() {
-            ppu.vbl_reset_counter.set(ppu.vbl_reset_counter.get() + 1);
-            ppu.process_vbl_clear_scheduled();
+        // Only borrow PPU when vbl_clear_scheduled might be active
+        // This check is only relevant immediately after reading PPU status
+        {
+            let ppu = self.ppu.borrow();
+            if ppu.vbl_clear_scheduled.get().is_some() {
+                ppu.vbl_reset_counter.set(ppu.vbl_reset_counter.get() + 1);
+                ppu.process_vbl_clear_scheduled();
+            }
         }
-        drop(ppu);
 
         if self.total_cycles > last_cycle {
             self.total_cycles -= 1;
@@ -196,13 +207,12 @@ impl Nes {
             self.ppu_cycle_counter = 0;
         }
 
-        if self.cpu_cycle_counter.wrapping_add(2) == 12 {
-            let mut do_trace = false;
-
-            if self.trace_log.is_some() && matches!(&self.cpu.current_op, &MicroOp::FetchOpcode(..))
-            {
-                do_trace = true;
-            }
+        // Check if CPU should step (every 12th master cycle, offset by 2)
+        // cpu_cycle_counter + 2 == 12  means cpu_cycle_counter == 10
+        if self.cpu_cycle_counter == 10 {
+            // Only check trace_log when actually needed
+            let do_trace = self.trace_log.is_some()
+                && matches!(&self.cpu.current_op, &MicroOp::FetchOpcode(..));
 
             cpu_res = self.cpu.step();
 
@@ -231,8 +241,6 @@ impl Nes {
 
         cpu_res
     }
-
-    pub fn inc_debug_palette(&mut self) { self.ppu.borrow_mut().inc_debug_palette() }
 }
 
 impl Default for Nes {

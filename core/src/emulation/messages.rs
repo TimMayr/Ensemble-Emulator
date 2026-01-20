@@ -1,3 +1,7 @@
+use std::path::PathBuf;
+
+use crate::frontend::palettes::parse_palette_from_file;
+
 /// Message types for communication between the frontend and emulator.
 ///
 /// This module defines the message protocol for bidirectional communication:
@@ -21,6 +25,13 @@ pub const SPRITE_WIDTH: usize = 8;
 pub const TOTAL_OUTPUT_WIDTH: usize = 256;
 pub const TOTAL_OUTPUT_HEIGHT: usize = 240;
 
+pub const TILE_COUNT: usize = 512;
+pub const PALETTE_COUNT: usize = 8;
+pub const NAMETABLE_COUNT: usize = 4;
+pub const NAMETABLE_ROWS: usize = 30;
+pub const NAMETABLE_COLS: usize = 32;
+pub const PATTERN_TABLE_SIZE: usize = 256;
+
 /// Messages sent from the frontend to the emulator
 #[derive(Debug, Clone)]
 pub enum FrontendMessage {
@@ -30,23 +41,20 @@ pub enum FrontendMessage {
     ControllerInput(ControllerEvent),
     /// Request to reset the console
     Reset,
+    Power,
+    PowerOff,
     /// Request to step one frame
     StepFrame,
-    /// Enable pattern table rendering
-    EnablePatternTableRendering(bool),
-    /// Enable nametable rendering
-    EnableNametableRendering(bool),
-    /// Request pattern table data (frontend requests it, not sent every frame)
-    RequestPatternTableData,
-    /// Request nametable data (frontend requests it, not sent every frame)
-    RequestNametableData,
-    RequestSpriteData,
+    RequestDebugData(EmulatorFetchable),
+    SetPalette(Box<RgbPalette>),
+    LoadRom(PathBuf),
+    WritePpu(u16, u8),
+    WriteCpu(u16, u8),
 }
 
 /// Controller input events
 #[derive(Debug, Clone, Copy)]
 pub enum ControllerEvent {
-    IncPalette,
     Left,
     Right,
     Up,
@@ -59,65 +67,90 @@ pub enum ControllerEvent {
 
 /// Messages sent from the emulator to the frontend
 pub enum EmulatorMessage {
-    /// A new frame is ready to be displayed
     FrameReady(Vec<u32>),
-    /// Pattern table data is ready
-    PatternTableReady(Box<PatternTableViewerData>),
-    /// Nametable data is ready
-    NametableReady(Vec<u32>),
     /// Emulator has stopped/quit
     Stopped,
-    SpritesReady(([Box<[u32]>; SPRITE_COUNT], usize)),
+    DebugData(EmulatorFetchable),
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub struct SpriteViewerData {
-    pub sprites: [SpriteData; 64],
-    pub sprite_height: u8,
-    pub palette: PaletteData,
-}
-#[derive(Copy, Clone, PartialEq, Eq)]
-
-pub struct PatternTableViewerData {
-    pub left: PatternTableData,
-    pub right: PatternTableData,
-    pub palette: PaletteData,
-}
-#[derive(Copy, Clone, PartialEq, Eq)]
-
-pub struct PatternTableData {
-    pub tiles: [TileData; 256],
-}
-#[derive(Copy, Clone, PartialEq, Eq)]
-
-pub struct SpriteData {
-    pub tile: TileData,
-    pub tile_2: Option<TileData>,
-    pub y_pos: usize,
-    pub x_pos: usize,
-    pub attributes: SpriteAttributes,
-}
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct SpriteAttributes {
-    pub palette_index: u8,
-    pub priority: bool,
-    pub flip_x: bool,
-    pub flip_y: bool,
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum EmulatorFetchable {
+    Palettes(Option<Box<PaletteData>>),
+    Tiles(Option<Box<[TileData; TILE_COUNT]>>),
+    Nametables(Option<Box<NametableData>>),
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+impl EmulatorFetchable {
+    #[inline]
+    pub fn get_empty(emulator_fetchable: &EmulatorFetchable) -> EmulatorFetchable {
+        match emulator_fetchable {
+            EmulatorFetchable::Palettes(_) => EmulatorFetchable::Palettes(None),
+            EmulatorFetchable::Tiles(_) => EmulatorFetchable::Tiles(None),
+            EmulatorFetchable::Nametables(_) => EmulatorFetchable::Nametables(None),
+        }
+    }
+
+    /// Returns true if this fetchable should only be fetched when the emulator
+    /// notifies that the data has changed (passive), rather than on a regular
+    /// interval (active).
+    ///
+    /// Passive fetches reduce CPU overhead for data that rarely changes.
+    #[inline]
+    pub fn is_passive(&self) -> bool {
+        matches!(
+            self,
+            EmulatorFetchable::Palettes(_) | EmulatorFetchable::Tiles(_)
+        )
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct NametableData {
+    pub tiles: [[u16; NAMETABLE_ROWS * NAMETABLE_COLS]; NAMETABLE_COUNT],
+    pub palettes: [[u8; 64]; NAMETABLE_COUNT],
+}
+
+// #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+// pub struct SpriteViewerData {
+//     pub sprites: [SpriteData; 64],
+//     pub sprite_height: u8,
+//     pub palette: PaletteData,
+// }
+
+// #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+// pub struct SpriteData {
+//     pub tile: u16,
+//     pub tile_2: Option<u16>,
+//     pub y_pos: usize,
+//     pub x_pos: usize,
+//     pub attributes: SpriteAttributes,
+// }
+//
+// #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+// pub struct SpriteAttributes {
+//     pub palette_index: u8,
+//     pub priority: bool,
+//     pub flip_x: bool,
+//     pub flip_y: bool,
+// }
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub struct TileData {
     pub address: u16,
     pub plane_0: u64,
     pub plane_1: u64,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct PaletteData {
-    pub colors: [u32; 4],
+    pub colors: [[u8; 4]; 8],
 }
 
-pub enum InputEvent {
-    IncPalette,
-    Quit,
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct RgbPalette {
+    pub colors: [[u32; 64]; 8],
+}
+
+impl Default for RgbPalette {
+    fn default() -> Self { parse_palette_from_file(None) }
 }

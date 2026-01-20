@@ -1,11 +1,10 @@
-use std::collections::HashMap;
 use std::time::Instant;
 
 use egui::{ColorImage, Context, TextureHandle, TextureOptions};
 
 use crate::emulation::messages::{
-    NAMETABLE_HEIGHT, NAMETABLE_WIDTH, PaletteData, PatternTableViewerData, SpriteData,
-    TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData,
+    NametableData, PALETTE_COUNT, PaletteData, RgbPalette, TILE_COUNT, TOTAL_OUTPUT_HEIGHT,
+    TOTAL_OUTPUT_WIDTH, TileData,
 };
 use crate::emulation::ppu::TILE_SIZE;
 
@@ -13,36 +12,28 @@ use crate::emulation::ppu::TILE_SIZE;
 #[derive(Eq, PartialEq, Clone)]
 pub struct EmuTextures {
     pub current_frame: Option<Vec<u32>>,
-    pub emulator_texture: Option<TextureHandle>,
-    pub pattern_table_data: Option<Box<PatternTableViewerData>>,
-    pub nametable_data: Option<Vec<u32>>,
-    pub nametable_texture: Option<TextureHandle>,
-    pub sprite_viewer_data: Option<Vec<SpriteData>>,
-    pub sprite_viewer_textures: Option<HashMap<u8, TextureHandle>>,
-    pub last_pattern_table_request: Instant,
-    pub last_nametable_request: Instant,
+    pub frame_texture: Option<TextureHandle>,
+    pub last_debug_request: Instant,
     pub last_frame_request: Instant,
-    pub last_sprite_viewer_request: Instant,
     pub sprite_height: usize,
-    pub tile_textures: Vec<Vec<TextureHandle>>,
+    pub tile_textures: Option<[[TextureHandle; TILE_COUNT]; PALETTE_COUNT]>,
+    pub palette_data: Option<Box<PaletteData>>,
+    pub tile_data: Option<Box<[TileData; TILE_COUNT]>>,
+    pub nametable_data: Option<Box<NametableData>>,
 }
 
 impl Default for EmuTextures {
     fn default() -> Self {
         Self {
             current_frame: Default::default(),
-            emulator_texture: Default::default(),
-            pattern_table_data: Default::default(),
-            nametable_data: Default::default(),
-            nametable_texture: Default::default(),
-            sprite_viewer_data: Default::default(),
-            sprite_viewer_textures: Default::default(),
-            last_pattern_table_request: Instant::now(),
-            last_nametable_request: Instant::now(),
+            frame_texture: Default::default(),
+            last_debug_request: Instant::now(),
             last_frame_request: Instant::now(),
-            last_sprite_viewer_request: Instant::now(),
             sprite_height: 8,
-            tile_textures: vec![vec![], vec![]],
+            tile_textures: None,
+            palette_data: None,
+            tile_data: None,
+            nametable_data: None,
         }
     }
 }
@@ -81,14 +72,15 @@ impl EmuTextures {
                     ..Default::default()
                 },
             );
-            self.emulator_texture = Some(texture);
+            self.frame_texture = Some(texture);
         }
     }
 
     /// Create a texture for a single tile
     pub fn get_texture_for_tile(
         tile: &TileData,
-        palette: &PaletteData,
+        palette: &[u8; 4],
+        rgb_palette_map: &RgbPalette,
         ctx: &Context,
     ) -> TextureHandle {
         let mut data = [0u32; 64];
@@ -100,7 +92,7 @@ impl EmuTextures {
             let hi = ((tile.plane_1 >> bit) & 1) as usize;
 
             let color_index = lo | (hi << 1);
-            *color = palette.colors[color_index];
+            *color = rgb_palette_map.colors[0][palette[color_index] as usize];
         }
 
         let image = Self::u32_to_color_image(data.as_ref(), TILE_SIZE, TILE_SIZE);
@@ -117,39 +109,27 @@ impl EmuTextures {
     }
 
     /// Update the pattern table textures
-    pub fn update_pattern_table_texture(&mut self, ctx: &Context) {
-        if let Some(ref data) = self.pattern_table_data {
-            let palette = data.palette;
+    pub fn update_tile_textures(&mut self, ctx: &Context, rgb_palette_map: &RgbPalette) {
+        if let Some(ref palettes) = self.palette_data
+            && let Some(ref tiles) = self.tile_data
+        {
+            let mut tile_textures: Vec<[TextureHandle; TILE_COUNT]> =
+                Vec::with_capacity(palettes.colors.len());
 
-            self.tile_textures[0].clear();
-            self.tile_textures[1].clear();
-            for x in data.left.tiles {
-                let texture = Self::get_texture_for_tile(&x, &palette, ctx);
-                self.tile_textures[0].push(texture);
+            for palette in palettes.colors {
+                let mut palette_tile_textures = Vec::with_capacity(tiles.len());
+                for tile in tiles.iter() {
+                    let texture = Self::get_texture_for_tile(tile, &palette, rgb_palette_map, ctx);
+                    palette_tile_textures.push(texture);
+                }
+                tile_textures.push(palette_tile_textures.try_into().unwrap_or_else(|_| {
+                    panic!("Fatal internal error encountered while trying to render debug views")
+                }))
             }
 
-            for x in data.right.tiles {
-                let texture = Self::get_texture_for_tile(&x, &palette, ctx);
-                self.tile_textures[1].push(texture);
-            }
-        }
-    }
-
-    /// Update the nametable texture
-    pub fn update_nametable_texture(&mut self, ctx: &Context) {
-        if let Some(ref data) = self.nametable_data {
-            let image = Self::u32_to_color_image(data.as_ref(), NAMETABLE_WIDTH, NAMETABLE_HEIGHT);
-
-            let texture = ctx.load_texture(
-                "nametable",
-                image,
-                TextureOptions {
-                    magnification: egui::TextureFilter::Nearest,
-                    minification: egui::TextureFilter::Nearest,
-                    ..Default::default()
-                },
-            );
-            self.nametable_texture = Some(texture);
+            self.tile_textures = Some(tile_textures.try_into().unwrap_or_else(|_| {
+                panic!("Fatal internal error encountered while trying to render debug views")
+            }));
         }
     }
 }

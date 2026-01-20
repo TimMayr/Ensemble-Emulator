@@ -14,17 +14,21 @@ struct Args {
     headless: bool,
 
     ///Rom File to load
-    #[arg(value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
-    file: PathBuf,
+    #[arg(value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath, short, long)]
+    rom: Option<PathBuf>,
+
+    ///RGB Palette to load
+    #[arg(value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath, short, long)]
+    palette: Option<PathBuf>,
 }
 
 fn main() {
     let args = Args::parse();
 
     let res = if args.headless {
-        start_headless(args.file)
+        start_headless(args.rom)
     } else {
-        start_egui(args.file)
+        start_egui(args.rom, args.palette)
     };
 
     match res {
@@ -37,18 +41,22 @@ fn main() {
     }
 }
 
-fn start_egui(file: PathBuf) -> Result<(), String> {
-    if let Err(e) = egui_frontend::run(file) {
+fn start_egui(rom: Option<PathBuf>, palette: Option<PathBuf>) -> Result<(), String> {
+    if let Err(e) = egui_frontend::run(rom, palette) {
         Err(e.to_string())
     } else {
         Ok(())
     }
 }
 
-fn start_headless(file: PathBuf) -> Result<(), String> {
+fn start_headless(rom: Option<PathBuf>) -> Result<(), String> {
     let mut emu = Nes::default();
 
-    emu.load_rom(&file.to_string_lossy().take());
+    if rom.is_none() {
+        panic!("Headless runs must specify the rom file using the -r (--rom) argument")
+    }
+
+    emu.load_rom(&rom.unwrap().to_string_lossy().take());
     emu.power();
 
     let start = Instant::now();

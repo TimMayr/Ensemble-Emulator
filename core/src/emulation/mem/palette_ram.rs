@@ -28,6 +28,7 @@ impl MemoryDevice for PaletteRam {
 
     #[inline(always)]
     fn write(&mut self, addr: u16, data: u8) {
+        let data = data & 0b00111111;
         match addr {
             0x0 | 0x4 | 0x8 | 0xC | 0x10 | 0x14 | 0x18 | 0x1C => {
                 self.zero_bits[(addr % 0x10) as usize / 4usize] = data

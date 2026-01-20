@@ -1,18 +1,31 @@
 use std::cmp::max;
+use std::collections::HashSet;
+use std::path::PathBuf;
 
-/// Configuration for which debug views are visible
-#[derive(Default, Debug, Copy, Clone, Eq, PartialEq)]
+use crate::emulation::messages::{EmulatorFetchable, RgbPalette};
+
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct ViewConfig {
-    pub show_nametable: bool,
+    pub show_palette: bool,
     pub show_pattern_table: bool,
-    pub show_sprite_viewer: bool,
+    pub show_nametable: bool,
+    pub required_debug_fetches: HashSet<EmulatorFetchable>,
+    pub palette_rgb_data: RgbPalette,
+    pub debug_active_palette: usize,
 }
 
 /// Main application configuration
-#[derive(Default, Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct AppConfig {
     pub view_config: ViewConfig,
     pub speed_config: SpeedConfig,
+    pub user_config: UserConfig,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
+pub struct UserConfig {
+    pub previous_palette_path: PathBuf,
+    pub previous_rom_path: PathBuf,
 }
 
 /// Emulation speed mode

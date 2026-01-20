@@ -7,23 +7,11 @@ use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, MemoryDevice, OpenBus, Ram};
 use crate::emulation::messages::{
-    NAMETABLE_HEIGHT, NAMETABLE_WIDTH, PaletteData, PatternTableData, PatternTableViewerData,
-    TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData,
+    EmulatorFetchable, NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, NametableData,
+    PATTERN_TABLE_SIZE, PaletteData, RgbPalette, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData,
 };
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::PpuState;
-
-const NES_PALETTE: [u32; 64] = [
-    0xFF545454, 0xFF001E74, 0xFF081090, 0xFF300088, 0xFF440064, 0xFF5C0030, 0xFF540400, 0xFF3C1800,
-    0xFF202A00, 0xFF083A00, 0xFF004000, 0xFF003C00, 0xFF00323C, 0xFF000000, 0xFF000000, 0xFF000000,
-    0xFF989698, 0xFF084CC4, 0xFF3032EC, 0xFF5C1EE4, 0xFF8814B0, 0xFFA01464, 0xFF982220, 0xFF783C00,
-    0xFF545A00, 0xFF287200, 0xFF087C00, 0xFF007628, 0xFF006678, 0xFF000000, 0xFF000000, 0xFF000000,
-    0xFFECEEEC, 0xFF4C9AEC, 0xFF787CEC, 0xFFB062EC, 0xFFE454EC, 0xFFEC58B4, 0xFFEC6A64, 0xFFD48820,
-    0xFFA0AA00, 0xFF74C400, 0xFF4CD020, 0xFF38CC6C, 0xFF38B4CC, 0xFF3C3C3C, 0xFF000000, 0xFF000000,
-    0xFFECEEEC, 0xFFA8CCEC, 0xFFBCBCEC, 0xFFD4B2EC, 0xFFECAEEC, 0xFFECAED4, 0xFFECB4B0, 0xFFE4C490,
-    0xFFCCD278, 0xFFB4DE78, 0xFFA8E290, 0xFF98E2B4, 0xFFA0D6E4, 0xFFA0A2A0, 0xFF000000, 0xFF000000,
-];
-
 pub const VBLANK_NMI_BIT: u8 = 0x80;
 pub const VRAM_ADDR_INC_BIT: u8 = 0x4;
 pub const UPPER_BYTE: u16 = 0xFF00;
@@ -44,6 +32,8 @@ pub const PALETTE_RAM_END_INDEX: u16 = 0x3FFF;
 pub const PALETTE_RAM_SIZE: u16 = 0x20;
 pub const VRAM_SIZE: usize = 0x800;
 pub const DOTS_PER_SCANLINE: u16 = 340;
+/// Number of dots in one scanline including dot 0 (341 total: dots 0-340)
+pub const DOTS_IN_SCANLINE: u16 = DOTS_PER_SCANLINE + 1;
 pub const SCANLINES_PER_FRAME: u16 = 261;
 pub const OPEN_BUS_DECAY_DELAY: u32 = 420_000;
 pub const SPRITE_OVERFLOW_FLAG: u8 = 0b0010_0000;
@@ -86,10 +76,6 @@ pub struct Ppu {
     pub even_frame: bool,
     pub reset_signal: bool,
     pub pixel_buffer: Vec<u32>,
-    pub pattern_table_buffer: Box<[u32; ((256 + 16) * 128) as usize]>,
-    pub nametable_buffer: Box<[u32; (512 * 480) as usize]>,
-    pub render_pattern_tables_enabled: bool,
-    pub render_nametables_enabled: bool,
     pub vbl_reset_counter: Cell<u8>,
     pub vbl_clear_scheduled: Cell<Option<u8>>,
     pub scanline: u16,
@@ -107,7 +93,6 @@ pub struct Ppu {
     pub bg_next_tile_id: u8,
     pub bg_next_tile_attribute: u8,
     pub bg_next_tile_lsb: u8,
-    pub current_palette: u8,
     pub is_soam_clear_active: bool,
     pub oam_index: u8,
     pub soam_index: u8,
@@ -119,6 +104,7 @@ pub struct Ppu {
     pub current_sprite_tile_id: u8,
     pub oam_fetch: u8,
     pub log: String,
+    pub rgb_palette: RgbPalette,
 }
 
 impl Default for Ppu {
@@ -148,10 +134,6 @@ impl Ppu {
             even_frame: false,
             reset_signal: false,
             pixel_buffer: [0u32; TOTAL_OUTPUT_HEIGHT * TOTAL_OUTPUT_WIDTH].to_vec(),
-            pattern_table_buffer: Box::from([0u32; ((256 + 16) * 128) as usize]),
-            nametable_buffer: Box::from([0u32; (512 * 480) as usize]),
-            render_pattern_tables_enabled: false,
-            render_nametables_enabled: false,
             vbl_reset_counter: 0.into(),
             vbl_clear_scheduled: None.into(),
             scanline: 0,
@@ -164,7 +146,6 @@ impl Ppu {
             shift_pattern_hi: 0,
             shift_attr_lo: 0,
             shift_attr_hi: 0,
-            current_palette: 0,
             shift_in_attr_lo: false,
             shift_in_attr_hi: false,
             is_soam_clear_active: false,
@@ -178,6 +159,7 @@ impl Ppu {
             current_sprite_tile_id: 0,
             oam_fetch: 0,
             log: "".to_string(),
+            rgb_palette: Default::default(),
         }
     }
 
@@ -211,14 +193,13 @@ impl Ppu {
             self.t_register = 0;
         }
 
-        let frame_dot = self.dot_counter % DOTS_PER_FRAME;
+        // Direct increment of dot/scanline is much faster than u128 modulo
+        // Only need to track frame boundaries now
+        let is_frame_start = self.dot == 0 && self.scanline == 0;
 
-        if frame_dot == 0 {
+        if is_frame_start {
             self.even_frame = !self.even_frame;
         }
-
-        self.scanline = (frame_dot / (DOTS_PER_SCANLINE + 1) as u128) as u16;
-        self.dot = (frame_dot % (DOTS_PER_SCANLINE + 1) as u128) as u16;
 
         let res = false;
 
@@ -368,7 +349,7 @@ impl Ppu {
 
                     self.pixel_buffer
                         [self.scanline as usize * SCREEN_RENDER_WIDTH + (self.dot - 1) as usize] =
-                        NES_PALETTE[pixel_color as usize];
+                        self.rgb_palette.colors[0][pixel_color as usize];
                 }
 
                 self.shift_bg_shifters();
@@ -409,11 +390,14 @@ impl Ppu {
 
         self.update_nmi();
 
-        if self.dot == DOTS_PER_SCANLINE - 1
+        // Skip cycle on odd frames when rendering (skips from dot 339 directly to next frame)
+        // This occurs at dot 339 of scanline 261 on odd frames when rendering is enabled
+        let skip_cycle = self.dot == DOTS_PER_SCANLINE - 1
             && self.scanline == PRE_RENDER_SCANLINE
             && !self.even_frame
-            && self.is_rendering()
-        {
+            && self.is_rendering();
+
+        if skip_cycle {
             self.dot_counter += 1;
         }
 
@@ -421,7 +405,23 @@ impl Ppu {
 
         self.dot_counter += 1;
 
-        frame_dot == DOTS_PER_FRAME - 1 || res
+        // Increment dot/scanline directly instead of recalculating from dot_counter
+        // Handle skip_cycle by incrementing by 2 (skipping dot 340)
+        let increment = if skip_cycle { 2 } else { 1 };
+        self.dot += increment;
+
+        // Handle wrap-around: dots 0-340 (341 total), scanlines 0-261 (262 total)
+        let mut is_frame_end = false;
+        if self.dot > DOTS_PER_SCANLINE {
+            self.dot -= DOTS_IN_SCANLINE; // 341 -> 0, 342 -> 1
+            self.scanline += 1;
+            if self.scanline > PRE_RENDER_SCANLINE {
+                self.scanline = 0;
+                is_frame_end = true; // Frame ends when we wrap to scanline 0
+            }
+        }
+
+        is_frame_end || res
     }
 
     #[inline]
@@ -450,12 +450,12 @@ impl Ppu {
                 };
 
                 let row_offset =
-                        // if self.sprite_fifo[(self.soam_index / 4) as usize].attribute & 80 == 0 {
-                        self
-                            .current_sprite_y
-                            .wrapping_sub(self.scanline.wrapping_add(1) as u8)
-                % self.get_sprite_height()
-                        ;
+                    // if self.sprite_fifo[(self.soam_index / 4) as usize].attribute & 80 == 0 {
+                    self
+                        .current_sprite_y
+                        .wrapping_sub(self.scanline.wrapping_add(1) as u8)
+                        % self.get_sprite_height()
+                    ;
                 // }
                 // else {
                 //     (self
@@ -1024,34 +1024,6 @@ impl Ppu {
     #[inline]
     pub fn get_pixel_buffer(&self) -> &Vec<u32> { &self.pixel_buffer }
 
-    pub fn get_pattern_table_buffer(&self) -> &[u32; ((256 + 16) * 128) as usize] {
-        &self.pattern_table_buffer
-    }
-
-    pub fn get_nametable_buffer(&self) -> &[u32; NAMETABLE_WIDTH * NAMETABLE_HEIGHT] {
-        &self.nametable_buffer
-    }
-
-    // pub fn render_sprites_debug(&self) -> ([Box<[u32]>; SPRITE_COUNT], usize) {
-    //     let data = Vec::new();
-    //     let palette = self.load_palette_colors();
-    //
-    //     let mut sprite_data: Vec<u8> = Vec::new();
-    //     for i in 0.. OAM_SIZE {
-    //         sprite_data.push(self.oam.read(i as u16, 0))
-    //     }
-    //
-    //
-    // }
-
-    pub fn set_render_pattern_tables(&mut self, enabled: bool) {
-        self.render_pattern_tables_enabled = enabled;
-    }
-
-    pub fn set_render_nametables(&mut self, enabled: bool) {
-        self.render_nametables_enabled = enabled;
-    }
-
     pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
         self.memory.get_memory_debug(range)
     }
@@ -1084,87 +1056,23 @@ impl Ppu {
         self.shift_in_attr_hi = attr_high_bit;
     }
 
-    pub fn frame(&mut self) { self.render_pattern_tables() }
+    fn load_palette_colors(&self) -> [[u8; 4]; 8] {
+        let mut data = [[0; 4]; 8];
 
-    pub fn inc_debug_palette(&mut self) { self.current_palette += 1; }
+        for palette in 0..8 {
+            let mut colors = [0; 4];
+            let base = PALETTE_RAM_START_ADDRESS + palette * 4;
 
-    #[inline]
-    fn load_palette_colors(&self) -> [u32; 4] {
-        let mut colors = [0u32; 4];
-        let sel = self.current_palette as u16;
-        let base = PALETTE_RAM_START_ADDRESS + sel * 4;
-
-        for (i, color) in colors.iter_mut().enumerate() {
-            let idx = self.mem_read_debug(base + i as u16) as usize;
-            *color = NES_PALETTE[idx];
-        }
-
-        colors
-    }
-
-    pub fn render_nametables(&mut self) {
-        let pattern_table_base_address = if self.ctrl_register & 0b0001_0000 != 0 {
-            0x1000
-        } else {
-            0x0000
-        };
-
-        for nametable_idx in 0..4 {
-            let nametable_start_addr = 0x2000 + nametable_idx * 0x0400;
-
-            for entry_idx in 0..NAMETABLE_TILE_AREA_SIZE {
-                let tile_index = self.mem_read_debug(nametable_start_addr + entry_idx);
-
-                let nametable_row = entry_idx / 32;
-                let nametable_col = entry_idx % 32;
-
-                let attr_addr = nametable_start_addr
-                    + ((nametable_row / 4) * 8)
-                    + (nametable_col / 4)
-                    + NAMETABLE_TILE_AREA_SIZE;
-                let attr_byte = self.mem_read_debug(attr_addr);
-
-                let tile_x = nametable_col + ((nametable_idx & 0x1) * 32);
-                let tile_y = nametable_row + ((nametable_idx >> 1) * 30);
-
-                let base_x = tile_x * 8;
-                let base_y = tile_y * 8;
-
-                let patter_addr = pattern_table_base_address + (tile_index as u16) * 16;
-
-                for row_in_tile in 0..TILE_SIZE {
-                    let low = self.mem_read_debug(patter_addr + row_in_tile as u16);
-                    let high = self.mem_read_debug(patter_addr + row_in_tile as u16 + 8);
-
-                    let quad_x = (nametable_col % 4) / 2;
-                    let quad_y = (nametable_row % 4) / 2;
-                    let attr_shift = (quad_y * 4 + quad_x * 2) as u8;
-                    let palette_select = (attr_byte >> attr_shift) & 0b11;
-
-                    for col_in_tile in 0..TILE_SIZE {
-                        let bit0 = (low >> (7 - col_in_tile)) & 1;
-                        let bit1 = (high >> (7 - col_in_tile)) & 1;
-                        let pixel_value = (bit1 << 1) | bit0;
-
-                        let palette_addr = if pixel_value == 0 {
-                            PALETTE_RAM_START_ADDRESS
-                        } else {
-                            PALETTE_RAM_START_ADDRESS + (palette_select * 4 + pixel_value) as u16
-                        };
-
-                        let color_idx = self.mem_read_debug(palette_addr);
-
-                        let x = base_x as usize + col_in_tile;
-                        let y = base_y as usize + row_in_tile;
-
-                        self.nametable_buffer[(y * 512) + x] = NES_PALETTE[color_idx as usize]
-                    }
-                }
+            for (i, color) in colors.iter_mut().enumerate() {
+                let idx = self.mem_read_debug(base + i as u16);
+                *color = idx;
             }
-        }
-    }
 
-    pub fn render_pattern_tables(&mut self) {}
+            data[palette as usize] = colors;
+        }
+
+        data
+    }
 
     #[inline(always)]
     pub fn tick_open_bus(&self, times: u8) {
@@ -1195,10 +1103,6 @@ impl Ppu {
             even_frame: state.even_frame,
             reset_signal: state.reset_signal,
             pixel_buffer: state.pixel_buffer.clone(),
-            pattern_table_buffer: Box::from([0u32; ((256 + 16) * 128) as usize]),
-            nametable_buffer: Box::from([0u32; (512 * 480) as usize]),
-            render_pattern_tables_enabled: false,
-            render_nametables_enabled: false,
             vbl_reset_counter: 0.into(),
             vbl_clear_scheduled: None.into(),
             scanline: state.scanline,
@@ -1211,7 +1115,6 @@ impl Ppu {
             shift_pattern_hi: 0,
             shift_attr_lo: 0,
             shift_attr_hi: 0,
-            current_palette: 0,
             shift_in_attr_lo: false,
             shift_in_attr_hi: false,
             is_soam_clear_active: false,
@@ -1225,6 +1128,7 @@ impl Ppu {
             sprite_fifo: [SpriteFifo::default(); 8],
             oam_fetch: 0,
             log: "".to_string(),
+            rgb_palette: Default::default(),
         };
 
         ppu.load_rom(rom);
@@ -1234,17 +1138,15 @@ impl Ppu {
 }
 
 impl Ppu {
-    pub fn get_pattern_table_data_debug(&self) -> Box<PatternTableViewerData> {
-        // Build palette→color once
-        let palette: PaletteData = PaletteData {
+    pub fn get_palettes_debug(&self) -> EmulatorFetchable {
+        EmulatorFetchable::Palettes(Some(Box::new(PaletteData {
             colors: self.load_palette_colors(),
-        };
+        })))
+    }
 
-        // Two tables: base 0x0000 and 0x1000
-        let mut pattern_tables: Vec<PatternTableData> = Vec::new();
+    pub fn get_tiles_debug(&self) -> EmulatorFetchable {
+        let mut tiles = [TileData::default(); 512];
         for table_ix in 0..2 {
-            let mut tiles: Vec<TileData> = Vec::new();
-
             let table_base = (table_ix * TABLE_BYTES) as u16;
             for tile_index in 0..256 {
                 let tile_addr = table_base + (tile_index * BYTES_PER_TILE) as u16;
@@ -1265,21 +1167,45 @@ impl Ppu {
                     plane_1,
                 };
 
-                tiles.push(tile);
+                tiles[tile_index + table_ix * PATTERN_TABLE_SIZE] = tile;
             }
-
-            let tiles = tiles.as_slice().try_into().unwrap();
-            let pattern_table = PatternTableData {
-                tiles,
-            };
-            pattern_tables.push(pattern_table);
         }
 
-        Box::new(PatternTableViewerData {
-            left: pattern_tables[0],
-            right: pattern_tables[1],
-            palette,
-        })
+        EmulatorFetchable::Tiles(Some(Box::new(tiles)))
+    }
+
+    pub fn get_nametable_debug(&self) -> EmulatorFetchable {
+        let nametable_start = 0x2000u16;
+        let pattern_table = ((self.ctrl_register & 0b1_0000) as u16) << 4;
+        let mut nametables = [[0; NAMETABLE_ROWS * NAMETABLE_COLS]; NAMETABLE_COUNT];
+        let mut attributes = [[0; 64]; NAMETABLE_COUNT];
+
+        // Attribute table offset within each nametable (0x3C0 = 960 = 30 * 32)
+        let attr_offset = NAMETABLE_TILE_AREA_SIZE;
+
+        for nametable_index in 0..NAMETABLE_COUNT {
+            let nametable_base = nametable_start + (nametable_index as u16) * NAMETABLE_SIZE;
+
+            // Read tile indices
+            for row in 0..NAMETABLE_ROWS {
+                for col in 0..NAMETABLE_COLS {
+                    let addr = nametable_base + (row * NAMETABLE_COLS + col) as u16;
+                    let tile = (self.mem_read_debug(addr) as u16) | pattern_table;
+                    nametables[nametable_index][row * NAMETABLE_COLS + col] = tile;
+                }
+            }
+
+            // Read attribute table (64 bytes per nametable)
+            let attr_base = nametable_base + attr_offset;
+            for (i, attr) in attributes[nametable_index].iter_mut().enumerate() {
+                *attr = self.mem_read_debug(attr_base + i as u16);
+            }
+        }
+
+        EmulatorFetchable::Nametables(Some(Box::new(NametableData {
+            tiles: nametables,
+            palettes: attributes,
+        })))
     }
 }
 
