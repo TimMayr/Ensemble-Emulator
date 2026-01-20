@@ -14,6 +14,7 @@ use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+
 use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, TextBuffer, Visuals};
 
@@ -25,9 +26,10 @@ use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
-    Pane, TreeBehavior, add_pane_if_missing, compute_required_fetches_from_tree, create_tree,
+    add_pane_if_missing, compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
 };
 use crate::frontend::egui::ui::add_status_bar;
+use crate::frontend::messages::AsyncFrontendMessage;
 use crate::frontend::palettes::parse_palette_from_file;
 
 /// Main egui application state
@@ -35,6 +37,8 @@ pub struct EguiApp {
     channel_emu: ChannelEmulator,
     to_emulator: Sender<FrontendMessage>,
     from_emulator: Receiver<EmulatorMessage>,
+    from_async: Receiver<AsyncFrontendMessage>,
+    async_sender: Sender<AsyncFrontendMessage>,
     emu_textures: EmuTextures,
     fps_counter: FpsCounter,
     accumulator: Duration,
@@ -48,12 +52,16 @@ impl EguiApp {
         channel_emu: ChannelEmulator,
         to_emulator: Sender<FrontendMessage>,
         from_emulator: Receiver<EmulatorMessage>,
+        to_async: Sender<AsyncFrontendMessage>,
+        from_async: Receiver<AsyncFrontendMessage>,
         rgb_palette: RgbPalette,
     ) -> Self {
         let mut s = Self {
             channel_emu,
             to_emulator,
             from_emulator,
+            from_async,
+            async_sender: to_async,
             emu_textures: Default::default(),
             fps_counter: Default::default(),
             accumulator: Default::default(),
@@ -97,7 +105,28 @@ impl EguiApp {
     }
 
     /// Process messages received from the emulator
-    fn process_emu_messages(&mut self, ctx: &Context) {
+    fn process_messages(&mut self, ctx: &Context) {
+        while let Ok(msg) = self.from_async.try_recv() {
+            match msg {
+                AsyncFrontendMessage::LoadPalette(p) => {
+                    let palette = parse_palette_from_file(p.clone());
+                    self.config.view_config.palette_rgb_data = palette;
+                    if let Some(p) = p {
+                        self.config.user_config.previous_palette_path = p
+                    }
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::SetPalette(Box::new(palette)));
+                }
+                AsyncFrontendMessage::LoadRom(p) => {
+                    if let Some(p) = p {
+                        let _ = self.to_emulator.send(FrontendMessage::LoadRom(p.clone()));
+                        self.config.user_config.previous_rom_path = p
+                    }
+                }
+            }
+        }
+
         while let Ok(msg) = self.from_emulator.try_recv() {
             match msg {
                 EmulatorMessage::FrameReady(frame) => {
@@ -235,7 +264,7 @@ impl eframe::App for EguiApp {
         self.update_emu_textures(ctx);
 
         // Process messages from emulator
-        self.process_emu_messages(ctx);
+        self.process_messages(ctx);
 
         // Update required debug fetches based on visible panes
         self.config.view_config.required_debug_fetches =
@@ -277,7 +306,12 @@ impl eframe::App for EguiApp {
 
         // Central panel with tile tree
         egui::CentralPanel::default().show(ctx, |ui| {
-            let mut behavior = TreeBehavior::new(&mut self.config, &self.emu_textures);
+            let mut behavior = TreeBehavior::new(
+                &mut self.config,
+                &self.emu_textures,
+                &self.to_emulator,
+                &self.async_sender,
+            );
             self.tree.ui(&mut behavior, ui);
         });
 
@@ -308,6 +342,7 @@ pub fn run(rom: PathBuf, palette: Option<PathBuf>) -> Result<(), Box<dyn std::er
     // Create channel-based emulator wrapper
     let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
     let _ = tx_to_emu.send(FrontendMessage::SetPalette(Box::new(palette)));
+    let (to_async, from_async) = crossbeam_channel::unbounded();
 
     // Configure eframe options
     // Disable vsync to allow uncapped frame rates - emulator handles its own timing
@@ -334,6 +369,8 @@ pub fn run(rom: PathBuf, palette: Option<PathBuf>) -> Result<(), Box<dyn std::er
                 channel_emu,
                 tx_to_emu,
                 rx_from_emu,
+                to_async,
+                from_async,
                 palette,
             )))
         }),

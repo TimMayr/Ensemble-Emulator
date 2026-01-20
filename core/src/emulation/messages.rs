@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use crate::frontend::palettes::parse_palette_from_file;
 
 /// Message types for communication between the frontend and emulator.
@@ -43,6 +44,9 @@ pub enum FrontendMessage {
     StepFrame,
     RequestDebugData(EmulatorFetchable),
     SetPalette(Box<RgbPalette>),
+    LoadRom(PathBuf),
+    WritePpu(u16, u8),
+    WriteCpu(u16, u8),
 }
 
 /// Controller input events

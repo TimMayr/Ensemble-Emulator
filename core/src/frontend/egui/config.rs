@@ -1,5 +1,6 @@
 use std::cmp::max;
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use crate::emulation::messages::{EmulatorFetchable, RgbPalette};
 
@@ -18,6 +19,13 @@ pub struct ViewConfig {
 pub struct AppConfig {
     pub view_config: ViewConfig,
     pub speed_config: SpeedConfig,
+    pub user_config: UserConfig,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
+pub struct UserConfig {
+    pub previous_palette_path: PathBuf,
+    pub previous_rom_path: PathBuf,
 }
 
 /// Emulation speed mode

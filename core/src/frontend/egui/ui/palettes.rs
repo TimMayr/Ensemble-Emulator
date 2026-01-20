@@ -1,11 +1,24 @@
+use std::path::PathBuf;
+
+use crossbeam_channel::Sender;
+
+use crate::emulation::messages::{EmulatorFetchable, FrontendMessage};
+use crate::emulation::ppu::PALETTE_RAM_START_ADDRESS;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
-use crate::frontend::util::FromU32;
+use crate::frontend::messages::AsyncFrontendMessage;
+use crate::frontend::util::{pick_palette, FromU32};
 
-pub fn render_palettes(ui: &mut egui::Ui, config: &AppConfig, emu_textures: &EmuTextures) {
+pub fn render_palettes(
+    ui: &mut egui::Ui,
+    config: &mut AppConfig,
+    emu_textures: &EmuTextures,
+    to_emu: &Sender<FrontendMessage>,
+    to_frontend: &Sender<AsyncFrontendMessage>,
+) {
     if let Some(palette_data) = &emu_textures.palette_data {
         let full_width = ui.available_width();
-        let single_color_width = full_width / 4.0;
+        let single_color_width = 80f32.min(full_width / 4.0);
         let single_color_height = 20.0;
 
         for (i, palette) in palette_data.colors.iter().enumerate() {
@@ -15,23 +28,74 @@ pub fn render_palettes(ui: &mut egui::Ui, config: &AppConfig, emu_textures: &Emu
                 ui.label(format!("Sprite Palette {}", i - 3));
             };
 
-            let painter = ui.painter();
-            let start_pos = ui.cursor().min;
+            let (parent, _) = ui.allocate_exact_size(
+                egui::vec2(single_color_width * 4.0, single_color_height),
+                egui::Sense::hover(),
+            );
 
             for (j, color) in palette.iter().enumerate() {
+                let min = parent.min + egui::vec2(j as f32 * single_color_width, 0.0);
                 let rect = egui::Rect::from_min_size(
-                    egui::pos2((j as f32) * single_color_width + start_pos.x, start_pos.y),
+                    min,
                     egui::vec2(single_color_width, single_color_height),
                 );
-                painter.rect_filled(
-                    rect,
-                    0.0,
-                    egui::Color32::from_u32(
-                        config.view_config.palette_rgb_data.colors[0][*color as usize],
-                    ),
-                );
+
+                let painter = ui.painter();
+                let response =
+                    ui.interact(rect, ui.id().with(format!("{}", rect)), egui::Sense::all());
+
+                let rgb_color = config.view_config.palette_rgb_data.colors[0][*color as usize];
+                painter.rect_filled(rect, 0.0, egui::Color32::from_u32(rgb_color));
+
+                if response.hovered() {
+                    painter.rect_stroke(
+                        rect,
+                        0.0,
+                        egui::Stroke::new(3.0, egui::Color32::WHITE),
+                        egui::StrokeKind::Inside,
+                    );
+                }
+
+                let address = PALETTE_RAM_START_ADDRESS as usize | (j + (i * 4));
+
+                if response.clicked() {
+                    let _ = to_emu.send(FrontendMessage::WritePpu(address as u16, color + 1));
+                    let _ = to_emu.send(FrontendMessage::RequestDebugData(
+                        EmulatorFetchable::Palettes(None),
+                    ));
+                }
+
+                response.on_hover_ui(|ui| {
+                    ui.label(format!("Global palette index: {color}"));
+                    ui.label(format!("Address: ${:0X}", address));
+                    ui.label(format!(
+                        "Palette rgb mapping: #{:06X}",
+                        rgb_color & 0x00FFFFFF
+                    ));
+                });
             }
-            ui.allocate_space(egui::vec2(4.0 * single_color_width, single_color_height));
         }
     }
+
+    ui.separator();
+    egui::MenuBar::new().ui(ui, |ui| {
+        ui.menu_button("File", |ui| {
+            if ui.button("Load palette file").clicked() {
+                std::thread::spawn({
+                    let sender = to_frontend.clone();
+                    let prev_path = config.user_config.previous_palette_path.clone();
+                    let prev_dir = if let Some(prev_path) = prev_path.parent() {
+                        prev_path.to_path_buf()
+                    } else {
+                        PathBuf::default()
+                    };
+
+                    move || {
+                        let path = pick_palette(prev_dir);
+                        sender.send(AsyncFrontendMessage::LoadPalette(path))
+                    }
+                });
+            }
+        })
+    });
 }
