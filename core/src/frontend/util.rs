@@ -2,6 +2,28 @@ use std::path::PathBuf;
 
 use rfd::FileDialog;
 
+pub trait Contrastable {
+    fn get_contrast(&self) -> Self;
+}
+
+impl Contrastable for egui::Color32 {
+    fn get_contrast(&self) -> Self {
+        let bg = self.as_u32();
+        /// Calculate foreground color (black or white) based on background luminance
+        let r = (bg >> 16) & 0xFF;
+        let g = (bg >> 8) & 0xFF;
+        let b = bg & 0xFF;
+
+        let luminance = 0.299 * r as f32 + 0.587 * g as f32 + 0.114 * b as f32;
+
+        if luminance > 128.0 {
+            egui::Color32::BLACK
+        } else {
+            egui::Color32::WHITE
+        }
+    }
+}
+
 pub trait FromU32 {
     fn from_u32(d: u32) -> Self;
 }
