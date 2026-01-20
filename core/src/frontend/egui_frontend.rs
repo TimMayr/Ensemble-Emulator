@@ -352,7 +352,10 @@ impl Debug for EguiApp {
 }
 
 /// Run the egui frontend
-pub fn run(rom: PathBuf, palette: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(
+    rom: Option<PathBuf>,
+    palette: Option<PathBuf>,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Create the emulator instance
     let console = Nes::default();
 
@@ -363,7 +366,7 @@ pub fn run(rom: PathBuf, palette: Option<PathBuf>) -> Result<(), Box<dyn std::er
     let (to_frontend, from_async) = crossbeam_channel::unbounded();
 
     // Setup Emulator State via messages
-    let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(Some(rom)));
+    let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(rom));
     let _ = tx_to_emu.send(FrontendMessage::SetPalette(Box::new(palette)));
 
     // Configure eframe options
@@ -371,7 +374,8 @@ pub fn run(rom: PathBuf, palette: Option<PathBuf>) -> Result<(), Box<dyn std::er
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1024.0, 768.0])
-            .with_title("NES Emulator - Egui"),
+            .with_title("NES Emulator - Egui")
+            .with_app_id("nes-emulator"),
         vsync: false, // Disable vsync for uncapped performance
         ..Default::default()
     };
