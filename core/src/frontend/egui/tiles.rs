@@ -1,15 +1,17 @@
 use std::collections::HashSet;
 
+use crossbeam_channel::Sender;
 use egui::WidgetText;
 use egui_tiles::{Behavior, SimplificationOptions, TileId, Tiles, UiResponse};
 
 use crate::emulation::channel_emu::{ChannelEmulator, FETCH_DEPS};
-use crate::emulation::messages::EmulatorFetchable;
+use crate::emulation::messages::{EmulatorFetchable, FrontendMessage};
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::ui::{
     render_emulator_output, render_nametable, render_options, render_palettes, render_pattern_table,
 };
+use crate::frontend::messages::AsyncFrontendMessage;
 
 /// The different pane types that can be displayed in the tile tree
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,19 +52,28 @@ impl Pane {
 pub struct TreeBehavior<'a> {
     pub config: &'a mut AppConfig,
     pub emu_textures: &'a EmuTextures,
+    pub emu_sender: &'a Sender<FrontendMessage>,
+    pub async_sender: &'a Sender<AsyncFrontendMessage>,
 }
 
 impl<'a> TreeBehavior<'a> {
-    pub fn new(config: &'a mut AppConfig, emu_textures: &'a EmuTextures) -> Self {
+    pub fn new(
+        config: &'a mut AppConfig,
+        emu_textures: &'a EmuTextures,
+        emu_sender: &'a Sender<FrontendMessage>,
+        async_sender: &'a Sender<AsyncFrontendMessage>,
+    ) -> Self {
         Self {
             config,
             emu_textures,
+            emu_sender,
+            async_sender,
         }
     }
 }
 
 impl Behavior<Pane> for TreeBehavior<'_> {
-    fn pane_ui(&mut self, ui: &mut egui::Ui, _tile_id: TileId, pane: &mut Pane) -> UiResponse {
+    fn pane_ui(&mut self, ui: &mut egui::Ui, _: TileId, pane: &mut Pane) -> UiResponse {
         match pane {
             Pane::EmulatorOutput => {
                 render_emulator_output(ui, self.emu_textures);
@@ -76,7 +87,13 @@ impl Behavior<Pane> for TreeBehavior<'_> {
             Pane::Nametables => {
                 render_nametable(ui, self.emu_textures);
             }
-            Pane::Palettes => render_palettes(ui, self.config, self.emu_textures),
+            Pane::Palettes => render_palettes(
+                ui,
+                self.config,
+                self.emu_textures,
+                self.emu_sender,
+                self.async_sender,
+            ),
         }
         UiResponse::None
     }

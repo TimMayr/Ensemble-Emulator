@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rkyv::with::Skip;
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
@@ -13,8 +13,8 @@ use crate::emulation::mem::nametable_memory::{NametableArrangement, NametableMem
 use crate::emulation::mem::{Memory, MemoryDevice, Ram, Rom};
 use crate::emulation::rom::formats::archaic_ines::ArchaicInes;
 use crate::emulation::rom::formats::ines::Ines;
-use crate::emulation::rom::formats::ines_07::Ines07;
 use crate::emulation::rom::formats::ines2::Ines2;
+use crate::emulation::rom::formats::ines_07::Ines07;
 
 #[derive(Debug, Clone)]
 pub enum ParseError {
@@ -230,6 +230,10 @@ impl From<&RomFile> for RomFile {
     fn from(rom: &RomFile) -> Self { rom.clone() }
 }
 
+impl From<&PathBuf> for RomFile {
+    fn from(path: &PathBuf) -> Self { RomFile::load(&path.to_string_lossy().to_string()) }
+}
+
 pub struct RomBuilder {
     prg_rom_size: u32,
     chr_rom_size: u32,
@@ -407,5 +411,9 @@ impl RomFileConvertible for String {
 }
 
 impl RomFileConvertible for RomFile {
+    fn as_rom_file(&self) -> RomFile { RomFile::from(self) }
+}
+
+impl RomFileConvertible for PathBuf {
     fn as_rom_file(&self) -> RomFile { RomFile::from(self) }
 }

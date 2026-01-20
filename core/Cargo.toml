@@ -14,8 +14,9 @@ path = "src/bin/main.rs"
 [dependencies]
 rkyv = { version = "0.8.13", features = ["std", "bytecheck"] }
 crossbeam-channel = "0.5.15"
-
+rfd = "0.17.2"
 eframe = { version = "0.33.3" }
-egui = { version = "0.33.3", features = ["bytemuck", "serde"] }
+egui = { version = "0.33.3" }
 egui_tiles = { version = "0.14.1" }
 clap = { version = "4.5.54", features = ["derive"] }
+wasm-bindgen-futures = "0.4.58"
