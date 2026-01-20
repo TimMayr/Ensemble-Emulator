@@ -121,10 +121,12 @@ impl EguiApp {
                 }
                 AsyncFrontendMessage::LoadRom(p) => {
                     if let Some(p) = p {
-                        let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-                        let _ = self.to_emulator.send(FrontendMessage::LoadRom(p.clone()));
-                        let _ = self.to_emulator.send(FrontendMessage::Power);
-                        self.config.user_config.previous_rom_path = p
+                        if let Ok(p) = p.canonicalize() {
+                            let _ = self.to_emulator.send(FrontendMessage::PowerOff);
+                            let _ = self.to_emulator.send(FrontendMessage::LoadRom(p.clone()));
+                            let _ = self.to_emulator.send(FrontendMessage::Power);
+                            self.config.user_config.previous_rom_path = p
+                        }
                     }
                 }
             }
@@ -352,18 +354,17 @@ impl Debug for EguiApp {
 /// Run the egui frontend
 pub fn run(rom: PathBuf, palette: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
     // Create the emulator instance
-    let mut console = Nes::default();
+    let console = Nes::default();
 
     let palette = parse_palette_from_file(palette);
 
-    // Load a ROM
-    console.load_rom(&rom.to_string_lossy().to_string());
-
     // Create channel-based emulator wrapper
     let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
+    let (to_frontend, from_async) = crossbeam_channel::unbounded();
+
+    // Setup Emulator State via messages
+    let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(Some(rom)));
     let _ = tx_to_emu.send(FrontendMessage::SetPalette(Box::new(palette)));
-    let _ = tx_to_emu.send(FrontendMessage::Power);
-    let (to_async, from_async) = crossbeam_channel::unbounded();
 
     // Configure eframe options
     // Disable vsync to allow uncapped frame rates - emulator handles its own timing
@@ -390,7 +391,7 @@ pub fn run(rom: PathBuf, palette: Option<PathBuf>) -> Result<(), Box<dyn std::er
                 channel_emu,
                 tx_to_emu,
                 rx_from_emu,
-                to_async,
+                to_frontend,
                 from_async,
                 palette,
             )))
