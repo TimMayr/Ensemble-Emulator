@@ -52,7 +52,6 @@ fn start_egui(rom: Option<PathBuf>, palette: Option<PathBuf>) -> Result<(), Stri
 fn start_headless(rom: Option<PathBuf>) -> Result<(), String> {
     let mut emu = Nes::default();
 
-
     if rom.is_none() {
         panic!("Headless runs must specify the rom file using the -r (--rom) argument")
     }

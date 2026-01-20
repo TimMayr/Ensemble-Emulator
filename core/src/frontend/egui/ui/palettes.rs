@@ -1,3 +1,5 @@
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::PathBuf;
 
 use crossbeam_channel::Sender;
@@ -7,7 +9,7 @@ use crate::emulation::ppu::PALETTE_RAM_START_ADDRESS;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::messages::AsyncFrontendMessage;
-use crate::frontend::util::{pick_palette, FromU32};
+use crate::frontend::util::{AsU32, FromU32, Hashable, ToBytes, create_new, pick_palette};
 
 pub fn render_palettes(
     ui: &mut egui::Ui,
@@ -16,6 +18,7 @@ pub fn render_palettes(
     to_emu: &Sender<FrontendMessage>,
     to_frontend: &Sender<AsyncFrontendMessage>,
 ) {
+    let old_palette = config.view_config.palette_rgb_data;
     let full_width = ui.available_width();
     let single_color_width = 80f32.min(full_width / 4.0);
     let single_color_height = 20.0;
@@ -59,7 +62,13 @@ pub fn render_palettes(
 
                 let address = PALETTE_RAM_START_ADDRESS as usize | (j + (i * 4));
 
-                if response.clicked() {
+                let mut new_color = *color;
+                response.context_menu(|ui| {
+                    ui.add(egui::Slider::new(&mut new_color, 1..=64).text("Palette Index"));
+                });
+
+                if response.clicked() || new_color != *color {
+                    let color = new_color;
                     let _ = to_emu.send(FrontendMessage::WritePpu(address as u16, color + 1));
                     let _ = to_emu.send(FrontendMessage::RequestDebugData(
                         EmulatorFetchable::Palettes(None),
@@ -81,7 +90,7 @@ pub fn render_palettes(
     ui.separator();
     egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
-            if ui.button("Load palette file").clicked() {
+            if ui.button("Load palette").clicked() {
                 std::thread::spawn({
                     let sender = to_frontend.clone();
                     let prev_path = config.user_config.previous_palette_path.clone();
@@ -97,6 +106,31 @@ pub fn render_palettes(
                     }
                 });
             }
+
+            if ui.button("Save palette").clicked() {
+                std::thread::spawn({
+                    let palette = config.view_config.palette_rgb_data.to_bytes();
+                    let prev_path = config.user_config.previous_palette_path.clone();
+                    let prev_dir = if let Some(prev_path) = prev_path.parent() {
+                        prev_path.to_path_buf()
+                    } else {
+                        PathBuf::default()
+                    };
+
+                    move || {
+                        let path = create_new(prev_dir);
+                        if let Some(p) = path
+                            && let Ok(mut file) = OpenOptions::new()
+                                .write(true)
+                                .create(true)
+                                .truncate(false)
+                                .open(p)
+                        {
+                            let _ = file.write_all(&palette[..]);
+                        };
+                    }
+                });
+            }
         })
     });
 
@@ -108,6 +142,7 @@ pub fn render_palettes(
     );
 
     for (i, color) in config.view_config.palette_rgb_data.colors[0]
+        .clone()
         .iter()
         .enumerate()
     {
@@ -130,9 +165,27 @@ pub fn render_palettes(
             );
         }
 
+        let mut picked_color = egui::Color32::from_u32(*color);
+        response.context_menu(|ui| {
+            egui::color_picker::color_picker_color32(
+                ui,
+                &mut picked_color,
+                egui::color_picker::Alpha::Opaque,
+            );
+        });
+
+        config.view_config.palette_rgb_data.colors[0][i] = picked_color.as_u32();
+
         response.on_hover_ui(|ui| {
             ui.label(format!("Index: {i}"));
             ui.label(format!("Hex: 0x{:06X}", color & 0x00FFFFFF));
         });
+    }
+
+    if old_palette.hash() != config.view_config.palette_rgb_data.hash() {
+        let _ = to_emu.send(FrontendMessage::SetPalette(Box::new(
+            config.view_config.palette_rgb_data,
+        )));
+        let _ = to_frontend.send(AsyncFrontendMessage::RefreshPalette);
     }
 }

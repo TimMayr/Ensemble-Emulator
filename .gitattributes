@@ -1,2 +1,3 @@
-# Ignore everything in the "third_party" folder
 core/tests/** linguist-vendored
+wiki-clone/** linguist-vendored
+pally/** linguist-vendored
