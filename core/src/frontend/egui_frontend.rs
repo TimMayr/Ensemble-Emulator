@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 
 use crossbeam_channel::{Receiver, Sender};
-use egui::{Context, Style, TextBuffer, Visuals};
+use egui::{Context, Style, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
 use crate::emulation::messages::{EmulatorFetchable, EmulatorMessage, FrontendMessage, RgbPalette};
@@ -31,6 +31,7 @@ use crate::frontend::egui::tiles::{
 use crate::frontend::egui::ui::add_status_bar;
 use crate::frontend::messages::AsyncFrontendMessage;
 use crate::frontend::palettes::parse_palette_from_file;
+use crate::frontend::util::pick_rom;
 
 /// Main egui application state
 pub struct EguiApp {
@@ -120,7 +121,9 @@ impl EguiApp {
                 }
                 AsyncFrontendMessage::LoadRom(p) => {
                     if let Some(p) = p {
+                        let _ = self.to_emulator.send(FrontendMessage::PowerOff);
                         let _ = self.to_emulator.send(FrontendMessage::LoadRom(p.clone()));
+                        let _ = self.to_emulator.send(FrontendMessage::Power);
                         self.config.user_config.previous_rom_path = p
                     }
                 }
@@ -273,6 +276,24 @@ impl eframe::App for EguiApp {
         // Menu bar at the top
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
+                ui.menu_button("File", |ui| {
+                    if ui.button("Load Rom").clicked() {
+                        std::thread::spawn({
+                            let sender = self.async_sender.clone();
+                            let prev_path = self.config.user_config.previous_rom_path.clone();
+                            let prev_dir = if let Some(prev_path) = prev_path.parent() {
+                                prev_path.to_path_buf()
+                            } else {
+                                PathBuf::default()
+                            };
+
+                            move || {
+                                let path = pick_rom(prev_dir);
+                                sender.send(AsyncFrontendMessage::LoadRom(path))
+                            }
+                        });
+                    }
+                });
                 ui.menu_button("View", |ui| {
                     if ui.button("Options").clicked() {
                         add_pane_if_missing(&mut self.tree, Pane::Options);
@@ -336,12 +357,12 @@ pub fn run(rom: PathBuf, palette: Option<PathBuf>) -> Result<(), Box<dyn std::er
     let palette = parse_palette_from_file(palette);
 
     // Load a ROM
-    console.load_rom(&rom.to_string_lossy().take());
-    console.power();
+    console.load_rom(&rom.to_string_lossy().to_string());
 
     // Create channel-based emulator wrapper
     let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
     let _ = tx_to_emu.send(FrontendMessage::SetPalette(Box::new(palette)));
+    let _ = tx_to_emu.send(FrontendMessage::Power);
     let (to_async, from_async) = crossbeam_channel::unbounded();
 
     // Configure eframe options

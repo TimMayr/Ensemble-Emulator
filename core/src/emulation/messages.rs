@@ -40,6 +40,8 @@ pub enum FrontendMessage {
     ControllerInput(ControllerEvent),
     /// Request to reset the console
     Reset,
+    Power,
+    PowerOff,
     /// Request to step one frame
     StepFrame,
     RequestDebugData(EmulatorFetchable),
