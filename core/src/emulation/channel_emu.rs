@@ -139,6 +139,10 @@ impl ChannelEmulator {
                 FrontendMessage::LoadRom(path) => {
                     self.nes.load_rom(&path);
                 }
+                FrontendMessage::Power => {
+                    self.nes.power();
+                }
+                FrontendMessage::PowerOff => self.nes.power_off(),
             }
         }
 

@@ -1112,7 +1112,6 @@ impl Cpu {
 
             self.is_in_irq = true;
 
-            debug_assert!(!seq.is_empty());
             if let Some(next) = seq.pop_front() {
                 self.current_op = next;
             }
