@@ -50,6 +50,7 @@ pub enum FrontendMessage {
     LoadRom(PathBuf),
     WritePpu(u16, u8),
     WriteCpu(u16, u8),
+    InitPpu(u16, u8),
 }
 
 /// Controller input events
