@@ -20,12 +20,26 @@ pub struct AppConfig {
     pub view_config: ViewConfig,
     pub speed_config: SpeedConfig,
     pub user_config: UserConfig,
+    pub console_config: ConsoleConfig,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct UserConfig {
-    pub previous_palette_path: PathBuf,
-    pub previous_rom_path: PathBuf,
+    pub previous_palette_path: Option<PathBuf>,
+    pub previous_rom_path: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ConsoleConfig {
+    pub is_powered: bool,
+}
+
+impl Default for ConsoleConfig {
+    fn default() -> Self {
+        Self {
+            is_powered: true,
+        }
+    }
 }
 
 /// Emulation speed mode

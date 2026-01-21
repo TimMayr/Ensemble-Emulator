@@ -14,6 +14,7 @@ use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+
 use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, Visuals};
 
@@ -25,7 +26,7 @@ use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
-    Pane, TreeBehavior, add_pane_if_missing, compute_required_fetches_from_tree, create_tree,
+    add_pane_if_missing, compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
 };
 use crate::frontend::egui::ui::add_status_bar;
 use crate::frontend::messages::AsyncFrontendMessage;
@@ -112,7 +113,7 @@ impl EguiApp {
                     let palette = parse_palette_from_file(p.clone());
                     self.config.view_config.palette_rgb_data = palette;
                     if let Some(p) = p {
-                        self.config.user_config.previous_palette_path = p
+                        self.config.user_config.previous_palette_path = Some(p)
                     }
                     let _ = self
                         .to_emulator
@@ -127,7 +128,7 @@ impl EguiApp {
                         let _ = self.to_emulator.send(FrontendMessage::PowerOff);
                         let _ = self.to_emulator.send(FrontendMessage::LoadRom(p.clone()));
                         let _ = self.to_emulator.send(FrontendMessage::Power);
-                        self.config.user_config.previous_rom_path = p
+                        self.config.user_config.previous_rom_path = Some(p)
                     }
                 }
                 AsyncFrontendMessage::RefreshPalette => {
@@ -288,8 +289,13 @@ impl eframe::App for EguiApp {
                         std::thread::spawn({
                             let sender = self.async_sender.clone();
                             let prev_path = self.config.user_config.previous_rom_path.clone();
-                            let prev_dir = if let Some(prev_path) = prev_path.parent() {
-                                prev_path.to_path_buf()
+
+                            let prev_dir = if let Some(prev_path) = prev_path {
+                                if let Some(prev_path) = prev_path.parent() {
+                                    prev_path.to_path_buf()
+                                } else {
+                                    PathBuf::default()
+                                }
                             } else {
                                 PathBuf::default()
                             };
@@ -299,6 +305,33 @@ impl eframe::App for EguiApp {
                                 sender.send(AsyncFrontendMessage::LoadRom(path))
                             }
                         });
+                    }
+                });
+                ui.menu_button("Console", |ui| {
+                    if ui.button("Reset").clicked() {
+                        let _ = self.to_emulator.send(FrontendMessage::Reset);
+                    }
+                    if ui.button("Power cycle").clicked() {
+                        let _ = self.to_emulator.send(FrontendMessage::PowerOff);
+                        if let Some(p) = self.config.user_config.previous_rom_path.clone() {
+                            let _ = self.to_emulator.send(FrontendMessage::LoadRom(p));
+                        }
+                        let _ = self.to_emulator.send(FrontendMessage::Power);
+                        self.config.console_config.is_powered = true;
+                    }
+                    if !self.config.console_config.is_powered {
+                        if ui.button("Power On").clicked() {
+                            if let Some(p) = self.config.user_config.previous_rom_path.clone() {
+                                let _ = self.to_emulator.send(FrontendMessage::LoadRom(p));
+                            }
+                            let _ = self.to_emulator.send(FrontendMessage::Power);
+                            self.config.console_config.is_powered = true;
+                        }
+                    } else {
+                        if ui.button("Power Off").clicked() {
+                            let _ = self.to_emulator.send(FrontendMessage::PowerOff);
+                            self.config.console_config.is_powered = false;
+                        }
                     }
                 });
                 ui.menu_button("View", |ui| {

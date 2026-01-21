@@ -9,7 +9,7 @@ use crate::emulation::ppu::PALETTE_RAM_START_ADDRESS;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::messages::AsyncFrontendMessage;
-use crate::frontend::util::{AsU32, FromU32, Hashable, ToBytes, create_new, pick_palette};
+use crate::frontend::util::{create_new, pick_palette, AsU32, FromU32, Hashable, ToBytes};
 
 pub fn render_palettes(
     ui: &mut egui::Ui,
@@ -94,8 +94,12 @@ pub fn render_palettes(
                 std::thread::spawn({
                     let sender = to_frontend.clone();
                     let prev_path = config.user_config.previous_palette_path.clone();
-                    let prev_dir = if let Some(prev_path) = prev_path.parent() {
-                        prev_path.to_path_buf()
+                    let prev_dir = if let Some(prev_path) = prev_path {
+                        if let Some(prev_path) = prev_path.parent() {
+                            prev_path.to_path_buf()
+                        } else {
+                            PathBuf::default()
+                        }
                     } else {
                         PathBuf::default()
                     };
@@ -111,8 +115,12 @@ pub fn render_palettes(
                 std::thread::spawn({
                     let palette = config.view_config.palette_rgb_data.to_bytes();
                     let prev_path = config.user_config.previous_palette_path.clone();
-                    let prev_dir = if let Some(prev_path) = prev_path.parent() {
-                        prev_path.to_path_buf()
+                    let prev_dir = if let Some(prev_path) = prev_path {
+                        if let Some(prev_path) = prev_path.parent() {
+                            prev_path.to_path_buf()
+                        } else {
+                            PathBuf::default()
+                        }
                     } else {
                         PathBuf::default()
                     };
