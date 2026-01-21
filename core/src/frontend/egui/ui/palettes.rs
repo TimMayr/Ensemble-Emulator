@@ -90,7 +90,7 @@ pub fn render_palettes(
     ui.separator();
     egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
-            if ui.button("Load palette").clicked() {
+            if ui.button("Load Palette").clicked() {
                 std::thread::spawn({
                     let sender = to_frontend.clone();
                     let prev_path = config.user_config.previous_palette_path.clone();
@@ -107,7 +107,7 @@ pub fn render_palettes(
                 });
             }
 
-            if ui.button("Save palette").clicked() {
+            if ui.button("Save Palette").clicked() {
                 std::thread::spawn({
                     let palette = config.view_config.palette_rgb_data.to_bytes();
                     let prev_path = config.user_config.previous_palette_path.clone();
@@ -130,6 +130,10 @@ pub fn render_palettes(
                         };
                     }
                 });
+            }
+
+            if ui.button("Reset Palette").clicked() {
+                let _ = to_frontend.send(AsyncFrontendMessage::LoadPalette(None));
             }
         })
     });
