@@ -104,7 +104,26 @@ pub fn draw_pattern_table(
                         let new_lo = new_pattern & 1;
                         let new_hi = (new_pattern >> 1) & 1;
 
-                        //COPILOT: YOUR CODE HERE
+                        // Match the bit position calculation from the read code (64 - index)
+                        // to ensure we modify the same pixel that is displayed.
+                        // When index=0, 64-0=64 which wraps to 0 for shift operations.
+                        let u64_bit_pos = 64usize.wrapping_sub(index) & 63;
+                        // Convert u64 bit position to PPU byte row and bit within byte
+                        let ppu_row = 7 - (u64_bit_pos / 8);
+                        let ppu_bit = u64_bit_pos % 8;
+                        // Extract current bytes for this row from plane_0 and plane_1
+                        let byte_shift = (7 - ppu_row) * 8;
+                        let old_byte_0 = ((tile_data.plane_0 >> byte_shift) & 0xFF) as u8;
+                        let old_byte_1 = ((tile_data.plane_1 >> byte_shift) & 0xFF) as u8;
+                        // Clear the old bit and set the new bit
+                        let new_byte_0 = (old_byte_0 & !(1 << ppu_bit)) | (new_lo << ppu_bit);
+                        let new_byte_1 = (old_byte_1 & !(1 << ppu_bit)) | (new_hi << ppu_bit);
+                        // Calculate PPU addresses for the bytes
+                        let addr_0 = tile_data.address + ppu_row as u16;
+                        let addr_1 = tile_data.address + ppu_row as u16 + 8;
+                        // Send the updated bytes to the emulator
+                        let _ = to_emu.send(FrontendMessage::WritePpu(addr_0, new_byte_0));
+                        let _ = to_emu.send(FrontendMessage::WritePpu(addr_1, new_byte_1));
 
                         let _ = to_emu.send(FrontendMessage::RequestDebugData(EmulatorFetchable::Tiles(None)));
                     }
