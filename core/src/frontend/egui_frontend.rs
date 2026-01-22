@@ -14,6 +14,7 @@ use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+
 use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, Visuals};
 
@@ -25,12 +26,11 @@ use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
-    Pane, TreeBehavior, add_pane_if_missing, compute_required_fetches_from_tree, create_tree,
+    compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
 };
-use crate::frontend::egui::ui::add_status_bar;
+use crate::frontend::egui::ui::{add_menu_bar, add_status_bar};
 use crate::frontend::messages::AsyncFrontendMessage;
 use crate::frontend::palettes::parse_palette_from_file;
-use crate::frontend::util::pick_rom;
 
 /// Main egui application state
 pub struct EguiApp {
@@ -112,7 +112,7 @@ impl EguiApp {
                     let palette = parse_palette_from_file(p.clone());
                     self.config.view_config.palette_rgb_data = palette;
                     if let Some(p) = p {
-                        self.config.user_config.previous_palette_path = p
+                        self.config.user_config.previous_palette_path = Some(p)
                     }
                     let _ = self
                         .to_emulator
@@ -127,7 +127,7 @@ impl EguiApp {
                         let _ = self.to_emulator.send(FrontendMessage::PowerOff);
                         let _ = self.to_emulator.send(FrontendMessage::LoadRom(p.clone()));
                         let _ = self.to_emulator.send(FrontendMessage::Power);
-                        self.config.user_config.previous_rom_path = p
+                        self.config.user_config.previous_rom_path = Some(p)
                     }
                 }
                 AsyncFrontendMessage::RefreshPalette => {
@@ -280,49 +280,13 @@ impl eframe::App for EguiApp {
         self.config.view_config.required_debug_fetches =
             compute_required_fetches_from_tree(&self.tree);
 
-        // Menu bar at the top
-        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-            egui::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui.button("Load Rom").clicked() {
-                        std::thread::spawn({
-                            let sender = self.async_sender.clone();
-                            let prev_path = self.config.user_config.previous_rom_path.clone();
-                            let prev_dir = if let Some(prev_path) = prev_path.parent() {
-                                prev_path.to_path_buf()
-                            } else {
-                                PathBuf::default()
-                            };
-
-                            move || {
-                                let path = pick_rom(prev_dir);
-                                sender.send(AsyncFrontendMessage::LoadRom(path))
-                            }
-                        });
-                    }
-                });
-                ui.menu_button("View", |ui| {
-                    if ui.button("Options").clicked() {
-                        add_pane_if_missing(&mut self.tree, Pane::Options);
-                        ui.close();
-                    }
-                    ui.separator();
-                    ui.label("Debug Viewers");
-                    if ui.button("Palettes").clicked() {
-                        add_pane_if_missing(&mut self.tree, Pane::Palettes);
-                        ui.close();
-                    }
-                    if ui.button("Pattern Tables").clicked() {
-                        add_pane_if_missing(&mut self.tree, Pane::PatternTables);
-                        ui.close();
-                    }
-                    if ui.button("Nametables").clicked() {
-                        add_pane_if_missing(&mut self.tree, Pane::Nametables);
-                        ui.close();
-                    }
-                });
-            });
-        });
+        add_menu_bar(
+            ctx,
+            &mut self.config,
+            &self.async_sender,
+            &self.to_emulator,
+            &mut self.tree,
+        );
 
         // Status bar at bottom
         add_status_bar(

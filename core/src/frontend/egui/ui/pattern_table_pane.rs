@@ -6,8 +6,9 @@ use crate::frontend::egui::ui::draw_pattern_table;
 
 /// Render both pattern tables side by side
 pub fn render_pattern_table(ui: &mut egui::Ui, config: &AppConfig, emu_textures: &EmuTextures) {
-    if emu_textures.tile_textures.is_some()
+    if let Some(tile_textures) = &emu_textures.tile_textures
         && let Some(palettes) = &emu_textures.palette_data
+        && let Some(pattern_data) = &emu_textures.tile_data
     {
         let full_width = ui.available_width();
         let half_width = (full_width - ui.spacing().item_spacing.x * 3.0) * 0.5;
@@ -22,26 +23,22 @@ pub fn render_pattern_table(ui: &mut egui::Ui, config: &AppConfig, emu_textures:
             .map(|color_index| config.view_config.palette_rgb_data.colors[0][color_index as usize]);
 
         ui.horizontal_top(|ui| {
-            ui.allocate_ui(egui::vec2(half_width, half_width), |ui| {
-                draw_pattern_table(
-                    ui,
-                    0,
-                    emu_textures,
-                    config.view_config.debug_active_palette,
-                    transformed_palette,
-                );
-            });
+            draw_pattern_table(
+                ui,
+                half_width,
+                &tile_textures[config.view_config.debug_active_palette][..256],
+                transformed_palette,
+                &pattern_data[..256],
+            );
 
             ui.separator();
-            ui.allocate_ui(egui::vec2(half_width, half_width), |ui| {
-                draw_pattern_table(
-                    ui,
-                    1,
-                    emu_textures,
-                    config.view_config.debug_active_palette,
-                    transformed_palette,
-                );
-            });
+            draw_pattern_table(
+                ui,
+                half_width,
+                &tile_textures[config.view_config.debug_active_palette][256..],
+                transformed_palette,
+                &pattern_data[256..],
+            );
         });
     } else {
         ui.label("Waiting for pattern table data...");
