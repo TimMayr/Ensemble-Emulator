@@ -82,7 +82,7 @@ impl Behavior<Pane> for TreeBehavior<'_> {
                 render_options(ui, self.config);
             }
             Pane::PatternTables => {
-                render_pattern_table(ui, self.config, self.emu_textures);
+                render_pattern_table(ui, self.config, self.emu_textures, self.emu_sender);
             }
             Pane::Nametables => {
                 render_nametable(ui, self.emu_textures);

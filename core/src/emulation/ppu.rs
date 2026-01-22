@@ -962,6 +962,14 @@ impl Ppu {
         }
     }
 
+        #[inline(always)]
+    pub fn mem_init(&mut self, addr: u16, data: u8) {
+        match addr {
+            0x3F00..0x3FFF => self.palette_ram.init(addr, data),
+            _ => self.memory.init(addr, data),
+        }
+    }
+
     #[inline(always)]
     pub fn oam_read(&mut self, addr: u8) -> u8 {
         let row = addr >> 3;

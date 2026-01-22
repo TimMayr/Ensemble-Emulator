@@ -265,12 +265,6 @@ impl eframe::App for EguiApp {
             &mut self.emu_textures.last_frame_request,
         );
 
-        // Check for escape to quit
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            let _ = self.to_emulator.send(FrontendMessage::Quit);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-        }
-
         self.update_emu_textures(ctx);
 
         // Process messages from emulator
