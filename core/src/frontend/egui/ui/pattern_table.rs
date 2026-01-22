@@ -104,6 +104,7 @@ pub fn draw_pattern_table(
                         let new_lo = new_pattern & 1;
                         let new_hi = (new_pattern >> 1) & 1;
 
+                        //COPILOT: YOUR CODE HERE
 
                         let _ = to_emu.send(FrontendMessage::RequestDebugData(EmulatorFetchable::Tiles(None)));
                     }
