@@ -30,7 +30,7 @@ pub fn draw_pattern_table(
         ));
 
         egui::Popup::context_menu(&response)
-            .close_behavior(egui::PopupCloseBehavior::IgnoreClicks)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| {
                 ui.heading("Edit Pattern");
 
