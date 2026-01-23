@@ -63,13 +63,16 @@ pub fn render_palettes(
                 let address = PALETTE_RAM_START_ADDRESS as usize | (j + (i * 4));
 
                 let mut new_color = *color;
-                response.context_menu(|ui| {
-                    ui.add(egui::Slider::new(&mut new_color, 1..=64).text("Palette Index"));
-                });
 
-                if response.clicked() || new_color != *color {
+                egui::Popup::context_menu(&response)
+                    .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                    .show(|ui| {
+                        ui.add(egui::Slider::new(&mut new_color, 1..=64).text("Palette Index"));
+                    });
+
+                if new_color != *color {
                     let color = new_color;
-                    let _ = to_emu.send(FrontendMessage::WritePpu(address as u16, color + 1));
+                    let _ = to_emu.send(FrontendMessage::WritePpu(address as u16, color));
                     let _ = to_emu.send(FrontendMessage::RequestDebugData(
                         EmulatorFetchable::Palettes(None),
                     ));
@@ -178,13 +181,15 @@ pub fn render_palettes(
         }
 
         let mut picked_color = egui::Color32::from_u32(*color);
-        response.context_menu(|ui| {
-            egui::color_picker::color_picker_color32(
-                ui,
-                &mut picked_color,
-                egui::color_picker::Alpha::Opaque,
-            );
-        });
+        egui::Popup::context_menu(&response)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| {
+                egui::color_picker::color_picker_color32(
+                    ui,
+                    &mut picked_color,
+                    egui::color_picker::Alpha::Opaque,
+                );
+            });
 
         config.view_config.palette_rgb_data.colors[0][i] = picked_color.as_u32();
 

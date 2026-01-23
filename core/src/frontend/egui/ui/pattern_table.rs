@@ -3,6 +3,7 @@ use eframe::epaint::TextureHandle;
 use egui::Ui;
 
 use crate::emulation::messages::{EmulatorFetchable, FrontendMessage, TileData};
+use crate::frontend::egui::config::AppConfig;
 use crate::frontend::util::FromU32;
 
 /// Draw a pattern table (left or right) in the UI
@@ -12,7 +13,8 @@ pub fn draw_pattern_table(
     emu_textures: &[TextureHandle],
     palette: [u32; 4],
     pattern_data: &[TileData],
-    to_emu: &Sender<FrontendMessage>
+    to_emu: &Sender<FrontendMessage>,
+    config: &mut AppConfig,
 ) {
     let tile_size = width / 16.0;
 
@@ -49,13 +51,40 @@ pub fn draw_pattern_table(
             egui::Id::new("popup_painter"),
         ));
 
-        egui::Popup::menu(&response)
-            .close_behavior(egui::PopupCloseBehavior::IgnoreClicks)
+        egui::Popup::context_menu(&response)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| {
                 ui.heading("Edit Pattern");
 
                 let tile_data = pattern_data[i];
                 ui.label(format!("Rom address: ${:0X}", tile_data.address));
+
+                ui.horizontal(|ui| {
+                    color_radio(
+                        ui,
+                        &mut config.user_config.pattern_edit_color,
+                        0,
+                        egui::Color32::from_u32(palette[0]),
+                    );
+                    color_radio(
+                        ui,
+                        &mut config.user_config.pattern_edit_color,
+                        1,
+                        egui::Color32::from_u32(palette[1]),
+                    );
+                    color_radio(
+                        ui,
+                        &mut config.user_config.pattern_edit_color,
+                        2,
+                        egui::Color32::from_u32(palette[2]),
+                    );
+                    color_radio(
+                        ui,
+                        &mut config.user_config.pattern_edit_color,
+                        3,
+                        egui::Color32::from_u32(palette[3]),
+                    );
+                });
 
                 ui.label("Pattern:");
 
@@ -111,7 +140,9 @@ pub fn draw_pattern_table(
                         let _ = to_emu.send(FrontendMessage::WritePpu(addr_0, new_byte_0));
                         let _ = to_emu.send(FrontendMessage::WritePpu(addr_1, new_byte_1));
 
-                        let _ = to_emu.send(FrontendMessage::RequestDebugData(EmulatorFetchable::Tiles(None)));
+                        let _ = to_emu.send(FrontendMessage::RequestDebugData(
+                            EmulatorFetchable::Tiles(None),
+                        ));
                     }
 
                     if response.hovered() {
@@ -124,5 +155,45 @@ pub fn draw_pattern_table(
                     }
                 }
             });
+    }
+}
+
+fn color_radio<'a, Value: PartialEq>(
+    ui: &mut Ui,
+    current: &mut Value,
+    alternative: Value,
+    color32: egui::Color32,
+) {
+    let selected = *current == alternative;
+
+    let frame = egui::Frame::NONE
+        .stroke(if selected {
+            egui::Stroke::new(2.0, ui.visuals().selection.stroke.color)
+        } else {
+            egui::Stroke::NONE
+        })
+        .fill(if selected {
+            ui.visuals().selection.bg_fill
+        } else {
+            egui::Color32::TRANSPARENT
+        })
+        .corner_radius(6.0)
+        .inner_margin(6.0);
+
+    let min = ui.cursor().min;
+    let response = frame
+        .show(ui, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.painter().rect_filled(
+                    egui::Rect::from_min_size(min, egui::vec2(10.0, 10.0)),
+                    0.0,
+                    color32,
+                );
+            });
+        })
+        .response;
+
+    if response.clicked() {
+        *current = alternative;
     }
 }
