@@ -7,12 +7,16 @@ pub fn render_nametable(ui: &mut egui::Ui, emu_textures: &EmuTextures) {
     if let Some(ref data) = emu_textures.nametable_data
         && let Some(ref textures) = emu_textures.tile_textures
     {
-        let available = ui.available_width();
-        // Each nametable is 32x30 tiles, we show 2 side by side
+        let available = ui.available_size();
+        // Each nametable is 32x30 tiles, we show 2x2 nametables
         let base_size = 8.0;
         let tile_cols = 32;
-        let logical_width = (tile_cols as f32 * base_size) * 2.0; // 2 nametables side by side
-        let scale = available / logical_width;
+        let tile_rows = 30;
+        // 2 nametables side by side, 2 stacked vertically
+        let logical_width = (tile_cols as f32 * base_size) * 2.0 + 4.0; // +4 for spacing
+        let logical_height = (tile_rows as f32 * base_size) * 2.0 + 4.0 + 20.0; // +4 spacing, +20 for label
+        // Scale to fit both width and height
+        let scale = (available.x / logical_width).min(available.y / logical_height);
         let tex_size = egui::vec2(base_size, base_size) * scale;
 
         ui.label(format!("Nametables (256x240 x4 at {:.1}x scale)", scale));
