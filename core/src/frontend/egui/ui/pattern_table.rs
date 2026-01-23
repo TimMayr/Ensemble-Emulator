@@ -22,7 +22,13 @@ pub fn draw_pattern_table(
 
     for (i, tex) in emu_textures.iter().enumerate() {
         let rect = grid_config.cell_rect(parent.min, i);
-        let response = image_cell(ui, rect, tex.id(), egui::Sense::all(), ("tile", i, parent.to_string()));
+        let response = image_cell(
+            ui,
+            rect,
+            tex.id(),
+            egui::Sense::all(),
+            ("tile", i, parent.to_string()),
+        );
 
         let painter = ui.ctx().layer_painter(egui::LayerId::new(
             egui::Order::Foreground,
@@ -90,12 +96,20 @@ pub fn draw_pattern_table(
                     // Support both click and drag for editing pixels
                     // Check if clicked OR if pointer is within this pixel's rect while primary button is down
                     let pointer_in_rect = ui.ctx().input(|i| {
-                        i.pointer.interact_pos()
+                        i.pointer
+                            .interact_pos()
                             .map_or(false, |pos| pixel_rect.contains(pos))
                     });
                     let primary_down = ui.input(|i| i.pointer.primary_down());
+                    let secondary_down = ui.input(|i| i.pointer.secondary_down());
                     if response.clicked() || (pointer_in_rect && primary_down) {
-                        handle_pixel_edit(&tile_data, index, config, to_emu);
+                        handle_pixel_edit(&tile_data, index, config, to_emu, false);
+                    }
+
+                    if response.clicked_by(egui::PointerButton::Secondary)
+                        || (pointer_in_rect && secondary_down)
+                    {
+                        handle_pixel_edit(&tile_data, index, config, to_emu, true);
                     }
 
                     if response.hovered() || pointer_in_rect {
@@ -117,10 +131,16 @@ fn handle_pixel_edit(
     index: usize,
     config: &AppConfig,
     to_emu: &Sender<FrontendMessage>,
+    clear: bool,
 ) {
-    let new_pattern = config.user_config.pattern_edit_color;
-    let new_lo = new_pattern & 1;
-    let new_hi = (new_pattern >> 1) & 1;
+    let new_color = if !clear {
+        config.user_config.pattern_edit_color
+    } else {
+        0
+    };
+    
+    let new_lo = new_color & 1;
+    let new_hi = (new_color >> 1) & 1;
 
     let u64_bit_pos = 63usize.wrapping_sub(index) & 63;
     let ppu_row = 7 - (u64_bit_pos / 8);
