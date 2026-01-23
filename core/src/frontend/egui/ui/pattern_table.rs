@@ -59,7 +59,11 @@ pub fn draw_pattern_table(
                 let tile_data = pattern_data[i];
                 ui.label(format!("Rom address: ${:0X}", tile_data.address));
 
-                ui.horizontal(|ui| {
+               
+
+                ui.label("Pattern:");
+                
+                 ui.horizontal(|ui| {
                     color_radio(
                         ui,
                         &mut config.user_config.pattern_edit_color,
@@ -85,8 +89,6 @@ pub fn draw_pattern_table(
                         egui::Color32::from_u32(palette[3]),
                     );
                 });
-
-                ui.label("Pattern:");
 
                 let height = 4.0 * 8.0;
                 let (parent, _) = ui.allocate_exact_size(

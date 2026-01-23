@@ -120,11 +120,6 @@ pub fn create_new(previous: PathBuf) -> Option<PathBuf> {
         .save_file()
 }
 
-/// A custom radio button widget that displays a colored square.
-/// Similar to egui's `radio_value`, but shows color instead of a radio circle.
-///
-/// When clicked, updates `current` to `alternative`.
-/// Shows a border when selected (current == alternative).
 pub fn color_radio<Value: PartialEq>(
     ui: &mut egui::Ui,
     current: &mut Value,
