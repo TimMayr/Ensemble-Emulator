@@ -22,8 +22,18 @@ pub fn render_palettes(
     let single_color_width = 80f32.min(full_width / 4.0);
     let single_color_height = 20.0;
 
-    // Handle drag and drop for palette files
-    handle_palette_drag_drop(ui, to_frontend);
+    // Get the pane rect for drag and drop scoping
+    let pane_rect = ui.max_rect();
+    
+    // Check if mouse is over this pane
+    let mouse_over_pane = ui.ctx().input(|i| {
+        i.pointer.hover_pos().map_or(false, |pos| pane_rect.contains(pos))
+    });
+
+    // Handle drag and drop for palette files only when hovering over this pane
+    if mouse_over_pane {
+        handle_palette_drag_drop(ui, pane_rect, to_frontend);
+    }
 
     // Render the 8 active palettes (4 background + 4 sprite)
     if let Some(palette_data) = &emu_textures.palette_data {
@@ -143,9 +153,9 @@ pub fn render_palettes(
 }
 
 /// Handle drag and drop for palette files
-fn handle_palette_drag_drop(ui: &mut egui::Ui, to_frontend: &Sender<AsyncFrontendMessage>) {
-    // Show drop preview when hovering with files
-    preview_files_being_dropped(ui.ctx(), &["pal"], "Drop .pal palette file here");
+fn handle_palette_drag_drop(ui: &egui::Ui, pane_rect: egui::Rect, to_frontend: &Sender<AsyncFrontendMessage>) {
+    // Show drop preview when hovering with files over this pane
+    preview_files_being_dropped(ui, pane_rect, &["pal"], "Drop .pal palette file here");
 
     // Handle dropped files
     ui.ctx().input(|i| {
@@ -161,12 +171,12 @@ fn handle_palette_drag_drop(ui: &mut egui::Ui, to_frontend: &Sender<AsyncFronten
     });
 }
 
-/// Show a visual indicator when files are being dragged over the window
-fn preview_files_being_dropped(ctx: &egui::Context, valid_extensions: &[&str], hint_text: &str) {
+/// Show a visual indicator when files are being dragged over the pane
+fn preview_files_being_dropped(ui: &egui::Ui, pane_rect: egui::Rect, valid_extensions: &[&str], hint_text: &str) {
     use egui::*;
 
-    if !ctx.input(|i| i.raw.hovered_files.is_empty()) {
-        let has_valid_file = ctx.input(|i| {
+    if !ui.ctx().input(|i| i.raw.hovered_files.is_empty()) {
+        let has_valid_file = ui.ctx().input(|i| {
             i.raw.hovered_files.iter().any(|f| {
                 f.path.as_ref().map_or(false, |p| {
                     p.extension().map_or(false, |ext| {
@@ -176,8 +186,7 @@ fn preview_files_being_dropped(ctx: &egui::Context, valid_extensions: &[&str], h
             })
         });
 
-        let screen_rect = ctx.viewport_rect();
-        let painter = ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("file_drop_overlay")));
+        let painter = ui.painter();
         
         let color = if has_valid_file {
             Color32::from_rgba_unmultiplied(0, 100, 0, 180)
@@ -185,7 +194,7 @@ fn preview_files_being_dropped(ctx: &egui::Context, valid_extensions: &[&str], h
             Color32::from_rgba_unmultiplied(100, 0, 0, 180)
         };
         
-        painter.rect_filled(screen_rect, 0.0, color);
+        painter.rect_filled(pane_rect, 0.0, color);
         
         let text = if has_valid_file {
             hint_text.to_string()
@@ -194,10 +203,10 @@ fn preview_files_being_dropped(ctx: &egui::Context, valid_extensions: &[&str], h
         };
         
         painter.text(
-            screen_rect.center(),
+            pane_rect.center(),
             Align2::CENTER_CENTER,
             text,
-            FontId::proportional(32.0),
+            FontId::proportional(24.0),
             Color32::WHITE,
         );
     }

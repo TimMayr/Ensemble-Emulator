@@ -29,8 +29,13 @@ pub fn render_pattern_table(ui: &mut egui::Ui, config: &mut AppConfig, emu_textu
             ));
             ui.separator();
             ui.label("Debug Palette:");
+            let palette_label = if config.view_config.debug_active_palette < 4 {
+                format!("BG Palette {}", config.view_config.debug_active_palette + 1)
+            } else {
+                format!("Sprite Palette {}", config.view_config.debug_active_palette - 3)
+            };
             egui::ComboBox::from_id_salt("debug_palette_selector")
-                .selected_text(format!("Palette {}", config.view_config.debug_active_palette))
+                .selected_text(palette_label)
                 .show_ui(ui, |ui| {
                     for i in 0..8 {
                         let label = if i < 4 {
