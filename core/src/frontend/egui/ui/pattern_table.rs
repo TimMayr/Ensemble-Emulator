@@ -4,7 +4,7 @@ use egui::Ui;
 
 use crate::emulation::messages::{EmulatorFetchable, FrontendMessage, TileData};
 use crate::frontend::egui::config::AppConfig;
-use crate::frontend::util::FromU32;
+use crate::frontend::util::{color_radio, FromU32};
 
 /// Draw a pattern table (left or right) in the UI
 pub fn draw_pattern_table(
@@ -155,45 +155,5 @@ pub fn draw_pattern_table(
                     }
                 }
             });
-    }
-}
-
-fn color_radio<'a, Value: PartialEq>(
-    ui: &mut Ui,
-    current: &mut Value,
-    alternative: Value,
-    color32: egui::Color32,
-) {
-    let selected = *current == alternative;
-
-    let frame = egui::Frame::NONE
-        .stroke(if selected {
-            egui::Stroke::new(2.0, ui.visuals().selection.stroke.color)
-        } else {
-            egui::Stroke::NONE
-        })
-        .fill(if selected {
-            ui.visuals().selection.bg_fill
-        } else {
-            egui::Color32::TRANSPARENT
-        })
-        .corner_radius(6.0)
-        .inner_margin(6.0);
-
-    let min = ui.cursor().min;
-    let response = frame
-        .show(ui, |ui| {
-            ui.vertical_centered(|ui| {
-                ui.painter().rect_filled(
-                    egui::Rect::from_min_size(min, egui::vec2(10.0, 10.0)),
-                    0.0,
-                    color32,
-                );
-            });
-        })
-        .response;
-
-    if response.clicked() {
-        *current = alternative;
     }
 }

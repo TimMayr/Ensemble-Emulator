@@ -119,3 +119,43 @@ pub fn create_new(previous: PathBuf) -> Option<PathBuf> {
         .set_file_name("palette.pal")
         .save_file()
 }
+
+/// A custom radio button widget that displays a colored square.
+/// Similar to egui's `radio_value`, but shows color instead of a radio circle.
+///
+/// When clicked, updates `current` to `alternative`.
+/// Shows a border when selected (current == alternative).
+pub fn color_radio<Value: PartialEq>(
+    ui: &mut egui::Ui,
+    current: &mut Value,
+    alternative: Value,
+    color: egui::Color32,
+) -> egui::Response {
+    let size = egui::vec2(20.0, 20.0);
+    let selected = *current == alternative;
+
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter();
+
+        // Draw the colored square
+        painter.rect_filled(rect, 2.0, color);
+
+        // Draw selection border when selected
+        if selected {
+            painter.rect_stroke(
+                rect,
+                2.0,
+                egui::Stroke::new(2.0, ui.visuals().selection.stroke.color),
+                egui::StrokeKind::Inside,
+            );
+        }
+    }
+
+    if response.clicked() {
+        *current = alternative;
+    }
+
+    response
+}
