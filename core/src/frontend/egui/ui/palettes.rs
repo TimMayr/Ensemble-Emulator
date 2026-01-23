@@ -42,7 +42,7 @@ pub fn render_palettes(
             for (j, color) in palette.iter().enumerate() {
                 let rgb_color = config.view_config.palette_rgb_data.colors[0][*color as usize];
                 let rect = grid_config.cell_rect(parent.min, j);
-                let response = color_cell(ui, rect, rgb_color, egui::Sense::all());
+                let response = color_cell(ui, rect, rgb_color, egui::Sense::all(), ("palette", i, j));
 
                 let address = PALETTE_RAM_START_ADDRESS as usize | (j + (i * 4));
                 let mut new_color = *color;
@@ -107,7 +107,7 @@ pub fn render_palettes(
         .enumerate()
     {
         let rect = grid_config.cell_rect(parent.min, i);
-        let response = color_cell(ui, rect, *color, egui::Sense::all());
+        let response = color_cell(ui, rect, *color, egui::Sense::all(), ("rgb_palette", i));
 
         let mut picked_color = egui::Color32::from_u32(*color);
         egui::Popup::context_menu(&response)

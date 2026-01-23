@@ -15,6 +15,7 @@ use crate::frontend::util::FromU32;
 /// * `rect` - The rectangle to draw in
 /// * `color` - The fill color (as u32 ARGB)
 /// * `sense` - The interaction sense (click, hover, etc.)
+/// * `id_source` - A unique ID source for this widget (e.g., index in a grid)
 ///
 /// # Returns
 /// The response from the interaction
@@ -23,8 +24,9 @@ pub fn color_cell(
     rect: egui::Rect,
     color: u32,
     sense: egui::Sense,
+    id_source: impl std::hash::Hash,
 ) -> egui::Response {
-    let response = ui.interact(rect, ui.id().with(format!("{}", rect)), sense);
+    let response = ui.interact(rect, ui.id().with(id_source), sense);
     let painter = ui.painter();
 
     painter.rect_filled(rect, 0.0, egui::Color32::from_u32(color));
@@ -50,6 +52,7 @@ pub fn color_cell(
 /// * `rect` - The rectangle to draw in
 /// * `texture_id` - The texture ID to draw
 /// * `sense` - The interaction sense
+/// * `id_source` - A unique ID source for this widget
 ///
 /// # Returns
 /// The response from the interaction
@@ -58,8 +61,9 @@ pub fn image_cell(
     rect: egui::Rect,
     texture_id: egui::TextureId,
     sense: egui::Sense,
+    id_source: impl std::hash::Hash,
 ) -> egui::Response {
-    let response = ui.interact(rect, ui.id().with(format!("{}", rect)), sense);
+    let response = ui.interact(rect, ui.id().with(id_source), sense);
     let painter = ui.painter();
 
     painter.image(

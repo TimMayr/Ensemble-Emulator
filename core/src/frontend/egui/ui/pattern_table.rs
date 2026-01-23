@@ -22,7 +22,7 @@ pub fn draw_pattern_table(
 
     for (i, tex) in emu_textures.iter().enumerate() {
         let rect = grid_config.cell_rect(parent.min, i);
-        let response = image_cell(ui, rect, tex.id(), egui::Sense::all());
+        let response = image_cell(ui, rect, tex.id(), egui::Sense::all(), ("tile", i));
 
         let painter = ui.ctx().layer_painter(egui::LayerId::new(
             egui::Order::Foreground,
@@ -81,7 +81,7 @@ pub fn draw_pattern_table(
                     let pixel_rect = pixel_grid.cell_rect(pixel_parent.min, index);
                     let response = ui.interact(
                         pixel_rect,
-                        ui.id().with(format!("{}", pixel_rect)),
+                        ui.id().with(("pixel", index)),
                         egui::Sense::click(),
                     );
 
