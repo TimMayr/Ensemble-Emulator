@@ -42,15 +42,14 @@ pub fn spawn_palette_save(previous_path: Option<&PathBuf>, palette_bytes: Vec<u8
 
     let prev_dir = get_parent_dir(previous_path);
     std::thread::spawn(move || {
-        if let Some(p) = create_new(prev_dir) {
-            if let Ok(mut file) = OpenOptions::new()
+        if let Some(p) = create_new(prev_dir)
+            && let Ok(mut file) = OpenOptions::new()
                 .write(true)
                 .create(true)
                 .truncate(true)
                 .open(p)
-            {
-                let _ = file.write_all(&palette_bytes);
-            }
+        {
+            let _ = file.write_all(&palette_bytes);
         }
     });
 }

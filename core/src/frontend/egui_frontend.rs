@@ -104,8 +104,14 @@ impl EguiApp {
         Duration::from_nanos(1_000_000_000 / fps as u64)
     }
 
-    /// Process messages received from the emulator
+    /// Process messages received from various sources
     fn process_messages(&mut self, ctx: &Context) {
+        self.process_async_messages(ctx);
+        self.process_emulator_messages(ctx);
+    }
+
+    /// Process messages from async operations (file dialogs, etc.)
+    fn process_async_messages(&mut self, ctx: &Context) {
         while let Ok(msg) = self.from_async.try_recv() {
             match msg {
                 AsyncFrontendMessage::LoadPalette(p) => {
@@ -136,7 +142,10 @@ impl EguiApp {
                 }
             }
         }
+    }
 
+    /// Process messages from the emulator (frames, debug data, etc.)
+    fn process_emulator_messages(&mut self, ctx: &Context) {
         while let Ok(msg) = self.from_emulator.try_recv() {
             match msg {
                 EmulatorMessage::FrameReady(frame) => {
@@ -260,8 +269,7 @@ impl eframe::App for EguiApp {
         handle_keyboard_input(
             ctx,
             &self.to_emulator,
-            &mut self.config.speed_config,
-            &mut self.config.view_config,
+            &mut self.config,
             &mut self.emu_textures.last_frame_request,
         );
 
