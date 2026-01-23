@@ -70,7 +70,7 @@ pub fn draw_pattern_table(
                 let pixel_size = 4.0 * 8.0;
                 let pixel_grid = PainterGridConfig::square(pixel_size * 8.0, 8);
                 let (pixel_parent, _) =
-                    ui.allocate_exact_size(pixel_grid.total_size(), egui::Sense::click());
+                    ui.allocate_exact_size(pixel_grid.total_size(), egui::Sense::click_and_drag());
 
                 for index in 0..64 {
                     let lo = (tile_data.plane_0 >> (63 - index) & 1) as u8;
@@ -82,12 +82,14 @@ pub fn draw_pattern_table(
                     let response = ui.interact(
                         pixel_rect,
                         ui.id().with(("pixel", index)),
-                        egui::Sense::click(),
+                        egui::Sense::click_and_drag(),
                     );
 
                     painter.rect_filled(pixel_rect, 0.0, egui::Color32::from_u32(color));
 
-                    if response.clicked() {
+                    // Support both click and drag for editing pixels
+                    let should_edit = response.clicked() || (response.dragged() && ui.input(|i| i.pointer.primary_down()));
+                    if should_edit {
                         handle_pixel_edit(&tile_data, index, config, to_emu);
                     }
 

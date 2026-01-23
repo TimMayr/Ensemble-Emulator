@@ -76,7 +76,7 @@ impl Behavior<Pane> for TreeBehavior<'_> {
     fn pane_ui(&mut self, ui: &mut egui::Ui, _: TileId, pane: &mut Pane) -> UiResponse {
         match pane {
             Pane::EmulatorOutput => {
-                render_emulator_output(ui, self.emu_textures);
+                render_emulator_output(ui, self.emu_textures, self.async_sender);
             }
             Pane::Options => {
                 render_options(ui, self.config);

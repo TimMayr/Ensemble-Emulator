@@ -16,15 +16,32 @@ pub fn render_pattern_table(ui: &mut egui::Ui, config: &mut AppConfig, emu_textu
         // Each pattern table is 128x128 pixels (16x16 tiles * 8 pixels each)
         // We show 2 side by side with spacing
         let logical_width = 128.0 * 2.0 + ui.spacing().item_spacing.x * 3.0;
-        let logical_height = 128.0 + 20.0; // +20 for label
+        let logical_height = 128.0 + 40.0; // +40 for label and palette selector
         // Scale to fit both width and height
         let scale = (available.x / logical_width).min(available.y / logical_height);
         let table_size = 128.0 * scale;
 
-        ui.label(format!(
-            "Pattern Tables (128x128x2 at {:.1}x scale)",
-            scale
-        ));
+        // Palette selector and label in horizontal layout
+        ui.horizontal(|ui| {
+            ui.label(format!(
+                "Pattern Tables (128x128x2 at {:.1}x scale)",
+                scale
+            ));
+            ui.separator();
+            ui.label("Debug Palette:");
+            egui::ComboBox::from_id_salt("debug_palette_selector")
+                .selected_text(format!("Palette {}", config.view_config.debug_active_palette))
+                .show_ui(ui, |ui| {
+                    for i in 0..8 {
+                        let label = if i < 4 {
+                            format!("BG Palette {}", i + 1)
+                        } else {
+                            format!("Sprite Palette {}", i - 3)
+                        };
+                        ui.selectable_value(&mut config.view_config.debug_active_palette, i, label);
+                    }
+                });
+        });
 
         let selected_palette = palettes.colors[config.view_config.debug_active_palette];
         let transformed_palette = selected_palette
