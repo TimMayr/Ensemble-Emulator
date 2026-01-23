@@ -8,6 +8,7 @@ mod pattern_table;
 mod pattern_table_pane;
 mod status_bar;
 mod menu_bar;
+pub mod widgets;
 
 pub use emulator_output::render_emulator_output;
 pub use nametable_pane::render_nametable;
