@@ -19,7 +19,7 @@ use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
-use crate::emulation::messages::{EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette};
+use crate::emulation::messages::{EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette, TileData, TILE_COUNT};
 use crate::emulation::nes::Nes;
 use crate::frontend::egui::config::{AppConfig, AppSpeed};
 use crate::frontend::egui::fps_counter::FpsCounter;
@@ -45,6 +45,8 @@ pub struct EguiApp {
     config: AppConfig,
     /// The tile tree for docking behavior
     tree: egui_tiles::Tree<Pane>,
+    /// Track if pattern tables was visible last frame to detect when it becomes visible
+    pattern_tables_was_visible: bool,
 }
 
 impl EguiApp {
@@ -67,6 +69,7 @@ impl EguiApp {
             accumulator: Default::default(),
             config: Default::default(),
             tree: create_tree(),
+            pattern_tables_was_visible: false,
         };
 
         s.config.view_config.palette_rgb_data = rgb_palette;
@@ -126,7 +129,7 @@ impl EguiApp {
                     // Only update tile textures if pattern tables are visible
                     if self.is_pattern_tables_visible() {
                         self.emu_textures
-                            .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data, None);
+                            .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data, None, None);
                     }
                 }
                 AsyncFrontendMessage::LoadRom(p) => {
@@ -143,7 +146,7 @@ impl EguiApp {
                     // Only update tile textures if pattern tables are visible
                     if self.is_pattern_tables_visible() {
                         self.emu_textures
-                            .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data, None);
+                            .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data, None, None);
                     }
                 }
             }
@@ -175,17 +178,34 @@ impl EguiApp {
                                         ctx,
                                         &self.config.view_config.palette_rgb_data,
                                         Some(palette_idx),
+                                        None, // Update all tiles for changed palettes
                                     );
                                 }
                             }
                         }
                     }
                     EmulatorFetchable::Tiles(t) => {
+                        // Detect which tiles changed for efficient updates
+                        let changed_tiles = self.detect_changed_tiles(&t);
                         self.emu_textures.tile_data = t;
+                        
                         // Only update tile textures if pattern tables are visible
                         if self.is_pattern_tables_visible() {
-                            self.emu_textures
-                                .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data, None);
+                            if changed_tiles.is_empty() || changed_tiles.len() > 10 {
+                                // If many tiles changed or we couldn't detect changes, rebuild all
+                                self.emu_textures
+                                    .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data, None, None);
+                            } else {
+                                // Only rebuild the specific tiles that changed (for all palettes)
+                                for tile_idx in changed_tiles {
+                                    self.emu_textures.update_tile_textures(
+                                        ctx,
+                                        &self.config.view_config.palette_rgb_data,
+                                        None, // All palettes
+                                        Some(tile_idx),
+                                    );
+                                }
+                            }
                         }
                     }
                     EmulatorFetchable::Nametables(n) => {
@@ -205,6 +225,18 @@ impl EguiApp {
         find_pane(&self.tree.tiles, &Pane::PatternTables).is_some()
     }
     
+    /// Check if pattern tables viewer just became visible and force rebuild if so
+    fn check_and_handle_viewer_visibility(&mut self, ctx: &Context) {
+        let is_visible = self.is_pattern_tables_visible();
+        
+        // If pattern tables just became visible, force full rebuild
+        if is_visible && !self.pattern_tables_was_visible {
+            self.emu_textures.force_rebuild_all_tiles(ctx, &self.config.view_config.palette_rgb_data);
+        }
+        
+        self.pattern_tables_was_visible = is_visible;
+    }
+    
     /// Detect which palettes changed between old and new palette data
     fn detect_changed_palettes(&self, new_palette_data: &Option<Box<PaletteData>>) -> Vec<usize> {
         match (&self.emu_textures.palette_data, new_palette_data) {
@@ -217,6 +249,22 @@ impl EguiApp {
                     .collect()
             }
             (None, Some(_)) => (0..8).collect(), // All palettes are new
+            _ => vec![], // No update needed
+        }
+    }
+    
+    /// Detect which tiles changed between old and new tile data
+    fn detect_changed_tiles(&self, new_tile_data: &Option<Box<[TileData; TILE_COUNT]>>) -> Vec<usize> {
+        match (&self.emu_textures.tile_data, new_tile_data) {
+            (Some(old), Some(new)) => {
+                old.iter()
+                    .zip(new.iter())
+                    .enumerate()
+                    .filter(|(_, (old_tile, new_tile))| old_tile != new_tile)
+                    .map(|(idx, _)| idx)
+                    .collect()
+            }
+            (None, Some(_)) => vec![], // All tiles are new - return empty to trigger full rebuild
             _ => vec![], // No update needed
         }
     }
@@ -318,6 +366,9 @@ impl eframe::App for EguiApp {
 
         // Process messages from emulator
         self.process_messages(ctx);
+        
+        // Check if pattern tables viewer just became visible and force rebuild if needed
+        self.check_and_handle_viewer_visibility(ctx);
 
         // Update required debug fetches based on visible panes
         self.config.view_config.required_debug_fetches =

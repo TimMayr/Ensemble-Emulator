@@ -22,35 +22,6 @@ pub fn render_palettes(
     let single_color_width = 80f32.min(full_width / 4.0);
     let single_color_height = 20.0;
 
-    // Get the pane rect for drag and drop scoping
-    let pane_rect = ui.max_rect();
-    
-    // Check if pointer is over this pane (for preview overlay)
-    let pointer_over_pane = ui.ctx().input(|i| {
-        i.pointer.latest_pos().map_or(false, |pos| pane_rect.contains(pos))
-    });
-    
-    // Check for hovered files (being dragged over)
-    let has_hovered_files = !ui.ctx().input(|i| i.raw.hovered_files.is_empty());
-
-    // Handle drag and drop for palette files
-    if has_hovered_files && pointer_over_pane {
-        preview_files_being_dropped(ui, pane_rect, &["pal"], "Drop .pal palette file here");
-    }
-    
-    // Handle dropped files
-    ui.ctx().input(|i| {
-        if !i.raw.dropped_files.is_empty() && pointer_over_pane {
-            for file in &i.raw.dropped_files {
-                if let Some(path) = &file.path {
-                    if path.extension().map_or(false, |ext| ext.eq_ignore_ascii_case("pal")) {
-                        let _ = to_frontend.send(AsyncFrontendMessage::LoadPalette(Some(path.clone())));
-                    }
-                }
-            }
-        }
-    });
-
     // Render the 8 active palettes (4 background + 4 sprite)
     if let Some(palette_data) = &emu_textures.palette_data {
         for (i, palette) in palette_data.colors.iter().enumerate() {
@@ -125,8 +96,6 @@ pub fn render_palettes(
         })
     });
 
-    ui.label("Drag and drop .pal files here to load");
-
     // Render the full 64-color palette editor
     let color_width = 40f32.min(full_width / 8.0);
     let grid_config = PainterGridConfig::square(color_width * 8.0, 8);
@@ -166,43 +135,4 @@ pub fn render_palettes(
         )));
         let _ = to_frontend.send(AsyncFrontendMessage::RefreshPalette);
     }
-}
-
-/// Show a visual indicator when files are being dragged over the pane
-fn preview_files_being_dropped(ui: &egui::Ui, pane_rect: egui::Rect, valid_extensions: &[&str], hint_text: &str) {
-    use egui::*;
-
-    let has_valid_file = ui.ctx().input(|i| {
-        i.raw.hovered_files.iter().any(|f| {
-            f.path.as_ref().map_or(false, |p| {
-                p.extension().map_or(false, |ext| {
-                    valid_extensions.iter().any(|valid_ext| ext.eq_ignore_ascii_case(valid_ext))
-                })
-            })
-        })
-    });
-
-    let painter = ui.painter();
-    
-    let color = if has_valid_file {
-        Color32::from_rgba_unmultiplied(0, 100, 0, 180)
-    } else {
-        Color32::from_rgba_unmultiplied(100, 0, 0, 180)
-    };
-    
-    painter.rect_filled(pane_rect, 0.0, color);
-    
-    let text = if has_valid_file {
-        hint_text.to_string()
-    } else {
-        "Invalid file type".to_string()
-    };
-    
-    painter.text(
-        pane_rect.center(),
-        Align2::CENTER_CENTER,
-        text,
-        FontId::proportional(24.0),
-        Color32::WHITE,
-    );
 }
