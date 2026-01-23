@@ -22,7 +22,8 @@ pub fn draw_pattern_table(
 
     for (i, tex) in emu_textures.iter().enumerate() {
         let rect = grid_config.cell_rect(parent.min, i);
-        let response = image_cell(ui, rect, tex.id(), egui::Sense::all(), ("tile", tex.id()));
+        // Use stable index-based ID instead of texture ID which changes when palette updates
+        let response = image_cell(ui, rect, tex.id(), egui::Sense::all(), ("tile", i));
 
         let painter = ui.ctx().layer_painter(egui::LayerId::new(
             egui::Order::Foreground,
