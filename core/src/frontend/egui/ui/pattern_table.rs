@@ -30,7 +30,7 @@ pub fn draw_pattern_table(
         ));
 
         egui::Popup::context_menu(&response)
-            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .close_behavior(egui::PopupCloseBehavior::IgnoreClicks)
             .show(|ui| {
                 ui.heading("Edit Pattern");
 
@@ -88,7 +88,7 @@ pub fn draw_pattern_table(
                     painter.rect_filled(pixel_rect, 0.0, egui::Color32::from_u32(color));
 
                     if response.clicked() {
-                        handle_pixel_edit(&tile_data, index, color_id, to_emu);
+                        handle_pixel_edit(&tile_data, index, config, to_emu);
                     }
 
                     if response.hovered() {
@@ -108,10 +108,10 @@ pub fn draw_pattern_table(
 fn handle_pixel_edit(
     tile_data: &TileData,
     index: usize,
-    color_id: u8,
+    config: &AppConfig,
     to_emu: &Sender<FrontendMessage>,
 ) {
-    let new_pattern = (color_id + 1) % 4;
+    let new_pattern = config.user_config.pattern_edit_color;
     let new_lo = new_pattern & 1;
     let new_hi = (new_pattern >> 1) & 1;
 
@@ -131,7 +131,7 @@ fn handle_pixel_edit(
 
     let _ = to_emu.send(FrontendMessage::WritePpu(addr_0, new_byte_0));
     let _ = to_emu.send(FrontendMessage::WritePpu(addr_1, new_byte_1));
-    let _ = to_emu.send(FrontendMessage::RequestDebugData(
-        EmulatorFetchable::Tiles(None),
-    ));
+    let _ = to_emu.send(FrontendMessage::RequestDebugData(EmulatorFetchable::Tiles(
+        None,
+    )));
 }
