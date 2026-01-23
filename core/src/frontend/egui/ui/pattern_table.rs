@@ -88,13 +88,17 @@ pub fn draw_pattern_table(
                     painter.rect_filled(pixel_rect, 0.0, egui::Color32::from_u32(color));
 
                     // Support both click and drag for editing pixels
-                    // Check if clicked OR if hovering while primary mouse button is down (for drag painting)
-                    let is_painting = response.hovered() && ui.input(|i| i.pointer.primary_down());
-                    if response.clicked() || is_painting {
+                    // Check if clicked OR if pointer is within this pixel's rect while primary button is down
+                    let pointer_in_rect = ui.ctx().input(|i| {
+                        i.pointer.interact_pos()
+                            .map_or(false, |pos| pixel_rect.contains(pos))
+                    });
+                    let primary_down = ui.input(|i| i.pointer.primary_down());
+                    if response.clicked() || (pointer_in_rect && primary_down) {
                         handle_pixel_edit(&tile_data, index, config, to_emu);
                     }
 
-                    if response.hovered() {
+                    if response.hovered() || pointer_in_rect {
                         painter.rect_stroke(
                             pixel_rect,
                             0.0,

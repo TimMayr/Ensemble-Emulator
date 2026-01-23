@@ -19,7 +19,7 @@ use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
-use crate::emulation::messages::{EmulatorFetchable, EmulatorMessage, FrontendMessage, RgbPalette};
+use crate::emulation::messages::{EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette};
 use crate::emulation::nes::Nes;
 use crate::frontend::egui::config::{AppConfig, AppSpeed};
 use crate::frontend::egui::fps_counter::FpsCounter;
@@ -123,8 +123,11 @@ impl EguiApp {
                     let _ = self
                         .to_emulator
                         .send(FrontendMessage::SetPalette(Box::new(palette)));
-                    self.emu_textures
-                        .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data);
+                    // Only update tile textures if pattern tables are visible
+                    if self.is_pattern_tables_visible() {
+                        self.emu_textures
+                            .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data, None);
+                    }
                 }
                 AsyncFrontendMessage::LoadRom(p) => {
                     if let Some(p) = p
@@ -137,8 +140,11 @@ impl EguiApp {
                     }
                 }
                 AsyncFrontendMessage::RefreshPalette => {
-                    self.emu_textures
-                        .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data);
+                    // Only update tile textures if pattern tables are visible
+                    if self.is_pattern_tables_visible() {
+                        self.emu_textures
+                            .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data, None);
+                    }
                 }
             }
         }
@@ -155,19 +161,32 @@ impl EguiApp {
                 }
                 EmulatorMessage::DebugData(data) => match data {
                     EmulatorFetchable::Palettes(p) => {
-                        // Only rebuild textures if palette data actually changed
+                        // Only rebuild textures if palette data actually changed and pattern tables are visible
                         if self.emu_textures.palette_data != p {
+                            // Detect which palettes changed
+                            let changed_palettes = self.detect_changed_palettes(&p);
                             self.emu_textures.palette_data = p;
-                            self.emu_textures.update_tile_textures(
-                                ctx,
-                                &self.config.view_config.palette_rgb_data,
-                            );
+                            
+                            // Only update tile textures if pattern tables are visible
+                            if self.is_pattern_tables_visible() {
+                                // Update only the changed palettes
+                                for palette_idx in changed_palettes {
+                                    self.emu_textures.update_tile_textures(
+                                        ctx,
+                                        &self.config.view_config.palette_rgb_data,
+                                        Some(palette_idx),
+                                    );
+                                }
+                            }
                         }
                     }
                     EmulatorFetchable::Tiles(t) => {
                         self.emu_textures.tile_data = t;
-                        self.emu_textures
-                            .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data);
+                        // Only update tile textures if pattern tables are visible
+                        if self.is_pattern_tables_visible() {
+                            self.emu_textures
+                                .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data, None);
+                        }
                     }
                     EmulatorFetchable::Nametables(n) => {
                         self.emu_textures.nametable_data = n;
@@ -177,6 +196,28 @@ impl EguiApp {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
             }
+        }
+    }
+
+    /// Check if the pattern tables pane is visible
+    fn is_pattern_tables_visible(&self) -> bool {
+        use crate::frontend::egui::tiles::{find_pane, Pane};
+        find_pane(&self.tree.tiles, &Pane::PatternTables).is_some()
+    }
+    
+    /// Detect which palettes changed between old and new palette data
+    fn detect_changed_palettes(&self, new_palette_data: &Option<Box<PaletteData>>) -> Vec<usize> {
+        match (&self.emu_textures.palette_data, new_palette_data) {
+            (Some(old), Some(new)) => {
+                old.colors.iter()
+                    .zip(new.colors.iter())
+                    .enumerate()
+                    .filter(|(_, (old_pal, new_pal))| old_pal != new_pal)
+                    .map(|(idx, _)| idx)
+                    .collect()
+            }
+            (None, Some(_)) => (0..8).collect(), // All palettes are new
+            _ => vec![], // No update needed
         }
     }
 

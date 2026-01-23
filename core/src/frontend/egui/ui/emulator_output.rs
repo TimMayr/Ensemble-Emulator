@@ -12,34 +12,35 @@ pub fn render_emulator_output(
     emu_textures: &EmuTextures,
     async_sender: &Sender<AsyncFrontendMessage>,
 ) {
-    // Handle drag and drop for ROM files
+    // Allocate the response area for hover detection
     let response = ui.allocate_response(ui.available_size(), egui::Sense::hover());
     let pane_rect = response.rect;
     
-    // Check if mouse is over this pane
-    let mouse_over_pane = ui.ctx().input(|i| {
-        i.pointer.hover_pos().map_or(false, |pos| pane_rect.contains(pos))
+    // Check if mouse/pointer is over this pane (for preview overlay)
+    let pointer_over_pane = ui.ctx().input(|i| {
+        i.pointer.latest_pos().map_or(false, |pos| pane_rect.contains(pos))
     });
     
-    // Preview dropped files only when hovering over this pane
-    if mouse_over_pane {
+    // Check for hovered files (being dragged over)
+    let has_hovered_files = !ui.ctx().input(|i| i.raw.hovered_files.is_empty());
+    
+    // Show preview overlay when files are being dragged and pointer is over this pane
+    if has_hovered_files && pointer_over_pane {
         preview_files_being_dropped(ui, pane_rect, &["nes"], "Drop .nes ROM file here");
     }
 
-    // Handle dropped files only when mouse is over this pane
-    if mouse_over_pane {
-        ui.ctx().input(|i| {
-            if !i.raw.dropped_files.is_empty() {
-                for file in &i.raw.dropped_files {
-                    if let Some(path) = &file.path {
-                        if path.extension().map_or(false, |ext| ext.eq_ignore_ascii_case("nes")) {
-                            let _ = async_sender.send(AsyncFrontendMessage::LoadRom(Some(path.clone())));
-                        }
+    // Handle dropped files - check if pointer was over this pane when dropped
+    ui.ctx().input(|i| {
+        if !i.raw.dropped_files.is_empty() && pointer_over_pane {
+            for file in &i.raw.dropped_files {
+                if let Some(path) = &file.path {
+                    if path.extension().map_or(false, |ext| ext.eq_ignore_ascii_case("nes")) {
+                        let _ = async_sender.send(AsyncFrontendMessage::LoadRom(Some(path.clone())));
                     }
                 }
             }
-        });
-    }
+        }
+    });
 
     // Render the emulator output
     let rect = response.rect;
@@ -90,39 +91,37 @@ pub fn render_emulator_output(
 fn preview_files_being_dropped(ui: &egui::Ui, pane_rect: egui::Rect, valid_extensions: &[&str], hint_text: &str) {
     use egui::*;
 
-    if !ui.ctx().input(|i| i.raw.hovered_files.is_empty()) {
-        let has_valid_file = ui.ctx().input(|i| {
-            i.raw.hovered_files.iter().any(|f| {
-                f.path.as_ref().map_or(false, |p| {
-                    p.extension().map_or(false, |ext| {
-                        valid_extensions.iter().any(|valid_ext| ext.eq_ignore_ascii_case(valid_ext))
-                    })
+    let has_valid_file = ui.ctx().input(|i| {
+        i.raw.hovered_files.iter().any(|f| {
+            f.path.as_ref().map_or(false, |p| {
+                p.extension().map_or(false, |ext| {
+                    valid_extensions.iter().any(|valid_ext| ext.eq_ignore_ascii_case(valid_ext))
                 })
             })
-        });
+        })
+    });
 
-        let painter = ui.painter();
-        
-        let color = if has_valid_file {
-            Color32::from_rgba_unmultiplied(0, 100, 0, 180)
-        } else {
-            Color32::from_rgba_unmultiplied(100, 0, 0, 180)
-        };
-        
-        painter.rect_filled(pane_rect, 0.0, color);
-        
-        let text = if has_valid_file {
-            hint_text.to_string()
-        } else {
-            "Invalid file type".to_string()
-        };
-        
-        painter.text(
-            pane_rect.center(),
-            Align2::CENTER_CENTER,
-            text,
-            FontId::proportional(24.0),
-            Color32::WHITE,
-        );
-    }
+    let painter = ui.painter();
+    
+    let color = if has_valid_file {
+        Color32::from_rgba_unmultiplied(0, 100, 0, 180)
+    } else {
+        Color32::from_rgba_unmultiplied(100, 0, 0, 180)
+    };
+    
+    painter.rect_filled(pane_rect, 0.0, color);
+    
+    let text = if has_valid_file {
+        hint_text.to_string()
+    } else {
+        "Invalid file type".to_string()
+    };
+    
+    painter.text(
+        pane_rect.center(),
+        Align2::CENTER_CENTER,
+        text,
+        FontId::proportional(24.0),
+        Color32::WHITE,
+    );
 }
