@@ -151,6 +151,7 @@ impl AsU32 for egui::Color32 {
 pub fn pick_rom(previous: PathBuf) -> Option<PathBuf> {
     FileDialog::new()
         .add_filter("NES ROM File", &["nes"])
+        .add_filter("All Files", &["*"])
         .set_directory(previous)
         .pick_file()
 }
@@ -158,6 +159,7 @@ pub fn pick_rom(previous: PathBuf) -> Option<PathBuf> {
 pub fn pick_palette(previous: PathBuf) -> Option<PathBuf> {
     FileDialog::new()
         .add_filter("NES Palette File", &["pal"])
+        .add_filter("All Files", &["*"])
         .set_directory(previous)
         .pick_file()
 }
@@ -166,7 +168,6 @@ pub fn create_new(previous: PathBuf) -> Option<PathBuf> {
     FileDialog::new()
         .set_directory(previous)
         .set_can_create_directories(true)
-        .set_file_name("palette.pal")
         .save_file()
 }
 
