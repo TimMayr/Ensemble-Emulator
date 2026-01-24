@@ -1907,10 +1907,16 @@ impl Cpu {
             dma_temp: state.dma_temp,
         };
 
-        // Load ROM first to set up memory mapping, then restore savestate memory
-        // (this ensures savestate's RAM data overwrites any fresh RAM created by load_rom)
+        // Load ROM first to set up memory mapping
         cpu.load_rom(rom);
-        cpu.memory.load(&state.memory);
+
+        // Restore internal RAM (2KB at 0x0000-0x07FF)
+        cpu.memory.load_range(&state.internal_ram, 0x0000);
+
+        // Restore PRG RAM if present (0x6000-0x7FFF)
+        if !state.prg_ram.is_empty() {
+            cpu.memory.load_range(&state.prg_ram, 0x6000);
+        }
 
         cpu
     }

@@ -134,4 +134,11 @@ impl MemoryMap {
             self.mem_init(addr as u16, *byte);
         }
     }
+
+    /// Load data starting at a specific address
+    pub fn load_range(&mut self, data: &[u8], start_addr: u16) {
+        for (offset, byte) in data.iter().enumerate() {
+            self.mem_init(start_addr.wrapping_add(offset as u16), *byte);
+        }
+    }
 }

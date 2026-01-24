@@ -2,12 +2,12 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 
 use rkyv::rancor::BoxedError;
+use rkyv::with::Skip;
 use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::emulation::cpu::{Cpu, MicroOp};
+use crate::emulation::cpu::{Cpu, MicroOp, INTERNAL_RAM_SIZE};
 use crate::emulation::mem::OpenBus;
-use crate::emulation::messages::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
-use crate::emulation::ppu::Ppu;
+use crate::emulation::ppu::{Ppu, VRAM_SIZE};
 use crate::emulation::rom::RomFile;
 
 #[derive(Archive, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -21,6 +21,12 @@ pub struct CpuState {
     pub x_register: u8,
     pub y_register: u8,
     pub processor_status: u8,
+    /// Internal RAM only (2KB, addresses 0x0000-0x07FF)
+    pub internal_ram: Vec<u8>,
+    /// PRG RAM if present (up to 8KB, addresses 0x6000-0x7FFF)
+    pub prg_ram: Vec<u8>,
+    /// Full memory dump for tracing/debug (not serialized to reduce size)
+    #[rkyv(with = Skip)]
     pub memory: Vec<u8>,
     pub lo: u8,
     pub hi: u8,
@@ -55,6 +61,11 @@ impl From<&Cpu> for CpuState {
             x_register: cpu.x_register,
             y_register: cpu.y_register,
             processor_status: cpu.processor_status,
+            // Only save internal RAM (2KB) - addresses 0x0000-0x07FF
+            internal_ram: cpu.memory.get_memory_debug(Some(0x0..=((INTERNAL_RAM_SIZE - 1) as u16))),
+            // Save PRG RAM if present (0x6000-0x7FFF)
+            prg_ram: cpu.memory.get_memory_debug(Some(0x6000..=0x7FFF)),
+            // Full memory dump for tracing (not serialized)
             memory: cpu.memory.get_memory_debug(Some(0x0..=0xFFFF)),
             lo: cpu.lo,
             hi: cpu.hi,
@@ -93,7 +104,8 @@ pub struct PpuState {
     pub ctrl_register: u8,
     pub mask_register: u8,
     pub nmi_requested: bool,
-    pub memory: Vec<u8>,
+    /// Nametable VRAM only (2KB, addresses 0x2000-0x27FF mirrored)
+    pub nametable_ram: Vec<u8>,
     pub ppu_addr_register: u16,
     pub oam_addr_register: u8,
     pub write_latch: bool,
@@ -103,6 +115,8 @@ pub struct PpuState {
     pub fine_x_scroll: u8,
     pub even_frame: bool,
     pub reset_signal: bool,
+    // pixel_buffer is skipped - it's just the framebuffer, regenerated every frame
+    #[rkyv(with = Skip)]
     pub pixel_buffer: Vec<u32>,
     pub dot: u16,
     pub scanline: u16,
@@ -139,7 +153,8 @@ impl From<&Ppu> for PpuState {
             ctrl_register: ppu.ctrl_register,
             mask_register: ppu.mask_register,
             nmi_requested: ppu.nmi_requested.get(),
-            memory: ppu.memory.get_memory_debug(None),
+            // Only save nametable VRAM (2KB) - addresses 0x2000-0x27FF
+            nametable_ram: ppu.memory.get_memory_debug(Some(0x2000..=(0x2000 + (VRAM_SIZE as u16) - 1))),
             ppu_addr_register: ppu.v_register,
             oam_addr_register: ppu.oam_addr_register,
             write_latch: ppu.write_latch.get(),
@@ -170,7 +185,8 @@ impl From<&Ppu> for PpuState {
             fine_x_scroll: ppu.fine_x_scroll,
             even_frame: ppu.even_frame,
             reset_signal: ppu.reset_signal,
-            pixel_buffer: vec![0u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT],
+            // pixel_buffer is not saved - it will be regenerated
+            pixel_buffer: Vec::new(),
             dot: ppu.dot,
             scanline: ppu.scanline,
             palette_ram: ppu.palette_ram.get_memory_debug(None),

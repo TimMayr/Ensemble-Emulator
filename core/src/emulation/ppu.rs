@@ -1111,6 +1111,8 @@ impl Ppu {
     }
 
     pub fn from(state: &PpuState, rom: &RomFile) -> Self {
+        use crate::emulation::messages::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+
         let mut ppu = Self {
             dot_counter: state.cycle_counter,
             ctrl_register: state.ctrl_register,
@@ -1131,7 +1133,8 @@ impl Ppu {
             fine_x_scroll: state.fine_x_scroll,
             even_frame: state.even_frame,
             reset_signal: state.reset_signal,
-            pixel_buffer: state.pixel_buffer.clone(),
+            // Initialize pixel buffer fresh - it's not saved in savestate
+            pixel_buffer: vec![0u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT],
             vbl_reset_counter: Cell::new(state.vbl_reset_counter),
             vbl_clear_scheduled: Cell::new(state.vbl_clear_scheduled),
             scanline: state.scanline,
@@ -1160,10 +1163,13 @@ impl Ppu {
             rgb_palette: Default::default(),
         };
 
-        // Load ROM first to set up memory mapping (CHR ROM and nametables),
-        // then restore savestate memory to overwrite nametable data with saved values
+        // Load ROM first to set up memory mapping (CHR ROM and nametables)
         ppu.load_rom(rom);
-        ppu.memory.load(&state.memory);
+
+        // Restore nametable VRAM (at address 0x2000)
+        ppu.memory.load_range(&state.nametable_ram, 0x2000);
+
+        // Restore OAM and palette RAM
         ppu.oam.load(&state.oam_mem);
         ppu.palette_ram.load(&state.palette_ram);
 
