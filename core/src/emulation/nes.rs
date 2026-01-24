@@ -158,14 +158,11 @@ impl Nes {
         self.rom_file = Some(state.rom_file);
 
         self.ppu = Rc::new(RefCell::new(Ppu::from(
-            &state.ppu,
-            self.rom_file.as_ref().unwrap(),
-        )));
+            &state.ppu)));
 
         self.cpu = Cpu::from(
             &state.cpu,
             self.ppu.clone(),
-            self.rom_file.as_ref().unwrap(),
         );
 
         self.cpu_cycle_counter = state.cycle;

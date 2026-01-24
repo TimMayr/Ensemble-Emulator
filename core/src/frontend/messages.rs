@@ -28,7 +28,7 @@ pub enum AsyncFrontendMessage {
     RomVerificationFailed(Box<SavestateLoadContext>, SavestateLoadError),
 }
 
-/// Context for the multi-step savestate loading process
+/// Context for the multistep savestate loading process
 #[derive(Clone)]
 pub struct SavestateLoadContext {
     pub savestate: SaveState,
@@ -38,5 +38,4 @@ pub struct SavestateLoadContext {
 pub enum RelayType {
     LoadRom,
     LoadPalette,
-    LoadSaveState,
 }

@@ -1,6 +1,6 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crossbeam_channel::Sender;
 use rfd::FileDialog;
@@ -255,17 +255,16 @@ pub fn compute_file_checksum(path: &PathBuf) -> Option<[u8; 32]> {
 
 /// Check if a ROM file matches the expected filename and checksum
 pub fn find_matching_rom_in_dir(
-    dir: &PathBuf,
+    dir: &Path,
     expected_filename: &str,
     expected_checksum: &[u8; 32],
 ) -> Option<PathBuf> {
     let rom_path = dir.join(expected_filename);
-    if rom_path.exists() {
-        if let Some(checksum) = compute_file_checksum(&rom_path) {
-            if checksum == *expected_checksum {
-                return Some(rom_path);
-            }
-        }
+    if rom_path.exists()
+        && let Some(checksum) = compute_file_checksum(&rom_path)
+        && checksum == *expected_checksum
+    {
+        return Some(rom_path);
     }
     None
 }
@@ -284,45 +283,44 @@ pub fn spawn_savestate_picker(
     std::thread::spawn(move || {
         let path = pick_file(prev_dir, FileType::Savestate);
 
-        if let Some(savestate_path) = path {
-            if let Ok(canonical_path) = savestate_path.canonicalize() {
-                // Try to load the savestate, handle errors gracefully
-                let savestate = match savestate::try_load_state(&canonical_path) {
-                    Some(s) => s,
-                    None => {
-                        // Failed to load savestate - send error notification
-                        let _ = sender.send(AsyncFrontendMessage::SavestateLoadFailed(
-                            SavestateLoadError::FailedToLoadSavestate,
-                        ));
-                        return;
-                    }
-                };
-                let context = SavestateLoadContext {
-                    savestate,
-                    savestate_path: canonical_path,
-                };
-
-                // Check if there's a matching ROM in the last ROM directory
-                if let Some(ref rom_dir) = rom_dir {
-                    if let Some(ref rom_name) = context.savestate.rom_file.name {
-                        if let Some(matching_rom) = find_matching_rom_in_dir(
-                            rom_dir,
-                            rom_name,
-                            &context.savestate.rom_file.data_checksum,
-                        ) {
-                            // Found a matching ROM - ask user if they want to use it
-                            let _ = sender.send(AsyncFrontendMessage::ShowMatchingRomDialog(
-                                Box::new(context),
-                                matching_rom,
-                            ));
-                            return;
-                        }
-                    }
+        if let Some(savestate_path) = path
+            && let Ok(canonical_path) = savestate_path.canonicalize()
+        {
+            // Try to load the savestate, handle errors gracefully
+            let savestate = match savestate::try_load_state(&canonical_path) {
+                Some(s) => s,
+                None => {
+                    // Failed to load savestate - send error notification
+                    let _ = sender.send(AsyncFrontendMessage::SavestateLoadFailed(
+                        SavestateLoadError::FailedToLoadSavestate,
+                    ));
+                    return;
                 }
+            };
+            let context = SavestateLoadContext {
+                savestate,
+                savestate_path: canonical_path,
+            };
 
-                // No matching ROM found, send context for next step
-                let _ = sender.send(AsyncFrontendMessage::SavestateLoaded(Box::new(context)));
+            // Check if there's a matching ROM in the last ROM directory
+            if let Some(ref rom_dir) = rom_dir
+                && let Some(ref rom_name) = context.savestate.rom_file.name
+                && let Some(matching_rom) = find_matching_rom_in_dir(
+                    rom_dir,
+                    rom_name,
+                    &context.savestate.rom_file.data_checksum,
+                )
+            {
+                // Found a matching ROM - ask user if they want to use it
+                let _ = sender.send(AsyncFrontendMessage::ShowMatchingRomDialog(
+                    Box::new(context),
+                    matching_rom,
+                ));
+                return;
             }
+
+            // No matching ROM found, send context for next step
+            let _ = sender.send(AsyncFrontendMessage::SavestateLoaded(Box::new(context)));
         }
     });
 }
@@ -339,13 +337,13 @@ pub fn spawn_rom_picker_for_savestate(
     std::thread::spawn(move || {
         let path = pick_file(prev_dir, FileType::Rom);
 
-        if let Some(rom_path) = path {
-            if let Ok(canonical_path) = rom_path.canonicalize() {
-                let _ = sender.send(AsyncFrontendMessage::RomSelectedForSavestate(
-                    context,
-                    canonical_path,
-                ));
-            }
+        if let Some(rom_path) = path
+            && let Ok(canonical_path) = rom_path.canonicalize()
+        {
+            let _ = sender.send(AsyncFrontendMessage::RomSelectedForSavestate(
+                context,
+                canonical_path,
+            ));
         }
     });
 }

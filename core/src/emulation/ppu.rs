@@ -7,10 +7,10 @@ use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, OpenBus, Ram};
 use crate::emulation::messages::{
-    EmulatorFetchable, NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, NametableData,
-    PATTERN_TABLE_SIZE, PaletteData, RgbPalette, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData,
+    EmulatorFetchable, NametableData, PaletteData, RgbPalette, TileData,
+    NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, PATTERN_TABLE_SIZE, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
 };
-use crate::emulation::rom::{RomFile, RomFileConvertible};
+use crate::emulation::rom::RomFileConvertible;
 use crate::emulation::savestate::PpuState;
 pub const VBLANK_NMI_BIT: u8 = 0x80;
 pub const VRAM_ADDR_INC_BIT: u8 = 0x4;
@@ -1110,7 +1110,7 @@ impl Ppu {
         self.open_bus.set(bus);
     }
 
-    pub fn from(state: &PpuState, rom: &RomFile) -> Self {
+    pub fn from(state: &PpuState) -> Self {
         let mut ppu = Self {
             dot_counter: state.cycle_counter,
             ctrl_register: state.ctrl_register,
@@ -1163,7 +1163,6 @@ impl Ppu {
         ppu.memory.load(&state.memory);
         ppu.oam.load(&state.oam_mem);
         ppu.palette_ram.load(&state.palette_ram);
-        ppu.load_rom(rom);
 
         ppu
     }

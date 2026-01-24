@@ -14,7 +14,7 @@ use crate::emulation::nes::ExecutionFinishedType::CycleCompleted;
 use crate::emulation::opcode;
 use crate::emulation::opcode::{OPCODES_MAP, OPCODES_TABLE, OpCode, get_opcode};
 use crate::emulation::ppu::Ppu;
-use crate::emulation::rom::{RomFile, RomFileConvertible};
+use crate::emulation::rom::RomFileConvertible;
 use crate::emulation::savestate::CpuState;
 use crate::util;
 
@@ -1870,7 +1870,7 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub fn from(state: &CpuState, ppu: Rc<RefCell<Ppu>>, rom: &RomFile) -> Self {
+    pub fn from(state: &CpuState, ppu: Rc<RefCell<Ppu>>) -> Self {
         OPCODES_MAP.get_or_init(opcode::init);
         OPCODES_TABLE.get_or_init(opcode::init_lookup_table);
 
@@ -1908,7 +1908,6 @@ impl Cpu {
         };
 
         cpu.memory.load(&state.memory);
-        cpu.load_rom(rom);
 
         cpu
     }

@@ -63,7 +63,7 @@ pub struct RomFile {
     pub submapper_number: u8,
     pub data_checksum: [u8; 32],
     #[rkyv(with = Skip)]
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 #[derive(Debug, Copy, Clone, Archive, Serialize, Deserialize, PartialEq, Eq)]
