@@ -24,7 +24,10 @@ use crate::emulation::messages::{
 };
 use crate::emulation::nes::Nes;
 use crate::emulation::savestate;
-use crate::frontend::egui::config::{AppConfig, AppSpeed};
+use crate::frontend::egui::config::{
+    AppConfig, AppSpeed, ChecksumMismatchDialogState, MatchingRomDialogState,
+    RomSelectionDialogState,
+};
 use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
@@ -160,6 +163,8 @@ impl EguiApp {
                             }
                         }
                         RelayType::LoadSaveState => {
+                            // This is now a legacy path, new savestate loading goes through
+                            // the multi-step flow starting with SavestateLoaded
                             if let Some(p) = p
                                 && let Ok(p) = p.canonicalize()
                             {
@@ -184,8 +189,95 @@ impl EguiApp {
                         );
                     }
                 }
+                AsyncFrontendMessage::SavestateLoaded(context) => {
+                    // Savestate loaded, now need to select ROM
+                    // Show dialog to select ROM with the expected filename displayed
+                    self.config.pending_dialogs.rom_selection_dialog =
+                        Some(RomSelectionDialogState { context });
+                }
+                AsyncFrontendMessage::ShowMatchingRomDialog(context, matching_rom_path) => {
+                    // Found a matching ROM in the directory
+                    self.config.pending_dialogs.matching_rom_dialog =
+                        Some(MatchingRomDialogState {
+                            context,
+                            matching_rom_path,
+                        });
+                }
+                AsyncFrontendMessage::UseMatchingRom(context, rom_path) => {
+                    // User chose to use the matching ROM - load the savestate
+                    self.load_savestate_with_rom(&context, &rom_path);
+                }
+                AsyncFrontendMessage::ManuallySelectRom(context) => {
+                    // User chose to manually select a ROM
+                    util::spawn_rom_picker_for_savestate(
+                        &self.async_sender,
+                        context,
+                        self.config.user_config.previous_rom_path.as_ref(),
+                    );
+                }
+                AsyncFrontendMessage::RomSelectedForSavestate(context, rom_path) => {
+                    // User selected a ROM file, now verify checksum
+                    if let Some(checksum) = util::compute_file_checksum(&rom_path) {
+                        if checksum == context.savestate.rom_file.data_checksum {
+                            // Checksum matches, load the savestate
+                            self.load_savestate_with_rom(&context, &rom_path);
+                        } else {
+                            // Checksum mismatch, show warning dialog
+                            self.config.pending_dialogs.checksum_mismatch_dialog =
+                                Some(ChecksumMismatchDialogState {
+                                    context,
+                                    selected_rom_path: rom_path,
+                                });
+                        }
+                    }
+                }
+                AsyncFrontendMessage::ShowChecksumMismatchDialog(context, rom_path) => {
+                    // Show checksum mismatch warning dialog
+                    self.config.pending_dialogs.checksum_mismatch_dialog =
+                        Some(ChecksumMismatchDialogState {
+                            context,
+                            selected_rom_path: rom_path,
+                        });
+                }
+                AsyncFrontendMessage::LoadSavestateAnyway(context, rom_path) => {
+                    // User chose to load anyway despite checksum mismatch
+                    self.load_savestate_with_rom(&context, &rom_path);
+                }
+                AsyncFrontendMessage::SelectAnotherRom(context) => {
+                    // User chose to select a different ROM after checksum mismatch
+                    util::spawn_rom_picker_for_savestate(
+                        &self.async_sender,
+                        context,
+                        self.config.user_config.previous_rom_path.as_ref(),
+                    );
+                }
             }
         }
+    }
+
+    /// Load a savestate after ROM has been verified/selected
+    fn load_savestate_with_rom(
+        &mut self,
+        context: &crate::frontend::messages::SavestateLoadContext,
+        rom_path: &PathBuf,
+    ) {
+        // First power off, load ROM, power on
+        let _ = self.to_emulator.send(FrontendMessage::PowerOff);
+        let _ = self
+            .to_emulator
+            .send(FrontendMessage::LoadRom(rom_path.clone()));
+        let _ = self.to_emulator.send(FrontendMessage::Power);
+
+        // Then load the savestate
+        let _ = self
+            .to_emulator
+            .send(FrontendMessage::LoadSaveState(Box::new(
+                context.savestate.clone(),
+            )));
+
+        // Update config paths
+        self.config.user_config.previous_rom_path = Some(rom_path.clone());
+        self.config.user_config.previous_savestate_path = Some(context.savestate_path.clone());
     }
 
     /// Process messages from the emulator (frames, debug data, etc.)
@@ -413,6 +505,193 @@ impl EguiApp {
             self.emu_textures.last_debug_request = Instant::now();
         }
     }
+
+    /// Render any pending dialogs for savestate loading
+    fn render_savestate_dialogs(&mut self, ctx: &Context) {
+        // ROM selection dialog - shown when no matching ROM was found
+        if self.config.pending_dialogs.rom_selection_dialog.is_some() {
+            let mut close_dialog = false;
+            let mut spawn_picker = false;
+            let context_clone;
+
+            if let Some(ref state) = self.config.pending_dialogs.rom_selection_dialog {
+                context_clone = Some(state.context.clone());
+                let rom_name = state
+                    .context
+                    .savestate
+                    .rom_file
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| "Unknown".to_string());
+
+                egui::Window::new("Select ROM")
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.label("Please select the ROM file for this savestate.");
+                        ui.add_space(8.0);
+                        ui.label(format!("Expected ROM: {}", rom_name));
+                        ui.add_space(16.0);
+                        ui.horizontal(|ui| {
+                            if ui.button("Select ROM...").clicked() {
+                                spawn_picker = true;
+                                close_dialog = true;
+                            }
+                            if ui.button("Cancel").clicked() {
+                                close_dialog = true;
+                            }
+                        });
+                    });
+            } else {
+                context_clone = None;
+            }
+
+            if close_dialog {
+                if spawn_picker {
+                    if let Some(context) = context_clone {
+                        util::spawn_rom_picker_for_savestate(
+                            &self.async_sender,
+                            context,
+                            self.config.user_config.previous_rom_path.as_ref(),
+                        );
+                    }
+                }
+                self.config.pending_dialogs.rom_selection_dialog = None;
+            }
+        }
+
+        // Matching ROM dialog - shown when a matching ROM was found in the directory
+        if self.config.pending_dialogs.matching_rom_dialog.is_some() {
+            let mut close_dialog = false;
+            let mut use_matching = false;
+            let mut select_manual = false;
+            let state_clone;
+
+            if let Some(ref state) = self.config.pending_dialogs.matching_rom_dialog {
+                state_clone = Some((state.context.clone(), state.matching_rom_path.clone()));
+                let rom_name = state
+                    .matching_rom_path
+                    .file_name()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "Unknown".to_string());
+
+                egui::Window::new("Matching ROM Found")
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.label("A ROM file matching the savestate was found:");
+                        ui.add_space(8.0);
+                        ui.label(format!("ROM: {}", rom_name));
+                        ui.add_space(8.0);
+                        ui.label("Would you like to use this ROM or select one manually?");
+                        ui.add_space(16.0);
+                        ui.horizontal(|ui| {
+                            if ui.button("Use This ROM").clicked() {
+                                use_matching = true;
+                                close_dialog = true;
+                            }
+                            if ui.button("Select Manually...").clicked() {
+                                select_manual = true;
+                                close_dialog = true;
+                            }
+                            if ui.button("Cancel").clicked() {
+                                close_dialog = true;
+                            }
+                        });
+                    });
+            } else {
+                state_clone = None;
+            }
+
+            if close_dialog {
+                if let Some((context, rom_path)) = state_clone {
+                    if use_matching {
+                        let _ = self
+                            .async_sender
+                            .send(AsyncFrontendMessage::UseMatchingRom(context, rom_path));
+                    } else if select_manual {
+                        let _ = self
+                            .async_sender
+                            .send(AsyncFrontendMessage::ManuallySelectRom(context));
+                    }
+                }
+                self.config.pending_dialogs.matching_rom_dialog = None;
+            }
+        }
+
+        // Checksum mismatch dialog - shown when selected ROM doesn't match expected checksum
+        if self.config.pending_dialogs.checksum_mismatch_dialog.is_some() {
+            let mut close_dialog = false;
+            let mut load_anyway = false;
+            let mut select_another = false;
+            let state_clone;
+
+            if let Some(ref state) = self.config.pending_dialogs.checksum_mismatch_dialog {
+                state_clone = Some((state.context.clone(), state.selected_rom_path.clone()));
+                let expected_name = state
+                    .context
+                    .savestate
+                    .rom_file
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| "Unknown".to_string());
+                let selected_name = state
+                    .selected_rom_path
+                    .file_name()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "Unknown".to_string());
+
+                egui::Window::new("⚠ Checksum Mismatch")
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.label("Warning: The selected ROM's checksum doesn't match!");
+                        ui.add_space(8.0);
+                        ui.label(format!("Expected ROM: {}", expected_name));
+                        ui.label(format!("Selected ROM: {}", selected_name));
+                        ui.add_space(8.0);
+                        ui.label(
+                            "Loading a savestate with a different ROM may cause issues \
+                             or crashes.",
+                        );
+                        ui.add_space(16.0);
+                        ui.horizontal(|ui| {
+                            if ui.button("Load Anyway").clicked() {
+                                load_anyway = true;
+                                close_dialog = true;
+                            }
+                            if ui.button("Select Another ROM...").clicked() {
+                                select_another = true;
+                                close_dialog = true;
+                            }
+                            if ui.button("Cancel").clicked() {
+                                close_dialog = true;
+                            }
+                        });
+                    });
+            } else {
+                state_clone = None;
+            }
+
+            if close_dialog {
+                if let Some((context, rom_path)) = state_clone {
+                    if load_anyway {
+                        let _ = self
+                            .async_sender
+                            .send(AsyncFrontendMessage::LoadSavestateAnyway(context, rom_path));
+                    } else if select_another {
+                        let _ = self
+                            .async_sender
+                            .send(AsyncFrontendMessage::SelectAnotherRom(context));
+                    }
+                }
+                self.config.pending_dialogs.checksum_mismatch_dialog = None;
+            }
+        }
+    }
 }
 
 impl eframe::App for EguiApp {
@@ -469,6 +748,9 @@ impl eframe::App for EguiApp {
             );
             self.tree.ui(&mut behavior, ui);
         });
+
+        // Render any pending savestate dialogs
+        self.render_savestate_dialogs(ctx);
 
         // Request continuous repaint for animation
         ctx.request_repaint();

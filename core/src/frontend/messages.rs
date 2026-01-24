@@ -1,8 +1,33 @@
 use std::path::PathBuf;
 
+use crate::emulation::savestate::SaveState;
+
 pub enum AsyncFrontendMessage {
     EmuRelay(RelayType, Option<PathBuf>),
     RefreshPalette,
+    /// User has selected a savestate file, now need to verify/select ROM
+    SavestateLoaded(Box<SavestateLoadContext>),
+    /// Show dialog asking if user wants to load the found matching ROM
+    ShowMatchingRomDialog(Box<SavestateLoadContext>, PathBuf),
+    /// User chose to use the matching ROM that was found
+    UseMatchingRom(Box<SavestateLoadContext>, PathBuf),
+    /// User chose to manually select a ROM for the savestate
+    ManuallySelectRom(Box<SavestateLoadContext>),
+    /// User selected a ROM file for the savestate
+    RomSelectedForSavestate(Box<SavestateLoadContext>, PathBuf),
+    /// Show checksum mismatch warning dialog
+    ShowChecksumMismatchDialog(Box<SavestateLoadContext>, PathBuf),
+    /// User chose to try loading with mismatched checksum anyway
+    LoadSavestateAnyway(Box<SavestateLoadContext>, PathBuf),
+    /// User chose to select another ROM after checksum mismatch
+    SelectAnotherRom(Box<SavestateLoadContext>),
+}
+
+/// Context for the multi-step savestate loading process
+#[derive(Clone)]
+pub struct SavestateLoadContext {
+    pub savestate: SaveState,
+    pub savestate_path: PathBuf,
 }
 
 pub enum RelayType {

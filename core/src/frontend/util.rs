@@ -1,14 +1,15 @@
-use std::fs::OpenOptions;
-use std::io::Write;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use crossbeam_channel::Sender;
 use rfd::FileDialog;
 use rkyv::rancor::BoxedError;
+use sha2::{Digest, Sha256};
 
 use crate::emulation::messages::RgbPalette;
-use crate::emulation::savestate::SaveState;
-use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
+use crate::emulation::savestate::{self, SaveState};
+use crate::frontend::messages::{AsyncFrontendMessage, RelayType, SavestateLoadContext};
 
 pub trait Contrastable {
     fn get_contrast(&self) -> Self;
@@ -231,4 +232,103 @@ pub fn color_radio<Value: PartialEq>(
     }
 
     response
+}
+
+/// Compute SHA256 checksum for a file
+pub fn compute_file_checksum(path: &PathBuf) -> Option<[u8; 32]> {
+    let mut file = File::open(path).ok()?;
+    let mut data = Vec::new();
+    file.read_to_end(&mut data).ok()?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(&data);
+    Some(hasher.finalize().into())
+}
+
+/// Check if a ROM file matches the expected filename and checksum
+pub fn find_matching_rom_in_dir(
+    dir: &PathBuf,
+    expected_filename: &str,
+    expected_checksum: &[u8; 32],
+) -> Option<PathBuf> {
+    let rom_path = dir.join(expected_filename);
+    if rom_path.exists() {
+        if let Some(checksum) = compute_file_checksum(&rom_path) {
+            if checksum == *expected_checksum {
+                return Some(rom_path);
+            }
+        }
+    }
+    None
+}
+
+/// Spawn the initial savestate file picker in a background thread.
+/// After the savestate is loaded, it will check for a matching ROM.
+pub fn spawn_savestate_picker(
+    sender: &Sender<AsyncFrontendMessage>,
+    previous_savestate_path: Option<&PathBuf>,
+    previous_rom_path: Option<PathBuf>,
+) {
+    let sender = sender.clone();
+    let prev_dir = get_parent_dir(previous_savestate_path);
+    let rom_dir = previous_rom_path.and_then(|p| p.parent().map(|p| p.to_path_buf()));
+
+    std::thread::spawn(move || {
+        let path = pick_file(prev_dir, FileType::Savestate);
+
+        if let Some(savestate_path) = path {
+            if let Ok(canonical_path) = savestate_path.canonicalize() {
+                // Load the savestate to get ROM info
+                let savestate = savestate::load_state(canonical_path.clone());
+                let context = SavestateLoadContext {
+                    savestate,
+                    savestate_path: canonical_path,
+                };
+
+                // Check if there's a matching ROM in the last ROM directory
+                if let Some(ref rom_dir) = rom_dir {
+                    if let Some(ref rom_name) = context.savestate.rom_file.name {
+                        if let Some(matching_rom) = find_matching_rom_in_dir(
+                            rom_dir,
+                            rom_name,
+                            &context.savestate.rom_file.data_checksum,
+                        ) {
+                            // Found a matching ROM - ask user if they want to use it
+                            let _ = sender.send(AsyncFrontendMessage::ShowMatchingRomDialog(
+                                Box::new(context),
+                                matching_rom,
+                            ));
+                            return;
+                        }
+                    }
+                }
+
+                // No matching ROM found, send context for next step
+                let _ = sender.send(AsyncFrontendMessage::SavestateLoaded(Box::new(context)));
+            }
+        }
+    });
+}
+
+/// Spawn a file picker to select a ROM for a savestate
+pub fn spawn_rom_picker_for_savestate(
+    sender: &Sender<AsyncFrontendMessage>,
+    context: Box<SavestateLoadContext>,
+    previous_rom_path: Option<&PathBuf>,
+) {
+    let sender = sender.clone();
+    let prev_dir = get_parent_dir(previous_rom_path);
+
+    std::thread::spawn(move || {
+        let path = pick_file(prev_dir, FileType::Rom);
+
+        if let Some(rom_path) = path {
+            if let Ok(canonical_path) = rom_path.canonicalize() {
+                let _ = sender.send(AsyncFrontendMessage::RomSelectedForSavestate(
+                    context,
+                    canonical_path,
+                ));
+            }
+        }
+    });
 }
