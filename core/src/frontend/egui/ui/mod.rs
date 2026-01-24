@@ -7,6 +7,7 @@ mod options_pane;
 mod palettes;
 mod pattern_table;
 mod pattern_table_pane;
+pub mod savestate_dialogs;
 mod status_bar;
 pub mod widgets;
 
@@ -17,4 +18,5 @@ pub use options_pane::render_options;
 pub use palettes::render_palettes;
 pub use pattern_table::draw_pattern_table;
 pub use pattern_table_pane::render_pattern_table;
+pub use savestate_dialogs::render_dialogs as render_savestate_dialogs;
 pub use status_bar::add_status_bar;

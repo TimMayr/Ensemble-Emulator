@@ -155,15 +155,18 @@ impl Nes {
     }
 
     pub fn load_state(&mut self, state: SaveState) {
-        self.rom_file = Some(state.rom_file);
+        // Use the already loaded ROM file if available (it has the actual ROM data),
+        // otherwise fall back to the savestate's ROM (which may have empty data due to Skip)
+        let rom_to_use = self.rom_file.as_ref().unwrap_or(&state.rom_file);
 
-        self.ppu = Rc::new(RefCell::new(Ppu::from(
-            &state.ppu)));
+        self.ppu = Rc::new(RefCell::new(Ppu::from(&state.ppu, rom_to_use)));
 
-        self.cpu = Cpu::from(
-            &state.cpu,
-            self.ppu.clone(),
-        );
+        self.cpu = Cpu::from(&state.cpu, self.ppu.clone(), rom_to_use);
+
+        // Only update rom_file if we didn't have one loaded
+        if self.rom_file.is_none() {
+            self.rom_file = Some(state.rom_file);
+        }
 
         self.cpu_cycle_counter = state.cycle;
         self.cpu_cycle_counter = state.cpu_cycle_counter;
