@@ -11,6 +11,14 @@ use crate::emulation::messages::RgbPalette;
 use crate::emulation::savestate::{self, SaveState};
 use crate::frontend::messages::{AsyncFrontendMessage, RelayType, SavestateLoadContext};
 
+/// Enum to represent errors that can occur during savestate loading UI flow
+pub enum SavestateLoadError {
+    /// Failed to load or parse the savestate file
+    FailedToLoadSavestate,
+    /// Failed to compute checksum for a ROM file
+    FailedToComputeChecksum,
+}
+
 pub trait Contrastable {
     fn get_contrast(&self) -> Self;
 }
@@ -278,8 +286,17 @@ pub fn spawn_savestate_picker(
 
         if let Some(savestate_path) = path {
             if let Ok(canonical_path) = savestate_path.canonicalize() {
-                // Load the savestate to get ROM info
-                let savestate = savestate::load_state(canonical_path.clone());
+                // Try to load the savestate, handle errors gracefully
+                let savestate = match savestate::try_load_state(&canonical_path) {
+                    Some(s) => s,
+                    None => {
+                        // Failed to load savestate - send error notification
+                        let _ = sender.send(AsyncFrontendMessage::SavestateLoadFailed(
+                            SavestateLoadError::FailedToLoadSavestate,
+                        ));
+                        return;
+                    }
+                };
                 let context = SavestateLoadContext {
                     savestate,
                     savestate_path: canonical_path,

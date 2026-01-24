@@ -25,7 +25,7 @@ use crate::emulation::messages::{
 use crate::emulation::nes::Nes;
 use crate::emulation::savestate;
 use crate::frontend::egui::config::{
-    AppConfig, AppSpeed, ChecksumMismatchDialogState, MatchingRomDialogState,
+    AppConfig, AppSpeed, ChecksumMismatchDialogState, ErrorDialogState, MatchingRomDialogState,
     RomSelectionDialogState,
 };
 use crate::frontend::egui::fps_counter::FpsCounter;
@@ -217,16 +217,26 @@ impl EguiApp {
                 }
                 AsyncFrontendMessage::RomSelectedForSavestate(context, rom_path) => {
                     // User selected a ROM file, now verify checksum
-                    if let Some(checksum) = util::compute_file_checksum(&rom_path) {
-                        if checksum == context.savestate.rom_file.data_checksum {
-                            // Checksum matches, load the savestate
-                            self.load_savestate_with_rom(&context, &rom_path);
-                        } else {
-                            // Checksum mismatch, show warning dialog
-                            self.config.pending_dialogs.checksum_mismatch_dialog =
-                                Some(ChecksumMismatchDialogState {
-                                    context,
-                                    selected_rom_path: rom_path,
+                    match util::compute_file_checksum(&rom_path) {
+                        Some(checksum) => {
+                            if checksum == context.savestate.rom_file.data_checksum {
+                                // Checksum matches, load the savestate
+                                self.load_savestate_with_rom(&context, &rom_path);
+                            } else {
+                                // Checksum mismatch, show warning dialog
+                                self.config.pending_dialogs.checksum_mismatch_dialog =
+                                    Some(ChecksumMismatchDialogState {
+                                        context,
+                                        selected_rom_path: rom_path,
+                                    });
+                            }
+                        }
+                        None => {
+                            // Failed to compute checksum - show error dialog
+                            self.config.pending_dialogs.error_dialog =
+                                Some(ErrorDialogState {
+                                    title: "Error Reading ROM".to_string(),
+                                    message: "Failed to read or compute checksum for the selected ROM file.".to_string(),
                                 });
                         }
                     }
@@ -250,6 +260,42 @@ impl EguiApp {
                         context,
                         self.config.user_config.previous_rom_path.as_ref(),
                     );
+                }
+                AsyncFrontendMessage::SavestateLoadFailed(error) => {
+                    // Show error dialog for failed savestate loading
+                    let message = match error {
+                        util::SavestateLoadError::FailedToLoadSavestate => {
+                            "Failed to load or parse the savestate file. The file may be corrupted or invalid."
+                        }
+                        util::SavestateLoadError::FailedToComputeChecksum => {
+                            "Failed to compute checksum for the ROM file."
+                        }
+                    };
+                    self.config.pending_dialogs.error_dialog = Some(ErrorDialogState {
+                        title: "Savestate Load Error".to_string(),
+                        message: message.to_string(),
+                    });
+                }
+                AsyncFrontendMessage::RomVerificationFailed(context, error) => {
+                    // Show error dialog for failed ROM verification
+                    let message = match error {
+                        util::SavestateLoadError::FailedToLoadSavestate => {
+                            "Unexpected error during ROM verification."
+                        }
+                        util::SavestateLoadError::FailedToComputeChecksum => {
+                            "Failed to read or compute checksum for the ROM file."
+                        }
+                    };
+                    self.config.pending_dialogs.error_dialog = Some(ErrorDialogState {
+                        title: "ROM Verification Error".to_string(),
+                        message: format!(
+                            "{}\n\nWould you like to select a different ROM?",
+                            message
+                        ),
+                    });
+                    // Also store the context to allow retrying
+                    self.config.pending_dialogs.rom_selection_dialog =
+                        Some(RomSelectionDialogState { context });
                 }
             }
         }
@@ -689,6 +735,34 @@ impl EguiApp {
                     }
                 }
                 self.config.pending_dialogs.checksum_mismatch_dialog = None;
+            }
+        }
+
+        // Error dialog - shown when an error occurs during the loading process
+        if self.config.pending_dialogs.error_dialog.is_some() {
+            let mut close_dialog = false;
+            let title;
+            let message;
+
+            if let Some(ref state) = self.config.pending_dialogs.error_dialog {
+                title = state.title.clone();
+                message = state.message.clone();
+
+                egui::Window::new(format!("❌ {}", title))
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.label(&message);
+                        ui.add_space(16.0);
+                        if ui.button("OK").clicked() {
+                            close_dialog = true;
+                        }
+                    });
+            }
+
+            if close_dialog {
+                self.config.pending_dialogs.error_dialog = None;
             }
         }
     }

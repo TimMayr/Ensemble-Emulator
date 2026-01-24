@@ -197,3 +197,9 @@ pub fn load_state(path: PathBuf) -> SaveState {
     let encoded = std::fs::read(path).expect("Failed to read save file");
     rkyv::from_bytes::<SaveState, BoxedError>(&encoded).expect("Failed to deserialize SaveState")
 }
+
+/// Try to load a savestate from a file path, returning None on error
+pub fn try_load_state(path: &PathBuf) -> Option<SaveState> {
+    let encoded = std::fs::read(path).ok()?;
+    rkyv::from_bytes::<SaveState, BoxedError>(&encoded).ok()
+}

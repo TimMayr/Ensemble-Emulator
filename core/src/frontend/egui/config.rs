@@ -16,6 +16,9 @@ pub struct ViewConfig {
 }
 
 /// Main application configuration
+///
+/// Note: `Eq` and `PartialEq` are not derived because `PendingDialogs` contains
+/// `SavestateLoadContext` which includes `SaveState`, which is not trivially comparable.
 #[derive(Default, Clone)]
 pub struct AppConfig {
     pub view_config: ViewConfig,
@@ -34,6 +37,8 @@ pub struct PendingDialogs {
     pub checksum_mismatch_dialog: Option<ChecksumMismatchDialogState>,
     /// Dialog to ask user to select a ROM file (shows expected filename)
     pub rom_selection_dialog: Option<RomSelectionDialogState>,
+    /// Generic error dialog for displaying error messages
+    pub error_dialog: Option<ErrorDialogState>,
 }
 
 /// State for the matching ROM dialog
@@ -54,6 +59,13 @@ pub struct ChecksumMismatchDialogState {
 #[derive(Clone)]
 pub struct RomSelectionDialogState {
     pub context: Box<SavestateLoadContext>,
+}
+
+/// State for a generic error dialog
+#[derive(Clone)]
+pub struct ErrorDialogState {
+    pub title: String,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]

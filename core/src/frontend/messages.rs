@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crate::emulation::savestate::SaveState;
+use crate::frontend::util::SavestateLoadError;
 
 pub enum AsyncFrontendMessage {
     EmuRelay(RelayType, Option<PathBuf>),
@@ -21,6 +22,10 @@ pub enum AsyncFrontendMessage {
     LoadSavestateAnyway(Box<SavestateLoadContext>, PathBuf),
     /// User chose to select another ROM after checksum mismatch
     SelectAnotherRom(Box<SavestateLoadContext>),
+    /// An error occurred while loading the savestate
+    SavestateLoadFailed(SavestateLoadError),
+    /// An error occurred while verifying the ROM
+    RomVerificationFailed(Box<SavestateLoadContext>, SavestateLoadError),
 }
 
 /// Context for the multi-step savestate loading process
