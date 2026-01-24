@@ -47,6 +47,8 @@ pub struct EguiApp {
     tree: egui_tiles::Tree<Pane>,
     /// Track if pattern tables was visible last frame to detect when it becomes visible
     pattern_tables_was_visible: bool,
+    /// Track if nametables was visible last frame to detect when it becomes visible
+    nametables_was_visible: bool,
 }
 
 impl EguiApp {
@@ -70,6 +72,7 @@ impl EguiApp {
             config: Default::default(),
             tree: create_tree(),
             pattern_tables_was_visible: false,
+            nametables_was_visible: false,
         };
 
         s.config.view_config.palette_rgb_data = rgb_palette;
@@ -126,8 +129,8 @@ impl EguiApp {
                     let _ = self
                         .to_emulator
                         .send(FrontendMessage::SetPalette(Box::new(palette)));
-                    // Only update tile textures if pattern tables are visible
-                    if self.is_pattern_tables_visible() {
+                    // Only update tile textures if a tile viewer is visible
+                    if self.is_tile_viewer_visible() {
                         self.emu_textures
                             .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data, None, None);
                     }
@@ -143,8 +146,8 @@ impl EguiApp {
                     }
                 }
                 AsyncFrontendMessage::RefreshPalette => {
-                    // Only update tile textures if pattern tables are visible
-                    if self.is_pattern_tables_visible() {
+                    // Only update tile textures if a tile viewer is visible
+                    if self.is_tile_viewer_visible() {
                         self.emu_textures
                             .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data, None, None);
                     }
@@ -164,14 +167,14 @@ impl EguiApp {
                 }
                 EmulatorMessage::DebugData(data) => match data {
                     EmulatorFetchable::Palettes(p) => {
-                        // Only rebuild textures if palette data actually changed and pattern tables are visible
+                        // Only rebuild textures if palette data actually changed and a tile viewer is visible
                         if self.emu_textures.palette_data != p {
                             // Detect which palettes changed
                             let changed_palettes = self.detect_changed_palettes(&p);
                             self.emu_textures.palette_data = p;
                             
-                            // Only update tile textures if pattern tables are visible
-                            if self.is_pattern_tables_visible() {
+                            // Only update tile textures if a tile viewer is visible
+                            if self.is_tile_viewer_visible() {
                                 // Update only the changed palettes
                                 for palette_idx in changed_palettes {
                                     self.emu_textures.update_tile_textures(
@@ -189,8 +192,8 @@ impl EguiApp {
                         let changed_tiles = self.detect_changed_tiles(&t);
                         self.emu_textures.tile_data = t;
                         
-                        // Only update tile textures if pattern tables are visible
-                        if self.is_pattern_tables_visible() {
+                        // Only update tile textures if a tile viewer is visible
+                        if self.is_tile_viewer_visible() {
                             if changed_tiles.is_empty() || changed_tiles.len() > 10 {
                                 // If many tiles changed or we couldn't detect changes, rebuild all
                                 self.emu_textures
@@ -225,16 +228,32 @@ impl EguiApp {
         find_pane(&self.tree.tiles, &Pane::PatternTables).is_some()
     }
     
-    /// Check if pattern tables viewer just became visible and force rebuild if so
+    /// Check if the nametables pane is visible
+    fn is_nametables_visible(&self) -> bool {
+        use crate::frontend::egui::tiles::{find_pane, Pane};
+        find_pane(&self.tree.tiles, &Pane::Nametables).is_some()
+    }
+    
+    /// Check if any viewer that needs tile textures is visible
+    fn is_tile_viewer_visible(&self) -> bool {
+        self.is_pattern_tables_visible() || self.is_nametables_visible()
+    }
+    
+    /// Check if pattern tables or nametables viewer just became visible and force rebuild if so
     fn check_and_handle_viewer_visibility(&mut self, ctx: &Context) {
-        let is_visible = self.is_pattern_tables_visible();
+        let pattern_tables_visible = self.is_pattern_tables_visible();
+        let nametables_visible = self.is_nametables_visible();
         
-        // If pattern tables just became visible, force full rebuild
-        if is_visible && !self.pattern_tables_was_visible {
+        // If either viewer just became visible, force full rebuild
+        let pattern_just_opened = pattern_tables_visible && !self.pattern_tables_was_visible;
+        let nametables_just_opened = nametables_visible && !self.nametables_was_visible;
+        
+        if pattern_just_opened || nametables_just_opened {
             self.emu_textures.force_rebuild_all_tiles(ctx, &self.config.view_config.palette_rgb_data);
         }
         
-        self.pattern_tables_was_visible = is_visible;
+        self.pattern_tables_was_visible = pattern_tables_visible;
+        self.nametables_was_visible = nametables_visible;
     }
     
     /// Detect which palettes changed between old and new palette data

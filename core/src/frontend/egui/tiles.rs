@@ -195,8 +195,11 @@ pub fn compute_required_fetches_from_tree(
     }
 
     // Check if nametables pane is visible
+    // Nametables need tile textures to render, so also fetch tiles and palettes
     if find_pane(&tree.tiles, &Pane::Nametables).is_some() {
         explicit_fetches.insert(EmulatorFetchable::Nametables(None));
+        explicit_fetches.insert(EmulatorFetchable::Tiles(None));
+        explicit_fetches.insert(EmulatorFetchable::Palettes(None));
     }
 
     if find_pane(&tree.tiles, &Pane::Palettes).is_some() {
