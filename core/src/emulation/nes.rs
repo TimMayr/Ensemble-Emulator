@@ -163,6 +163,16 @@ impl Nes {
 
         self.cpu = Cpu::from(&state.cpu, self.ppu.clone(), rom_to_use);
 
+        // Add PPU registers to CPU memory map (same as power() does)
+        // This is critical - without this, the CPU can't communicate with the PPU!
+        self.cpu.memory.add_memory(
+            0x2000..=0x3FFF,
+            Memory::MirrorMemory(MirrorMemory::new(
+                Box::new(Memory::PpuRegisters(PpuRegisters::new(self.ppu.clone()))),
+                0x0007,
+            )),
+        );
+
         // Only update rom_file if we didn't have one loaded
         if self.rom_file.is_none() {
             self.rom_file = Some(state.rom_file);
