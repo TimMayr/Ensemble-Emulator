@@ -1907,8 +1907,10 @@ impl Cpu {
             dma_temp: state.dma_temp,
         };
 
-        cpu.memory.load(&state.memory);
+        // Load ROM first to set up memory mapping, then restore savestate memory
+        // (this ensures savestate's RAM data overwrites any fresh RAM created by load_rom)
         cpu.load_rom(rom);
+        cpu.memory.load(&state.memory);
 
         cpu
     }

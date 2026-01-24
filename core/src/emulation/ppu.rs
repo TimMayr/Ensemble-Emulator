@@ -1160,10 +1160,12 @@ impl Ppu {
             rgb_palette: Default::default(),
         };
 
+        // Load ROM first to set up memory mapping (CHR ROM and nametables),
+        // then restore savestate memory to overwrite nametable data with saved values
+        ppu.load_rom(rom);
         ppu.memory.load(&state.memory);
         ppu.oam.load(&state.oam_mem);
         ppu.palette_ram.load(&state.palette_ram);
-        ppu.load_rom(rom);
 
         ppu
     }
