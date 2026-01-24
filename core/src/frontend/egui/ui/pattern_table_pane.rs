@@ -1,13 +1,19 @@
 //! Pattern table viewer pane rendering
 
 use crossbeam_channel::Sender;
+
 use crate::emulation::messages::FrontendMessage;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::ui::draw_pattern_table;
 
 /// Render both pattern tables side by side
-pub fn render_pattern_table(ui: &mut egui::Ui, config: &mut AppConfig, emu_textures: &EmuTextures, to_emu: &Sender<FrontendMessage>) {
+pub fn render_pattern_table(
+    ui: &mut egui::Ui,
+    config: &mut AppConfig,
+    emu_textures: &EmuTextures,
+    to_emu: &Sender<FrontendMessage>,
+) {
     if let Some(tile_textures) = &emu_textures.tile_textures
         && let Some(palettes) = &emu_textures.palette_data
         && let Some(pattern_data) = &emu_textures.tile_data
@@ -23,16 +29,16 @@ pub fn render_pattern_table(ui: &mut egui::Ui, config: &mut AppConfig, emu_textu
 
         // Palette selector and label in horizontal layout
         ui.horizontal(|ui| {
-            ui.label(format!(
-                "Pattern Tables (128x128x2 at {:.1}x scale)",
-                scale
-            ));
+            ui.label(format!("Pattern Tables (128x128x2 at {:.1}x scale)", scale));
             ui.separator();
             ui.label("Debug Palette:");
             let palette_label = if config.view_config.debug_active_palette < 4 {
                 format!("BG Palette {}", config.view_config.debug_active_palette + 1)
             } else {
-                format!("Sprite Palette {}", config.view_config.debug_active_palette - 3)
+                format!(
+                    "Sprite Palette {}",
+                    config.view_config.debug_active_palette - 3
+                )
             };
             egui::ComboBox::from_id_salt("debug_palette_selector")
                 .selected_text(palette_label)
@@ -60,7 +66,7 @@ pub fn render_pattern_table(ui: &mut egui::Ui, config: &mut AppConfig, emu_textu
                 transformed_palette,
                 &pattern_data[..256],
                 to_emu,
-                config
+                config,
             );
 
             ui.separator();
@@ -71,7 +77,7 @@ pub fn render_pattern_table(ui: &mut egui::Ui, config: &mut AppConfig, emu_textu
                 transformed_palette,
                 &pattern_data[256..],
                 to_emu,
-                config
+                config,
             );
         });
     } else {

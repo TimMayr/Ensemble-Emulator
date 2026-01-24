@@ -26,7 +26,10 @@ pub fn spawn_rom_picker(sender: &Sender<AsyncFrontendMessage>, previous_path: Op
 }
 
 /// Spawn a palette picker dialog in a background thread and send the result via the async channel.
-pub fn spawn_palette_picker(sender: &Sender<AsyncFrontendMessage>, previous_path: Option<&PathBuf>) {
+pub fn spawn_palette_picker(
+    sender: &Sender<AsyncFrontendMessage>,
+    previous_path: Option<&PathBuf>,
+) {
     let sender = sender.clone();
     let prev_dir = get_parent_dir(previous_path);
     std::thread::spawn(move || {
@@ -135,7 +138,12 @@ pub fn compute_hash(data: &[u8]) -> u64 {
 
 impl FromU32 for egui::Color32 {
     fn from_u32(d: u32) -> Self {
-        egui::Color32::from_rgba_unmultiplied((d >> 16) as u8, (d >> 8) as u8, d as u8, (d >> 24) as u8)
+        egui::Color32::from_rgba_unmultiplied(
+            (d >> 16) as u8,
+            (d >> 8) as u8,
+            d as u8,
+            (d >> 24) as u8,
+        )
     }
 }
 

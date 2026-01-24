@@ -3,7 +3,7 @@ use egui::Context;
 
 use crate::emulation::messages::FrontendMessage;
 use crate::frontend::egui::config::AppConfig;
-use crate::frontend::egui::tiles::{add_pane_if_missing, Pane};
+use crate::frontend::egui::tiles::{Pane, add_pane_if_missing};
 use crate::frontend::messages::AsyncFrontendMessage;
 use crate::frontend::util::spawn_rom_picker;
 

@@ -14,19 +14,21 @@ use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-
 use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
-use crate::emulation::messages::{EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette, TileData, TILE_COUNT};
+use crate::emulation::messages::{
+    EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette, TILE_COUNT,
+    TileData,
+};
 use crate::emulation::nes::Nes;
 use crate::frontend::egui::config::{AppConfig, AppSpeed};
 use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
-    compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
+    Pane, TreeBehavior, compute_required_fetches_from_tree, create_tree,
 };
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar};
 use crate::frontend::messages::AsyncFrontendMessage;
@@ -131,8 +133,12 @@ impl EguiApp {
                         .send(FrontendMessage::SetPalette(Box::new(palette)));
                     // Only update tile textures if a tile viewer is visible
                     if self.is_tile_viewer_visible() {
-                        self.emu_textures
-                            .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data, None, None);
+                        self.emu_textures.update_tile_textures(
+                            ctx,
+                            &self.config.view_config.palette_rgb_data,
+                            None,
+                            None,
+                        );
                     }
                 }
                 AsyncFrontendMessage::LoadRom(p) => {
@@ -148,8 +154,12 @@ impl EguiApp {
                 AsyncFrontendMessage::RefreshPalette => {
                     // Only update tile textures if a tile viewer is visible
                     if self.is_tile_viewer_visible() {
-                        self.emu_textures
-                            .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data, None, None);
+                        self.emu_textures.update_tile_textures(
+                            ctx,
+                            &self.config.view_config.palette_rgb_data,
+                            None,
+                            None,
+                        );
                     }
                 }
             }
@@ -172,7 +182,7 @@ impl EguiApp {
                             // Detect which palettes changed
                             let changed_palettes = self.detect_changed_palettes(&p);
                             self.emu_textures.palette_data = p;
-                            
+
                             // Only update tile textures if a tile viewer is visible
                             if self.is_tile_viewer_visible() {
                                 // Update only the changed palettes
@@ -191,13 +201,17 @@ impl EguiApp {
                         // Detect which tiles changed for efficient updates
                         let changed_tiles = self.detect_changed_tiles(&t);
                         self.emu_textures.tile_data = t;
-                        
+
                         // Only update tile textures if a tile viewer is visible
                         if self.is_tile_viewer_visible() {
                             if changed_tiles.is_empty() || changed_tiles.len() > 10 {
                                 // If many tiles changed or we couldn't detect changes, rebuild all
-                                self.emu_textures
-                                    .update_tile_textures(ctx, &self.config.view_config.palette_rgb_data, None, None);
+                                self.emu_textures.update_tile_textures(
+                                    ctx,
+                                    &self.config.view_config.palette_rgb_data,
+                                    None,
+                                    None,
+                                );
                             } else {
                                 // Only rebuild the specific tiles that changed (for all palettes)
                                 for tile_idx in changed_tiles {
@@ -224,67 +238,70 @@ impl EguiApp {
 
     /// Check if the pattern tables pane is visible
     fn is_pattern_tables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{find_pane, Pane};
+        use crate::frontend::egui::tiles::{Pane, find_pane};
         find_pane(&self.tree.tiles, &Pane::PatternTables).is_some()
     }
-    
+
     /// Check if the nametables pane is visible
     fn is_nametables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{find_pane, Pane};
+        use crate::frontend::egui::tiles::{Pane, find_pane};
         find_pane(&self.tree.tiles, &Pane::Nametables).is_some()
     }
-    
+
     /// Check if any viewer that needs tile textures is visible
     fn is_tile_viewer_visible(&self) -> bool {
         self.is_pattern_tables_visible() || self.is_nametables_visible()
     }
-    
+
     /// Check if pattern tables or nametables viewer just became visible and force rebuild if so
     fn check_and_handle_viewer_visibility(&mut self, ctx: &Context) {
         let pattern_tables_visible = self.is_pattern_tables_visible();
         let nametables_visible = self.is_nametables_visible();
-        
+
         // If either viewer just became visible, force full rebuild
         let pattern_just_opened = pattern_tables_visible && !self.pattern_tables_was_visible;
         let nametables_just_opened = nametables_visible && !self.nametables_was_visible;
-        
+
         if pattern_just_opened || nametables_just_opened {
-            self.emu_textures.force_rebuild_all_tiles(ctx, &self.config.view_config.palette_rgb_data);
+            self.emu_textures
+                .force_rebuild_all_tiles(ctx, &self.config.view_config.palette_rgb_data);
         }
-        
+
         self.pattern_tables_was_visible = pattern_tables_visible;
         self.nametables_was_visible = nametables_visible;
     }
-    
+
     /// Detect which palettes changed between old and new palette data
     fn detect_changed_palettes(&self, new_palette_data: &Option<Box<PaletteData>>) -> Vec<usize> {
         match (&self.emu_textures.palette_data, new_palette_data) {
-            (Some(old), Some(new)) => {
-                old.colors.iter()
-                    .zip(new.colors.iter())
-                    .enumerate()
-                    .filter(|(_, (old_pal, new_pal))| old_pal != new_pal)
-                    .map(|(idx, _)| idx)
-                    .collect()
-            }
+            (Some(old), Some(new)) => old
+                .colors
+                .iter()
+                .zip(new.colors.iter())
+                .enumerate()
+                .filter(|(_, (old_pal, new_pal))| old_pal != new_pal)
+                .map(|(idx, _)| idx)
+                .collect(),
             (None, Some(_)) => (0..8).collect(), // All palettes are new
-            _ => vec![], // No update needed
+            _ => vec![],                         // No update needed
         }
     }
-    
+
     /// Detect which tiles changed between old and new tile data
-    fn detect_changed_tiles(&self, new_tile_data: &Option<Box<[TileData; TILE_COUNT]>>) -> Vec<usize> {
+    fn detect_changed_tiles(
+        &self,
+        new_tile_data: &Option<Box<[TileData; TILE_COUNT]>>,
+    ) -> Vec<usize> {
         match (&self.emu_textures.tile_data, new_tile_data) {
-            (Some(old), Some(new)) => {
-                old.iter()
-                    .zip(new.iter())
-                    .enumerate()
-                    .filter(|(_, (old_tile, new_tile))| old_tile != new_tile)
-                    .map(|(idx, _)| idx)
-                    .collect()
-            }
+            (Some(old), Some(new)) => old
+                .iter()
+                .zip(new.iter())
+                .enumerate()
+                .filter(|(_, (old_tile, new_tile))| old_tile != new_tile)
+                .map(|(idx, _)| idx)
+                .collect(),
             (None, Some(_)) => vec![], // All tiles are new - return empty to trigger full rebuild
-            _ => vec![], // No update needed
+            _ => vec![],               // No update needed
         }
     }
 
@@ -385,7 +402,7 @@ impl eframe::App for EguiApp {
 
         // Process messages from emulator
         self.process_messages(ctx);
-        
+
         // Check if pattern tables viewer just became visible and force rebuild if needed
         self.check_and_handle_viewer_visibility(ctx);
 

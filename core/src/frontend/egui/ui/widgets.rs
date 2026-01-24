@@ -119,9 +119,7 @@ impl PainterGridConfig {
     }
 
     /// Get the height (defaults to width if not set)
-    pub fn get_height(&self) -> f32 {
-        self.height.unwrap_or(self.width)
-    }
+    pub fn get_height(&self) -> f32 { self.height.unwrap_or(self.width) }
 
     /// Get the size of each cell
     pub fn cell_size(&self) -> egui::Vec2 {
@@ -141,7 +139,5 @@ impl PainterGridConfig {
     }
 
     /// Total size of the grid
-    pub fn total_size(&self) -> egui::Vec2 {
-        egui::vec2(self.width, self.get_height())
-    }
+    pub fn total_size(&self) -> egui::Vec2 { egui::vec2(self.width, self.get_height()) }
 }

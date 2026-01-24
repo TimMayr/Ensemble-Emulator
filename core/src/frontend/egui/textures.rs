@@ -112,16 +112,28 @@ impl EmuTextures {
     /// If `palette_index` is Some, only update textures for that specific palette
     /// If `palette_index` is None, update all palette variations
     /// If `tile_index` is Some, only update that specific tile (across all requested palettes)
-    pub fn update_tile_textures(&mut self, ctx: &Context, rgb_palette_map: &RgbPalette, palette_index: Option<usize>, tile_index: Option<usize>) {
+    pub fn update_tile_textures(
+        &mut self,
+        ctx: &Context,
+        rgb_palette_map: &RgbPalette,
+        palette_index: Option<usize>,
+        tile_index: Option<usize>,
+    ) {
         if let Some(ref palettes) = self.palette_data
             && let Some(ref tiles) = self.tile_data
         {
             // Get or create the tile textures array
             let tile_textures = self.tile_textures.get_or_insert_with(|| {
                 // Initialize with empty placeholders - they'll be filled below
-                std::array::from_fn(|_| std::array::from_fn(|_| {
-                    ctx.load_texture("placeholder", ColorImage::new([1, 1], vec![egui::Color32::TRANSPARENT]), TextureOptions::default())
-                }))
+                std::array::from_fn(|_| {
+                    std::array::from_fn(|_| {
+                        ctx.load_texture(
+                            "placeholder",
+                            ColorImage::new([1, 1], vec![egui::Color32::TRANSPARENT]),
+                            TextureOptions::default(),
+                        )
+                    })
+                })
             });
 
             // Determine which palettes to update
@@ -132,21 +144,26 @@ impl EmuTextures {
 
             for palette_idx in palette_range {
                 let palette = palettes.colors[palette_idx];
-                
+
                 // Determine which tiles to update
                 let tile_range: Box<dyn Iterator<Item = usize>> = match tile_index {
                     Some(idx) if idx < tiles.len() => Box::new(std::iter::once(idx)),
                     _ => Box::new(0..tiles.len()),
                 };
-                
+
                 for tile_idx in tile_range {
-                    let texture = Self::get_texture_for_tile(&tiles[tile_idx], &palette, rgb_palette_map, ctx);
+                    let texture = Self::get_texture_for_tile(
+                        &tiles[tile_idx],
+                        &palette,
+                        rgb_palette_map,
+                        ctx,
+                    );
                     tile_textures[palette_idx][tile_idx] = texture;
                 }
             }
         }
     }
-    
+
     /// Force rebuild all tile textures - call when pattern tables viewer becomes visible
     pub fn force_rebuild_all_tiles(&mut self, ctx: &Context, rgb_palette_map: &RgbPalette) {
         // Clear existing textures to force full rebuild

@@ -962,7 +962,7 @@ impl Ppu {
         }
     }
 
-        #[inline(always)]
+    #[inline(always)]
     pub fn mem_init(&mut self, addr: u16, data: u8) {
         match addr {
             0x3F00..0x3FFF => self.palette_ram.init(addr, data),

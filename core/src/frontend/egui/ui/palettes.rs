@@ -4,10 +4,10 @@ use crate::emulation::messages::{EmulatorFetchable, FrontendMessage};
 use crate::emulation::ppu::PALETTE_RAM_START_ADDRESS;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
-use crate::frontend::egui::ui::widgets::{color_cell, PainterGridConfig};
+use crate::frontend::egui::ui::widgets::{PainterGridConfig, color_cell};
 use crate::frontend::messages::AsyncFrontendMessage;
 use crate::frontend::util::{
-    spawn_palette_picker, spawn_palette_save, AsU32, FromU32, Hashable, ToBytes,
+    AsU32, FromU32, Hashable, ToBytes, spawn_palette_picker, spawn_palette_save,
 };
 
 pub fn render_palettes(
@@ -31,18 +31,16 @@ pub fn render_palettes(
                 ui.label(format!("Sprite Palette {}", i - 3));
             };
 
-            let grid_config = PainterGridConfig::rect(
-                single_color_width * 4.0,
-                single_color_height,
-                4,
-                1,
-            );
-            let (parent, _) = ui.allocate_exact_size(grid_config.total_size(), egui::Sense::hover());
+            let grid_config =
+                PainterGridConfig::rect(single_color_width * 4.0, single_color_height, 4, 1);
+            let (parent, _) =
+                ui.allocate_exact_size(grid_config.total_size(), egui::Sense::hover());
 
             for (j, color) in palette.iter().enumerate() {
                 let rgb_color = config.view_config.palette_rgb_data.colors[0][*color as usize];
                 let rect = grid_config.cell_rect(parent.min, j);
-                let response = color_cell(ui, rect, rgb_color, egui::Sense::all(), ("palette", i, j));
+                let response =
+                    color_cell(ui, rect, rgb_color, egui::Sense::all(), ("palette", i, j));
 
                 let address = PALETTE_RAM_START_ADDRESS as usize | (j + (i * 4));
                 let mut new_color = *color;

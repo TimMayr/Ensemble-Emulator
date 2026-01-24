@@ -4,8 +4,8 @@ use egui::Ui;
 
 use crate::emulation::messages::{EmulatorFetchable, FrontendMessage, TileData};
 use crate::frontend::egui::config::AppConfig;
-use crate::frontend::egui::ui::widgets::{image_cell, PainterGridConfig};
-use crate::frontend::util::{color_radio, FromU32};
+use crate::frontend::egui::ui::widgets::{PainterGridConfig, image_cell};
+use crate::frontend::util::{FromU32, color_radio};
 
 /// Draw a pattern table (left or right) in the UI
 pub fn draw_pattern_table(
@@ -98,7 +98,7 @@ pub fn draw_pattern_table(
                     let pointer_in_rect = ui.ctx().input(|i| {
                         i.pointer
                             .interact_pos()
-                            .map_or(false, |pos| pixel_rect.contains(pos))
+                            .is_some_and(|pos| pixel_rect.contains(pos))
                     });
                     let primary_down = ui.input(|i| i.pointer.primary_down());
                     let secondary_down = ui.input(|i| i.pointer.secondary_down());
