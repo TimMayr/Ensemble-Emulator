@@ -5,7 +5,7 @@ use rkyv::rancor::BoxedError;
 use rkyv::with::Skip;
 use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::emulation::cpu::{Cpu, MicroOp, INTERNAL_RAM_SIZE};
+use crate::emulation::cpu::{Cpu, INTERNAL_RAM_SIZE, MicroOp};
 use crate::emulation::mem::OpenBus;
 use crate::emulation::ppu::{Ppu, VRAM_SIZE};
 use crate::emulation::rom::RomFile;
@@ -62,7 +62,9 @@ impl From<&Cpu> for CpuState {
             y_register: cpu.y_register,
             processor_status: cpu.processor_status,
             // Only save internal RAM (2KB) - addresses 0x0000-0x07FF
-            internal_ram: cpu.memory.get_memory_debug(Some(0x0..=((INTERNAL_RAM_SIZE - 1) as u16))),
+            internal_ram: cpu
+                .memory
+                .get_memory_debug(Some(0x0..=(INTERNAL_RAM_SIZE - 1))),
             // Save PRG RAM if present (0x6000-0x7FFF)
             prg_ram: cpu.memory.get_memory_debug(Some(0x6000..=0x7FFF)),
             // Full memory dump for tracing (not serialized)
@@ -154,7 +156,9 @@ impl From<&Ppu> for PpuState {
             mask_register: ppu.mask_register,
             nmi_requested: ppu.nmi_requested.get(),
             // Only save nametable VRAM (2KB) - addresses 0x2000-0x27FF
-            nametable_ram: ppu.memory.get_memory_debug(Some(0x2000..=(0x2000 + (VRAM_SIZE as u16) - 1))),
+            nametable_ram: ppu
+                .memory
+                .get_memory_debug(Some(0x2000..=(0x2000 + (VRAM_SIZE as u16) - 1))),
             ppu_addr_register: ppu.v_register,
             oam_addr_register: ppu.oam_addr_register,
             write_latch: ppu.write_latch.get(),

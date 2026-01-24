@@ -1,9 +1,9 @@
 //! Dialogs for the savestate loading workflow.
 //!
 //! This module contains helper functions for rendering the various dialogs
-//! that appear during the multi-step savestate loading process.
+//! that appear during the multistep savestate loading process.
 
-use std::path::PathBuf;
+use std::path::Path;
 
 use crossbeam_channel::Sender;
 
@@ -20,7 +20,7 @@ fn modal_window(title: &str) -> egui::Window<'_> {
 }
 
 /// Extract filename from path or return "Unknown"
-fn get_filename(path: &PathBuf) -> String {
+fn get_filename(path: &Path) -> String {
     path.file_name()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "Unknown".to_string())
