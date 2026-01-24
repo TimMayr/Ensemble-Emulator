@@ -5,7 +5,7 @@ use crate::emulation::messages::FrontendMessage;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::tiles::{Pane, add_pane_if_missing};
 use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
-use crate::frontend::util::{FileType, spawn_file_picker};
+use crate::frontend::util::{FileType, spawn_file_picker, spawn_savestate_picker};
 
 pub fn add_menu_bar(
     ctx: &Context,
@@ -31,12 +31,12 @@ pub fn add_menu_bar(
                     }
 
                     if ui.button("Load State").clicked() {
-                        spawn_file_picker(
+                        // Use the new multi-step savestate loading flow
+                        spawn_savestate_picker(
                             async_sender,
                             config.user_config.previous_savestate_path.as_ref(),
-                            FileType::Savestate,
-                            RelayType::LoadSaveState,
-                        )
+                            config.user_config.previous_rom_path.clone(),
+                        );
                     }
                 })
             });
