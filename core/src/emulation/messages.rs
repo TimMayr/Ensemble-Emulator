@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::emulation::savestate::SaveState;
 use crate::frontend::palettes::parse_palette_from_file;
 
 /// Message types for communication between the frontend and emulator.
@@ -50,6 +51,8 @@ pub enum FrontendMessage {
     LoadRom(PathBuf),
     WritePpu(u16, u8),
     WriteCpu(u16, u8),
+    CreateSaveState,
+    LoadSaveState(Box<SaveState>),
 }
 
 /// Controller input events
@@ -71,6 +74,7 @@ pub enum EmulatorMessage {
     /// Emulator has stopped/quit
     Stopped,
     DebugData(EmulatorFetchable),
+    SaveState(Box<SaveState>),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -152,5 +156,5 @@ pub struct RgbPalette {
 }
 
 impl Default for RgbPalette {
-    fn default() -> Self { parse_palette_from_file(None) }
+    fn default() -> Self { parse_palette_from_file(None, None) }
 }

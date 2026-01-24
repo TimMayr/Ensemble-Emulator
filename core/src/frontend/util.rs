@@ -1,60 +1,22 @@
-use std::path::PathBuf;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 
 use crossbeam_channel::Sender;
 use rfd::FileDialog;
+use rkyv::rancor::BoxedError;
+use sha2::{Digest, Sha256};
 
 use crate::emulation::messages::RgbPalette;
-use crate::frontend::messages::AsyncFrontendMessage;
+use crate::emulation::savestate::{self, SaveState};
+use crate::frontend::messages::{AsyncFrontendMessage, RelayType, SavestateLoadContext};
 
-/// Extract the parent directory from an optional path, or return a default empty path.
-/// This is commonly used to set the initial directory for file dialogs.
-pub fn get_parent_dir(path: Option<&PathBuf>) -> PathBuf {
-    path.and_then(|p| p.parent())
-        .map(|p| p.to_path_buf())
-        .unwrap_or_default()
-}
-
-/// Spawn a file picker dialog in a background thread and send the result via the async channel.
-/// This is used to avoid blocking the UI while the file dialog is open.
-pub fn spawn_rom_picker(sender: &Sender<AsyncFrontendMessage>, previous_path: Option<&PathBuf>) {
-    let sender = sender.clone();
-    let prev_dir = get_parent_dir(previous_path);
-    std::thread::spawn(move || {
-        let path = pick_rom(prev_dir);
-        let _ = sender.send(AsyncFrontendMessage::LoadRom(path));
-    });
-}
-
-/// Spawn a palette picker dialog in a background thread and send the result via the async channel.
-pub fn spawn_palette_picker(
-    sender: &Sender<AsyncFrontendMessage>,
-    previous_path: Option<&PathBuf>,
-) {
-    let sender = sender.clone();
-    let prev_dir = get_parent_dir(previous_path);
-    std::thread::spawn(move || {
-        let path = pick_palette(prev_dir);
-        let _ = sender.send(AsyncFrontendMessage::LoadPalette(path));
-    });
-}
-
-/// Spawn a save dialog for a palette file in a background thread.
-pub fn spawn_palette_save(previous_path: Option<&PathBuf>, palette_bytes: Vec<u8>) {
-    use std::fs::OpenOptions;
-    use std::io::Write;
-
-    let prev_dir = get_parent_dir(previous_path);
-    std::thread::spawn(move || {
-        if let Some(p) = create_new(prev_dir)
-            && let Ok(mut file) = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(p)
-        {
-            let _ = file.write_all(&palette_bytes);
-        }
-    });
+/// Enum to represent errors that can occur during savestate loading UI flow
+pub enum SavestateLoadError {
+    /// Failed to load or parse the savestate file
+    FailedToLoadSavestate,
+    /// Failed to compute checksum for a ROM file
+    FailedToComputeChecksum,
 }
 
 pub trait Contrastable {
@@ -111,6 +73,14 @@ impl ToBytes for RgbPalette {
     }
 }
 
+impl ToBytes for SaveState {
+    fn to_bytes(&self) -> Vec<u8> {
+        rkyv::to_bytes::<BoxedError>(self)
+            .expect("Failed to serialize SaveState")
+            .to_vec()
+    }
+}
+
 impl Hashable for RgbPalette {
     /// Compute a fast hash of the given data for change detection.
     /// Uses FNV-1a algorithm which is fast and has good distribution.
@@ -156,27 +126,85 @@ impl AsU32 for egui::Color32 {
     }
 }
 
-pub fn pick_rom(previous: PathBuf) -> Option<PathBuf> {
+pub fn pick_file(previous: PathBuf, file_type: FileType) -> Option<PathBuf> {
     FileDialog::new()
-        .add_filter("NES ROM File", &["nes"])
-        .add_filter("All Files", &["*"])
+        .add_filetype_filter(file_type)
+        .add_filetype_filter(FileType::All)
         .set_directory(previous)
         .pick_file()
 }
 
-pub fn pick_palette(previous: PathBuf) -> Option<PathBuf> {
-    FileDialog::new()
-        .add_filter("NES Palette File", &["pal"])
-        .add_filter("All Files", &["*"])
-        .set_directory(previous)
-        .pick_file()
-}
-
-pub fn create_new(previous: PathBuf) -> Option<PathBuf> {
+pub fn save_file(previous: PathBuf, file_type: FileType) -> Option<PathBuf> {
     FileDialog::new()
         .set_directory(previous)
+        .add_filetype_filter(file_type)
+        .add_filetype_filter(FileType::All)
         .set_can_create_directories(true)
         .save_file()
+}
+
+pub enum FileType {
+    Rom,
+    Savestate,
+    Palette,
+    All,
+}
+
+impl FileType {
+    pub fn add_filters(&self, dialog: FileDialog) -> FileDialog {
+        match self {
+            FileType::Rom => dialog.add_filter("NES ROM File", &["nes"]),
+            FileType::Savestate => dialog.add_filter("Savestate", &["sav"]),
+            FileType::Palette => dialog.add_filter("NES Palette File", &["pal"]),
+            FileType::All => dialog.add_filter("All Files", &["*"]),
+        }
+    }
+}
+
+pub trait AddFilter {
+    fn add_filetype_filter(self, file_type: FileType) -> Self;
+}
+
+impl AddFilter for FileDialog {
+    fn add_filetype_filter(self, file_type: FileType) -> Self { file_type.add_filters(self) }
+}
+
+/// Extract the parent directory from an optional path, or return a default empty path.
+/// This is commonly used to set the initial directory for file dialogs.
+pub fn get_parent_dir(path: Option<&PathBuf>) -> PathBuf {
+    path.and_then(|p| p.parent())
+        .map(|p| p.to_path_buf())
+        .unwrap_or_default()
+}
+
+pub fn spawn_file_picker(
+    sender: &Sender<AsyncFrontendMessage>,
+    previous_path: Option<&PathBuf>,
+    file_type: FileType,
+    message: RelayType,
+) {
+    let sender = sender.clone();
+    let prev_dir = get_parent_dir(previous_path);
+    std::thread::spawn(move || {
+        let path = pick_file(prev_dir, file_type);
+        let _ = sender.send(AsyncFrontendMessage::EmuRelay(message, path));
+    });
+}
+
+/// Spawn a save dialog for a palette file in a background thread.
+pub fn spawn_save_dialog(previous_path: Option<&PathBuf>, file_type: FileType, data: Vec<u8>) {
+    let prev_dir = get_parent_dir(previous_path);
+    std::thread::spawn(move || {
+        if let Some(p) = save_file(prev_dir, file_type)
+            && let Ok(mut file) = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(p)
+        {
+            let _ = file.write_all(&data);
+        }
+    });
 }
 
 pub fn color_radio<Value: PartialEq>(
@@ -212,4 +240,110 @@ pub fn color_radio<Value: PartialEq>(
     }
 
     response
+}
+
+/// Compute SHA256 checksum for a file
+pub fn compute_file_checksum(path: &PathBuf) -> Option<[u8; 32]> {
+    let mut file = File::open(path).ok()?;
+    let mut data = Vec::new();
+    file.read_to_end(&mut data).ok()?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(&data);
+    Some(hasher.finalize().into())
+}
+
+/// Check if a ROM file matches the expected filename and checksum
+pub fn find_matching_rom_in_dir(
+    dir: &Path,
+    expected_filename: &str,
+    expected_checksum: &[u8; 32],
+) -> Option<PathBuf> {
+    let rom_path = dir.join(expected_filename);
+    if rom_path.exists()
+        && let Some(checksum) = compute_file_checksum(&rom_path)
+        && checksum == *expected_checksum
+    {
+        return Some(rom_path);
+    }
+    None
+}
+
+/// Spawn the initial savestate file picker in a background thread.
+/// After the savestate is loaded, it will check for a matching ROM.
+pub fn spawn_savestate_picker(
+    sender: &Sender<AsyncFrontendMessage>,
+    previous_savestate_path: Option<&PathBuf>,
+    previous_rom_path: Option<PathBuf>,
+) {
+    let sender = sender.clone();
+    let prev_dir = get_parent_dir(previous_savestate_path);
+    let rom_dir = previous_rom_path.and_then(|p| p.parent().map(|p| p.to_path_buf()));
+
+    std::thread::spawn(move || {
+        let path = pick_file(prev_dir, FileType::Savestate);
+
+        if let Some(savestate_path) = path
+            && let Ok(canonical_path) = savestate_path.canonicalize()
+        {
+            // Try to load the savestate, handle errors gracefully
+            let savestate = match savestate::try_load_state(&canonical_path) {
+                Some(s) => s,
+                None => {
+                    // Failed to load savestate - send error notification
+                    let _ = sender.send(AsyncFrontendMessage::SavestateLoadFailed(
+                        SavestateLoadError::FailedToLoadSavestate,
+                    ));
+                    return;
+                }
+            };
+            let context = SavestateLoadContext {
+                savestate,
+                savestate_path: canonical_path,
+            };
+
+            // Check if there's a matching ROM in the last ROM directory
+            if let Some(ref rom_dir) = rom_dir
+                && let Some(ref rom_name) = context.savestate.rom_file.name
+                && let Some(matching_rom) = find_matching_rom_in_dir(
+                    rom_dir,
+                    rom_name,
+                    &context.savestate.rom_file.data_checksum,
+                )
+            {
+                // Found a matching ROM - ask user if they want to use it
+                let _ = sender.send(AsyncFrontendMessage::ShowMatchingRomDialog(
+                    Box::new(context),
+                    matching_rom,
+                ));
+                return;
+            }
+
+            // No matching ROM found, send context for next step
+            let _ = sender.send(AsyncFrontendMessage::SavestateLoaded(Box::new(context)));
+        }
+    });
+}
+
+/// Spawn a file picker to select a ROM for a savestate
+pub fn spawn_rom_picker_for_savestate(
+    sender: &Sender<AsyncFrontendMessage>,
+    context: Box<SavestateLoadContext>,
+    previous_rom_path: Option<&PathBuf>,
+) {
+    let sender = sender.clone();
+    let prev_dir = get_parent_dir(previous_rom_path);
+
+    std::thread::spawn(move || {
+        let path = pick_file(prev_dir, FileType::Rom);
+
+        if let Some(rom_path) = path
+            && let Ok(canonical_path) = rom_path.canonicalize()
+        {
+            let _ = sender.send(AsyncFrontendMessage::RomSelectedForSavestate(
+                context,
+                canonical_path,
+            ));
+        }
+    });
 }

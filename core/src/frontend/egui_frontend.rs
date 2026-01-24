@@ -11,7 +11,7 @@
 /// - `egui::tiles`: Tile tree behavior and pane management
 /// - `egui::ui`: UI rendering components
 use std::fmt::{Debug, Formatter};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
@@ -23,16 +23,21 @@ use crate::emulation::messages::{
     TileData,
 };
 use crate::emulation::nes::Nes;
-use crate::frontend::egui::config::{AppConfig, AppSpeed};
+use crate::frontend::egui::config::{
+    AppConfig, AppSpeed, ChecksumMismatchDialogState, ErrorDialogState, MatchingRomDialogState,
+    RomSelectionDialogState,
+};
 use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
     Pane, TreeBehavior, compute_required_fetches_from_tree, create_tree,
 };
-use crate::frontend::egui::ui::{add_menu_bar, add_status_bar};
-use crate::frontend::messages::AsyncFrontendMessage;
+use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
+use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
 use crate::frontend::palettes::parse_palette_from_file;
+use crate::frontend::util;
+use crate::frontend::util::{FileType, ToBytes};
 
 /// Main egui application state
 pub struct EguiApp {
@@ -122,33 +127,40 @@ impl EguiApp {
     fn process_async_messages(&mut self, ctx: &Context) {
         while let Ok(msg) = self.from_async.try_recv() {
             match msg {
-                AsyncFrontendMessage::LoadPalette(p) => {
-                    let palette = parse_palette_from_file(p.clone());
-                    self.config.view_config.palette_rgb_data = palette;
-                    if let Some(p) = p {
-                        self.config.user_config.previous_palette_path = Some(p)
-                    }
-                    let _ = self
-                        .to_emulator
-                        .send(FrontendMessage::SetPalette(Box::new(palette)));
-                    // Only update tile textures if a tile viewer is visible
-                    if self.is_tile_viewer_visible() {
-                        self.emu_textures.update_tile_textures(
-                            ctx,
-                            &self.config.view_config.palette_rgb_data,
-                            None,
-                            None,
-                        );
-                    }
-                }
-                AsyncFrontendMessage::LoadRom(p) => {
-                    if let Some(p) = p
-                        && let Ok(p) = p.canonicalize()
-                    {
-                        let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-                        let _ = self.to_emulator.send(FrontendMessage::LoadRom(p.clone()));
-                        let _ = self.to_emulator.send(FrontendMessage::Power);
-                        self.config.user_config.previous_rom_path = Some(p)
+                AsyncFrontendMessage::EmuRelay(r, p) => {
+                    match r {
+                        RelayType::LoadPalette => {
+                            let palette = parse_palette_from_file(
+                                p.clone(),
+                                self.config.user_config.previous_palette_path.clone(),
+                            );
+                            self.config.view_config.palette_rgb_data = palette;
+                            if let Some(p) = p {
+                                self.config.user_config.previous_palette_path = Some(p)
+                            }
+                            let _ = self
+                                .to_emulator
+                                .send(FrontendMessage::SetPalette(Box::new(palette)));
+                            // Only update tile textures if a tile viewer is visible
+                            if self.is_tile_viewer_visible() {
+                                self.emu_textures.update_tile_textures(
+                                    ctx,
+                                    &self.config.view_config.palette_rgb_data,
+                                    None,
+                                    None,
+                                );
+                            }
+                        }
+                        RelayType::LoadRom => {
+                            if let Some(p) = p
+                                && let Ok(p) = p.canonicalize()
+                            {
+                                let _ = self.to_emulator.send(FrontendMessage::PowerOff);
+                                let _ = self.to_emulator.send(FrontendMessage::LoadRom(p.clone()));
+                                let _ = self.to_emulator.send(FrontendMessage::Power);
+                                self.config.user_config.previous_rom_path = Some(p)
+                            }
+                        }
                     }
                 }
                 AsyncFrontendMessage::RefreshPalette => {
@@ -162,8 +174,146 @@ impl EguiApp {
                         );
                     }
                 }
+                AsyncFrontendMessage::SavestateLoaded(context) => {
+                    // Savestate loaded, now need to select ROM
+                    // Show dialog to select ROM with the expected filename displayed
+                    self.config.pending_dialogs.rom_selection_dialog =
+                        Some(RomSelectionDialogState {
+                            context,
+                        });
+                }
+                AsyncFrontendMessage::ShowMatchingRomDialog(context, matching_rom_path) => {
+                    // Found a matching ROM in the directory
+                    self.config.pending_dialogs.matching_rom_dialog =
+                        Some(MatchingRomDialogState {
+                            context,
+                            matching_rom_path,
+                        });
+                }
+                AsyncFrontendMessage::UseMatchingRom(context, rom_path) => {
+                    // User chose to use the matching ROM - load the savestate
+                    self.load_savestate_with_rom(&context, &rom_path);
+                }
+                AsyncFrontendMessage::ManuallySelectRom(context) => {
+                    // User chose to manually select a ROM
+                    util::spawn_rom_picker_for_savestate(
+                        &self.async_sender,
+                        context,
+                        self.config.user_config.previous_rom_path.as_ref(),
+                    );
+                }
+                AsyncFrontendMessage::RomSelectedForSavestate(context, rom_path) => {
+                    // User selected a ROM file, now verify checksum
+                    match util::compute_file_checksum(&rom_path) {
+                        Some(checksum) => {
+                            if checksum == context.savestate.rom_file.data_checksum {
+                                // Checksum matches, load the savestate
+                                self.load_savestate_with_rom(&context, &rom_path);
+                            } else {
+                                // Checksum mismatch, show warning dialog
+                                self.config.pending_dialogs.checksum_mismatch_dialog =
+                                    Some(ChecksumMismatchDialogState {
+                                        context,
+                                        selected_rom_path: rom_path,
+                                    });
+                            }
+                        }
+                        None => {
+                            // Failed to compute checksum - show error dialog
+                            self.config.pending_dialogs.error_dialog = Some(ErrorDialogState {
+                                title: "Error Reading ROM".to_string(),
+                                message:
+                                    "Failed to read or compute checksum for the selected ROM file."
+                                        .to_string(),
+                            });
+                        }
+                    }
+                }
+                AsyncFrontendMessage::ShowChecksumMismatchDialog(context, rom_path) => {
+                    // Show checksum mismatch warning dialog
+                    self.config.pending_dialogs.checksum_mismatch_dialog =
+                        Some(ChecksumMismatchDialogState {
+                            context,
+                            selected_rom_path: rom_path,
+                        });
+                }
+                AsyncFrontendMessage::LoadSavestateAnyway(context, rom_path) => {
+                    // User chose to load anyway despite checksum mismatch
+                    self.load_savestate_with_rom(&context, &rom_path);
+                }
+                AsyncFrontendMessage::SelectAnotherRom(context) => {
+                    // User chose to select a different ROM after checksum mismatch
+                    util::spawn_rom_picker_for_savestate(
+                        &self.async_sender,
+                        context,
+                        self.config.user_config.previous_rom_path.as_ref(),
+                    );
+                }
+                AsyncFrontendMessage::SavestateLoadFailed(error) => {
+                    // Show error dialog for failed savestate loading
+                    let message = match error {
+                        util::SavestateLoadError::FailedToLoadSavestate => {
+                            "Failed to load or parse the savestate file. The file may be corrupted or invalid."
+                        }
+                        util::SavestateLoadError::FailedToComputeChecksum => {
+                            "Failed to compute checksum for the ROM file."
+                        }
+                    };
+                    self.config.pending_dialogs.error_dialog = Some(ErrorDialogState {
+                        title: "Savestate Load Error".to_string(),
+                        message: message.to_string(),
+                    });
+                }
+                AsyncFrontendMessage::RomVerificationFailed(context, error) => {
+                    // Show error dialog for failed ROM verification
+                    let message = match error {
+                        util::SavestateLoadError::FailedToLoadSavestate => {
+                            "Unexpected error during ROM verification."
+                        }
+                        util::SavestateLoadError::FailedToComputeChecksum => {
+                            "Failed to read or compute checksum for the ROM file."
+                        }
+                    };
+                    self.config.pending_dialogs.error_dialog = Some(ErrorDialogState {
+                        title: "ROM Verification Error".to_string(),
+                        message: format!(
+                            "{}\n\nWould you like to select a different ROM?",
+                            message
+                        ),
+                    });
+                    // Also store the context to allow retrying
+                    self.config.pending_dialogs.rom_selection_dialog =
+                        Some(RomSelectionDialogState {
+                            context,
+                        });
+                }
             }
         }
+    }
+
+    /// Load a savestate after ROM has been verified/selected
+    fn load_savestate_with_rom(
+        &mut self,
+        context: &crate::frontend::messages::SavestateLoadContext,
+        rom_path: &Path,
+    ) {
+        // First power off, load ROM, power on
+        let _ = self.to_emulator.send(FrontendMessage::PowerOff);
+        let _ = self
+            .to_emulator
+            .send(FrontendMessage::LoadRom(rom_path.to_path_buf()));
+        let _ = self.to_emulator.send(FrontendMessage::Power);
+
+        // Then load the savestate
+        let _ = self
+            .to_emulator
+            .send(FrontendMessage::LoadSaveState(Box::new(
+                context.savestate.clone(),
+            )));
+
+        // Update config paths
+        self.config.user_config.previous_rom_path = Some(rom_path.to_path_buf());
+        self.config.user_config.previous_savestate_path = Some(context.savestate_path.clone());
     }
 
     /// Process messages from the emulator (frames, debug data, etc.)
@@ -205,7 +355,7 @@ impl EguiApp {
                         // Only update tile textures if a tile viewer is visible
                         if self.is_tile_viewer_visible() {
                             if changed_tiles.is_empty() || changed_tiles.len() > 10 {
-                                // If many tiles changed or we couldn't detect changes, rebuild all
+                                // If many tiles changed, or we couldn't detect changes, rebuild all
                                 self.emu_textures.update_tile_textures(
                                     ctx,
                                     &self.config.view_config.palette_rgb_data,
@@ -232,6 +382,11 @@ impl EguiApp {
                 EmulatorMessage::Stopped => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
+                EmulatorMessage::SaveState(s) => util::spawn_save_dialog(
+                    self.config.user_config.previous_savestate_path.as_ref(),
+                    FileType::Savestate,
+                    s.to_bytes(),
+                ),
             }
         }
     }
@@ -328,7 +483,7 @@ impl EguiApp {
             // Effectively paused, so we skip
             if frame_budget < Duration::from_secs(5) {
                 while self.accumulator >= frame_budget {
-                    if let Err(e) = self.channel_emu.step_frame() {
+                    if let Err(e) = self.channel_emu.execute_frame() {
                         eprintln!("Emulator error: {}", e);
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         break;
@@ -386,6 +541,16 @@ impl EguiApp {
             self.emu_textures.last_debug_request = Instant::now();
         }
     }
+
+    /// Render any pending dialogs for savestate loading
+    fn render_savestate_dialogs_impl(&mut self, ctx: &Context) {
+        render_savestate_dialogs(
+            ctx,
+            &mut self.config.pending_dialogs,
+            &self.config.user_config,
+            &self.async_sender,
+        );
+    }
 }
 
 impl eframe::App for EguiApp {
@@ -397,6 +562,12 @@ impl eframe::App for EguiApp {
             &mut self.config,
             &mut self.emu_textures.last_frame_request,
         );
+
+        if let Err(e) = self.channel_emu.process_messages() {
+            eprintln!("Emulator error: {}", e);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
+        }
 
         self.update_emu_textures(ctx);
 
@@ -437,6 +608,9 @@ impl eframe::App for EguiApp {
             self.tree.ui(&mut behavior, ui);
         });
 
+        // Render any pending savestate dialogs
+        self.render_savestate_dialogs_impl(ctx);
+
         // Request continuous repaint for animation
         ctx.request_repaint();
     }
@@ -458,14 +632,14 @@ pub fn run(
     // Create the emulator instance
     let console = Nes::default();
 
-    let palette = parse_palette_from_file(palette);
+    let palette = parse_palette_from_file(palette, None);
 
     // Create channel-based emulator wrapper
     let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
     let (to_frontend, from_async) = crossbeam_channel::unbounded();
 
     // Setup Emulator State via messages
-    let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(rom));
+    let _ = to_frontend.send(AsyncFrontendMessage::EmuRelay(RelayType::LoadRom, rom));
     let _ = tx_to_emu.send(FrontendMessage::SetPalette(Box::new(palette)));
 
     // Configure eframe options

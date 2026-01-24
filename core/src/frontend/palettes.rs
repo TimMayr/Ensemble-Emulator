@@ -5,7 +5,9 @@ use std::path::PathBuf;
 use crate::emulation::messages::RgbPalette;
 
 static DEFAULT_PALETTE: &[u8] = include_bytes!("../../assets/2C02G_wiki.pal");
-pub fn parse_palette_from_file(path: Option<PathBuf>) -> RgbPalette {
+pub fn parse_palette_from_file(path: Option<PathBuf>, fallback: Option<PathBuf>) -> RgbPalette {
+    let path = path.or(fallback);
+
     let data = if let Some(path) = path {
         if let Ok(ref mut file) = File::open(path) {
             let mut data = Vec::new();

@@ -9,7 +9,6 @@ use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
-use crate::emulation::savestate;
 use crate::emulation::savestate::{CpuState, PpuState, SaveState};
 use crate::trace::TraceLog;
 
@@ -137,41 +136,51 @@ impl Nes {
         self.rom_file = Some(rom_file);
     }
 
-    pub fn save_state(&self, path: &str) {
+    pub fn save_state(&self) -> SaveState {
         let ppu_state = {
             let ppu_ref = self.ppu.borrow();
             PpuState::from(ppu_ref.deref())
         };
 
-        let state = SaveState {
+        SaveState {
             cpu: CpuState::from(&self.cpu),
             ppu: ppu_state,
             cycle: self.cpu_cycle_counter,
             total_cycles: self.total_cycles,
             rom_file: self.rom_file.as_ref().unwrap().clone(),
             version: 1,
-        };
-
-        savestate::save_state(state, path);
+            ppu_cycle_counter: self.ppu_cycle_counter,
+            cpu_cycle_counter: self.cpu_cycle_counter,
+        }
     }
 
-    pub fn load_state(&mut self, path: &str) {
-        let state = savestate::load_state(path);
+    pub fn load_state(&mut self, state: SaveState) {
+        // Use the already loaded ROM file if available (it has the actual ROM data),
+        // otherwise fall back to the savestate's ROM (which may have empty data due to Skip)
+        let rom_to_use = self.rom_file.as_ref().unwrap_or(&state.rom_file);
 
-        self.rom_file = Some(state.rom_file);
-        self.ppu = Rc::new(RefCell::new(Ppu::from(
-            &state.ppu,
-            self.rom_file.as_ref().unwrap(),
-        )));
-        self.cpu = Cpu::from(
-            &state.cpu,
-            self.ppu.clone(),
-            self.rom_file.as_ref().unwrap(),
+        self.ppu = Rc::new(RefCell::new(Ppu::from(&state.ppu, rom_to_use)));
+
+        self.cpu = Cpu::from(&state.cpu, self.ppu.clone(), rom_to_use);
+
+        // Add PPU registers to CPU memory map (same as power() does)
+        // This is critical - without this, the CPU can't communicate with the PPU!
+        self.cpu.memory.add_memory(
+            0x2000..=0x3FFF,
+            Memory::MirrorMemory(MirrorMemory::new(
+                Box::new(Memory::PpuRegisters(PpuRegisters::new(self.ppu.clone()))),
+                0x0007,
+            )),
         );
-        self.cpu_cycle_counter = state.cycle;
 
-        self.cpu.memory.load(&state.cpu.memory);
-        self.ppu.borrow_mut().memory.load(&state.ppu.memory);
+        // Only update rom_file if we didn't have one loaded
+        if self.rom_file.is_none() {
+            self.rom_file = Some(state.rom_file);
+        }
+
+        self.cpu_cycle_counter = state.cycle;
+        self.cpu_cycle_counter = state.cpu_cycle_counter;
+        self.ppu_cycle_counter = state.ppu_cycle_counter;
     }
 
     #[inline(always)]
@@ -226,6 +235,8 @@ impl Nes {
                     cpu: CpuState::from(&self.cpu),
                     ppu: ppu_state,
                     cycle: self.cpu_cycle_counter,
+                    ppu_cycle_counter: self.ppu_cycle_counter,
+                    cpu_cycle_counter: self.cpu_cycle_counter,
                     total_cycles: self.total_cycles,
                     rom_file: self.rom_file.as_ref().unwrap().clone(),
                     version: 1,

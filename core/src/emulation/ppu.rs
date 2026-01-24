@@ -5,7 +5,7 @@ use std::ops::RangeInclusive;
 use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
-use crate::emulation::mem::{Memory, MemoryDevice, OpenBus, Ram};
+use crate::emulation::mem::{Memory, OpenBus, Ram};
 use crate::emulation::messages::{
     EmulatorFetchable, NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, NametableData,
     PATTERN_TABLE_SIZE, PaletteData, RgbPalette, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData,
@@ -69,7 +69,7 @@ pub struct Ppu {
     pub nmi_requested: Cell<bool>,
     pub memory: MemoryMap,
     pub palette_ram: MemoryMap,
-    pub oam: Ram,
+    pub oam: MemoryMap,
     pub write_latch: Cell<bool>,
     pub t_register: u16,
     pub fine_x_scroll: u8,
@@ -169,7 +169,7 @@ impl Ppu {
         let mut mem = MemoryMap::default();
 
         mem.add_memory(
-            PALETTE_RAM_START_ADDRESS..=PALETTE_RAM_END_INDEX,
+            0..=PALETTE_RAM_END_INDEX - PALETTE_RAM_START_ADDRESS,
             Memory::MirrorMemory(MirrorMemory::new(
                 Box::new(Memory::PaletteRam(PaletteRam::default())),
                 PALETTE_RAM_SIZE - 1,
@@ -179,7 +179,15 @@ impl Ppu {
         mem
     }
 
-    fn get_default_oam() -> Ram { Ram::new(OAM_SIZE + OAM_SIZE / 8) }
+    fn get_default_oam() -> MemoryMap {
+        let mut map = MemoryMap::new();
+        map.add_memory(
+            0..=((OAM_SIZE as u16) + OAM_SIZE as u16 / 8u16),
+            Memory::Ram(Ram::new(OAM_SIZE + OAM_SIZE / 8)),
+        );
+
+        map
+    }
 
     #[inline]
     pub fn step(&mut self) -> bool {
@@ -332,18 +340,23 @@ impl Ppu {
                             + (sprite_pixel_pattern as u16)
                     };
 
-                    let pixel_color_address =
-                        if bg_color_address == 0x3F00 && sprite_color_address == 0x3F10 {
-                            bg_color_address
-                        } else if bg_color_address == 0x3F00 && sprite_color_address != 0x3F10 {
-                            sprite_color_address
-                        } else if bg_color_address != 0x3F00 && sprite_color_address == 0x3F10 {
-                            bg_color_address
-                        } else if sprite_pixel_priority == 0 {
-                            sprite_color_address
-                        } else {
-                            bg_color_address
-                        };
+                    let pixel_color_address = if bg_color_address == PALETTE_RAM_START_ADDRESS
+                        && sprite_color_address == 0x3F10
+                    {
+                        bg_color_address
+                    } else if bg_color_address == PALETTE_RAM_START_ADDRESS
+                        && sprite_color_address != 0x3F10
+                    {
+                        sprite_color_address
+                    } else if bg_color_address != PALETTE_RAM_START_ADDRESS
+                        && sprite_color_address == 0x3F10
+                    {
+                        bg_color_address
+                    } else if sprite_pixel_priority == 0 {
+                        sprite_color_address
+                    } else {
+                        bg_color_address
+                    };
 
                     let pixel_color = self.mem_read(pixel_color_address);
 
@@ -582,9 +595,9 @@ impl Ppu {
         for row in 0..32 {
             let base = row * 9;
             let row_bytes = (0..8)
-                .map(|i| self.oam.read((base + i) as u16, 0))
+                .map(|i| self.oam.mem_read((base + i) as u16))
                 .collect::<Vec<_>>();
-            let oam2_byte = self.oam.read((base + 8) as u16, 0);
+            let oam2_byte = self.oam.mem_read((base + 8) as u16);
 
             // Print row
             self.log += format!("{:02X}  | ", row).as_str();
@@ -638,9 +651,9 @@ impl Ppu {
         let palette_index = (attr1 << 1) | attr0;
 
         if pattern_index == 0 {
-            0x3F00
+            PALETTE_RAM_START_ADDRESS
         } else {
-            0x3F00 + ((palette_index as u16) << 2) + (pattern_index as u16)
+            PALETTE_RAM_START_ADDRESS + ((palette_index as u16) << 2) + (pattern_index as u16)
         }
     }
 
@@ -807,10 +820,10 @@ impl Ppu {
     pub fn get_vram_at_addr(&mut self) -> u8 {
         let mut ret = self.ppu_data_buffer;
 
-        self.ppu_data_buffer = self.memory.mem_read(self.v_register);
+        self.ppu_data_buffer = self.mem_read(self.v_register);
 
-        if (0x3F00u16..=0x3FFFu16).contains(&self.v_register) {
-            ret = self.palette_ram.mem_read(self.v_register);
+        if (PALETTE_RAM_START_ADDRESS..=PALETTE_RAM_END_INDEX).contains(&self.v_register) {
+            ret = self.mem_read(self.v_register);
         }
 
         if !(self.scanline < VISIBLE_SCANLINES + 1 || self.scanline == PRE_RENDER_SCANLINE)
@@ -833,7 +846,7 @@ impl Ppu {
         if !(self.scanline < VISIBLE_SCANLINES + 1 || self.scanline == PRE_RENDER_SCANLINE)
             || !self.is_rendering()
         {
-            self.oam.write(self.oam_addr_register as u16, data);
+            self.oam.mem_write(self.oam_addr_register as u16, data);
             self.oam_addr_register = self.oam_addr_register.wrapping_add(1);
         }
     }
@@ -941,7 +954,9 @@ impl Ppu {
 
     pub fn mem_read_debug(&self, addr: u16) -> u8 {
         match addr {
-            0x3F00..0x3FFF => self.palette_ram.mem_read_debug(addr),
+            PALETTE_RAM_START_ADDRESS..PALETTE_RAM_END_INDEX => self
+                .palette_ram
+                .mem_read_debug(addr - PALETTE_RAM_START_ADDRESS),
             _ => self.memory.mem_read_debug(addr),
         }
     }
@@ -949,7 +964,9 @@ impl Ppu {
     #[inline(always)]
     pub fn mem_read(&mut self, addr: u16) -> u8 {
         match addr {
-            0x3F00..0x3FFF => self.palette_ram.mem_read(addr),
+            PALETTE_RAM_START_ADDRESS..PALETTE_RAM_END_INDEX => {
+                self.palette_ram.mem_read(addr - PALETTE_RAM_START_ADDRESS)
+            }
             _ => self.memory.mem_read(addr),
         }
     }
@@ -957,7 +974,9 @@ impl Ppu {
     #[inline(always)]
     pub fn mem_write(&mut self, addr: u16, data: u8) {
         match addr {
-            0x3F00..0x3FFF => self.palette_ram.mem_write(addr, data),
+            PALETTE_RAM_START_ADDRESS..PALETTE_RAM_END_INDEX => self
+                .palette_ram
+                .mem_write(addr - PALETTE_RAM_START_ADDRESS, data),
             _ => self.memory.mem_write(addr, data),
         }
     }
@@ -965,7 +984,9 @@ impl Ppu {
     #[inline(always)]
     pub fn mem_init(&mut self, addr: u16, data: u8) {
         match addr {
-            0x3F00..0x3FFF => self.palette_ram.init(addr, data),
+            PALETTE_RAM_START_ADDRESS..PALETTE_RAM_END_INDEX => self
+                .palette_ram
+                .init(addr - PALETTE_RAM_START_ADDRESS, data),
             _ => self.memory.init(addr, data),
         }
     }
@@ -974,7 +995,7 @@ impl Ppu {
     pub fn oam_read(&mut self, addr: u8) -> u8 {
         let row = addr >> 3;
         let byte = addr & 0x7;
-        let mut res = self.oam.read((row as u16 * 9) + byte as u16, 0);
+        let mut res = self.oam.mem_read((row as u16 * 9) + byte as u16);
 
         if self.is_soam_clear_active {
             res = 0xFF;
@@ -987,7 +1008,7 @@ impl Ppu {
     pub fn oam_write(&mut self, addr: u8, data: u8) {
         let row = addr >> 3;
         let byte = addr & 0x7;
-        self.oam.write((row as u16 * 9) + byte as u16, data)
+        self.oam.mem_write((row as u16 * 9) + byte as u16, data)
     }
 
     #[inline(always)]
@@ -995,7 +1016,7 @@ impl Ppu {
         let row = addr & 0x1F;
         let byte = 8u8;
 
-        self.oam.read((row as u16 * 9) + byte as u16, 0)
+        self.oam.mem_read((row as u16 * 9) + byte as u16)
     }
 
     #[inline(always)]
@@ -1004,9 +1025,9 @@ impl Ppu {
         let byte = 8u8;
 
         if !self.soam_disable {
-            self.oam.write((row as u16 * 9) + byte as u16, data);
+            self.oam.mem_write((row as u16 * 9) + byte as u16, data);
         } else {
-            self.oam.read((row as u16 * 9) + byte as u16, 0);
+            self.oam.mem_read((row as u16 * 9) + byte as u16);
         }
     }
 
@@ -1019,7 +1040,7 @@ impl Ppu {
         }
 
         self.memory.add_memory(
-            0x2000..=0x3FFF,
+            0x2000..=PALETTE_RAM_END_INDEX,
             Memory::MirrorMemory(MirrorMemory::new(
                 Box::new(rom_file.get_nametable_memory()),
                 (VRAM_SIZE * 2 - 1) as u16,
@@ -1090,6 +1111,8 @@ impl Ppu {
     }
 
     pub fn from(state: &PpuState, rom: &RomFile) -> Self {
+        use crate::emulation::messages::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+
         let mut ppu = Self {
             dot_counter: state.cycle_counter,
             ctrl_register: state.ctrl_register,
@@ -1100,46 +1123,55 @@ impl Ppu {
             ppu_data_buffer: state.ppu_data_buffer,
             nmi_requested: Cell::new(state.nmi_requested),
             memory: Self::get_default_memory_map(),
-            palette_ram: Default::default(),
+            palette_ram: Self::get_palette_memory_map(),
             oam: Self::get_default_oam(),
             write_latch: state.write_latch.into(),
             t_register: state.t_register,
             bg_next_tile_id: state.bg_next_tile_id,
             bg_next_tile_attribute: state.bg_next_tile_attribute,
-            bg_next_tile_lsb: 0,
+            bg_next_tile_lsb: state.bg_next_tile_lsb,
             fine_x_scroll: state.fine_x_scroll,
             even_frame: state.even_frame,
             reset_signal: state.reset_signal,
-            pixel_buffer: state.pixel_buffer.clone(),
-            vbl_reset_counter: 0.into(),
-            vbl_clear_scheduled: None.into(),
+            // Initialize pixel buffer fresh - it's not saved in savestate
+            pixel_buffer: vec![0u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT],
+            vbl_reset_counter: Cell::new(state.vbl_reset_counter),
+            vbl_clear_scheduled: Cell::new(state.vbl_clear_scheduled),
             scanline: state.scanline,
             dot: state.dot,
-            prev_vbl: 0,
-            open_bus: OpenBus::new(OPEN_BUS_DECAY_DELAY).into(),
-            address_bus: 0,
-            address_latch: 0,
-            shift_pattern_lo: 0,
-            shift_pattern_hi: 0,
-            shift_attr_lo: 0,
-            shift_attr_hi: 0,
-            shift_in_attr_lo: false,
-            shift_in_attr_hi: false,
-            is_soam_clear_active: false,
-            oam_index: 0,
-            soam_index: 0,
-            soam_disable: false,
-            oam_increment: 0,
-            soam_write_counter: 1,
+            prev_vbl: state.prev_vbl,
+            open_bus: Cell::new(state.open_bus),
+            address_bus: state.address_bus,
+            address_latch: state.address_latch,
+            shift_pattern_lo: state.shift_pattern_lo,
+            shift_pattern_hi: state.shift_pattern_hi,
+            shift_attr_lo: state.shift_attr_lo,
+            shift_attr_hi: state.shift_attr_hi,
+            shift_in_attr_lo: state.shift_in_attr_lo,
+            shift_in_attr_hi: state.shift_in_attr_hi,
+            is_soam_clear_active: state.is_soam_clear_active,
+            oam_index: state.oam_index,
+            soam_index: state.soam_index,
+            soam_disable: state.soam_disable,
+            oam_increment: state.oam_increment,
+            soam_write_counter: state.soam_write_counter, //1
+            oam_fetch: state.oam_fetch,
             current_sprite_tile_id: 0,
             current_sprite_y: 0,
             sprite_fifo: [SpriteFifo::default(); 8],
-            oam_fetch: 0,
             log: "".to_string(),
             rgb_palette: Default::default(),
         };
 
+        // Load ROM first to set up memory mapping (CHR ROM and nametables)
         ppu.load_rom(rom);
+
+        // Restore nametable VRAM (at address 0x2000)
+        ppu.memory.load_range(&state.nametable_ram, 0x2000);
+
+        // Restore OAM and palette RAM
+        ppu.oam.load(&state.oam_mem);
+        ppu.palette_ram.load(&state.palette_ram);
 
         ppu
     }

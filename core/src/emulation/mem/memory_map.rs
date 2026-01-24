@@ -30,6 +30,16 @@ impl MemoryMap {
         }
     }
 
+    pub fn get_last_address(&self) -> u16 {
+        for i in (0..MEMORY_SIZE).rev() {
+            if self.lookup[i as usize].is_some() {
+                return i;
+            }
+        }
+
+        0
+    }
+
     pub fn add_memory(&mut self, address_space: RangeInclusive<u16>, memory: Memory) {
         let device_index = self.regions.len();
 
@@ -112,7 +122,7 @@ impl MemoryMap {
                 vec.push(self.mem_read_debug(addr));
             }
         } else {
-            for addr in 0..=MEMORY_SIZE {
+            for addr in 0..=self.get_last_address() {
                 vec.push(self.mem_read_debug(addr));
             }
         }
@@ -122,6 +132,13 @@ impl MemoryMap {
     pub fn load(&mut self, data: &[u8]) {
         for (addr, byte) in data.iter().enumerate() {
             self.mem_init(addr as u16, *byte);
+        }
+    }
+
+    /// Load data starting at a specific address
+    pub fn load_range(&mut self, data: &[u8], start_addr: u16) {
+        for (offset, byte) in data.iter().enumerate() {
+            self.mem_init(start_addr.wrapping_add(offset as u16), *byte);
         }
     }
 }

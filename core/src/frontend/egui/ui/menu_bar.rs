@@ -4,8 +4,8 @@ use egui::Context;
 use crate::emulation::messages::FrontendMessage;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::tiles::{Pane, add_pane_if_missing};
-use crate::frontend::messages::AsyncFrontendMessage;
-use crate::frontend::util::spawn_rom_picker;
+use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
+use crate::frontend::util::{FileType, spawn_file_picker, spawn_savestate_picker};
 
 pub fn add_menu_bar(
     ctx: &Context,
@@ -18,8 +18,27 @@ pub fn add_menu_bar(
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui.button("Load Rom").clicked() {
-                    spawn_rom_picker(async_sender, config.user_config.previous_rom_path.as_ref());
+                    spawn_file_picker(
+                        async_sender,
+                        config.user_config.previous_rom_path.as_ref(),
+                        FileType::Rom,
+                        RelayType::LoadRom,
+                    );
                 }
+                ui.menu_button("Savestates", |ui| {
+                    if ui.button("Save State").clicked() {
+                        let _ = to_emu.send(FrontendMessage::CreateSaveState);
+                    }
+
+                    if ui.button("Load State").clicked() {
+                        // Use the new multi-step savestate loading flow
+                        spawn_savestate_picker(
+                            async_sender,
+                            config.user_config.previous_savestate_path.as_ref(),
+                            config.user_config.previous_rom_path.clone(),
+                        );
+                    }
+                })
             });
             ui.menu_button("Console", |ui| {
                 if ui.button("Reset").clicked() {

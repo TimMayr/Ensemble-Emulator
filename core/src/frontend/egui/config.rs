@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use crate::emulation::messages::{EmulatorFetchable, RgbPalette};
+use crate::frontend::messages::SavestateLoadContext;
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct ViewConfig {
@@ -15,18 +16,63 @@ pub struct ViewConfig {
 }
 
 /// Main application configuration
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+///
+/// Note: `Eq` and `PartialEq` are not derived because `PendingDialogs` contains
+/// `SavestateLoadContext` which includes `SaveState`, which is not trivially comparable.
+#[derive(Default, Clone)]
 pub struct AppConfig {
     pub view_config: ViewConfig,
     pub speed_config: SpeedConfig,
     pub user_config: UserConfig,
     pub console_config: ConsoleConfig,
+    pub pending_dialogs: PendingDialogs,
+}
+
+/// Pending dialog states for multi-step operations
+#[derive(Default, Clone)]
+pub struct PendingDialogs {
+    /// Dialog to ask user if they want to use a matching ROM found in the directory
+    pub matching_rom_dialog: Option<MatchingRomDialogState>,
+    /// Dialog to ask user what to do when ROM checksum doesn't match
+    pub checksum_mismatch_dialog: Option<ChecksumMismatchDialogState>,
+    /// Dialog to ask user to select a ROM file (shows expected filename)
+    pub rom_selection_dialog: Option<RomSelectionDialogState>,
+    /// Generic error dialog for displaying error messages
+    pub error_dialog: Option<ErrorDialogState>,
+}
+
+/// State for the matching ROM dialog
+#[derive(Clone)]
+pub struct MatchingRomDialogState {
+    pub context: Box<SavestateLoadContext>,
+    pub matching_rom_path: PathBuf,
+}
+
+/// State for the checksum mismatch warning dialog
+#[derive(Clone)]
+pub struct ChecksumMismatchDialogState {
+    pub context: Box<SavestateLoadContext>,
+    pub selected_rom_path: PathBuf,
+}
+
+/// State for the ROM selection dialog
+#[derive(Clone)]
+pub struct RomSelectionDialogState {
+    pub context: Box<SavestateLoadContext>,
+}
+
+/// State for a generic error dialog
+#[derive(Clone)]
+pub struct ErrorDialogState {
+    pub title: String,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct UserConfig {
     pub previous_palette_path: Option<PathBuf>,
     pub previous_rom_path: Option<PathBuf>,
+    pub previous_savestate_path: Option<PathBuf>,
     pub pattern_edit_color: u8,
 }
 

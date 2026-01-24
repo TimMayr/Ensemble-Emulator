@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
-use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
+use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::emulation::mem::apu_registers::ApuRegisters;
 use crate::emulation::mem::memory_map::MemoryMap;
@@ -1657,7 +1657,7 @@ impl Cpu {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Archive, RkyvSerialize, RkyvDeserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Archive, Serialize, Deserialize)]
 pub enum MicroOp {
     FetchOpcode(MicroOpCallback),
     FetchOperandLo(MicroOpCallback),
@@ -1694,7 +1694,7 @@ pub enum MicroOp {
     FixHiBranch(u16),
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, RkyvSerialize, RkyvDeserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, Serialize, Deserialize)]
 pub enum Target {
     A,
     X,
@@ -1714,7 +1714,7 @@ pub enum Target {
     OamWrite,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, RkyvSerialize, RkyvDeserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, Serialize, Deserialize)]
 pub enum Source {
     PBrk,
     A,
@@ -1732,7 +1732,7 @@ pub enum Source {
     DmaTemp,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, RkyvSerialize, RkyvDeserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, Serialize, Deserialize)]
 pub enum AddressSource {
     AddressLatch,
     Address(u16),
@@ -1744,7 +1744,7 @@ pub enum AddressSource {
     IrqVec,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, RkyvSerialize, RkyvDeserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, Serialize, Deserialize)]
 pub enum MicroOpCallback {
     None,
     ADC,
@@ -1807,7 +1807,7 @@ pub enum MicroOpCallback {
     ExitIrq,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Archive, RkyvSerialize, RkyvDeserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Archive, Serialize, Deserialize)]
 pub enum Condition {
     CarrySet,
     CarryClear,
@@ -1819,7 +1819,10 @@ pub enum Condition {
     OverflowClear,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Archive, Serialize, Deserialize)]
+#[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
+                        __S::Error: rkyv::rancor::Source))]
+#[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
 pub enum OpType {
     ImmediateAddressing(Target, MicroOpCallback),
     AbsoluteRead(Target, MicroOpCallback),
@@ -1870,12 +1873,6 @@ impl Cpu {
     pub fn from(state: &CpuState, ppu: Rc<RefCell<Ppu>>, rom: &RomFile) -> Self {
         OPCODES_MAP.get_or_init(opcode::init);
         OPCODES_TABLE.get_or_init(opcode::init_lookup_table);
-        let mut opcode = None;
-
-        if let Some(opcode_u8) = state.current_opcode {
-            // Use fast lookup table
-            opcode = get_opcode(opcode_u8);
-        }
 
         let mut cpu = Self {
             program_counter: state.program_counter,
@@ -1886,31 +1883,40 @@ impl Cpu {
             processor_status: state.processor_status,
             memory: Self::get_default_memory_map(),
             ppu: Some(ppu),
-            irq_provider: Cell::new(false),
+            irq_provider: Cell::new(state.irq_provider),
             lo: state.lo,
             hi: state.hi,
             current_op: state.current_op,
             op_queue: state.op_queue.clone(),
-            current_opcode: opcode,
+            current_opcode: state.current_opcode.and_then(get_opcode),
             temp: state.temp,
             ane_constant: state.ane_constant,
             is_halted: state.is_halted,
-            irq_pending: false,
-            nmi_pending: false,
-            nmi_detected: false,
-            irq_detected: false,
-            locked_irq_vec: 0,
-            current_irq_vec: 0,
-            is_in_irq: false,
-            prev_nmi: false,
-            cpu_read_cycle: true,
-            dma_read: true,
-            dma_triggered: false,
-            dma_page: 0,
-            dma_temp: 0,
+            irq_pending: state.irq_pending,
+            nmi_pending: state.nmi_pending,
+            nmi_detected: state.nmi_detected,
+            irq_detected: state.irq_detected,
+            locked_irq_vec: state.locked_irq_vec,
+            current_irq_vec: state.current_irq_vec,
+            is_in_irq: state.is_in_irq,
+            prev_nmi: state.prev_nmi,
+            cpu_read_cycle: state.read_cycle,
+            dma_read: state.dma_read,
+            dma_triggered: state.dma_triggered,
+            dma_page: state.dma_page,
+            dma_temp: state.dma_temp,
         };
 
+        // Load ROM first to set up memory mapping
         cpu.load_rom(rom);
+
+        // Restore internal RAM (2KB at 0x0000-0x07FF)
+        cpu.memory.load_range(&state.internal_ram, 0x0000);
+
+        // Restore PRG RAM if present (0x6000-0x7FFF)
+        if !state.prg_ram.is_empty() {
+            cpu.memory.load_range(&state.prg_ram, 0x6000);
+        }
 
         cpu
     }

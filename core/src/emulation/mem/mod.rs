@@ -1,5 +1,7 @@
 use std::fmt::{Debug, Formatter};
 
+use rkyv::{Archive, Deserialize, Serialize};
+
 use crate::emulation::mem::apu_registers::ApuRegisters;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::nametable_memory::NametableMemory;
@@ -194,13 +196,13 @@ impl MemoryDevice for Rom {
     fn load(&mut self, data: Box<[u8]>) { self.memory = data }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Archive, Deserialize, Serialize, PartialEq, Eq)]
 pub struct OpenBus {
     bits: [BitState; 8],
     decay_time: u32,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Archive, Deserialize, Serialize, PartialEq, Eq)]
 pub struct BitState {
     set: bool,
     decay_timer: u32,

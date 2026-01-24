@@ -94,7 +94,7 @@ impl ChannelEmulator {
     }
 
     /// Run one frame of emulation and handle messages
-    pub fn step_frame(&mut self) -> Result<(), String> {
+    pub fn process_messages(&mut self) -> Result<(), String> {
         // Check for messages from frontend
         while let Ok(msg) = self.from_frontend.try_recv() {
             match msg {
@@ -143,18 +143,20 @@ impl ChannelEmulator {
                     self.nes.power();
                 }
                 FrontendMessage::PowerOff => self.nes.power_off(),
+                FrontendMessage::CreateSaveState => {
+                    let state = self.nes.save_state();
+                    let _ = self
+                        .to_frontend
+                        .send(EmulatorMessage::SaveState(Box::new(state)));
+                }
+                FrontendMessage::LoadSaveState(s) => self.nes.load_state(*s),
             }
         }
-
-        self.nes.cpu.memory.init(0x4016, self.input);
-
-        self.execute_frame()?;
-        self.input = 0;
 
         Ok(())
     }
 
-    fn execute_frame(&mut self) -> Result<(), String> {
+    pub fn execute_frame(&mut self) -> Result<(), String> {
         match self.nes.step_frame() {
             Ok(
                 ExecutionFinishedType::CycleCompleted
