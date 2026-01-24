@@ -31,12 +31,12 @@ impl MemoryMap {
     }
 
     pub fn get_last_address(&self) -> u16 {
-        for i in (0..MEMORY_SIZE).into_iter().rev() {
+        for i in (0..MEMORY_SIZE).rev() {
             if self.lookup[i as usize].is_some() {
                 return i;
             }
         }
-        
+
         0
     }
 

@@ -1,4 +1,6 @@
 use std::collections::VecDeque;
+use std::path::PathBuf;
+
 use rkyv::rancor::BoxedError;
 use rkyv::{Archive, Deserialize, Serialize};
 
@@ -8,7 +10,7 @@ use crate::emulation::messages::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::RomFile;
 
-#[derive(Archive, Serialize, Deserialize, Clone)]
+#[derive(Archive, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
                         __S::Error: rkyv::rancor::Source))]
 #[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
@@ -80,7 +82,7 @@ impl From<&Cpu> for CpuState {
     }
 }
 
-#[derive(Archive, Serialize, Deserialize, Clone)]
+#[derive(Archive, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
                         __S::Error: rkyv::rancor::Source))]
 #[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
@@ -125,7 +127,7 @@ pub struct PpuState {
     pub soam_write_counter: u8,
     pub oam_fetch: u8,
     pub oam_mem: Vec<u8>,
-    pub palette_ram: Vec<u8>
+    pub palette_ram: Vec<u8>,
 }
 
 impl From<&Ppu> for PpuState {
@@ -146,7 +148,7 @@ impl From<&Ppu> for PpuState {
             bg_next_tile_id: ppu.bg_next_tile_id,
             bg_next_tile_lsb: ppu.bg_next_tile_lsb,
             vbl_clear_scheduled: ppu.vbl_clear_scheduled.get(),
-            prev_vbl:ppu.prev_vbl,
+            prev_vbl: ppu.prev_vbl,
             open_bus: ppu.open_bus.get(),
             address_bus: ppu.address_bus,
             address_latch: ppu.address_latch,
@@ -176,7 +178,7 @@ impl From<&Ppu> for PpuState {
     }
 }
 
-#[derive(Archive, Serialize, Deserialize, Clone)]
+#[derive(Archive, Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
                         __S::Error: rkyv::rancor::Source))]
 #[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
@@ -187,14 +189,11 @@ pub struct SaveState {
     pub version: u16,
     pub total_cycles: u128,
     pub cycle: u8,
+    pub ppu_cycle_counter: u8,
+    pub cpu_cycle_counter: u8,
 }
 
-pub fn save_state(state: SaveState, path: &str) {
-    let bytes = rkyv::to_bytes::<BoxedError>(&state).expect("Failed to serialize SaveState");
-    std::fs::write(path, &bytes).expect("Failed to write save file");
-}
-
-pub fn load_state(path: &str) -> SaveState {
+pub fn load_state(path: PathBuf) -> SaveState {
     let encoded = std::fs::read(path).expect("Failed to read save file");
     rkyv::from_bytes::<SaveState, BoxedError>(&encoded).expect("Failed to deserialize SaveState")
 }

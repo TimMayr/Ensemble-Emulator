@@ -9,7 +9,6 @@ use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
-use crate::emulation::savestate;
 use crate::emulation::savestate::{CpuState, PpuState, SaveState};
 use crate::trace::TraceLog;
 
@@ -137,41 +136,41 @@ impl Nes {
         self.rom_file = Some(rom_file);
     }
 
-    pub fn save_state(&self, path: &str) {
+    pub fn save_state(&self) -> SaveState {
         let ppu_state = {
             let ppu_ref = self.ppu.borrow();
             PpuState::from(ppu_ref.deref())
         };
 
-        let state = SaveState {
+        SaveState {
             cpu: CpuState::from(&self.cpu),
             ppu: ppu_state,
             cycle: self.cpu_cycle_counter,
             total_cycles: self.total_cycles,
             rom_file: self.rom_file.as_ref().unwrap().clone(),
             version: 1,
-        };
-
-        savestate::save_state(state, path);
+            ppu_cycle_counter: self.ppu_cycle_counter,
+            cpu_cycle_counter: self.cpu_cycle_counter,
+        }
     }
 
-    pub fn load_state(&mut self, path: &str) {
-        let state = savestate::load_state(path);
-
+    pub fn load_state(&mut self, state: SaveState) {
         self.rom_file = Some(state.rom_file);
+
         self.ppu = Rc::new(RefCell::new(Ppu::from(
             &state.ppu,
             self.rom_file.as_ref().unwrap(),
         )));
+
         self.cpu = Cpu::from(
             &state.cpu,
             self.ppu.clone(),
             self.rom_file.as_ref().unwrap(),
         );
-        self.cpu_cycle_counter = state.cycle;
 
-        self.cpu.memory.load(&state.cpu.memory);
-        self.ppu.borrow_mut().memory.load(&state.ppu.memory);
+        self.cpu_cycle_counter = state.cycle;
+        self.cpu_cycle_counter = state.cpu_cycle_counter;
+        self.ppu_cycle_counter = state.ppu_cycle_counter;
     }
 
     #[inline(always)]
@@ -226,6 +225,8 @@ impl Nes {
                     cpu: CpuState::from(&self.cpu),
                     ppu: ppu_state,
                     cycle: self.cpu_cycle_counter,
+                    ppu_cycle_counter: self.ppu_cycle_counter,
+                    cpu_cycle_counter: self.cpu_cycle_counter,
                     total_cycles: self.total_cycles,
                     rom_file: self.rom_file.as_ref().unwrap().clone(),
                     version: 1,

@@ -196,13 +196,13 @@ impl MemoryDevice for Rom {
     fn load(&mut self, data: Box<[u8]>) { self.memory = data }
 }
 
-#[derive(Debug, Copy, Clone, Archive, Deserialize, Serialize)]
+#[derive(Debug, Copy, Clone, Archive, Deserialize, Serialize, PartialEq, Eq)]
 pub struct OpenBus {
     bits: [BitState; 8],
     decay_time: u32,
 }
 
-#[derive(Copy, Clone, Debug, Archive, Deserialize, Serialize)]
+#[derive(Copy, Clone, Debug, Archive, Deserialize, Serialize, PartialEq, Eq)]
 pub struct BitState {
     set: bool,
     decay_timer: u32,

@@ -1,61 +1,14 @@
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::PathBuf;
 
 use crossbeam_channel::Sender;
 use rfd::FileDialog;
+use rkyv::rancor::BoxedError;
 
 use crate::emulation::messages::RgbPalette;
-use crate::frontend::messages::AsyncFrontendMessage;
-
-/// Extract the parent directory from an optional path, or return a default empty path.
-/// This is commonly used to set the initial directory for file dialogs.
-pub fn get_parent_dir(path: Option<&PathBuf>) -> PathBuf {
-    path.and_then(|p| p.parent())
-        .map(|p| p.to_path_buf())
-        .unwrap_or_default()
-}
-
-/// Spawn a file picker dialog in a background thread and send the result via the async channel.
-/// This is used to avoid blocking the UI while the file dialog is open.
-pub fn spawn_rom_picker(sender: &Sender<AsyncFrontendMessage>, previous_path: Option<&PathBuf>) {
-    let sender = sender.clone();
-    let prev_dir = get_parent_dir(previous_path);
-    std::thread::spawn(move || {
-        let path = pick_rom(prev_dir);
-        let _ = sender.send(AsyncFrontendMessage::LoadRom(path));
-    });
-}
-
-/// Spawn a palette picker dialog in a background thread and send the result via the async channel.
-pub fn spawn_palette_picker(
-    sender: &Sender<AsyncFrontendMessage>,
-    previous_path: Option<&PathBuf>,
-) {
-    let sender = sender.clone();
-    let prev_dir = get_parent_dir(previous_path);
-    std::thread::spawn(move || {
-        let path = pick_palette(prev_dir);
-        let _ = sender.send(AsyncFrontendMessage::LoadPalette(path));
-    });
-}
-
-/// Spawn a save dialog for a palette file in a background thread.
-pub fn spawn_palette_save(previous_path: Option<&PathBuf>, palette_bytes: Vec<u8>) {
-    use std::fs::OpenOptions;
-    use std::io::Write;
-
-    let prev_dir = get_parent_dir(previous_path);
-    std::thread::spawn(move || {
-        if let Some(p) = create_new(prev_dir)
-            && let Ok(mut file) = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(p)
-        {
-            let _ = file.write_all(&palette_bytes);
-        }
-    });
-}
+use crate::emulation::savestate::SaveState;
+use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
 
 pub trait Contrastable {
     fn get_contrast(&self) -> Self;
@@ -111,6 +64,14 @@ impl ToBytes for RgbPalette {
     }
 }
 
+impl ToBytes for SaveState {
+    fn to_bytes(&self) -> Vec<u8> {
+        rkyv::to_bytes::<BoxedError>(self)
+            .expect("Failed to serialize SaveState")
+            .to_vec()
+    }
+}
+
 impl Hashable for RgbPalette {
     /// Compute a fast hash of the given data for change detection.
     /// Uses FNV-1a algorithm which is fast and has good distribution.
@@ -156,27 +117,85 @@ impl AsU32 for egui::Color32 {
     }
 }
 
-pub fn pick_rom(previous: PathBuf) -> Option<PathBuf> {
+pub fn pick_file(previous: PathBuf, file_type: FileType) -> Option<PathBuf> {
     FileDialog::new()
-        .add_filter("NES ROM File", &["nes"])
-        .add_filter("All Files", &["*"])
+        .add_filetype_filter(file_type)
+        .add_filetype_filter(FileType::All)
         .set_directory(previous)
         .pick_file()
 }
 
-pub fn pick_palette(previous: PathBuf) -> Option<PathBuf> {
-    FileDialog::new()
-        .add_filter("NES Palette File", &["pal"])
-        .add_filter("All Files", &["*"])
-        .set_directory(previous)
-        .pick_file()
-}
-
-pub fn create_new(previous: PathBuf) -> Option<PathBuf> {
+pub fn save_file(previous: PathBuf, file_type: FileType) -> Option<PathBuf> {
     FileDialog::new()
         .set_directory(previous)
+        .add_filetype_filter(file_type)
+        .add_filetype_filter(FileType::All)
         .set_can_create_directories(true)
         .save_file()
+}
+
+pub enum FileType {
+    Rom,
+    Savestate,
+    Palette,
+    All,
+}
+
+impl FileType {
+    pub fn add_filters(&self, dialog: FileDialog) -> FileDialog {
+        match self {
+            FileType::Rom => dialog.add_filter("NES ROM File", &["nes"]),
+            FileType::Savestate => dialog.add_filter("Savestate", &["save"]),
+            FileType::Palette => dialog.add_filter("NES Palette File", &["pal"]),
+            FileType::All => dialog.add_filter("All Files", &["*"]),
+        }
+    }
+}
+
+pub trait AddFilter {
+    fn add_filetype_filter(self, file_type: FileType) -> Self;
+}
+
+impl AddFilter for FileDialog {
+    fn add_filetype_filter(self, file_type: FileType) -> Self { file_type.add_filters(self) }
+}
+
+/// Extract the parent directory from an optional path, or return a default empty path.
+/// This is commonly used to set the initial directory for file dialogs.
+pub fn get_parent_dir(path: Option<&PathBuf>) -> PathBuf {
+    path.and_then(|p| p.parent())
+        .map(|p| p.to_path_buf())
+        .unwrap_or_default()
+}
+
+pub fn spawn_file_picker(
+    sender: &Sender<AsyncFrontendMessage>,
+    previous_path: Option<&PathBuf>,
+    file_type: FileType,
+    message: RelayType,
+) {
+    let sender = sender.clone();
+    let prev_dir = get_parent_dir(previous_path);
+    std::thread::spawn(move || {
+        let path = pick_file(prev_dir, file_type);
+        let _ = sender.send(AsyncFrontendMessage::EmuRelay(message, path));
+    });
+}
+
+/// Spawn a save dialog for a palette file in a background thread.
+pub fn spawn_save_dialog(previous_path: Option<&PathBuf>, file_type: FileType, data: Vec<u8>) {
+    let prev_dir = get_parent_dir(previous_path);
+    std::thread::spawn(move || {
+        if let Some(p) = save_file(prev_dir, file_type)
+            && let Ok(mut file) = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(p)
+        {
+            let _ = file.write_all(&data);
+        }
+    });
 }
 
 pub fn color_radio<Value: PartialEq>(

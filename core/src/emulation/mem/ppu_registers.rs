@@ -3,7 +3,7 @@ use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
 use crate::emulation::mem::MemoryDevice;
-use crate::emulation::ppu::{Ppu, PALETTE_RAM_END_INDEX, PALETTE_RAM_START_ADDRESS};
+use crate::emulation::ppu::{PALETTE_RAM_END_INDEX, PALETTE_RAM_START_ADDRESS, Ppu};
 
 #[derive(Clone)]
 pub struct PpuRegisters {

@@ -27,6 +27,7 @@ pub struct AppConfig {
 pub struct UserConfig {
     pub previous_palette_path: Option<PathBuf>,
     pub previous_rom_path: Option<PathBuf>,
+    pub previous_savestate_path: Option<PathBuf>,
     pub pattern_edit_color: u8,
 }
 

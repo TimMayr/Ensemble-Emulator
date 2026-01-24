@@ -23,6 +23,7 @@ use crate::emulation::messages::{
     TileData,
 };
 use crate::emulation::nes::Nes;
+use crate::emulation::savestate;
 use crate::frontend::egui::config::{AppConfig, AppSpeed};
 use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
@@ -31,8 +32,10 @@ use crate::frontend::egui::tiles::{
     Pane, TreeBehavior, compute_required_fetches_from_tree, create_tree,
 };
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar};
-use crate::frontend::messages::AsyncFrontendMessage;
+use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
 use crate::frontend::palettes::parse_palette_from_file;
+use crate::frontend::util;
+use crate::frontend::util::{FileType, ToBytes};
 
 /// Main egui application state
 pub struct EguiApp {
@@ -122,33 +125,52 @@ impl EguiApp {
     fn process_async_messages(&mut self, ctx: &Context) {
         while let Ok(msg) = self.from_async.try_recv() {
             match msg {
-                AsyncFrontendMessage::LoadPalette(p) => {
-                    let palette = parse_palette_from_file(p.clone());
-                    self.config.view_config.palette_rgb_data = palette;
-                    if let Some(p) = p {
-                        self.config.user_config.previous_palette_path = Some(p)
-                    }
-                    let _ = self
-                        .to_emulator
-                        .send(FrontendMessage::SetPalette(Box::new(palette)));
-                    // Only update tile textures if a tile viewer is visible
-                    if self.is_tile_viewer_visible() {
-                        self.emu_textures.update_tile_textures(
-                            ctx,
-                            &self.config.view_config.palette_rgb_data,
-                            None,
-                            None,
-                        );
-                    }
-                }
-                AsyncFrontendMessage::LoadRom(p) => {
-                    if let Some(p) = p
-                        && let Ok(p) = p.canonicalize()
-                    {
-                        let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-                        let _ = self.to_emulator.send(FrontendMessage::LoadRom(p.clone()));
-                        let _ = self.to_emulator.send(FrontendMessage::Power);
-                        self.config.user_config.previous_rom_path = Some(p)
+                AsyncFrontendMessage::EmuRelay(r, p) => {
+                    match r {
+                        RelayType::LoadPalette => {
+                            let palette = parse_palette_from_file(
+                                p.clone(),
+                                self.config.user_config.previous_palette_path.clone(),
+                            );
+                            self.config.view_config.palette_rgb_data = palette;
+                            if let Some(p) = p {
+                                self.config.user_config.previous_palette_path = Some(p)
+                            }
+                            let _ = self
+                                .to_emulator
+                                .send(FrontendMessage::SetPalette(Box::new(palette)));
+                            // Only update tile textures if a tile viewer is visible
+                            if self.is_tile_viewer_visible() {
+                                self.emu_textures.update_tile_textures(
+                                    ctx,
+                                    &self.config.view_config.palette_rgb_data,
+                                    None,
+                                    None,
+                                );
+                            }
+                        }
+                        RelayType::LoadRom => {
+                            if let Some(p) = p
+                                && let Ok(p) = p.canonicalize()
+                            {
+                                let _ = self.to_emulator.send(FrontendMessage::PowerOff);
+                                let _ = self.to_emulator.send(FrontendMessage::LoadRom(p.clone()));
+                                let _ = self.to_emulator.send(FrontendMessage::Power);
+                                self.config.user_config.previous_rom_path = Some(p)
+                            }
+                        }
+                        RelayType::LoadSaveState => {
+                            if let Some(p) = p
+                                && let Ok(p) = p.canonicalize()
+                            {
+                                let state = savestate::load_state(p.clone());
+
+                                let _ = self
+                                    .to_emulator
+                                    .send(FrontendMessage::LoadSaveState(Box::new(state)));
+                                self.config.user_config.previous_savestate_path = Some(p);
+                            }
+                        }
                     }
                 }
                 AsyncFrontendMessage::RefreshPalette => {
@@ -205,7 +227,7 @@ impl EguiApp {
                         // Only update tile textures if a tile viewer is visible
                         if self.is_tile_viewer_visible() {
                             if changed_tiles.is_empty() || changed_tiles.len() > 10 {
-                                // If many tiles changed or we couldn't detect changes, rebuild all
+                                // If many tiles changed, or we couldn't detect changes, rebuild all
                                 self.emu_textures.update_tile_textures(
                                     ctx,
                                     &self.config.view_config.palette_rgb_data,
@@ -232,6 +254,11 @@ impl EguiApp {
                 EmulatorMessage::Stopped => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
+                EmulatorMessage::SaveState(s) => util::spawn_save_dialog(
+                    self.config.user_config.previous_savestate_path.as_ref(),
+                    FileType::Savestate,
+                    s.to_bytes(),
+                ),
             }
         }
     }
@@ -328,7 +355,7 @@ impl EguiApp {
             // Effectively paused, so we skip
             if frame_budget < Duration::from_secs(5) {
                 while self.accumulator >= frame_budget {
-                    if let Err(e) = self.channel_emu.step_frame() {
+                    if let Err(e) = self.channel_emu.execute_frame() {
                         eprintln!("Emulator error: {}", e);
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         break;
@@ -398,6 +425,12 @@ impl eframe::App for EguiApp {
             &mut self.emu_textures.last_frame_request,
         );
 
+        if let Err(e) = self.channel_emu.process_messages() {
+            eprintln!("Emulator error: {}", e);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
+        }
+
         self.update_emu_textures(ctx);
 
         // Process messages from emulator
@@ -458,14 +491,14 @@ pub fn run(
     // Create the emulator instance
     let console = Nes::default();
 
-    let palette = parse_palette_from_file(palette);
+    let palette = parse_palette_from_file(palette, None);
 
     // Create channel-based emulator wrapper
     let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
     let (to_frontend, from_async) = crossbeam_channel::unbounded();
 
     // Setup Emulator State via messages
-    let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(rom));
+    let _ = to_frontend.send(AsyncFrontendMessage::EmuRelay(RelayType::LoadRom, rom));
     let _ = tx_to_emu.send(FrontendMessage::SetPalette(Box::new(palette)));
 
     // Configure eframe options

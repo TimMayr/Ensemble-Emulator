@@ -7,7 +7,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use rkyv::with::Skip;
-use rkyv::{Archive, Deserialize as Deserialize, Serialize as Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::emulation::mem::nametable_memory::{NametableArrangement, NametableMemory};
 use crate::emulation::mem::{Memory, MemoryDevice, Ram, Rom};
@@ -37,14 +37,15 @@ impl Display for ParseError {
 impl Error for ParseError {}
 
 pub trait RomParser: Debug {
-    fn parse(&self, rom: &[u8]) -> Result<RomFile, ParseError>;
+    fn parse(&self, rom: &[u8], file: Option<PathBuf>) -> Result<RomFile, ParseError>;
 }
 
-#[derive(Debug, Clone, Archive, Serialize, Deserialize)]
+#[derive(Debug, Clone, Archive, Serialize, Deserialize, PartialEq, Eq)]
 #[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
                         __S::Error: rkyv::rancor::Source))]
 #[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
 pub struct RomFile {
+    pub name: Option<String>,
     pub prg_memory: PrgMemory,
     pub chr_memory: ChrMemory,
     pub mapper_number: u16,
@@ -64,7 +65,7 @@ pub struct RomFile {
     data: Vec<u8>,
 }
 
-#[derive(Debug, Copy, Clone, Archive, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Archive, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PrgMemory {
     pub prg_rom_size: u32,
     pub prg_ram_size: u32,
@@ -81,7 +82,7 @@ impl PrgMemory {
     }
 }
 
-#[derive(Debug, Copy, Clone, Archive, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Archive, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ChrMemory {
     pub chr_rom_size: u32,
     pub chr_ram_size: u32,
@@ -149,7 +150,9 @@ impl RomFile {
         file.read_to_end(&mut rom).expect("Couldn't read file");
 
         let rom_type = RomFile::get_rom_type(&rom);
-        let mut rom_file = rom_type.parse(&rom).expect("Error loading Rom");
+        let mut rom_file = rom_type
+            .parse(&rom, Some(PathBuf::from(path)))
+            .expect("Error loading Rom");
         rom_file.data = rom;
         rom_file
     }
@@ -235,6 +238,7 @@ impl From<&PathBuf> for RomFile {
 }
 
 pub struct RomBuilder {
+    name: Option<String>,
     prg_rom_size: u32,
     chr_rom_size: u32,
     mapper_number: u16,
@@ -259,6 +263,7 @@ pub struct RomBuilder {
 impl Default for RomBuilder {
     fn default() -> Self {
         Self {
+            name: None,
             prg_rom_size: 0,
             chr_rom_size: 0,
             mapper_number: 0,
@@ -380,8 +385,14 @@ impl RomBuilder {
         self
     }
 
+    pub fn name(mut self, value: Option<String>) -> Self {
+        self.name = value;
+        self
+    }
+
     pub fn build(self) -> RomFile {
         RomFile {
+            name: self.name,
             prg_memory: PrgMemory::new(self.prg_rom_size, self.prg_ram_size, self.prg_nvram_size),
             chr_memory: ChrMemory::new(self.chr_rom_size, self.chr_ram_size, self.chr_nvram_size),
             mapper_number: self.mapper_number,
