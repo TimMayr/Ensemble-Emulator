@@ -15,7 +15,6 @@ use crate::emulation::rom::formats::archaic_ines::ArchaicInes;
 use crate::emulation::rom::formats::ines::Ines;
 use crate::emulation::rom::formats::ines2::Ines2;
 use crate::emulation::rom::formats::ines_07::Ines07;
-use crate::frontend::util;
 
 #[derive(Debug, Clone)]
 pub enum ParseError {
@@ -62,7 +61,7 @@ pub struct RomFile {
     pub trainer_present: bool,
     pub alternative_nametables: bool,
     pub submapper_number: u8,
-    pub data_checksum: u64,
+    pub data_checksum: [u8; 32],
     #[rkyv(with = Skip)]
     data: Vec<u8>,
 }
@@ -142,6 +141,7 @@ impl RomFile {
     }
 
     pub fn load(path: &String) -> RomFile {
+        use sha2::{Digest, Sha256};
         let path = Path::new(&path);
         let mut file = match File::open(path) {
             Ok(file) => file,
@@ -151,12 +151,16 @@ impl RomFile {
         let mut rom: Vec<u8> = Vec::new();
         file.read_to_end(&mut rom).expect("Couldn't read file");
 
+        let mut hasher = Sha256::new();
+        hasher.update(&rom);
+        let hash: [u8; 32] = hasher.finalize().into();
+
         let rom_type = RomFile::get_rom_type(&rom);
         let mut rom_file = rom_type
             .parse(&rom, Some(PathBuf::from(path)))
             .expect("Error loading Rom");
         rom_file.data = rom;
-        rom_file.data_checksum = util::compute_hash(&rom_file.data);
+        rom_file.data_checksum = hash;
         rom_file
     }
 
@@ -411,7 +415,7 @@ impl RomBuilder {
             trainer_present: self.trainer_present,
             alternative_nametables: self.alternative_nametables,
             submapper_number: self.submapper_number,
-            data_checksum: 0,
+            data_checksum: [0; 32],
             data: Vec::new(),
         }
     }
