@@ -7,7 +7,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use rkyv::with::Skip;
-use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
+use rkyv::{Archive, Deserialize as Deserialize, Serialize as Serialize};
 
 use crate::emulation::mem::nametable_memory::{NametableArrangement, NametableMemory};
 use crate::emulation::mem::{Memory, MemoryDevice, Ram, Rom};
@@ -40,7 +40,7 @@ pub trait RomParser: Debug {
     fn parse(&self, rom: &[u8]) -> Result<RomFile, ParseError>;
 }
 
-#[derive(Debug, Clone, Archive, RkyvSerialize, RkyvDeserialize)]
+#[derive(Debug, Clone, Archive, Serialize, Deserialize)]
 #[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
                         __S::Error: rkyv::rancor::Source))]
 #[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
@@ -64,7 +64,7 @@ pub struct RomFile {
     data: Vec<u8>,
 }
 
-#[derive(Debug, Copy, Clone, Archive, RkyvSerialize, RkyvDeserialize)]
+#[derive(Debug, Copy, Clone, Archive, Serialize, Deserialize)]
 pub struct PrgMemory {
     pub prg_rom_size: u32,
     pub prg_ram_size: u32,
@@ -81,7 +81,7 @@ impl PrgMemory {
     }
 }
 
-#[derive(Debug, Copy, Clone, Archive, RkyvSerialize, RkyvDeserialize)]
+#[derive(Debug, Copy, Clone, Archive, Serialize, Deserialize)]
 pub struct ChrMemory {
     pub chr_rom_size: u32,
     pub chr_ram_size: u32,

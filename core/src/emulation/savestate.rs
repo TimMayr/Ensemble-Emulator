@@ -1,14 +1,14 @@
 use std::collections::VecDeque;
-
 use rkyv::rancor::BoxedError;
-use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
+use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::emulation::cpu::{Cpu, MicroOp};
+use crate::emulation::mem::OpenBus;
 use crate::emulation::messages::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::RomFile;
 
-#[derive(Archive, RkyvSerialize, RkyvDeserialize, Clone)]
+#[derive(Archive, Serialize, Deserialize, Clone)]
 #[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
                         __S::Error: rkyv::rancor::Source))]
 #[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
@@ -28,16 +28,24 @@ pub struct CpuState {
     pub temp: u8,
     pub ane_constant: u8,
     pub is_halted: bool,
+    pub read_cycle: bool,
+    pub irq_detected: bool,
+    pub irq_pending: bool,
+    pub irq_provider: bool,
+    pub is_in_irq: bool,
+    pub current_irq_vec: u16,
+    pub locked_irq_vec: u16,
+    pub dma_page: u8,
+    pub dma_read: bool,
+    pub dma_temp: u8,
+    pub dma_triggered: bool,
+    pub nmi_detected: bool,
+    pub nmi_pending: bool,
+    pub prev_nmi: bool,
 }
 
 impl From<&Cpu> for CpuState {
     fn from(cpu: &Cpu) -> Self {
-        let mut current_opcode = None;
-
-        if let Some(op) = cpu.current_opcode {
-            current_opcode = Some(op.opcode);
-        }
-
         Self {
             program_counter: cpu.program_counter,
             stack_pointer: cpu.stack_pointer,
@@ -50,15 +58,29 @@ impl From<&Cpu> for CpuState {
             hi: cpu.hi,
             current_op: cpu.current_op,
             op_queue: cpu.op_queue.clone(),
-            current_opcode,
+            current_opcode: cpu.current_opcode.map(|c| c.opcode),
             temp: cpu.temp,
             ane_constant: cpu.ane_constant,
             is_halted: cpu.is_halted,
+            read_cycle: cpu.cpu_read_cycle,
+            irq_detected: cpu.irq_detected,
+            irq_pending: cpu.irq_pending,
+            irq_provider: cpu.irq_provider.get(),
+            is_in_irq: cpu.is_in_irq,
+            current_irq_vec: cpu.current_irq_vec,
+            locked_irq_vec: cpu.locked_irq_vec,
+            dma_page: cpu.dma_page,
+            dma_read: cpu.dma_read,
+            dma_temp: cpu.dma_temp,
+            dma_triggered: cpu.dma_triggered,
+            nmi_detected: cpu.nmi_detected,
+            nmi_pending: cpu.nmi_pending,
+            prev_nmi: cpu.prev_nmi,
         }
     }
 }
 
-#[derive(Archive, RkyvSerialize, RkyvDeserialize, Clone)]
+#[derive(Archive, Serialize, Deserialize, Clone)]
 #[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
                         __S::Error: rkyv::rancor::Source))]
 #[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
@@ -83,6 +105,27 @@ pub struct PpuState {
     pub dot: u16,
     pub scanline: u16,
     pub bg_next_tile_id: u8,
+    pub bg_next_tile_lsb: u8,
+    pub vbl_clear_scheduled: Option<u8>,
+    pub prev_vbl: u8,
+    pub open_bus: OpenBus,
+    pub address_bus: u16,
+    pub address_latch: u8,
+    pub shift_pattern_lo: u16,
+    pub shift_pattern_hi: u16,
+    pub shift_attr_lo: u8,
+    pub shift_attr_hi: u8,
+    pub shift_in_attr_lo: bool,
+    pub shift_in_attr_hi: bool,
+    pub is_soam_clear_active: bool,
+    pub oam_index: u8,
+    pub soam_index: u8,
+    pub soam_disable: bool,
+    pub oam_increment: u8,
+    pub soam_write_counter: u8,
+    pub oam_fetch: u8,
+    pub oam_mem: Vec<u8>,
+    pub palette_ram: Vec<u8>
 }
 
 impl From<&Ppu> for PpuState {
@@ -94,13 +137,33 @@ impl From<&Ppu> for PpuState {
             ctrl_register: ppu.ctrl_register,
             mask_register: ppu.mask_register,
             nmi_requested: ppu.nmi_requested.get(),
-            memory: ppu.memory.get_memory_debug(Some(0x0..=0x3FFF)),
+            memory: ppu.memory.get_memory_debug(None),
             ppu_addr_register: ppu.v_register,
             oam_addr_register: ppu.oam_addr_register,
             write_latch: ppu.write_latch.get(),
             ppu_data_buffer: ppu.ppu_data_buffer,
             t_register: ppu.t_register,
             bg_next_tile_id: ppu.bg_next_tile_id,
+            bg_next_tile_lsb: ppu.bg_next_tile_lsb,
+            vbl_clear_scheduled: ppu.vbl_clear_scheduled.get(),
+            prev_vbl:ppu.prev_vbl,
+            open_bus: ppu.open_bus.get(),
+            address_bus: ppu.address_bus,
+            address_latch: ppu.address_latch,
+            shift_pattern_lo: ppu.shift_pattern_lo,
+            shift_pattern_hi: ppu.shift_pattern_hi,
+            shift_attr_lo: ppu.shift_attr_lo,
+            shift_attr_hi: ppu.shift_attr_hi,
+            shift_in_attr_lo: ppu.shift_in_attr_lo,
+            shift_in_attr_hi: ppu.shift_in_attr_hi,
+            is_soam_clear_active: ppu.is_soam_clear_active,
+            oam_index: ppu.oam_index,
+            soam_index: ppu.soam_index,
+            soam_disable: ppu.soam_disable,
+            oam_increment: ppu.oam_increment,
+            soam_write_counter: ppu.soam_write_counter,
+            oam_fetch: ppu.oam_fetch,
+            oam_mem: ppu.oam.get_memory_debug(None),
             bg_next_tile_attribute: ppu.bg_next_tile_attribute,
             fine_x_scroll: ppu.fine_x_scroll,
             even_frame: ppu.even_frame,
@@ -108,11 +171,12 @@ impl From<&Ppu> for PpuState {
             pixel_buffer: vec![0u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT],
             dot: ppu.dot,
             scanline: ppu.scanline,
+            palette_ram: ppu.palette_ram.get_memory_debug(None),
         }
     }
 }
 
-#[derive(Archive, RkyvSerialize, RkyvDeserialize, Clone)]
+#[derive(Archive, Serialize, Deserialize, Clone)]
 #[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
                         __S::Error: rkyv::rancor::Source))]
 #[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]

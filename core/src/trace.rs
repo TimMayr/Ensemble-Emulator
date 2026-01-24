@@ -2,11 +2,11 @@ use std::fs::OpenOptions;
 use std::io::Write;
 
 use crate::emulation::cpu::{
-    CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, OpType, Source, UNUSED_BIT,
+    OpType, Source, CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, UNUSED_BIT,
     ZERO_BIT,
 };
 use crate::emulation::opcode;
-use crate::emulation::opcode::OpCode;
+use crate::emulation::opcode::{get_opcode, OpCode};
 use crate::emulation::savestate::{CpuState, SaveState};
 use crate::util::add_to_low_byte;
 
@@ -29,12 +29,7 @@ impl TraceLog {
     pub fn trace(&mut self, nes: SaveState) {
         let mut cpu = nes.cpu.clone();
         let _ppu = nes.ppu;
-        let current_opcode = cpu.current_opcode.unwrap();
-        let current_opcode = **opcode::OPCODES_MAP
-            .get()
-            .unwrap()
-            .get(&current_opcode)
-            .unwrap();
+        let current_opcode = get_opcode(cpu.current_opcode.unwrap()).unwrap();
 
         let relevant_mem_start = cpu.program_counter.wrapping_sub(1);
         let relevant_mem_end =
@@ -152,12 +147,6 @@ pub fn get_opcode_descriptor(opcode: OpCode, cpu: &mut CpuState) -> String {
             if cpu.current_opcode.is_none() {
                 return String::new();
             }
-
-            let opcode = **opcode::OPCODES_MAP
-                .get()
-                .unwrap()
-                .get(&cpu.current_opcode.unwrap())
-                .unwrap();
 
             match opcode {
                 OpCode {
