@@ -138,7 +138,7 @@ fn handle_pixel_edit(
     } else {
         0
     };
-    
+
     let new_lo = new_color & 1;
     let new_hi = (new_color >> 1) & 1;
 
@@ -153,12 +153,14 @@ fn handle_pixel_edit(
     let new_byte_0 = (old_byte_0 & !(1 << ppu_bit)) | (new_lo << ppu_bit);
     let new_byte_1 = (old_byte_1 & !(1 << ppu_bit)) | (new_hi << ppu_bit);
 
-    let addr_0 = tile_data.address + ppu_row as u16;
-    let addr_1 = tile_data.address + ppu_row as u16 + 8;
+    if old_byte_0 != new_byte_0 || old_byte_1 != new_byte_1 {
+        let addr_0 = tile_data.address + ppu_row as u16;
+        let addr_1 = tile_data.address + ppu_row as u16 + 8;
 
-    let _ = to_emu.send(FrontendMessage::WritePpu(addr_0, new_byte_0));
-    let _ = to_emu.send(FrontendMessage::WritePpu(addr_1, new_byte_1));
-    let _ = to_emu.send(FrontendMessage::RequestDebugData(EmulatorFetchable::Tiles(
-        None,
-    )));
+        let _ = to_emu.send(FrontendMessage::WritePpu(addr_0, new_byte_0));
+        let _ = to_emu.send(FrontendMessage::WritePpu(addr_1, new_byte_1));
+        let _ = to_emu.send(FrontendMessage::RequestDebugData(EmulatorFetchable::Tiles(
+            None,
+        )));
+    }
 }
