@@ -13,8 +13,9 @@ use crate::emulation::mem::nametable_memory::{NametableArrangement, NametableMem
 use crate::emulation::mem::{Memory, MemoryDevice, Ram, Rom};
 use crate::emulation::rom::formats::archaic_ines::ArchaicInes;
 use crate::emulation::rom::formats::ines::Ines;
-use crate::emulation::rom::formats::ines_07::Ines07;
 use crate::emulation::rom::formats::ines2::Ines2;
+use crate::emulation::rom::formats::ines_07::Ines07;
+use crate::frontend::util;
 
 #[derive(Debug, Clone)]
 pub enum ParseError {
@@ -61,6 +62,7 @@ pub struct RomFile {
     pub trainer_present: bool,
     pub alternative_nametables: bool,
     pub submapper_number: u8,
+    pub data_checksum: u64,
     #[rkyv(with = Skip)]
     data: Vec<u8>,
 }
@@ -154,6 +156,7 @@ impl RomFile {
             .parse(&rom, Some(PathBuf::from(path)))
             .expect("Error loading Rom");
         rom_file.data = rom;
+        rom_file.data_checksum = util::compute_hash(&rom_file.data);
         rom_file
     }
 
@@ -408,6 +411,7 @@ impl RomBuilder {
             trainer_present: self.trainer_present,
             alternative_nametables: self.alternative_nametables,
             submapper_number: self.submapper_number,
+            data_checksum: 0,
             data: Vec::new(),
         }
     }
