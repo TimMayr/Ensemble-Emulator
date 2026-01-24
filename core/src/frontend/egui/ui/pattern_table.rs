@@ -4,7 +4,8 @@ use egui::Ui;
 
 use crate::emulation::messages::{EmulatorFetchable, FrontendMessage, TileData};
 use crate::frontend::egui::config::AppConfig;
-use crate::frontend::util::FromU32;
+use crate::frontend::egui::ui::widgets::{image_cell, PainterGridConfig};
+use crate::frontend::util::{color_radio, FromU32};
 
 /// Draw a pattern table (left or right) in the UI
 pub fn draw_pattern_table(
@@ -16,35 +17,18 @@ pub fn draw_pattern_table(
     to_emu: &Sender<FrontendMessage>,
     config: &mut AppConfig,
 ) {
-    let tile_size = width / 16.0;
-
-    let (parent, _) = ui.allocate_exact_size(egui::vec2(width, width), egui::Sense::hover());
+    let grid_config = PainterGridConfig::square(width, 16);
+    let (parent, _) = ui.allocate_exact_size(grid_config.total_size(), egui::Sense::hover());
 
     for (i, tex) in emu_textures.iter().enumerate() {
-        let row = i / 16;
-        let col = i % 16;
-        let min = parent.min + egui::vec2(col as f32 * tile_size, row as f32 * tile_size);
-
-        let rect = egui::Rect::from_min_size(min, egui::vec2(tile_size, tile_size));
-
-        let response = ui.interact(rect, ui.id().with(format!("{}", rect)), egui::Sense::all());
-
-        let painter = ui.painter();
-        painter.image(
-            tex.id(),
+        let rect = grid_config.cell_rect(parent.min, i);
+        let response = image_cell(
+            ui,
             rect,
-            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-            egui::Color32::WHITE,
+            tex.id(),
+            egui::Sense::all(),
+            ("tile", i, parent.to_string()),
         );
-
-        if response.hovered() {
-            painter.rect_stroke(
-                rect,
-                0.0,
-                egui::Stroke::new(3.0, egui::Color32::WHITE),
-                egui::StrokeKind::Inside,
-            );
-        }
 
         let painter = ui.ctx().layer_painter(egui::LayerId::new(
             egui::Order::Foreground,
@@ -58,6 +42,8 @@ pub fn draw_pattern_table(
 
                 let tile_data = pattern_data[i];
                 ui.label(format!("Rom address: ${:0X}", tile_data.address));
+
+                ui.label("Pattern:");
 
                 ui.horizontal(|ui| {
                     color_radio(
@@ -86,68 +72,49 @@ pub fn draw_pattern_table(
                     );
                 });
 
-                ui.label("Pattern:");
-
-                let height = 4.0 * 8.0;
-                let (parent, _) = ui.allocate_exact_size(
-                    egui::vec2(height * 8.0, height * 8.0),
-                    egui::Sense::click(),
-                );
+                // Tile pixel editor grid (8x8 pixels, each 4x4 in size = 32x32 total)
+                let pixel_size = 4.0 * 8.0;
+                let pixel_grid = PainterGridConfig::square(pixel_size * 8.0, 8);
+                let (pixel_parent, _) =
+                    ui.allocate_exact_size(pixel_grid.total_size(), egui::Sense::click_and_drag());
 
                 for index in 0..64 {
-                    let row = index / 8;
-                    let col = index % 8;
-
                     let lo = (tile_data.plane_0 >> (63 - index) & 1) as u8;
                     let hi = (tile_data.plane_1 >> (63 - index) & 1) as u8;
                     let color_id = hi << 1 | lo;
-
                     let color = palette[color_id as usize];
 
-                    let rect = egui::Rect::from_min_size(
-                        parent.min + egui::vec2(height * col as f32, height * row as f32),
-                        egui::vec2(height, height),
-                    );
-
+                    let pixel_rect = pixel_grid.cell_rect(pixel_parent.min, index);
                     let response = ui.interact(
-                        rect,
-                        ui.id().with(format!("{}", rect)),
-                        egui::Sense::click(),
+                        pixel_rect,
+                        ui.id().with(("pixel", index)),
+                        egui::Sense::click_and_drag(),
                     );
 
-                    painter.rect_filled(rect, 0.0, egui::Color32::from_u32(color));
+                    painter.rect_filled(pixel_rect, 0.0, egui::Color32::from_u32(color));
 
-                    if response.clicked() {
-                        let new_pattern = (color_id + 1) % 4;
-                        let new_lo = new_pattern & 1;
-                        let new_hi = (new_pattern >> 1) & 1;
-
-                        let u64_bit_pos = 63usize.wrapping_sub(index) & 63;
-
-                        let ppu_row = 7 - (u64_bit_pos / 8);
-                        let ppu_bit = u64_bit_pos % 8;
-
-                        let byte_shift = (7 - ppu_row) * 8;
-                        let old_byte_0 = ((tile_data.plane_0 >> byte_shift) & 0xFF) as u8;
-                        let old_byte_1 = ((tile_data.plane_1 >> byte_shift) & 0xFF) as u8;
-
-                        let new_byte_0 = (old_byte_0 & !(1 << ppu_bit)) | (new_lo << ppu_bit);
-                        let new_byte_1 = (old_byte_1 & !(1 << ppu_bit)) | (new_hi << ppu_bit);
-
-                        let addr_0 = tile_data.address + ppu_row as u16;
-                        let addr_1 = tile_data.address + ppu_row as u16 + 8;
-
-                        let _ = to_emu.send(FrontendMessage::WritePpu(addr_0, new_byte_0));
-                        let _ = to_emu.send(FrontendMessage::WritePpu(addr_1, new_byte_1));
-
-                        let _ = to_emu.send(FrontendMessage::RequestDebugData(
-                            EmulatorFetchable::Tiles(None),
-                        ));
+                    // Support both click and drag for editing pixels
+                    // Check if clicked OR if pointer is within this pixel's rect while primary button is down
+                    let pointer_in_rect = ui.ctx().input(|i| {
+                        i.pointer
+                            .interact_pos()
+                            .map_or(false, |pos| pixel_rect.contains(pos))
+                    });
+                    let primary_down = ui.input(|i| i.pointer.primary_down());
+                    let secondary_down = ui.input(|i| i.pointer.secondary_down());
+                    if response.clicked() || (pointer_in_rect && primary_down) {
+                        handle_pixel_edit(&tile_data, index, config, to_emu, false);
                     }
 
-                    if response.hovered() {
+                    if response.clicked_by(egui::PointerButton::Secondary)
+                        || (pointer_in_rect && secondary_down)
+                    {
+                        handle_pixel_edit(&tile_data, index, config, to_emu, true);
+                    }
+
+                    if response.hovered() || pointer_in_rect {
                         painter.rect_stroke(
-                            rect,
+                            pixel_rect,
                             0.0,
                             egui::Stroke::new(3.0, egui::Color32::WHITE),
                             egui::StrokeKind::Inside,
@@ -158,42 +125,42 @@ pub fn draw_pattern_table(
     }
 }
 
-fn color_radio<'a, Value: PartialEq>(
-    ui: &mut Ui,
-    current: &mut Value,
-    alternative: Value,
-    color32: egui::Color32,
+/// Handle editing a single pixel in a tile pattern
+fn handle_pixel_edit(
+    tile_data: &TileData,
+    index: usize,
+    config: &AppConfig,
+    to_emu: &Sender<FrontendMessage>,
+    clear: bool,
 ) {
-    let selected = *current == alternative;
+    let new_color = if !clear {
+        config.user_config.pattern_edit_color
+    } else {
+        0
+    };
 
-    let frame = egui::Frame::NONE
-        .stroke(if selected {
-            egui::Stroke::new(2.0, ui.visuals().selection.stroke.color)
-        } else {
-            egui::Stroke::NONE
-        })
-        .fill(if selected {
-            ui.visuals().selection.bg_fill
-        } else {
-            egui::Color32::TRANSPARENT
-        })
-        .corner_radius(6.0)
-        .inner_margin(6.0);
+    let new_lo = new_color & 1;
+    let new_hi = (new_color >> 1) & 1;
 
-    let min = ui.cursor().min;
-    let response = frame
-        .show(ui, |ui| {
-            ui.vertical_centered(|ui| {
-                ui.painter().rect_filled(
-                    egui::Rect::from_min_size(min, egui::vec2(10.0, 10.0)),
-                    0.0,
-                    color32,
-                );
-            });
-        })
-        .response;
+    let u64_bit_pos = 63usize.wrapping_sub(index) & 63;
+    let ppu_row = 7 - (u64_bit_pos / 8);
+    let ppu_bit = u64_bit_pos % 8;
 
-    if response.clicked() {
-        *current = alternative;
+    let byte_shift = (7 - ppu_row) * 8;
+    let old_byte_0 = ((tile_data.plane_0 >> byte_shift) & 0xFF) as u8;
+    let old_byte_1 = ((tile_data.plane_1 >> byte_shift) & 0xFF) as u8;
+
+    let new_byte_0 = (old_byte_0 & !(1 << ppu_bit)) | (new_lo << ppu_bit);
+    let new_byte_1 = (old_byte_1 & !(1 << ppu_bit)) | (new_hi << ppu_bit);
+
+    if old_byte_0 != new_byte_0 || old_byte_1 != new_byte_1 {
+        let addr_0 = tile_data.address + ppu_row as u16;
+        let addr_1 = tile_data.address + ppu_row as u16 + 8;
+
+        let _ = to_emu.send(FrontendMessage::WritePpu(addr_0, new_byte_0));
+        let _ = to_emu.send(FrontendMessage::WritePpu(addr_1, new_byte_1));
+        let _ = to_emu.send(FrontendMessage::RequestDebugData(EmulatorFetchable::Tiles(
+            None,
+        )));
     }
 }

@@ -12,13 +12,41 @@ pub fn render_pattern_table(ui: &mut egui::Ui, config: &mut AppConfig, emu_textu
         && let Some(palettes) = &emu_textures.palette_data
         && let Some(pattern_data) = &emu_textures.tile_data
     {
-        let full_width = ui.available_width();
-        let half_width = (full_width - ui.spacing().item_spacing.x * 3.0) * 0.5;
+        let available = ui.available_size();
+        // Each pattern table is 128x128 pixels (16x16 tiles * 8 pixels each)
+        // We show 2 side by side with spacing
+        let logical_width = 128.0 * 2.0 + ui.spacing().item_spacing.x * 3.0;
+        let logical_height = 128.0 + 40.0; // +40 for label and palette selector
+        // Scale to fit both width and height
+        let scale = (available.x / logical_width).min(available.y / logical_height);
+        let table_size = 128.0 * scale;
 
-        ui.label(format!(
-            "Pattern Tables (128x128x2 at {:.1}x scale)",
-            half_width / 128.0
-        ));
+        // Palette selector and label in horizontal layout
+        ui.horizontal(|ui| {
+            ui.label(format!(
+                "Pattern Tables (128x128x2 at {:.1}x scale)",
+                scale
+            ));
+            ui.separator();
+            ui.label("Debug Palette:");
+            let palette_label = if config.view_config.debug_active_palette < 4 {
+                format!("BG Palette {}", config.view_config.debug_active_palette + 1)
+            } else {
+                format!("Sprite Palette {}", config.view_config.debug_active_palette - 3)
+            };
+            egui::ComboBox::from_id_salt("debug_palette_selector")
+                .selected_text(palette_label)
+                .show_ui(ui, |ui| {
+                    for i in 0..8 {
+                        let label = if i < 4 {
+                            format!("BG Palette {}", i + 1)
+                        } else {
+                            format!("Sprite Palette {}", i - 3)
+                        };
+                        ui.selectable_value(&mut config.view_config.debug_active_palette, i, label);
+                    }
+                });
+        });
 
         let selected_palette = palettes.colors[config.view_config.debug_active_palette];
         let transformed_palette = selected_palette
@@ -27,7 +55,7 @@ pub fn render_pattern_table(ui: &mut egui::Ui, config: &mut AppConfig, emu_textu
         ui.horizontal_top(|ui| {
             draw_pattern_table(
                 ui,
-                half_width,
+                table_size,
                 &tile_textures[config.view_config.debug_active_palette][..256],
                 transformed_palette,
                 &pattern_data[..256],
@@ -38,7 +66,7 @@ pub fn render_pattern_table(ui: &mut egui::Ui, config: &mut AppConfig, emu_textu
             ui.separator();
             draw_pattern_table(
                 ui,
-                half_width,
+                table_size,
                 &tile_textures[config.view_config.debug_active_palette][256..],
                 transformed_palette,
                 &pattern_data[256..],

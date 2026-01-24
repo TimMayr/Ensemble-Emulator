@@ -1,8 +1,58 @@
 use std::path::PathBuf;
 
+use crossbeam_channel::Sender;
 use rfd::FileDialog;
 
 use crate::emulation::messages::RgbPalette;
+use crate::frontend::messages::AsyncFrontendMessage;
+
+/// Extract the parent directory from an optional path, or return a default empty path.
+/// This is commonly used to set the initial directory for file dialogs.
+pub fn get_parent_dir(path: Option<&PathBuf>) -> PathBuf {
+    path.and_then(|p| p.parent())
+        .map(|p| p.to_path_buf())
+        .unwrap_or_default()
+}
+
+/// Spawn a file picker dialog in a background thread and send the result via the async channel.
+/// This is used to avoid blocking the UI while the file dialog is open.
+pub fn spawn_rom_picker(sender: &Sender<AsyncFrontendMessage>, previous_path: Option<&PathBuf>) {
+    let sender = sender.clone();
+    let prev_dir = get_parent_dir(previous_path);
+    std::thread::spawn(move || {
+        let path = pick_rom(prev_dir);
+        let _ = sender.send(AsyncFrontendMessage::LoadRom(path));
+    });
+}
+
+/// Spawn a palette picker dialog in a background thread and send the result via the async channel.
+pub fn spawn_palette_picker(sender: &Sender<AsyncFrontendMessage>, previous_path: Option<&PathBuf>) {
+    let sender = sender.clone();
+    let prev_dir = get_parent_dir(previous_path);
+    std::thread::spawn(move || {
+        let path = pick_palette(prev_dir);
+        let _ = sender.send(AsyncFrontendMessage::LoadPalette(path));
+    });
+}
+
+/// Spawn a save dialog for a palette file in a background thread.
+pub fn spawn_palette_save(previous_path: Option<&PathBuf>, palette_bytes: Vec<u8>) {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+
+    let prev_dir = get_parent_dir(previous_path);
+    std::thread::spawn(move || {
+        if let Some(p) = create_new(prev_dir)
+            && let Ok(mut file) = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(p)
+        {
+            let _ = file.write_all(&palette_bytes);
+        }
+    });
+}
 
 pub trait Contrastable {
     fn get_contrast(&self) -> Self;
@@ -101,6 +151,7 @@ impl AsU32 for egui::Color32 {
 pub fn pick_rom(previous: PathBuf) -> Option<PathBuf> {
     FileDialog::new()
         .add_filter("NES ROM File", &["nes"])
+        .add_filter("All Files", &["*"])
         .set_directory(previous)
         .pick_file()
 }
@@ -108,6 +159,7 @@ pub fn pick_rom(previous: PathBuf) -> Option<PathBuf> {
 pub fn pick_palette(previous: PathBuf) -> Option<PathBuf> {
     FileDialog::new()
         .add_filter("NES Palette File", &["pal"])
+        .add_filter("All Files", &["*"])
         .set_directory(previous)
         .pick_file()
 }
@@ -116,6 +168,40 @@ pub fn create_new(previous: PathBuf) -> Option<PathBuf> {
     FileDialog::new()
         .set_directory(previous)
         .set_can_create_directories(true)
-        .set_file_name("palette.pal")
         .save_file()
+}
+
+pub fn color_radio<Value: PartialEq>(
+    ui: &mut egui::Ui,
+    current: &mut Value,
+    alternative: Value,
+    color: egui::Color32,
+) -> egui::Response {
+    let size = egui::vec2(20.0, 20.0);
+    let selected = *current == alternative;
+
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter();
+
+        // Draw the colored square
+        painter.rect_filled(rect, 2.0, color);
+
+        // Draw selection border when selected
+        if selected {
+            painter.rect_stroke(
+                rect,
+                2.0,
+                egui::Stroke::new(2.0, ui.visuals().selection.stroke.color),
+                egui::StrokeKind::Inside,
+            );
+        }
+    }
+
+    if response.clicked() {
+        *current = alternative;
+    }
+
+    response
 }

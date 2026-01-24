@@ -1,15 +1,14 @@
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::path::PathBuf;
-
 use crossbeam_channel::Sender;
 
 use crate::emulation::messages::{EmulatorFetchable, FrontendMessage};
 use crate::emulation::ppu::PALETTE_RAM_START_ADDRESS;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
+use crate::frontend::egui::ui::widgets::{color_cell, PainterGridConfig};
 use crate::frontend::messages::AsyncFrontendMessage;
-use crate::frontend::util::{create_new, pick_palette, AsU32, FromU32, Hashable, ToBytes};
+use crate::frontend::util::{
+    spawn_palette_picker, spawn_palette_save, AsU32, FromU32, Hashable, ToBytes,
+};
 
 pub fn render_palettes(
     ui: &mut egui::Ui,
@@ -23,6 +22,7 @@ pub fn render_palettes(
     let single_color_width = 80f32.min(full_width / 4.0);
     let single_color_height = 20.0;
 
+    // Render the 8 active palettes (4 background + 4 sprite)
     if let Some(palette_data) = &emu_textures.palette_data {
         for (i, palette) in palette_data.colors.iter().enumerate() {
             if i < 4 {
@@ -31,37 +31,20 @@ pub fn render_palettes(
                 ui.label(format!("Sprite Palette {}", i - 3));
             };
 
-            let (parent, _) = ui.allocate_exact_size(
-                egui::vec2(single_color_width * 4.0, single_color_height),
-                egui::Sense::hover(),
+            let grid_config = PainterGridConfig::rect(
+                single_color_width * 4.0,
+                single_color_height,
+                4,
+                1,
             );
+            let (parent, _) = ui.allocate_exact_size(grid_config.total_size(), egui::Sense::hover());
 
             for (j, color) in palette.iter().enumerate() {
                 let rgb_color = config.view_config.palette_rgb_data.colors[0][*color as usize];
-
-                let min = parent.min + egui::vec2(j as f32 * single_color_width, 0.0);
-                let rect = egui::Rect::from_min_size(
-                    min,
-                    egui::vec2(single_color_width, single_color_height),
-                );
-
-                let response =
-                    ui.interact(rect, ui.id().with(format!("{}", rect)), egui::Sense::all());
-
-                let painter = ui.painter();
-                painter.rect_filled(rect, 0.0, egui::Color32::from_u32(rgb_color));
-
-                if response.hovered() {
-                    painter.rect_stroke(
-                        rect,
-                        0.0,
-                        egui::Stroke::new(3.0, egui::Color32::WHITE),
-                        egui::StrokeKind::Inside,
-                    );
-                }
+                let rect = grid_config.cell_rect(parent.min, j);
+                let response = color_cell(ui, rect, rgb_color, egui::Sense::all(), ("palette", i, j));
 
                 let address = PALETTE_RAM_START_ADDRESS as usize | (j + (i * 4));
-
                 let mut new_color = *color;
 
                 egui::Popup::context_menu(&response)
@@ -71,8 +54,7 @@ pub fn render_palettes(
                     });
 
                 if new_color != *color {
-                    let color = new_color;
-                    let _ = to_emu.send(FrontendMessage::WritePpu(address as u16, color));
+                    let _ = to_emu.send(FrontendMessage::WritePpu(address as u16, new_color));
                     let _ = to_emu.send(FrontendMessage::RequestDebugData(
                         EmulatorFetchable::Palettes(None),
                     ));
@@ -90,57 +72,22 @@ pub fn render_palettes(
         }
     }
 
+    // File operations menu
     ui.separator();
     egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
             if ui.button("Load Palette").clicked() {
-                std::thread::spawn({
-                    let sender = to_frontend.clone();
-                    let prev_path = config.user_config.previous_palette_path.clone();
-                    let prev_dir = if let Some(prev_path) = prev_path {
-                        if let Some(prev_path) = prev_path.parent() {
-                            prev_path.to_path_buf()
-                        } else {
-                            PathBuf::default()
-                        }
-                    } else {
-                        PathBuf::default()
-                    };
-
-                    move || {
-                        let path = pick_palette(prev_dir);
-                        sender.send(AsyncFrontendMessage::LoadPalette(path))
-                    }
-                });
+                spawn_palette_picker(
+                    to_frontend,
+                    config.user_config.previous_palette_path.as_ref(),
+                );
             }
 
             if ui.button("Save Palette").clicked() {
-                std::thread::spawn({
-                    let palette = config.view_config.palette_rgb_data.to_bytes();
-                    let prev_path = config.user_config.previous_palette_path.clone();
-                    let prev_dir = if let Some(prev_path) = prev_path {
-                        if let Some(prev_path) = prev_path.parent() {
-                            prev_path.to_path_buf()
-                        } else {
-                            PathBuf::default()
-                        }
-                    } else {
-                        PathBuf::default()
-                    };
-
-                    move || {
-                        let path = create_new(prev_dir);
-                        if let Some(p) = path
-                            && let Ok(mut file) = OpenOptions::new()
-                                .write(true)
-                                .create(true)
-                                .truncate(false)
-                                .open(p)
-                        {
-                            let _ = file.write_all(&palette[..]);
-                        };
-                    }
-                });
+                spawn_palette_save(
+                    config.user_config.previous_palette_path.as_ref(),
+                    config.view_config.palette_rgb_data.to_bytes(),
+                );
             }
 
             if ui.button("Reset Palette").clicked() {
@@ -149,36 +96,18 @@ pub fn render_palettes(
         })
     });
 
+    // Render the full 64-color palette editor
     let color_width = 40f32.min(full_width / 8.0);
-
-    let (parent, _) = ui.allocate_exact_size(
-        egui::vec2(color_width * 8.0, color_width * 8.0),
-        egui::Sense::hover(),
-    );
+    let grid_config = PainterGridConfig::square(color_width * 8.0, 8);
+    let (parent, _) = ui.allocate_exact_size(grid_config.total_size(), egui::Sense::hover());
 
     for (i, color) in config.view_config.palette_rgb_data.colors[0]
         .clone()
         .iter()
         .enumerate()
     {
-        let row = (i / 8) as f32;
-        let col = (i % 8) as f32;
-        let min = parent.min + egui::vec2(col * color_width, row * color_width);
-        let rect = egui::Rect::from_min_size(min, egui::vec2(color_width, color_width));
-
-        let response = ui.interact(rect, ui.id().with(format!("{}", rect)), egui::Sense::all());
-
-        let painter = ui.painter();
-        painter.rect_filled(rect, 0.0, egui::Color32::from_u32(*color));
-
-        if response.hovered() {
-            painter.rect_stroke(
-                rect,
-                0.0,
-                egui::Stroke::new(3.0, egui::Color32::WHITE),
-                egui::StrokeKind::Inside,
-            );
-        }
+        let rect = grid_config.cell_rect(parent.min, i);
+        let response = color_cell(ui, rect, *color, egui::Sense::all(), ("rgb_palette", i));
 
         let mut picked_color = egui::Color32::from_u32(*color);
         egui::Popup::context_menu(&response)
@@ -199,6 +128,7 @@ pub fn render_palettes(
         });
     }
 
+    // Send palette update if changed
     if old_palette.hash() != config.view_config.palette_rgb_data.hash() {
         let _ = to_emu.send(FrontendMessage::SetPalette(Box::new(
             config.view_config.palette_rgb_data,
