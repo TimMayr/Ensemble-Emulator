@@ -35,7 +35,6 @@ use std::sync::OnceLock;
 /// ```
 use crossbeam_channel::{Receiver, Sender};
 
-
 use crate::emulation::messages::{
     ControllerEvent, EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData,
 };
@@ -134,12 +133,9 @@ impl ChannelEmulator {
                     self.nes.ppu.borrow_mut().rgb_palette = *p;
                 }
                 FrontendMessage::WritePpu(address, data) => {
-                    self.nes.ppu.borrow_mut().mem_write(address, data)
+                    self.nes.ppu.borrow_mut().mem_init(address, data)
                 }
-                FrontendMessage::InitPpu(address, data) => {
-                    self.nes.ppu.borrow_mut().memory.init(address, data);
-                }
-                FrontendMessage::WriteCpu(address, data) => self.nes.cpu.mem_write(address, data),
+                FrontendMessage::WriteCpu(address, data) => self.nes.cpu.memory.init(address, data),
                 FrontendMessage::LoadRom(path) => {
                     self.nes.load_rom(&path);
                 }

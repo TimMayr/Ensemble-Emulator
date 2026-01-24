@@ -1,8 +1,11 @@
+use crossbeam_channel::Sender;
 use eframe::epaint::TextureHandle;
 use egui::Ui;
 
-use crate::emulation::messages::TileData;
-use crate::frontend::util::{Contrastable, FromU32};
+use crate::emulation::messages::{EmulatorFetchable, FrontendMessage, TileData};
+use crate::frontend::egui::config::AppConfig;
+use crate::frontend::egui::ui::widgets::{PainterGridConfig, image_cell};
+use crate::frontend::util::{FromU32, color_radio};
 
 /// Draw a pattern table (left or right) in the UI
 pub fn draw_pattern_table(
@@ -11,106 +14,153 @@ pub fn draw_pattern_table(
     emu_textures: &[TextureHandle],
     palette: [u32; 4],
     pattern_data: &[TileData],
+    to_emu: &Sender<FrontendMessage>,
+    config: &mut AppConfig,
 ) {
-    let tile_size = width / 16.0;
-
-    let (parent, _) = ui.allocate_exact_size(egui::vec2(width, width), egui::Sense::hover());
+    let grid_config = PainterGridConfig::square(width, 16);
+    let (parent, _) = ui.allocate_exact_size(grid_config.total_size(), egui::Sense::hover());
 
     for (i, tex) in emu_textures.iter().enumerate() {
-        let row = i / 16;
-        let col = i % 16;
-        let min = parent.min + egui::vec2(col as f32 * tile_size, row as f32 * tile_size);
-
-        let rect = egui::Rect::from_min_size(min, egui::vec2(tile_size, tile_size));
-
-        let response = ui.interact(rect, ui.id().with(format!("{}", rect)), egui::Sense::all());
-
-        let painter = ui.painter();
-        painter.image(
-            tex.id(),
+        let rect = grid_config.cell_rect(parent.min, i);
+        let response = image_cell(
+            ui,
             rect,
-            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-            egui::Color32::WHITE,
+            tex.id(),
+            egui::Sense::all(),
+            ("tile", i, parent.to_string()),
         );
 
-        if response.hovered() {
-            painter.rect_stroke(
-                rect,
-                0.0,
-                egui::Stroke::new(3.0, egui::Color32::WHITE),
-                egui::StrokeKind::Inside,
-            );
-        }
+        let painter = ui.ctx().layer_painter(egui::LayerId::new(
+            egui::Order::Foreground,
+            egui::Id::new("popup_painter"),
+        ));
 
-        response.on_hover_ui(|ui| {
-            let tile_data = pattern_data[i];
-            ui.label(format!("Rom address: ${:0X}", tile_data.address));
+        egui::Popup::context_menu(&response)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| {
+                ui.heading("Edit Pattern");
 
-            let plane_0_string = format!("{:064b}", tile_data.plane_0);
-            let plane_1_string = format!("{:064b}", tile_data.plane_1);
+                let tile_data = pattern_data[i];
+                ui.label(format!("Rom address: ${:0X}", tile_data.address));
 
-            let mut res = String::new();
-            let mut res_line = String::new();
-            let mut res_vec = Vec::new();
+                ui.label("Pattern:");
 
-            let mut char_width = 0.0;
-            let mut line_height = 0.0;
-            for (i, c) in plane_0_string.chars().enumerate() {
-                res_line.push(c);
-                res_line.push(plane_1_string.chars().nth(i).unwrap());
+                ui.horizontal(|ui| {
+                    color_radio(
+                        ui,
+                        &mut config.user_config.pattern_edit_color,
+                        0,
+                        egui::Color32::from_u32(palette[0]),
+                    );
+                    color_radio(
+                        ui,
+                        &mut config.user_config.pattern_edit_color,
+                        1,
+                        egui::Color32::from_u32(palette[1]),
+                    );
+                    color_radio(
+                        ui,
+                        &mut config.user_config.pattern_edit_color,
+                        2,
+                        egui::Color32::from_u32(palette[2]),
+                    );
+                    color_radio(
+                        ui,
+                        &mut config.user_config.pattern_edit_color,
+                        3,
+                        egui::Color32::from_u32(palette[3]),
+                    );
+                });
 
-                if (i + 1) % 8 == 0 {
-                    res += res_line.as_str();
-                    res.push('\n');
-                    res_vec.push(res_line);
-                    res_line = String::new();
-                }
-            }
+                // Tile pixel editor grid (8x8 pixels, each 4x4 in size = 32x32 total)
+                let pixel_size = 4.0 * 8.0;
+                let pixel_grid = PainterGridConfig::square(pixel_size * 8.0, 8);
+                let (pixel_parent, _) =
+                    ui.allocate_exact_size(pixel_grid.total_size(), egui::Sense::click_and_drag());
 
-            ui.label("Pattern:");
-
-            let painter = ui.painter();
-            let font_id = egui::FontId::monospace(14.0);
-
-            let start_pos = ui.cursor().min;
-            let mut y = start_pos.y;
-            for (row, string) in res_vec.iter().enumerate() {
-                let mut x = start_pos.x;
-                let mut current_line_height: f32 = 0.0;
-
-                for (col, ch) in string.chars().enumerate() {
-                    let bitmap_col = col / 2;
-                    let bit = 63 - (row * 8 + bitmap_col);
-                    let lo = (tile_data.plane_0 >> bit & 1) as u8;
-                    let hi = (tile_data.plane_1 >> bit & 1) as u8;
+                for index in 0..64 {
+                    let lo = (tile_data.plane_0 >> (63 - index) & 1) as u8;
+                    let hi = (tile_data.plane_1 >> (63 - index) & 1) as u8;
                     let color_id = hi << 1 | lo;
-
                     let color = palette[color_id as usize];
 
-                    let galley = ui.fonts_mut(|f| {
-                        f.layout_no_wrap(
-                            ch.to_string(),
-                            font_id.clone(),
-                            egui::Color32::from_u32(color).get_contrast(),
-                        )
+                    let pixel_rect = pixel_grid.cell_rect(pixel_parent.min, index);
+                    let response = ui.interact(
+                        pixel_rect,
+                        ui.id().with(("pixel", index)),
+                        egui::Sense::click_and_drag(),
+                    );
+
+                    painter.rect_filled(pixel_rect, 0.0, egui::Color32::from_u32(color));
+
+                    // Support both click and drag for editing pixels
+                    // Check if clicked OR if pointer is within this pixel's rect while primary button is down
+                    let pointer_in_rect = ui.ctx().input(|i| {
+                        i.pointer
+                            .interact_pos()
+                            .is_some_and(|pos| pixel_rect.contains(pos))
                     });
-                    let rect = egui::Rect::from_min_size(egui::pos2(x, y), galley.size());
+                    let primary_down = ui.input(|i| i.pointer.primary_down());
+                    let secondary_down = ui.input(|i| i.pointer.secondary_down());
+                    if response.clicked() || (pointer_in_rect && primary_down) {
+                        handle_pixel_edit(&tile_data, index, config, to_emu, false);
+                    }
 
-                    painter.rect_filled(rect, 0.0, egui::Color32::from_u32(color));
-                    painter.galley(rect.min, galley, egui::Color32::WHITE);
+                    if response.clicked_by(egui::PointerButton::Secondary)
+                        || (pointer_in_rect && secondary_down)
+                    {
+                        handle_pixel_edit(&tile_data, index, config, to_emu, true);
+                    }
 
-                    x += rect.width();
-                    char_width = rect.width();
-                    current_line_height = current_line_height.max(rect.height());
-                    line_height = current_line_height;
+                    if response.hovered() || pointer_in_rect {
+                        painter.rect_stroke(
+                            pixel_rect,
+                            0.0,
+                            egui::Stroke::new(3.0, egui::Color32::WHITE),
+                            egui::StrokeKind::Inside,
+                        );
+                    }
                 }
+            });
+    }
+}
 
-                y += current_line_height;
-            }
+/// Handle editing a single pixel in a tile pattern
+fn handle_pixel_edit(
+    tile_data: &TileData,
+    index: usize,
+    config: &AppConfig,
+    to_emu: &Sender<FrontendMessage>,
+    clear: bool,
+) {
+    let new_color = if !clear {
+        config.user_config.pattern_edit_color
+    } else {
+        0
+    };
 
-            let total_height = res_vec.len() as f32 * line_height;
-            let total_width = res_vec[0].len() as f32 * char_width;
-            ui.allocate_space(egui::vec2(total_width, total_height));
-        });
+    let new_lo = new_color & 1;
+    let new_hi = (new_color >> 1) & 1;
+
+    let u64_bit_pos = 63usize.wrapping_sub(index) & 63;
+    let ppu_row = 7 - (u64_bit_pos / 8);
+    let ppu_bit = u64_bit_pos % 8;
+
+    let byte_shift = (7 - ppu_row) * 8;
+    let old_byte_0 = ((tile_data.plane_0 >> byte_shift) & 0xFF) as u8;
+    let old_byte_1 = ((tile_data.plane_1 >> byte_shift) & 0xFF) as u8;
+
+    let new_byte_0 = (old_byte_0 & !(1 << ppu_bit)) | (new_lo << ppu_bit);
+    let new_byte_1 = (old_byte_1 & !(1 << ppu_bit)) | (new_hi << ppu_bit);
+
+    if old_byte_0 != new_byte_0 || old_byte_1 != new_byte_1 {
+        let addr_0 = tile_data.address + ppu_row as u16;
+        let addr_1 = tile_data.address + ppu_row as u16 + 8;
+
+        let _ = to_emu.send(FrontendMessage::WritePpu(addr_0, new_byte_0));
+        let _ = to_emu.send(FrontendMessage::WritePpu(addr_1, new_byte_1));
+        let _ = to_emu.send(FrontendMessage::RequestDebugData(EmulatorFetchable::Tiles(
+            None,
+        )));
     }
 }
