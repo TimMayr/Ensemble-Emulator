@@ -145,7 +145,7 @@ impl FileType {
     pub fn add_filters(&self, dialog: FileDialog) -> FileDialog {
         match self {
             FileType::Rom => dialog.add_filter("NES ROM File", &["nes"]),
-            FileType::Savestate => dialog.add_filter("Savestate", &["save"]),
+            FileType::Savestate => dialog.add_filter("Savestate", &["sav"]),
             FileType::Palette => dialog.add_filter("NES Palette File", &["pal"]),
             FileType::All => dialog.add_filter("All Files", &["*"]),
         }
