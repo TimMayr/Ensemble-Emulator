@@ -12,7 +12,7 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use nes_core::cli::{self, CliArgs};
-use nes_core::emulation::nes::{MASTER_CYCLES_PER_FRAME, Nes};
+use nes_core::emulation::nes::{Nes, MASTER_CYCLES_PER_FRAME};
 use nes_core::emulation::rom::RomFile;
 use nes_core::frontend::egui_frontend;
 use serde::Serialize;
@@ -176,11 +176,17 @@ fn calculate_target_cycles(args: &CliArgs) -> u128 {
 fn output_results(emu: &Nes, args: &CliArgs) -> Result<(), String> {
     if let Some(ref range) = args.memory.read_cpu {
         output_cpu_memory(emu, range, args)?;
-    } else if let Some(ref range) = args.memory.read_ppu {
+    }
+
+    if let Some(ref range) = args.memory.read_ppu {
         output_ppu_memory(emu, range, args)?;
-    } else if args.memory.dump_oam {
+    }
+
+    if args.memory.dump_oam {
         output_oam(emu, args)?;
-    } else if args.memory.dump_nametables {
+    }
+
+    if args.memory.dump_nametables {
         output_nametables(emu, args)?;
     }
 
@@ -257,7 +263,8 @@ fn format_and_output_memory(
 /// Get output writer - either file or stdout
 fn get_output_writer(args: &CliArgs) -> Result<Box<dyn Write>, String> {
     if let Some(ref path) = args.output.output {
-        let file = File::create(path).map_err(|e| format!("Failed to create output file: {}", e))?;
+        let file =
+            File::create(path).map_err(|e| format!("Failed to create output file: {}", e))?;
         Ok(Box::new(file))
     } else {
         Ok(Box::new(std::io::stdout()))
@@ -266,14 +273,20 @@ fn get_output_writer(args: &CliArgs) -> Result<Box<dyn Write>, String> {
 
 fn output_hex(mem: &[u8], start_addr: u16, args: &CliArgs) -> Result<(), String> {
     let mut writer = get_output_writer(args)?;
-    
+
     for (i, chunk) in mem.chunks(16).enumerate() {
         let line = format!(
             "{:04X}: {}\n",
             start_addr as usize + i * 16,
-            chunk.iter().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" ")
+            chunk
+                .iter()
+                .map(|b| format!("{:02X}", b))
+                .collect::<Vec<_>>()
+                .join(" ")
         );
-        writer.write_all(line.as_bytes()).map_err(|e| e.to_string())?;
+        writer
+            .write_all(line.as_bytes())
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -287,10 +300,10 @@ fn output_json(mem: &[u8], start_addr: u16, mem_type: &str, args: &CliArgs) -> R
     let end_addr = start_addr
         .saturating_add(mem.len() as u16)
         .saturating_sub(1);
-    
+
     // Format data as hex strings
     let data_hex: Vec<String> = mem.iter().map(|b| format!("0x{:02X}", b)).collect();
-    
+
     let output = MemoryDumpOutput {
         memory_dump: MemoryDumpData {
             mem_type: mem_type.to_string(),
@@ -299,10 +312,10 @@ fn output_json(mem: &[u8], start_addr: u16, mem_type: &str, args: &CliArgs) -> R
             data: data_hex,
         },
     };
-    
+
     let json_str = serde_json::to_string_pretty(&output)
         .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
-    
+
     let mut writer = get_output_writer(args)?;
     writeln!(writer, "{}", json_str).map_err(|e| e.to_string())
 }
@@ -311,10 +324,10 @@ fn output_toml(mem: &[u8], start_addr: u16, mem_type: &str, args: &CliArgs) -> R
     let end_addr = start_addr
         .saturating_add(mem.len() as u16)
         .saturating_sub(1);
-    
+
     // Format data as hex strings
     let data_hex: Vec<String> = mem.iter().map(|b| format!("0x{:02X}", b)).collect();
-    
+
     let output = MemoryDumpOutput {
         memory_dump: MemoryDumpData {
             mem_type: mem_type.to_string(),
@@ -323,10 +336,10 @@ fn output_toml(mem: &[u8], start_addr: u16, mem_type: &str, args: &CliArgs) -> R
             data: data_hex,
         },
     };
-    
-    let toml_str = toml::to_string_pretty(&output)
-        .map_err(|e| format!("Failed to serialize TOML: {}", e))?;
-    
+
+    let toml_str =
+        toml::to_string_pretty(&output).map_err(|e| format!("Failed to serialize TOML: {}", e))?;
+
     let mut writer = get_output_writer(args)?;
     writeln!(writer, "{}", toml_str).map_err(|e| e.to_string())
 }
