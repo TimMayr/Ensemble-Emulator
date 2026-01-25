@@ -266,10 +266,10 @@ impl ConfigFile {
         if cli.palette.palette.is_none() {
             cli.palette.palette = self.palette.path.clone();
         }
-        if cli.palette.palette_builtin.is_none() {
-            if let Some(ref builtin) = self.palette.builtin {
-                cli.palette.palette_builtin = BuiltinPalette::from_str(builtin).ok();
-            }
+        if cli.palette.palette_builtin.is_none()
+            && let Some(ref builtin) = self.palette.builtin
+        {
+            cli.palette.palette_builtin = BuiltinPalette::from_str(builtin).ok();
         }
 
         // Video options
@@ -288,10 +288,10 @@ impl ConfigFile {
                 cli.video.video_format = VideoFormat::from_str(fmt).unwrap_or(VideoFormat::Raw);
             }
         }
-        if cli.video.video_fps == DEFAULT_VIDEO_FPS {
-            if let Some(fps) = self.video.video_fps {
-                cli.video.video_fps = fps;
-            }
+        if cli.video.video_fps == DEFAULT_VIDEO_FPS
+            && let Some(fps) = self.video.video_fps
+        {
+            cli.video.video_fps = fps;
         }
         if cli.video.export_nametables.is_none() {
             cli.video.export_nametables = self.video.export_nametables.clone();
@@ -319,15 +319,15 @@ impl ConfigFile {
         if cli.execution.frames.is_none() {
             cli.execution.frames = self.execution.frames;
         }
-        if cli.execution.until_pc.is_none() {
-            if let Some(ref pc) = self.execution.until_pc {
-                cli.execution.until_pc = parse_hex_u16_opt(pc);
-            }
+        if cli.execution.until_pc.is_none()
+            && let Some(ref pc) = self.execution.until_pc
+        {
+            cli.execution.until_pc = parse_hex_u16_opt(pc);
         }
-        if cli.execution.until_opcode.is_none() {
-            if let Some(ref op) = self.execution.until_opcode {
-                cli.execution.until_opcode = parse_hex_u8_opt(op);
-            }
+        if cli.execution.until_opcode.is_none()
+            && let Some(ref op) = self.execution.until_opcode
+        {
+            cli.execution.until_opcode = parse_hex_u8_opt(op);
         }
         if cli.execution.until_mem.is_none() {
             cli.execution.until_mem = self.execution.until_mem.clone();
