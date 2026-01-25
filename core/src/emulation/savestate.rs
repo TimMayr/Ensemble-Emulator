@@ -1,19 +1,14 @@
 use std::collections::VecDeque;
 use std::path::PathBuf;
 
-use rkyv::rancor::BoxedError;
-use rkyv::with::Skip;
-use rkyv::{Archive, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::emulation::cpu::{Cpu, INTERNAL_RAM_SIZE, MicroOp};
 use crate::emulation::mem::OpenBus;
 use crate::emulation::ppu::{Ppu, VRAM_SIZE};
 use crate::emulation::rom::RomFile;
 
-#[derive(Archive, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
-                        __S::Error: rkyv::rancor::Source))]
-#[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CpuState {
     pub program_counter: u16,
     pub stack_pointer: u8,
@@ -26,7 +21,7 @@ pub struct CpuState {
     /// PRG RAM if present (up to 8KB, addresses 0x6000-0x7FFF)
     pub prg_ram: Vec<u8>,
     /// Full memory dump for tracing/debug (not serialized to reduce size)
-    #[rkyv(with = Skip)]
+    #[serde(skip)]
     pub memory: Vec<u8>,
     pub lo: u8,
     pub hi: u8,
@@ -95,10 +90,7 @@ impl From<&Cpu> for CpuState {
     }
 }
 
-#[derive(Archive, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
-                        __S::Error: rkyv::rancor::Source))]
-#[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct PpuState {
     pub cycle_counter: u128,
     pub vbl_reset_counter: u8,
@@ -118,7 +110,7 @@ pub struct PpuState {
     pub even_frame: bool,
     pub reset_signal: bool,
     // pixel_buffer is skipped - it's just the framebuffer, regenerated every frame
-    #[rkyv(with = Skip)]
+    #[serde(skip)]
     pub pixel_buffer: Vec<u32>,
     pub dot: u16,
     pub scanline: u16,
@@ -198,10 +190,7 @@ impl From<&Ppu> for PpuState {
     }
 }
 
-#[derive(Archive, Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-#[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
-                        __S::Error: rkyv::rancor::Source))]
-#[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct SaveState {
     pub cpu: CpuState,
     pub ppu: PpuState,
@@ -216,5 +205,5 @@ pub struct SaveState {
 /// Try to load a savestate from a file path, returning None on error
 pub fn try_load_state(path: &PathBuf) -> Option<SaveState> {
     let encoded = std::fs::read(path).ok()?;
-    rkyv::from_bytes::<SaveState, BoxedError>(&encoded).ok()
+    bincode::deserialize(&encoded).ok()
 }

@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 
 use crossbeam_channel::Sender;
 use rfd::FileDialog;
-use rkyv::rancor::BoxedError;
 use sha2::{Digest, Sha256};
 
 use crate::emulation::messages::RgbPalette;
@@ -75,9 +74,7 @@ impl ToBytes for RgbPalette {
 
 impl ToBytes for SaveState {
     fn to_bytes(&self) -> Vec<u8> {
-        rkyv::to_bytes::<BoxedError>(self)
-            .expect("Failed to serialize SaveState")
-            .to_vec()
+        bincode::serialize(self).expect("Failed to serialize SaveState")
     }
 }
 
