@@ -270,11 +270,11 @@ pub struct OutputArgs {
     #[arg(short, long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
     pub output: Option<PathBuf>,
 
-    /// Output format (hex, json, toml, binary)
+    /// Output format (hex, JSON, toml, binary)
     #[arg(long, default_value = "hex")]
     pub output_format: OutputFormat,
 
-    /// Output in JSON format (shorthand for --output-format json)
+    /// Output in JSON format (shorthand for --output-format JSON)
     #[arg(long, default_value_t = false)]
     pub json: bool,
 
@@ -310,7 +310,10 @@ impl std::str::FromStr for OutputFormat {
             "json" => Ok(OutputFormat::Json),
             "toml" => Ok(OutputFormat::Toml),
             "binary" => Ok(OutputFormat::Binary),
-            _ => Err(format!("Unknown output format: '{}'. Valid options: hex, json, toml, binary", s)),
+            _ => Err(format!(
+                "Unknown output format: '{}'. Valid options: hex, json, toml, binary",
+                s
+            )),
         }
     }
 }
@@ -324,7 +327,10 @@ impl std::str::FromStr for VideoFormat {
             "ppm" => Ok(VideoFormat::Ppm),
             "png" => Ok(VideoFormat::Png),
             "mp4" => Ok(VideoFormat::Mp4),
-            _ => Err(format!("Unknown video format: '{}'. Valid options: raw, ppm, png, mp4", s)),
+            _ => Err(format!(
+                "Unknown video format: '{}'. Valid options: raw, ppm, png, mp4",
+                s
+            )),
         }
     }
 }
@@ -336,20 +342,29 @@ impl std::str::FromStr for BuiltinPalette {
         match s.to_lowercase().as_str() {
             "2c02g" => Ok(BuiltinPalette::Nes2C02G),
             "composite" => Ok(BuiltinPalette::Composite),
-            _ => Err(format!("Unknown palette: '{}'. Valid options: 2C02G, composite", s)),
+            _ => Err(format!(
+                "Unknown palette: '{}'. Valid options: 2C02G, composite",
+                s
+            )),
         }
     }
 }
 
 /// Parse a hexadecimal u16 value (with or without 0x prefix)
-fn parse_hex_u16(s: &str) -> Result<u16, String> {
-    let s = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")).unwrap_or(s);
+pub fn parse_hex_u16(s: &str) -> Result<u16, String> {
+    let s = s
+        .strip_prefix("0x")
+        .or_else(|| s.strip_prefix("0X"))
+        .unwrap_or(s);
     u16::from_str_radix(s, 16).map_err(|e| format!("Invalid hex value '{}': {}", s, e))
 }
 
 /// Parse a hexadecimal u8 value (with or without 0x prefix)
 fn parse_hex_u8(s: &str) -> Result<u8, String> {
-    let s = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")).unwrap_or(s);
+    let s = s
+        .strip_prefix("0x")
+        .or_else(|| s.strip_prefix("0X"))
+        .unwrap_or(s);
     u8::from_str_radix(s, 16).map_err(|e| format!("Invalid hex value '{}': {}", s, e))
 }
 

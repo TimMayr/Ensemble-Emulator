@@ -359,10 +359,10 @@ impl ConfigFile {
                 if cli.execution.frames.is_none() {
                     cli.execution.frames = rest.parse().ok();
                 }
-            } else if let Some(rest) = cond.strip_prefix("cycles:") {
-                if cli.execution.cycles.is_none() {
-                    cli.execution.cycles = rest.parse().ok();
-                }
+            } else if let Some(rest) = cond.strip_prefix("cycles:")
+                && cli.execution.cycles.is_none()
+            {
+                cli.execution.cycles = rest.parse().ok();
             }
         }
 

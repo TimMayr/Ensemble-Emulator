@@ -32,9 +32,8 @@ pub mod args;
 pub mod config;
 
 pub use args::CliArgs;
-pub use config::ConfigFile;
-
 use clap::Parser;
+pub use config::ConfigFile;
 
 /// Parse CLI arguments and optionally merge with a config file.
 ///
@@ -61,7 +60,11 @@ pub fn parse_args() -> Result<CliArgs, Box<dyn std::error::Error>> {
 /// Returns an error message if the arguments are invalid.
 pub fn validate_args(args: &CliArgs) -> Result<(), String> {
     // Headless mode requires a ROM or savestate
-    if args.headless && args.rom.rom.is_none() && args.savestate.load_state.is_none() && !args.savestate.state_stdin {
+    if args.headless
+        && args.rom.rom.is_none()
+        && args.savestate.load_state.is_none()
+        && !args.savestate.state_stdin
+    {
         return Err(
             "Headless mode requires a ROM (--rom), savestate (--load-state), or --state-stdin"
                 .to_string(),
@@ -98,7 +101,9 @@ pub fn validate_args(args: &CliArgs) -> Result<(), String> {
         .filter(|&&x| x)
         .count();
     if format_flags > 1 {
-        return Err("Cannot specify multiple output format flags (--json, --toml, --binary)".to_string());
+        return Err(
+            "Cannot specify multiple output format flags (--json, --toml, --binary)".to_string(),
+        );
     }
 
     Ok(())

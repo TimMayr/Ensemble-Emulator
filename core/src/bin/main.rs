@@ -2,9 +2,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Instant;
 
-use egui::TextBuffer;
+use nes_core::cli::args::parse_hex_u16;
 use nes_core::cli::{self, CliArgs};
-use nes_core::emulation::nes::Nes;
+use nes_core::emulation::nes::{MASTER_CYCLES_PER_FRAME, Nes};
 use nes_core::emulation::rom::RomFile;
 use nes_core::frontend::egui_frontend;
 
@@ -58,18 +58,20 @@ fn start_headless(args: &CliArgs) -> Result<(), String> {
 
     // Handle ROM info display
     if args.rom.rom_info {
-        if let Some(ref rom_path) = args.rom.rom {
-            return print_rom_info(rom_path);
+        return if let Some(ref rom_path) = args.rom.rom {
+            print_rom_info(rom_path)
         } else {
-            return Err("--rom-info requires --rom to be specified".to_string());
-        }
+            Err("--rom-info requires --rom to be specified".to_string())
+        };
     }
 
     // Load ROM
     if let Some(ref rom_path) = args.rom.rom {
-        emu.load_rom(&rom_path.to_string_lossy().take());
+        emu.load_rom(rom_path);
     } else if args.savestate.load_state.is_none() && !args.savestate.state_stdin {
-        return Err("Headless runs must specify the ROM file using the -r (--rom) argument".to_string());
+        return Err(
+            "Headless runs must specify the ROM file using the -r (--rom) argument".to_string(),
+        );
     }
 
     // Power on (unless --no-power is specified)
@@ -88,11 +90,10 @@ fn start_headless(args: &CliArgs) -> Result<(), String> {
     let target_cycles = if let Some(cycles) = args.execution.cycles {
         cycles
     } else if let Some(frames) = args.execution.frames {
-        // Approximately 357366 master cycles per frame
-        frames as u128 * 357366
+        frames as u128 * MASTER_CYCLES_PER_FRAME as u128
     } else {
         // Default: run for a reasonable amount (same as before)
-        700_119_365
+        60 * MASTER_CYCLES_PER_FRAME as u128
     };
 
     let res = emu.run_until(target_cycles);
@@ -124,7 +125,7 @@ fn start_headless(args: &CliArgs) -> Result<(), String> {
 }
 
 fn print_rom_info(rom_path: &PathBuf) -> Result<(), String> {
-    let rom = RomFile::load(&rom_path.to_string_lossy().to_string());
+    let rom = RomFile::load(rom_path);
 
     println!("ROM Information:");
     println!("  File: {}", rom_path.display());
@@ -134,13 +135,26 @@ fn print_rom_info(rom_path: &PathBuf) -> Result<(), String> {
     println!("  Mapper: {}", rom.mapper_number);
     println!("  PRG ROM: {} KB", rom.prg_memory.prg_rom_size / 1024);
     println!("  CHR ROM: {} KB", rom.chr_memory.chr_rom_size / 1024);
-    println!("  PRG RAM: {} KB (battery-backed: {})",
-             rom.prg_memory.prg_ram_size / 1024,
-             if rom.is_battery_backed { "yes" } else { "no" });
-    println!("  Mirroring: {}",
-             if rom.hardwired_nametable_layout { "Vertical" } else { "Horizontal" });
-    println!("  Checksum (SHA-256): {}",
-             rom.data_checksum.iter().map(|b| format!("{:02x}", b)).collect::<String>());
+    println!(
+        "  PRG RAM: {} KB (battery-backed: {})",
+        rom.prg_memory.prg_ram_size / 1024,
+        if rom.is_battery_backed { "yes" } else { "no" }
+    );
+    println!(
+        "  Mirroring: {}",
+        if rom.hardwired_nametable_layout {
+            "Vertical"
+        } else {
+            "Horizontal"
+        }
+    );
+    println!(
+        "  Checksum (SHA-256): {}",
+        rom.data_checksum
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>()
+    );
 
     Ok(())
 }
@@ -152,7 +166,7 @@ fn output_memory_dump(emu: &Nes, range: &str, args: &CliArgs) -> Result<(), Stri
     let mem = &emu.get_memory_debug(Some(start..=end))[0];
 
     match args.output.effective_format() {
-        nes_core::cli::args::OutputFormat::Hex => {
+        cli::args::OutputFormat::Hex => {
             for (i, chunk) in mem.chunks(16).enumerate() {
                 print!("{:04X}: ", start as usize + i * 16);
                 for byte in chunk {
@@ -161,26 +175,31 @@ fn output_memory_dump(emu: &Nes, range: &str, args: &CliArgs) -> Result<(), Stri
                 println!();
             }
         }
-        nes_core::cli::args::OutputFormat::Binary => {
+        cli::args::OutputFormat::Binary => {
             use std::io::Write;
             if let Some(ref path) = args.output.output {
                 std::fs::write(path, mem).map_err(|e| e.to_string())?;
             } else {
-                std::io::stdout().write_all(mem).map_err(|e| e.to_string())?;
+                std::io::stdout()
+                    .write_all(mem)
+                    .map_err(|e| e.to_string())?;
             }
         }
-        nes_core::cli::args::OutputFormat::Json => {
+        cli::args::OutputFormat::Json => {
             let json = serde_json::json!({
                 "memory_dump": {
                     "type": "cpu",
                     "start": format!("0x{:04X}", start),
                     "end": format!("0x{:04X}", end),
-                    "data": mem.iter().map(|b| *b).collect::<Vec<_>>()
+                    "data": mem.to_vec()
                 }
             });
-            println!("{}", serde_json::to_string_pretty(&json).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json).unwrap_or_default()
+            );
         }
-        nes_core::cli::args::OutputFormat::Toml => {
+        cli::args::OutputFormat::Toml => {
             println!("[memory_dump]");
             println!("type = \"cpu\"");
             println!("start = \"0x{:04X}\"", start);
@@ -194,20 +213,17 @@ fn output_memory_dump(emu: &Nes, range: &str, args: &CliArgs) -> Result<(), Stri
 
 fn parse_memory_range(range: &str) -> Result<(u16, u16), String> {
     if let Some((start_str, end_str)) = range.split_once('-') {
-        let start = parse_hex(start_str)?;
-        let end = parse_hex(end_str)?;
+        let start = parse_hex_u16(start_str)?;
+        let end = parse_hex_u16(end_str)?;
         Ok((start, end))
     } else if let Some((start_str, len_str)) = range.split_once(':') {
-        let start = parse_hex(start_str)?;
-        let len = parse_hex(len_str)?;
+        let start = parse_hex_u16(start_str)?;
+        let len = parse_hex_u16(len_str)?;
         Ok((start, start.saturating_add(len).saturating_sub(1)))
     } else {
-        Err(format!("Invalid memory range format: {}. Use START-END or START:LENGTH", range))
+        Err(format!(
+            "Invalid memory range format: {}. Use START-END or START:LENGTH",
+            range
+        ))
     }
-}
-
-fn parse_hex(s: &str) -> Result<u16, String> {
-    let s = s.trim();
-    let s = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")).unwrap_or(s);
-    u16::from_str_radix(s, 16).map_err(|e| format!("Invalid hex value '{}': {}", s, e))
 }

@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use rkyv::with::Skip;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -140,9 +140,8 @@ impl RomFile {
         panic!("Romtype not yet implemented")
     }
 
-    pub fn load(path: &String) -> RomFile {
+    pub fn load(path: &PathBuf) -> RomFile {
         use sha2::{Digest, Sha256};
-        let path = Path::new(&path);
         let mut file = match File::open(path) {
             Ok(file) => file,
             Err(e) => panic!("Couldn't read file {}: {}", path.display(), e),
@@ -157,7 +156,7 @@ impl RomFile {
 
         let rom_type = RomFile::get_rom_type(&rom);
         let mut rom_file = rom_type
-            .parse(&rom, Some(PathBuf::from(path)))
+            .parse(&rom, Some(path.clone()))
             .expect("Error loading Rom");
         rom_file.data = rom;
         rom_file.data_checksum = hash;
@@ -233,7 +232,7 @@ impl RomFile {
 }
 
 impl From<&String> for RomFile {
-    fn from(path: &String) -> Self { RomFile::load(path) }
+    fn from(path: &String) -> Self { RomFile::load(&PathBuf::from(path)) }
 }
 
 impl From<&RomFile> for RomFile {
@@ -241,7 +240,7 @@ impl From<&RomFile> for RomFile {
 }
 
 impl From<&PathBuf> for RomFile {
-    fn from(path: &PathBuf) -> Self { RomFile::load(&path.to_string_lossy().to_string()) }
+    fn from(path: &PathBuf) -> Self { RomFile::load(path) }
 }
 
 pub struct RomBuilder {
