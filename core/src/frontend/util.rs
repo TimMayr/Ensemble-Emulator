@@ -191,7 +191,13 @@ pub fn spawn_file_picker(
 }
 
 /// Spawn a file picker for palette files that loads the palette asynchronously.
-/// This reads and parses the palette file in the background thread to avoid blocking the UI.
+/// 
+/// This reads and parses the palette file in a background thread to avoid blocking the UI.
+/// 
+/// # Arguments
+/// * `sender` - Channel to send the loaded palette back to the UI thread
+/// * `previous_path` - Used to set the initial directory for the file picker dialog
+/// * `fallback_path` - Used as fallback if the selected file cannot be parsed
 pub fn spawn_palette_picker(
     sender: &Sender<AsyncFrontendMessage>,
     previous_path: Option<&PathBuf>,
