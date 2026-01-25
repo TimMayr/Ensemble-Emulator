@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
-use rkyv::{Archive, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::emulation::mem::apu_registers::ApuRegisters;
 use crate::emulation::mem::memory_map::MemoryMap;
@@ -1657,7 +1657,7 @@ impl Cpu {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Archive, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MicroOp {
     FetchOpcode(MicroOpCallback),
     FetchOperandLo(MicroOpCallback),
@@ -1694,7 +1694,7 @@ pub enum MicroOp {
     FixHiBranch(u16),
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Target {
     A,
     X,
@@ -1714,7 +1714,7 @@ pub enum Target {
     OamWrite,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Source {
     PBrk,
     A,
@@ -1732,7 +1732,7 @@ pub enum Source {
     DmaTemp,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub enum AddressSource {
     AddressLatch,
     Address(u16),
@@ -1744,7 +1744,7 @@ pub enum AddressSource {
     IrqVec,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Archive, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub enum MicroOpCallback {
     None,
     ADC,
@@ -1807,7 +1807,7 @@ pub enum MicroOpCallback {
     ExitIrq,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Archive, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Condition {
     CarrySet,
     CarryClear,
@@ -1819,10 +1819,7 @@ pub enum Condition {
     OverflowClear,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Archive, Serialize, Deserialize)]
-#[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
-                        __S::Error: rkyv::rancor::Source))]
-#[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum OpType {
     ImmediateAddressing(Target, MicroOpCallback),
     AbsoluteRead(Target, MicroOpCallback),

@@ -6,8 +6,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use rkyv::with::Skip;
-use rkyv::{Archive, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::emulation::mem::nametable_memory::{NametableArrangement, NametableMemory};
 use crate::emulation::mem::{Memory, MemoryDevice, Ram, Rom};
@@ -40,10 +39,7 @@ pub trait RomParser: Debug {
     fn parse(&self, rom: &[u8], file: Option<PathBuf>) -> Result<RomFile, ParseError>;
 }
 
-#[derive(Debug, Clone, Archive, Serialize, Deserialize, PartialEq, Eq)]
-#[rkyv(serialize_bounds(__S: rkyv::ser::Writer + rkyv::ser::Allocator,
-                        __S::Error: rkyv::rancor::Source))]
-#[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RomFile {
     pub name: Option<String>,
     pub prg_memory: PrgMemory,
@@ -62,11 +58,11 @@ pub struct RomFile {
     pub alternative_nametables: bool,
     pub submapper_number: u8,
     pub data_checksum: [u8; 32],
-    #[rkyv(with = Skip)]
+    #[serde(skip)]
     pub data: Vec<u8>,
 }
 
-#[derive(Debug, Copy, Clone, Archive, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PrgMemory {
     pub prg_rom_size: u32,
     pub prg_ram_size: u32,
@@ -83,7 +79,7 @@ impl PrgMemory {
     }
 }
 
-#[derive(Debug, Copy, Clone, Archive, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ChrMemory {
     pub chr_rom_size: u32,
     pub chr_ram_size: u32,

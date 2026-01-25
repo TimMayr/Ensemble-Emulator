@@ -12,7 +12,8 @@ name = "nes_main"
 path = "src/bin/main.rs"
 
 [dependencies]
-rkyv = { version = "0.8.14" }
+serde = { version = "1.0", features = ["derive"] }
+bincode = { version = "2.0.1", features = ["serde"] }
 crossbeam-channel = { version = "0.5.15" }
 rfd = { version = "0.17.2" }
 eframe = { version = "0.33.3", features = ["persistence", "accesskit", "serde"] }
