@@ -195,25 +195,30 @@ fn output_cpu_memory(emu: &Nes, range: &str, args: &CliArgs) -> Result<(), Strin
 }
 
 /// Output PPU memory dump
+/// TODO: Implement proper PPU memory access when available
 fn output_ppu_memory(emu: &Nes, range: &str, args: &CliArgs) -> Result<(), String> {
     let (start, end) = cli::parse_memory_range(range)?;
-    // PPU memory would need different accessor - placeholder for now
+    // FIXME: This uses CPU memory accessor as placeholder. Need PPU-specific accessor.
+    // PPU memory (pattern tables, nametables, palette) requires direct PPU bus access.
     let mem = &emu.get_memory_debug(Some(start..=end))[0];
     format_and_output_memory(mem, start, "ppu", args)
 }
 
 /// Output OAM dump
-fn output_oam(emu: &Nes, args: &CliArgs) -> Result<(), String> {
-    // OAM is 256 bytes at PPU internal address
-    let mem = &emu.get_memory_debug(Some(0x0000..=0x00FF))[0];
-    format_and_output_memory(mem, 0, "oam", args)
+/// TODO: Implement proper OAM access when available
+fn output_oam(_emu: &Nes, _args: &CliArgs) -> Result<(), String> {
+    // FIXME: OAM is PPU internal memory (256 bytes), not accessible via CPU bus.
+    // Need to add method to Nes/PPU to expose OAM data for debugging.
+    Err("OAM dump not yet implemented - requires PPU-specific accessor".to_string())
 }
 
 /// Output nametables dump
-fn output_nametables(emu: &Nes, args: &CliArgs) -> Result<(), String> {
-    // Nametables are at PPU addresses 0x2000-0x2FFF
-    let mem = &emu.get_memory_debug(Some(0x2000..=0x2FFF))[0];
-    format_and_output_memory(mem, 0x2000, "nametables", args)
+/// TODO: Implement proper nametable access when available
+fn output_nametables(_emu: &Nes, _args: &CliArgs) -> Result<(), String> {
+    // FIXME: Nametables are at PPU address 0x2000-0x2FFF, not CPU address space.
+    // CPU 0x2000-0x2007 are PPU registers, not nametable data.
+    // Need to add method to Nes/PPU to expose VRAM for debugging.
+    Err("Nametable dump not yet implemented - requires PPU-specific accessor".to_string())
 }
 
 /// Default memory dump (test results area)
