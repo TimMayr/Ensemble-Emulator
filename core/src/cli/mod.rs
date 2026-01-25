@@ -1,16 +1,31 @@
 //! CLI module for the NES emulator.
 //!
 //! This module provides a comprehensive command-line interface for programmatic
-//! control of the emulator. It supports:
+//! control of the emulator. It is designed with extensibility in mind:
 //!
-//! - ROM loading and information display
-//! - Savestate management (file and pipe-based)
-//! - Memory read/write operations
-//! - Power control (on/off, reset)
-//! - Palette configuration
-//! - Video/screenshot export
-//! - Execution control (cycles, frames, breakpoints)
-//! - TOML configuration file support
+//! ## Architecture
+//!
+//! The CLI is organized into several sub-modules:
+//!
+//! - **args** - Command-line argument definitions using clap derive macros
+//! - **config** - TOML configuration file support
+//! - **execution** - Execution engine with generic stop conditions
+//! - **output** - Extensible output formatting system
+//!
+//! ## Extensibility
+//!
+//! ### Adding a new output format
+//!
+//! 1. Add a variant to `OutputFormat` enum in `args.rs`
+//! 2. Implement `MemoryFormatter` trait for the new format in `output.rs`
+//! 3. Register it in `OutputFormat::formatter()`
+//!
+//! ### Adding a new stop condition
+//!
+//! 1. Add a variant to `StopCondition` enum in `execution.rs`
+//! 2. Add a corresponding `StopReason` variant
+//! 3. Implement the check in `ExecutionConfig::check_conditions()`
+//! 4. Add CLI argument in `args.rs` and builder method in `ExecutionConfig`
 //!
 //! # Example
 //!
@@ -31,14 +46,16 @@
 pub mod args;
 pub mod config;
 pub mod execution;
+pub mod output;
 
-pub use args::{CliArgs, parse_hex_u16};
+pub use args::{CliArgs, OutputFormat, parse_hex_u16};
 use clap::Parser;
 pub use config::ConfigFile;
 pub use execution::{
     ExecutionConfig, ExecutionEngine, ExecutionResult, SavestateConfig, SavestateDestination,
     SavestateSource, StopCondition, StopReason,
 };
+pub use output::{MemoryDump, MemoryFormatter, MemoryType, OutputWriter};
 
 // =============================================================================
 // Argument Parsing

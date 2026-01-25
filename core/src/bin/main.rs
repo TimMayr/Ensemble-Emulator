@@ -5,23 +5,17 @@
 //!
 //! See `docs/CLI_INTERFACE.md` for full CLI documentation.
 
-use std::fs::{File, OpenOptions};
-use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use nes_core::cli::{
-    self, CliArgs, ExecutionConfig, ExecutionEngine, SavestateConfig, StopReason,
+    self, CliArgs, ExecutionConfig, ExecutionEngine, MemoryDump, MemoryType, OutputWriter,
+    SavestateConfig, StopReason,
 };
 use nes_core::emulation::nes::Nes;
 use nes_core::emulation::rom::RomFile;
 use nes_core::frontend::egui_frontend;
-use serde::Serialize;
-
-/// Track whether the output file has been initialized (created/truncated)
-static OUTPUT_FILE_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 // =============================================================================
 // Exit Codes (as documented in CLI_INTERFACE.md)
@@ -156,192 +150,76 @@ fn handle_rom_info(args: &CliArgs) -> Result<(), String> {
 }
 
 // =============================================================================
-// Output Functions
+// Output Functions (using the output module abstraction)
 // =============================================================================
 
-/// Output results based on CLI args
+/// Output results based on CLI args using the output module abstraction.
 fn output_results(emu: &Nes, args: &CliArgs) -> Result<(), String> {
-    // Reset the output file initialized flag for this run
-    OUTPUT_FILE_INITIALIZED.store(false, Ordering::SeqCst);
-    
+    // Reset the output writer state for this run
+    OutputWriter::reset();
+
+    // Create the output writer with configured format and destination
+    let writer = OutputWriter::new(
+        args.output.output.clone(),
+        args.output.effective_format(),
+    );
+
+    // Process each requested memory dump
     if let Some(ref range) = args.memory.read_cpu {
-        output_cpu_memory(emu, range, args)?;
+        let dump = create_cpu_dump(emu, range)?;
+        writer.write(&dump)?;
     }
 
     if let Some(ref range) = args.memory.read_ppu {
-        output_ppu_memory(emu, range, args)?;
+        let dump = create_ppu_dump(emu, range)?;
+        writer.write(&dump)?;
     }
 
     if args.memory.dump_oam {
-        output_oam(emu, args)?;
+        let dump = create_oam_dump(emu);
+        writer.write(&dump)?;
     }
 
     if args.memory.dump_nametables {
-        output_nametables(emu, args)?;
+        let dump = create_nametables_dump(emu);
+        writer.write(&dump)?;
     }
 
     Ok(())
 }
 
-/// Output CPU memory dump
-fn output_cpu_memory(emu: &Nes, range: &str, args: &CliArgs) -> Result<(), String> {
+// =============================================================================
+// Memory Dump Creation
+// =============================================================================
+
+/// Create a CPU memory dump from the emulator
+fn create_cpu_dump(emu: &Nes, range: &str) -> Result<MemoryDump, String> {
     let (start, end) = cli::parse_memory_range(range)?;
     let mem = &emu.get_memory_debug(Some(start..=end))[0];
-    format_and_output_memory(mem, start, "cpu", args)
+    Ok(MemoryDump::new(MemoryType::Cpu, start, mem.to_vec()))
 }
 
-/// Output PPU memory dump
-fn output_ppu_memory(emu: &Nes, range: &str, args: &CliArgs) -> Result<(), String> {
+/// Create a PPU memory dump from the emulator
+fn create_ppu_dump(emu: &Nes, range: &str) -> Result<MemoryDump, String> {
     let (start, end) = cli::parse_memory_range(range)?;
     let mem = &emu.get_memory_debug(Some(start..=end))[1];
-    format_and_output_memory(mem, start, "ppu", args)
+    Ok(MemoryDump::new(MemoryType::Ppu, start, mem.to_vec()))
 }
 
-/// Output OAM dump
-fn output_oam(emu: &Nes, args: &CliArgs) -> Result<(), String> {
+/// Create an OAM memory dump from the emulator
+fn create_oam_dump(emu: &Nes) -> MemoryDump {
     let mem = emu.ppu.borrow().oam.get_memory_debug(None);
-    format_and_output_memory(&mem, 0, "oam", args)
+    MemoryDump::oam(mem)
 }
 
-/// Output nametables dump
-fn output_nametables(emu: &Nes, args: &CliArgs) -> Result<(), String> {
+/// Create a nametables memory dump from the emulator
+fn create_nametables_dump(emu: &Nes) -> MemoryDump {
     let mem = emu
         .ppu
         .borrow()
         .memory
         .get_memory_debug(Some(0x2000..=0x2FFF));
-    format_and_output_memory(&mem, 0x2000, "nametables", args)
-}
-
-// =============================================================================
-// Memory Serialization Structures
-// =============================================================================
-
-/// Structure for JSON/TOML serialization of memory dumps
-#[derive(Serialize)]
-struct MemoryDumpOutput {
-    memory_dump: MemoryDumpData,
-}
-
-#[derive(Serialize)]
-struct MemoryDumpData {
-    #[serde(rename = "type")]
-    mem_type: String,
-    start: String,
-    end: String,
-    /// Data as hex strings for readability
-    data: Vec<String>,
-}
-
-/// Format and output memory data in the specified format
-fn format_and_output_memory(
-    mem: &[u8],
-    start_addr: u16,
-    mem_type: &str,
-    args: &CliArgs,
-) -> Result<(), String> {
-    use cli::args::OutputFormat;
-
-    match args.output.effective_format() {
-        OutputFormat::Hex => output_hex(mem, start_addr, args),
-        OutputFormat::Binary => output_binary(mem, args),
-        OutputFormat::Json => output_json(mem, start_addr, mem_type, args),
-        OutputFormat::Toml => output_toml(mem, start_addr, mem_type, args),
-    }
-}
-
-/// Get output writer - either file (append mode after first write) or stdout
-fn get_output_writer(args: &CliArgs) -> Result<Box<dyn Write>, String> {
-    if let Some(ref path) = args.output.output {
-        // Check if this is the first write to the file
-        let is_first_write = !OUTPUT_FILE_INITIALIZED.swap(true, Ordering::SeqCst);
-        
-        let file = if is_first_write {
-            // First write: create/truncate the file
-            File::create(path)
-        } else {
-            // Subsequent writes: append to the file
-            OpenOptions::new().append(true).open(path)
-        }
-        .map_err(|e| format!("Failed to open output file: {}", e))?;
-        
-        Ok(Box::new(file))
-    } else {
-        Ok(Box::new(std::io::stdout()))
-    }
-}
-
-fn output_hex(mem: &[u8], start_addr: u16, args: &CliArgs) -> Result<(), String> {
-    let mut writer = get_output_writer(args)?;
-
-    for (i, chunk) in mem.chunks(16).enumerate() {
-        let line = format!(
-            "{:04X}: {}\n",
-            start_addr as usize + i * 16,
-            chunk
-                .iter()
-                .map(|b| format!("{:02X}", b))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-        writer
-            .write_all(line.as_bytes())
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-fn output_binary(mem: &[u8], args: &CliArgs) -> Result<(), String> {
-    let mut writer = get_output_writer(args)?;
-    writer.write_all(mem).map_err(|e| e.to_string())
-}
-
-fn output_json(mem: &[u8], start_addr: u16, mem_type: &str, args: &CliArgs) -> Result<(), String> {
-    let end_addr = start_addr
-        .saturating_add(mem.len() as u16)
-        .saturating_sub(1);
-
-    // Format data as hex strings
-    let data_hex: Vec<String> = mem.iter().map(|b| format!("0x{:02X}", b)).collect();
-
-    let output = MemoryDumpOutput {
-        memory_dump: MemoryDumpData {
-            mem_type: mem_type.to_string(),
-            start: format!("0x{:04X}", start_addr),
-            end: format!("0x{:04X}", end_addr),
-            data: data_hex,
-        },
-    };
-
-    let json_str = serde_json::to_string_pretty(&output)
-        .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
-
-    let mut writer = get_output_writer(args)?;
-    writeln!(writer, "{}", json_str).map_err(|e| e.to_string())
-}
-
-fn output_toml(mem: &[u8], start_addr: u16, mem_type: &str, args: &CliArgs) -> Result<(), String> {
-    let end_addr = start_addr
-        .saturating_add(mem.len() as u16)
-        .saturating_sub(1);
-
-    // Format data as hex strings
-    let data_hex: Vec<String> = mem.iter().map(|b| format!("0x{:02X}", b)).collect();
-
-    let output = MemoryDumpOutput {
-        memory_dump: MemoryDumpData {
-            mem_type: mem_type.to_string(),
-            start: format!("0x{:04X}", start_addr),
-            end: format!("0x{:04X}", end_addr),
-            data: data_hex,
-        },
-    };
-
-    let toml_str =
-        toml::to_string_pretty(&output).map_err(|e| format!("Failed to serialize TOML: {}", e))?;
-
-    let mut writer = get_output_writer(args)?;
-    writeln!(writer, "{}", toml_str).map_err(|e| e.to_string())
+    MemoryDump::nametables(mem)
 }
 
 // =============================================================================
