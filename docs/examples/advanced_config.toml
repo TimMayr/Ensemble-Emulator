@@ -39,7 +39,6 @@ no_power = false
 reset = false
 
 [palette]
-path = "custom.pal"
 builtin = "2C02G"
 
 [video]
@@ -56,17 +55,8 @@ export_sprites = "sprites.png"
 export_sprites_video = "sprites.raw"
 
 [execution]
-cycles = 1000000
 frames = 60
-until_pc = "0x8500"
-until_opcode = "0x02"
-until_mem = "0x6000==0x80"
-until_hlt = false
-step = false
-trace = "trace.log"
-breakpoints = ["0x8000", "0x8500", "0xC000"]
-stop_conditions = ["pc:0x8500", "frames:3600"]
 
 [output]
-path = "memory_dump.bin"
+path = "memory_dump.json"
 format = "json"
