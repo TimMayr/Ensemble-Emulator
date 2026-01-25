@@ -4,6 +4,18 @@ use crate::emulation::messages::{ControllerEvent, RgbPalette};
 use crate::emulation::savestate::SaveState;
 use crate::frontend::util::SavestateLoadError;
 
+/// Visual/frontend-only events that are processed synchronously via a deque.
+///
+/// These events only affect the frontend UI state and don't communicate with
+/// the emulator. They are pushed to a deque and processed on each update call,
+/// avoiding channel overhead for internal frontend operations.
+pub enum FrontendEvent {
+    /// Change the window title
+    ChangeWindowTitle(String),
+    /// Refresh palette textures
+    RefreshPalette,
+}
+
 /// Messages for async/deferred frontend operations.
 ///
 /// These messages are processed by EguiApp and allow UI components to request
@@ -11,7 +23,6 @@ use crate::frontend::util::SavestateLoadError;
 /// This consolidates all emulator communication logic in one place.
 pub enum AsyncFrontendMessage {
     EmuRelay(RelayType, Option<PathBuf>),
-    RefreshPalette,
     /// Palette file was loaded asynchronously - includes the parsed palette data and path
     PaletteLoaded(RgbPalette, PathBuf),
     /// User has selected a savestate file, now need to verify/select ROM
@@ -39,7 +50,6 @@ pub enum AsyncFrontendMessage {
     Quickload,
     Quicksave,
     LoadRom(PathBuf),
-    ChangeWindowTitle(String),
 
     // =========================================================================
     // Consolidated emulator operations

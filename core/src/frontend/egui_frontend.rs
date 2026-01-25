@@ -10,8 +10,11 @@
 /// - `egui::textures`: Texture management
 /// - `egui::tiles`: Tile tree behavior and pane management
 /// - `egui::ui`: UI rendering components
+use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::fmt::{Debug, Formatter};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 
@@ -35,7 +38,7 @@ use crate::frontend::egui::tiles::{
     compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
 };
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
-use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
+use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent, RelayType};
 use crate::frontend::palettes::parse_palette_from_file;
 use crate::frontend::persistence::{
     get_data_file_path, get_egui_storage_path, load_config, write_file_async,
@@ -46,6 +49,9 @@ use crate::frontend::util::{FileType, ToBytes};
 /// Key used for storing egui_tiles tree state in egui's persistence
 const EGUI_TILES_TREE_KEY: &str = "emulator_tiles_tree";
 
+/// Shared deque for frontend events that can be pushed from UI components
+pub type FrontendEventQueue = Rc<RefCell<VecDeque<FrontendEvent>>>;
+
 /// Main egui application state
 pub struct EguiApp {
     channel_emu: ChannelEmulator,
@@ -53,6 +59,8 @@ pub struct EguiApp {
     from_emulator: Receiver<EmulatorMessage>,
     from_async: Receiver<AsyncFrontendMessage>,
     async_sender: Sender<AsyncFrontendMessage>,
+    /// Queue for visual/frontend-only events processed on each update
+    event_queue: FrontendEventQueue,
     emu_textures: EmuTextures,
     fps_counter: FpsCounter,
     accumulator: Duration,
@@ -101,6 +109,7 @@ impl EguiApp {
             from_emulator,
             from_async,
             async_sender: to_async,
+            event_queue: Rc::new(RefCell::new(VecDeque::new())),
             emu_textures: Default::default(),
             fps_counter: Default::default(),
             accumulator: Default::default(),
@@ -143,8 +152,32 @@ impl EguiApp {
 
     /// Process messages received from various sources
     fn process_messages(&mut self, ctx: &Context) {
+        self.process_frontend_events(ctx);
         self.process_async_messages(ctx);
         self.process_emulator_messages(ctx);
+    }
+
+    /// Process visual/frontend-only events from the deque
+    fn process_frontend_events(&mut self, ctx: &Context) {
+        let mut queue = self.event_queue.borrow_mut();
+        while let Some(event) = queue.pop_front() {
+            match event {
+                FrontendEvent::ChangeWindowTitle(title) => {
+                    ctx.send_viewport_cmd(ViewportCommand::Title(title))
+                }
+                FrontendEvent::RefreshPalette => {
+                    // Only update tile textures if a tile viewer is visible
+                    if self.is_tile_viewer_visible() {
+                        self.emu_textures.update_tile_textures(
+                            ctx,
+                            &self.config.view_config.palette_rgb_data,
+                            None,
+                            None,
+                        );
+                    }
+                }
+            }
+        }
     }
 
     /// Process messages from async operations (file dialogs, etc.)
@@ -208,17 +241,6 @@ impl EguiApp {
                     // Handle save completion - log any errors
                     if let Some(e) = error {
                         eprintln!("File save error: {}", e);
-                    }
-                }
-                AsyncFrontendMessage::RefreshPalette => {
-                    // Only update tile textures if a tile viewer is visible
-                    if self.is_tile_viewer_visible() {
-                        self.emu_textures.update_tile_textures(
-                            ctx,
-                            &self.config.view_config.palette_rgb_data,
-                            None,
-                            None,
-                        );
                     }
                 }
                 AsyncFrontendMessage::SavestateLoaded(context) => {
@@ -343,9 +365,6 @@ impl EguiApp {
                 AsyncFrontendMessage::LoadRom(path) => {
                     self.load_rom(path);
                 }
-                AsyncFrontendMessage::ChangeWindowTitle(title) => {
-                    ctx.send_viewport_cmd(ViewportCommand::Title(title))
-                }
 
                 // Consolidated emulator operations
                 AsyncFrontendMessage::PowerOn => {
@@ -418,14 +437,12 @@ impl EguiApp {
             .send(FrontendMessage::LoadRom(rom_path.clone()));
 
         self.config.user_config.previous_rom_path = Some(rom_path.clone());
-        let _ = self
-            .async_sender
-            .send(AsyncFrontendMessage::ChangeWindowTitle(
-                rom_path
-                    .file_stem()
-                    .map(|f| format!("Tensordance - {}", f.to_string_lossy()))
-                    .unwrap_or("Tensordance".to_string()),
-            ));
+        self.event_queue.borrow_mut().push_back(FrontendEvent::ChangeWindowTitle(
+            rom_path
+                .file_stem()
+                .map(|f| format!("Tensordance - {}", f.to_string_lossy()))
+                .unwrap_or("Tensordance".to_string()),
+        ));
     }
 
     /// Load a savestate after ROM has been verified/selected
