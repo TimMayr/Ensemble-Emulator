@@ -31,9 +31,13 @@
 pub mod args;
 pub mod config;
 
-pub use args::CliArgs;
+pub use args::{parse_hex_u16, CliArgs};
 use clap::Parser;
 pub use config::ConfigFile;
+
+// =============================================================================
+// Argument Parsing
+// =============================================================================
 
 /// Parse CLI arguments and optionally merge with a config file.
 ///
@@ -55,11 +59,21 @@ pub fn parse_args() -> Result<CliArgs, Box<dyn std::error::Error>> {
     Ok(args)
 }
 
+// =============================================================================
+// Argument Validation
+// =============================================================================
+
 /// Validate CLI arguments for consistency and completeness.
 ///
 /// Returns an error message if the arguments are invalid.
 pub fn validate_args(args: &CliArgs) -> Result<(), String> {
-    // Headless mode requires a ROM or savestate
+    validate_headless_requirements(args)?;
+    validate_savestate_options(args)?;
+    validate_output_format(args)?;
+    Ok(())
+}
+
+fn validate_headless_requirements(args: &CliArgs) -> Result<(), String> {
     if args.headless
         && args.rom.rom.is_none()
         && args.savestate.load_state.is_none()
@@ -70,7 +84,10 @@ pub fn validate_args(args: &CliArgs) -> Result<(), String> {
                 .to_string(),
         );
     }
+    Ok(())
+}
 
+fn validate_savestate_options(args: &CliArgs) -> Result<(), String> {
     // Can't use both state-stdin and load-state
     if args.savestate.state_stdin && args.savestate.load_state.is_some() {
         return Err("Cannot use both --state-stdin and --load-state".to_string());
@@ -81,25 +98,15 @@ pub fn validate_args(args: &CliArgs) -> Result<(), String> {
         return Err("Cannot use both --state-stdout and --save-state".to_string());
     }
 
-    // If no execution limit is specified in headless mode, warn
-    // (but don't error - some use cases like --rom-info don't need execution)
-    if args.headless
-        && args.execution.cycles.is_none()
-        && args.execution.frames.is_none()
-        && args.execution.until_pc.is_none()
-        && args.execution.until_mem.is_none()
-        && !args.execution.until_hlt
-        && !args.rom.rom_info
-    {
-        // This is a warning case - execution will run indefinitely
-        // For now, we'll allow it but the engine should handle this
-    }
+    Ok(())
+}
 
-    // Multiple output format flags
+fn validate_output_format(args: &CliArgs) -> Result<(), String> {
     let format_flags = [args.output.json, args.output.toml, args.output.binary]
         .iter()
         .filter(|&&x| x)
         .count();
+
     if format_flags > 1 {
         return Err(
             "Cannot specify multiple output format flags (--json, --toml, --binary)".to_string(),
@@ -107,4 +114,64 @@ pub fn validate_args(args: &CliArgs) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+// =============================================================================
+// Memory Range Parsing
+// =============================================================================
+
+/// Parse a memory range string in format `START-END` or `START:LENGTH`.
+///
+/// Both `START` and `END`/`LENGTH` should be hexadecimal values (with or without 0x prefix).
+///
+/// # Examples
+///
+/// ```
+/// use nes_core::cli::parse_memory_range;
+///
+/// assert_eq!(parse_memory_range("0x0000-0x07FF").unwrap(), (0x0000, 0x07FF));
+/// assert_eq!(parse_memory_range("6000:100").unwrap(), (0x6000, 0x60FF));
+/// ```
+pub fn parse_memory_range(range: &str) -> Result<(u16, u16), String> {
+    if let Some((start_str, end_str)) = range.split_once('-') {
+        let start = parse_hex_u16(start_str)?;
+        let end = parse_hex_u16(end_str)?;
+        Ok((start, end))
+    } else if let Some((start_str, len_str)) = range.split_once(':') {
+        let start = parse_hex_u16(start_str)?;
+        let len = parse_hex_u16(len_str)?;
+        Ok((start, start.saturating_add(len).saturating_sub(1)))
+    } else {
+        Err(format!(
+            "Invalid memory range format: '{}'. Use START-END or START:LENGTH (e.g., 0x0000-0x07FF or 0x6000:0x100)",
+            range
+        ))
+    }
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_memory_range_dash() {
+        assert_eq!(parse_memory_range("0x0000-0x07FF").unwrap(), (0x0000, 0x07FF));
+        assert_eq!(parse_memory_range("6000-7FFF").unwrap(), (0x6000, 0x7FFF));
+    }
+
+    #[test]
+    fn test_parse_memory_range_colon() {
+        assert_eq!(parse_memory_range("0x6000:0x100").unwrap(), (0x6000, 0x60FF));
+        assert_eq!(parse_memory_range("0000:10").unwrap(), (0x0000, 0x000F));
+    }
+
+    #[test]
+    fn test_parse_memory_range_invalid() {
+        assert!(parse_memory_range("invalid").is_err());
+        assert!(parse_memory_range("").is_err());
+    }
 }
