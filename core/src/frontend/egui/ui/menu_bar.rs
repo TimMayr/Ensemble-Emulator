@@ -31,7 +31,7 @@ pub fn add_menu_bar(
                     }
 
                     if ui.button("Load State").clicked() {
-                        // Use the new multi-step savestate loading flow
+                        // Use the new multistep savestate loading flow
                         spawn_savestate_picker(
                             async_sender,
                             config.user_config.previous_savestate_path.as_ref(),

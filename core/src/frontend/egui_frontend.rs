@@ -14,13 +14,14 @@ use std::fmt::{Debug, Formatter};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+
 use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
 use crate::emulation::messages::{
-    EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette, TILE_COUNT,
-    TileData,
+    EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette, TileData,
+    TILE_COUNT,
 };
 use crate::emulation::nes::Nes;
 use crate::frontend::egui::config::{
@@ -31,12 +32,12 @@ use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
-    Pane, TreeBehavior, compute_required_fetches_from_tree, create_tree,
+    compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
 };
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
 use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
 use crate::frontend::palettes::parse_palette_from_file;
-use crate::frontend::persistence::{PersistentConfig, get_egui_storage_path, load_config};
+use crate::frontend::persistence::{get_egui_storage_path, load_config};
 use crate::frontend::util;
 use crate::frontend::util::{FileType, ToBytes};
 
@@ -78,15 +79,15 @@ impl EguiApp {
         // Try to restore the tile tree from egui's storage, fall back to default
         let tree = cc
             .storage
-            .and_then(|storage| eframe::get_value::<egui_tiles::Tree<Pane>>(storage, EGUI_TILES_TREE_KEY))
+            .and_then(|storage| {
+                eframe::get_value::<egui_tiles::Tree<Pane>>(storage, EGUI_TILES_TREE_KEY)
+            })
             .unwrap_or_else(create_tree);
 
         // Create default config and apply loaded settings
         let mut config = AppConfig::default();
         if let Some(ref persistent_config) = loaded_config {
-            config.user_config = (&persistent_config.user_config).into();
-            config.speed_config = (&persistent_config.speed_config).into();
-            config.console_config = (&persistent_config.console_config).into();
+            config = persistent_config.into();
         }
         config.view_config.palette_rgb_data = rgb_palette;
 
@@ -412,13 +413,13 @@ impl EguiApp {
 
     /// Check if the pattern tables pane is visible
     fn is_pattern_tables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{Pane, find_pane};
+        use crate::frontend::egui::tiles::{find_pane, Pane};
         find_pane(&self.tree.tiles, &Pane::PatternTables).is_some()
     }
 
     /// Check if the nametables pane is visible
     fn is_nametables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{Pane, find_pane};
+        use crate::frontend::egui::tiles::{find_pane, Pane};
         find_pane(&self.tree.tiles, &Pane::Nametables).is_some()
     }
 
@@ -641,11 +642,7 @@ impl eframe::App for EguiApp {
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         // Save configuration to TOML file before exiting (synchronous to ensure completion)
-        let persistent_config = PersistentConfig {
-            user_config: (&self.config.user_config).into(),
-            speed_config: (&self.config.speed_config).into(),
-            console_config: (&self.config.console_config).into(),
-        };
+        let persistent_config = (&self.config).into();
         if let Err(e) = crate::frontend::persistence::save_config(&persistent_config) {
             eprintln!("Failed to save configuration: {}", e);
         }

@@ -6,24 +6,26 @@
 //! - TOML-based configuration persistence for application settings
 //! - Helper functions for saving files to data and cache directories
 
-use std::fs;
+use std::collections::HashSet;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-use std::thread;
+use std::{fs, thread};
 
-use crossbeam_channel::{Receiver, bounded};
+use crossbeam_channel::{bounded, Receiver};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 
+use crate::emulation::messages::EmulatorFetchable;
 use crate::frontend::egui::config::{
-    AppSpeed, ConsoleConfig, DebugSpeed, SpeedConfig, UserConfig,
+    AppConfig, AppSpeed, ConsoleConfig, DebugSpeed, SpeedConfig, UserConfig, ViewConfig,
 };
+use crate::frontend::palettes::parse_palette_from_file;
 
 /// Application identifier used for directory paths
 const APP_QUALIFIER: &str = "com";
-const APP_ORGANIZATION: &str = "TimMayr";
-const APP_NAME: &str = "NESEmulator";
+const APP_ORGANIZATION: &str = "Lightsong";
+const APP_NAME: &str = "Tensordance";
 
 /// Singleton for project directories.
 ///
@@ -229,8 +231,107 @@ const CONFIG_FILENAME: &str = "config.toml";
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PersistentConfig {
     pub user_config: PersistentUserConfig,
+    pub view_config: PersistentViewConfig,
     pub speed_config: PersistentSpeedConfig,
     pub console_config: PersistentConsoleConfig,
+}
+
+impl From<&AppConfig> for PersistentConfig {
+    fn from(value: &AppConfig) -> Self {
+        let mut this = Self {
+            user_config: (&value.user_config).into(),
+            view_config: (&value.view_config).into(),
+            speed_config: (&value.speed_config).into(),
+            console_config: (&value.console_config).into(),
+        };
+
+        this.view_config.palette_rgb_data = this.user_config.previous_palette_path.clone();
+        this
+    }
+}
+
+impl From<&PersistentConfig> for AppConfig {
+    fn from(value: &PersistentConfig) -> Self {
+        let mut this = Self {
+            view_config: (&value.view_config).into(),
+            speed_config: (&value.speed_config).into(),
+            user_config: (&value.user_config).into(),
+            console_config: (&value.console_config).into(),
+            pending_dialogs: Default::default(),
+        };
+
+        this.view_config.palette_rgb_data =
+            parse_palette_from_file(value.user_config.previous_palette_path.clone(), None);
+
+        this
+    }
+}
+
+/// Persistent View configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PersistentViewConfig {
+    pub show_palette: bool,
+    pub show_pattern_table: bool,
+    pub show_nametable: bool,
+    pub palette_rgb_data: Option<PathBuf>,
+    pub required_debug_fetches: HashSet<PersistentEmulatorFetchable>,
+    pub debug_active_palette: usize,
+}
+
+impl From<&ViewConfig> for PersistentViewConfig {
+    fn from(config: &ViewConfig) -> Self {
+        Self {
+            show_palette: config.show_palette,
+            show_pattern_table: config.show_pattern_table,
+            show_nametable: config.show_nametable,
+            palette_rgb_data: None,
+            required_debug_fetches: config
+                .required_debug_fetches
+                .iter()
+                .map(|f| f.into())
+                .collect(),
+            debug_active_palette: config.debug_active_palette,
+        }
+    }
+}
+
+impl From<&PersistentViewConfig> for ViewConfig {
+    fn from(config: &PersistentViewConfig) -> Self {
+        Self {
+            debug_active_palette: config.debug_active_palette,
+            palette_rgb_data: parse_palette_from_file(config.palette_rgb_data.clone(), None),
+            show_nametable: config.show_nametable,
+            show_palette: config.show_palette,
+            show_pattern_table: config.show_pattern_table,
+            required_debug_fetches: Default::default(),
+        }
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Hash)]
+pub enum PersistentEmulatorFetchable {
+    Palettes,
+    Tiles,
+    Nametables,
+}
+
+impl From<&EmulatorFetchable> for PersistentEmulatorFetchable {
+    fn from(fetchable: &EmulatorFetchable) -> Self {
+        match fetchable {
+            EmulatorFetchable::Palettes(_) => PersistentEmulatorFetchable::Palettes,
+            EmulatorFetchable::Tiles(_) => PersistentEmulatorFetchable::Tiles,
+            EmulatorFetchable::Nametables(_) => PersistentEmulatorFetchable::Nametables,
+        }
+    }
+}
+
+impl From<PersistentEmulatorFetchable> for EmulatorFetchable {
+    fn from(fetchable: PersistentEmulatorFetchable) -> Self {
+        match fetchable {
+            PersistentEmulatorFetchable::Palettes => EmulatorFetchable::Palettes(None),
+            PersistentEmulatorFetchable::Tiles => EmulatorFetchable::Tiles(None),
+            PersistentEmulatorFetchable::Nametables => EmulatorFetchable::Nametables(None),
+        }
+    }
 }
 
 /// Persistent user configuration
@@ -422,10 +523,7 @@ pub fn load_config() -> Option<PersistentConfig> {
     match toml::from_str(&contents) {
         Ok(config) => Some(config),
         Err(e) => {
-            eprintln!(
-                "Failed to parse config file (using defaults): {}",
-                e
-            );
+            eprintln!("Failed to parse config file (using defaults): {}", e);
             None
         }
     }
