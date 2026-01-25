@@ -1,7 +1,6 @@
 use crossbeam_channel::Sender;
 use egui::Context;
 
-use crate::emulation::messages::{FrontendMessage, SaveType};
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::tiles::{add_pane_if_missing, Pane};
 use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
@@ -9,9 +8,8 @@ use crate::frontend::util::{spawn_file_picker, spawn_savestate_picker, FileType}
 
 pub fn add_menu_bar(
     ctx: &Context,
-    config: &mut AppConfig,
+    config: &AppConfig,
     async_sender: &Sender<AsyncFrontendMessage>,
-    to_emu: &Sender<FrontendMessage>,
     tree: &mut egui_tiles::Tree<Pane>,
 ) {
     egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
@@ -27,7 +25,7 @@ pub fn add_menu_bar(
                 }
                 ui.menu_button("Savestates", |ui| {
                     if ui.button("Save State").clicked() {
-                        let _ = to_emu.send(FrontendMessage::CreateSaveState(SaveType::Manual));
+                        let _ = async_sender.send(AsyncFrontendMessage::CreateSavestate);
                     }
 
                     if ui.button("Load State").clicked() {
@@ -42,27 +40,24 @@ pub fn add_menu_bar(
             });
             ui.menu_button("Console", |ui| {
                 if ui.button("Reset").clicked() {
-                    let _ = to_emu.send(FrontendMessage::Reset);
+                    let _ = async_sender.send(AsyncFrontendMessage::Reset);
                 }
                 if ui.button("Power cycle").clicked() {
-                    let _ = to_emu.send(FrontendMessage::PowerOff);
+                    let _ = async_sender.send(AsyncFrontendMessage::PowerOff);
                     if let Some(p) = config.user_config.previous_rom_path.clone() {
                         let _ = async_sender.send(AsyncFrontendMessage::LoadRom(p));
                     }
-                    let _ = to_emu.send(FrontendMessage::Power);
-                    config.console_config.is_powered = true;
+                    let _ = async_sender.send(AsyncFrontendMessage::PowerOn);
                 }
                 if !config.console_config.is_powered {
                     if ui.button("Power On").clicked() {
                         if let Some(p) = config.user_config.previous_rom_path.clone() {
                             let _ = async_sender.send(AsyncFrontendMessage::LoadRom(p));
                         }
-                        let _ = to_emu.send(FrontendMessage::Power);
-                        config.console_config.is_powered = true;
+                        let _ = async_sender.send(AsyncFrontendMessage::PowerOn);
                     }
                 } else if ui.button("Power Off").clicked() {
-                    let _ = to_emu.send(FrontendMessage::PowerOff);
-                    config.console_config.is_powered = false;
+                    let _ = async_sender.send(AsyncFrontendMessage::PowerOff);
                 }
             });
             ui.menu_button("View", |ui| {

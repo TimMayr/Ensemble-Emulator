@@ -1,9 +1,14 @@
 use std::path::PathBuf;
 
-use crate::emulation::messages::RgbPalette;
+use crate::emulation::messages::{ControllerEvent, RgbPalette};
 use crate::emulation::savestate::SaveState;
 use crate::frontend::util::SavestateLoadError;
 
+/// Messages for async/deferred frontend operations.
+///
+/// These messages are processed by EguiApp and allow UI components to request
+/// operations without directly sending FrontendMessages to the emulator.
+/// This consolidates all emulator communication logic in one place.
 pub enum AsyncFrontendMessage {
     EmuRelay(RelayType, Option<PathBuf>),
     RefreshPalette,
@@ -35,6 +40,33 @@ pub enum AsyncFrontendMessage {
     Quicksave,
     LoadRom(PathBuf),
     ChangeWindowTitle(String),
+
+    // =========================================================================
+    // Consolidated emulator operations
+    // These replace direct FrontendMessage sends from UI components
+    // =========================================================================
+
+    /// Power on the console (updates is_powered config)
+    PowerOn,
+    /// Power off the console (updates is_powered config)
+    PowerOff,
+    /// Reset the console (soft reset)
+    Reset,
+    /// Create a manual savestate
+    CreateSavestate,
+    /// Set the RGB palette and refresh tile textures
+    SetPalette(RgbPalette),
+    /// Write to PPU palette RAM and request updated palette data
+    WritePpuPalette { address: u16, value: u8 },
+    /// Write to PPU pattern table and request updated tile data
+    WritePpuPattern {
+        addr_0: u16,
+        value_0: u8,
+        addr_1: u16,
+        value_1: u8,
+    },
+    /// Send controller input to the emulator
+    ControllerInput(ControllerEvent),
 }
 
 /// Context for the multistep savestate loading process

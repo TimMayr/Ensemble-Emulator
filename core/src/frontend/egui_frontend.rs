@@ -346,6 +346,68 @@ impl EguiApp {
                 AsyncFrontendMessage::ChangeWindowTitle(title) => {
                     ctx.send_viewport_cmd(ViewportCommand::Title(title))
                 }
+
+                // Consolidated emulator operations
+                AsyncFrontendMessage::PowerOn => {
+                    let _ = self.to_emulator.send(FrontendMessage::Power);
+                    self.config.console_config.is_powered = true;
+                }
+                AsyncFrontendMessage::PowerOff => {
+                    let _ = self.to_emulator.send(FrontendMessage::PowerOff);
+                    self.config.console_config.is_powered = false;
+                }
+                AsyncFrontendMessage::Reset => {
+                    let _ = self.to_emulator.send(FrontendMessage::Reset);
+                }
+                AsyncFrontendMessage::CreateSavestate => {
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::CreateSaveState(SaveType::Manual));
+                }
+                AsyncFrontendMessage::SetPalette(palette) => {
+                    self.config.view_config.palette_rgb_data = palette;
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::SetPalette(Box::new(palette)));
+                    // Trigger texture refresh
+                    if self.is_tile_viewer_visible() {
+                        self.emu_textures.update_tile_textures(
+                            ctx,
+                            &self.config.view_config.palette_rgb_data,
+                            None,
+                            None,
+                        );
+                    }
+                }
+                AsyncFrontendMessage::WritePpuPalette { address, value } => {
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::WritePpu(address, value));
+                    let _ = self.to_emulator.send(FrontendMessage::RequestDebugData(
+                        EmulatorFetchable::Palettes(None),
+                    ));
+                }
+                AsyncFrontendMessage::WritePpuPattern {
+                    addr_0,
+                    value_0,
+                    addr_1,
+                    value_1,
+                } => {
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::WritePpu(addr_0, value_0));
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::WritePpu(addr_1, value_1));
+                    let _ = self.to_emulator.send(FrontendMessage::RequestDebugData(
+                        EmulatorFetchable::Tiles(None),
+                    ));
+                }
+                AsyncFrontendMessage::ControllerInput(event) => {
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::ControllerInput(event));
+                }
             }
         }
     }
@@ -656,10 +718,9 @@ impl eframe::App for EguiApp {
         // Handle keyboard input
         handle_keyboard_input(
             ctx,
-            &self.to_emulator,
+            &self.async_sender,
             &mut self.config,
             &mut self.emu_textures.last_frame_request,
-            &self.async_sender,
         );
 
         if let Err(e) = self.channel_emu.process_messages() {
@@ -682,9 +743,8 @@ impl eframe::App for EguiApp {
 
         add_menu_bar(
             ctx,
-            &mut self.config,
+            &self.config,
             &self.async_sender,
-            &self.to_emulator,
             &mut self.tree,
         );
 
@@ -701,7 +761,6 @@ impl eframe::App for EguiApp {
             let mut behavior = TreeBehavior::new(
                 &mut self.config,
                 &self.emu_textures,
-                &self.to_emulator,
                 &self.async_sender,
             );
             self.tree.ui(&mut behavior, ui);

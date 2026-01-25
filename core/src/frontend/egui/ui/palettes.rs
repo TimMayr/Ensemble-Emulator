@@ -1,6 +1,5 @@
 use crossbeam_channel::Sender;
 
-use crate::emulation::messages::{EmulatorFetchable, FrontendMessage};
 use crate::emulation::ppu::PALETTE_RAM_START_ADDRESS;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
@@ -14,8 +13,7 @@ pub fn render_palettes(
     ui: &mut egui::Ui,
     config: &mut AppConfig,
     emu_textures: &EmuTextures,
-    to_emu: &Sender<FrontendMessage>,
-    to_frontend: &Sender<AsyncFrontendMessage>,
+    async_sender: &Sender<AsyncFrontendMessage>,
 ) {
     let old_palette = config.view_config.palette_rgb_data;
     let full_width = ui.available_width();
@@ -52,10 +50,10 @@ pub fn render_palettes(
                     });
 
                 if new_color != *color {
-                    let _ = to_emu.send(FrontendMessage::WritePpu(address as u16, new_color));
-                    let _ = to_emu.send(FrontendMessage::RequestDebugData(
-                        EmulatorFetchable::Palettes(None),
-                    ));
+                    let _ = async_sender.send(AsyncFrontendMessage::WritePpuPalette {
+                        address: address as u16,
+                        value: new_color,
+                    });
                 }
 
                 response.on_hover_ui(|ui| {
@@ -76,7 +74,7 @@ pub fn render_palettes(
         ui.menu_button("File", |ui| {
             if ui.button("Load Palette").clicked() {
                 spawn_palette_picker(
-                    to_frontend,
+                    async_sender,
                     config.user_config.previous_palette_path.as_ref(),
                     config.user_config.previous_palette_path.clone(),
                 );
@@ -84,7 +82,7 @@ pub fn render_palettes(
 
             if ui.button("Save Palette").clicked() {
                 spawn_save_dialog(
-                    Some(to_frontend),
+                    Some(async_sender),
                     config.user_config.previous_palette_path.as_ref(),
                     FileType::Palette,
                     config.view_config.palette_rgb_data.to_bytes(),
@@ -93,7 +91,7 @@ pub fn render_palettes(
 
             if ui.button("Reset Palette").clicked() {
                 let _ =
-                    to_frontend.send(AsyncFrontendMessage::EmuRelay(RelayType::LoadPalette, None));
+                    async_sender.send(AsyncFrontendMessage::EmuRelay(RelayType::LoadPalette, None));
             }
         })
     });
@@ -132,9 +130,8 @@ pub fn render_palettes(
 
     // Send palette update if changed
     if old_palette.hash() != config.view_config.palette_rgb_data.hash() {
-        let _ = to_emu.send(FrontendMessage::SetPalette(Box::new(
+        let _ = async_sender.send(AsyncFrontendMessage::SetPalette(
             config.view_config.palette_rgb_data,
-        )));
-        let _ = to_frontend.send(AsyncFrontendMessage::RefreshPalette);
+        ));
     }
 }

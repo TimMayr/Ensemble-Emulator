@@ -6,7 +6,7 @@ use egui_tiles::{Behavior, SimplificationOptions, TileId, Tiles, UiResponse};
 use serde::{Deserialize, Serialize};
 
 use crate::emulation::channel_emu::{ChannelEmulator, FETCH_DEPS};
-use crate::emulation::messages::{EmulatorFetchable, FrontendMessage};
+use crate::emulation::messages::EmulatorFetchable;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::ui::{
@@ -53,7 +53,6 @@ impl Pane {
 pub struct TreeBehavior<'a> {
     pub config: &'a mut AppConfig,
     pub emu_textures: &'a EmuTextures,
-    pub emu_sender: &'a Sender<FrontendMessage>,
     pub async_sender: &'a Sender<AsyncFrontendMessage>,
 }
 
@@ -61,13 +60,11 @@ impl<'a> TreeBehavior<'a> {
     pub fn new(
         config: &'a mut AppConfig,
         emu_textures: &'a EmuTextures,
-        emu_sender: &'a Sender<FrontendMessage>,
         async_sender: &'a Sender<AsyncFrontendMessage>,
     ) -> Self {
         Self {
             config,
             emu_textures,
-            emu_sender,
             async_sender,
         }
     }
@@ -83,7 +80,7 @@ impl Behavior<Pane> for TreeBehavior<'_> {
                 render_options(ui, self.config);
             }
             Pane::PatternTables => {
-                render_pattern_table(ui, self.config, self.emu_textures, self.emu_sender);
+                render_pattern_table(ui, self.config, self.emu_textures, self.async_sender);
             }
             Pane::Nametables => {
                 render_nametable(ui, self.emu_textures);
@@ -92,7 +89,6 @@ impl Behavior<Pane> for TreeBehavior<'_> {
                 ui,
                 self.config,
                 self.emu_textures,
-                self.emu_sender,
                 self.async_sender,
             ),
         }
