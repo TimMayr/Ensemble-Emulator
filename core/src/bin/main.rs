@@ -179,9 +179,6 @@ fn output_results(emu: &Nes, args: &CliArgs) -> Result<(), String> {
         output_oam(emu, args)?;
     } else if args.memory.dump_nametables {
         output_nametables(emu, args)?;
-    } else if !args.quiet {
-        // Default behavior: dump test results area
-        output_default_memory_dump(emu);
     }
 
     Ok(())
@@ -195,45 +192,27 @@ fn output_cpu_memory(emu: &Nes, range: &str, args: &CliArgs) -> Result<(), Strin
 }
 
 /// Output PPU memory dump
-/// TODO: Implement proper PPU memory access when available
 fn output_ppu_memory(emu: &Nes, range: &str, args: &CliArgs) -> Result<(), String> {
     let (start, end) = cli::parse_memory_range(range)?;
-    // FIXME: This uses CPU memory accessor as placeholder. Need PPU-specific accessor.
-    // PPU memory (pattern tables, nametables, palette) requires direct PPU bus access.
-    let mem = &emu.get_memory_debug(Some(start..=end))[0];
+    let mem = &emu.get_memory_debug(Some(start..=end))[1];
     format_and_output_memory(mem, start, "ppu", args)
 }
 
 /// Output OAM dump
-/// TODO: Implement proper OAM access when available
-fn output_oam(_emu: &Nes, _args: &CliArgs) -> Result<(), String> {
-    // FIXME: OAM is PPU internal memory (256 bytes), not accessible via CPU bus.
-    // Need to add method to Nes/PPU to expose OAM data for debugging.
+fn output_oam(emu: &Nes, args: &CliArgs) -> Result<(), String> {
+    let mem = &emu.ppu.borrow().oam.get_memory_debug(None);
     Err("OAM dump not yet implemented - requires PPU-specific accessor".to_string())
 }
 
 /// Output nametables dump
-/// TODO: Implement proper nametable access when available
-fn output_nametables(_emu: &Nes, _args: &CliArgs) -> Result<(), String> {
-    // FIXME: Nametables are at PPU address 0x2000-0x2FFF, not CPU address space.
-    // CPU 0x2000-0x2007 are PPU registers, not nametable data.
+fn output_nametables(emu: &Nes, args: &CliArgs) -> Result<(), String> {
     // Need to add method to Nes/PPU to expose VRAM for debugging.
+    let mem = &emu
+        .ppu
+        .borrow()
+        .memory
+        .get_memory_debug(Some(0x2000..=0x2FFF));
     Err("Nametable dump not yet implemented - requires PPU-specific accessor".to_string())
-}
-
-/// Default memory dump (test results area)
-fn output_default_memory_dump(emu: &Nes) {
-    let mem = &emu.get_memory_debug(Some(0x6000..=0x6500))[0];
-    for (i, n) in mem.iter().enumerate() {
-        if i % 32 == 0 {
-            if i > 0 {
-                println!();
-            }
-            print!("    ");
-        }
-        print!("{:02X} ", n);
-    }
-    println!();
 }
 
 /// Format and output memory data in the specified format
@@ -270,14 +249,14 @@ fn output_binary(mem: &[u8], args: &CliArgs) -> Result<(), String> {
     if let Some(ref path) = args.output.output {
         std::fs::write(path, mem).map_err(|e| e.to_string())
     } else {
-        std::io::stdout()
-            .write_all(mem)
-            .map_err(|e| e.to_string())
+        std::io::stdout().write_all(mem).map_err(|e| e.to_string())
     }
 }
 
 fn output_json(mem: &[u8], start_addr: u16, mem_type: &str) -> Result<(), String> {
-    let end_addr = start_addr.saturating_add(mem.len() as u16).saturating_sub(1);
+    let end_addr = start_addr
+        .saturating_add(mem.len() as u16)
+        .saturating_sub(1);
     let json = serde_json::json!({
         "memory_dump": {
             "type": mem_type,
@@ -294,7 +273,9 @@ fn output_json(mem: &[u8], start_addr: u16, mem_type: &str) -> Result<(), String
 }
 
 fn output_toml(mem: &[u8], start_addr: u16, mem_type: &str) -> Result<(), String> {
-    let end_addr = start_addr.saturating_add(mem.len() as u16).saturating_sub(1);
+    let end_addr = start_addr
+        .saturating_add(mem.len() as u16)
+        .saturating_sub(1);
     println!("[memory_dump]");
     println!("type = \"{}\"", mem_type);
     println!("start = \"0x{:04X}\"", start_addr);

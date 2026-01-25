@@ -31,7 +31,7 @@
 pub mod args;
 pub mod config;
 
-pub use args::{parse_hex_u16, CliArgs};
+pub use args::{CliArgs, parse_hex_u16};
 use clap::Parser;
 pub use config::ConfigFile;
 
@@ -129,7 +129,10 @@ fn validate_output_format(args: &CliArgs) -> Result<(), String> {
 /// ```
 /// use nes_core::cli::parse_memory_range;
 ///
-/// assert_eq!(parse_memory_range("0x0000-0x07FF").unwrap(), (0x0000, 0x07FF));
+/// assert_eq!(
+///     parse_memory_range("0x0000-0x07FF").unwrap(),
+///     (0x0000, 0x07FF)
+/// );
 /// assert_eq!(parse_memory_range("6000:100").unwrap(), (0x6000, 0x60FF));
 /// ```
 pub fn parse_memory_range(range: &str) -> Result<(u16, u16), String> {
@@ -159,13 +162,19 @@ mod tests {
 
     #[test]
     fn test_parse_memory_range_dash() {
-        assert_eq!(parse_memory_range("0x0000-0x07FF").unwrap(), (0x0000, 0x07FF));
+        assert_eq!(
+            parse_memory_range("0x0000-0x07FF").unwrap(),
+            (0x0000, 0x07FF)
+        );
         assert_eq!(parse_memory_range("6000-7FFF").unwrap(), (0x6000, 0x7FFF));
     }
 
     #[test]
     fn test_parse_memory_range_colon() {
-        assert_eq!(parse_memory_range("0x6000:0x100").unwrap(), (0x6000, 0x60FF));
+        assert_eq!(
+            parse_memory_range("0x6000:0x100").unwrap(),
+            (0x6000, 0x60FF)
+        );
         assert_eq!(parse_memory_range("0000:10").unwrap(), (0x0000, 0x000F));
     }
 
