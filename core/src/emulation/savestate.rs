@@ -205,5 +205,7 @@ pub struct SaveState {
 /// Try to load a savestate from a file path, returning None on error
 pub fn try_load_state(path: &PathBuf) -> Option<SaveState> {
     let encoded = std::fs::read(path).ok()?;
-    bincode::deserialize(&encoded).ok()
+    bincode::serde::decode_from_slice(&encoded, bincode::config::standard())
+        .ok()
+        .map(|(state, _)| state)
 }

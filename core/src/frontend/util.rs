@@ -74,7 +74,8 @@ impl ToBytes for RgbPalette {
 
 impl ToBytes for SaveState {
     fn to_bytes(&self) -> Vec<u8> {
-        bincode::serialize(self).expect("Failed to serialize SaveState")
+        bincode::serde::encode_to_vec(self, bincode::config::standard())
+            .expect("Failed to serialize SaveState")
     }
 }
 
