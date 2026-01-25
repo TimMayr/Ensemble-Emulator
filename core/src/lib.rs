@@ -1,3 +1,5 @@
+#![feature(likely_unlikely)]
+
 pub mod emulation;
 pub mod frontend;
 #[cfg(test)]
