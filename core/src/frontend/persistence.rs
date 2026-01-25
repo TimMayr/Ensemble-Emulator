@@ -167,12 +167,11 @@ fn read_file_sync(path: &Path) -> AsyncFileResult {
 /// Write data to a file synchronously (internal helper)
 fn write_file_sync(path: &Path, data: &[u8]) -> AsyncFileResult {
     // Ensure parent directory exists
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            if let Err(e) = fs::create_dir_all(parent) {
-                return AsyncFileResult::Error(format!("Failed to create directory: {}", e));
-            }
-        }
+    if let Some(parent) = path.parent()
+        && !parent.exists()
+        && let Err(e) = fs::create_dir_all(parent)
+    {
+        return AsyncFileResult::Error(format!("Failed to create directory: {}", e));
     }
 
     match fs::File::create(path) {
