@@ -30,10 +30,15 @@
 
 pub mod args;
 pub mod config;
+pub mod execution;
 
 pub use args::{CliArgs, parse_hex_u16};
 use clap::Parser;
 pub use config::ConfigFile;
+pub use execution::{
+    ExecutionConfig, ExecutionEngine, ExecutionResult, SavestateConfig, SavestateDestination,
+    SavestateSource, StopCondition, StopReason,
+};
 
 // =============================================================================
 // Argument Parsing

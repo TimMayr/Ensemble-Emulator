@@ -1,0 +1,20 @@
+# Test Configuration: Frames Execution
+# Tests basic frame-based execution with verbose output
+#
+# Usage: nes_main -c docs/examples/test_frames.toml --rom <your_rom.nes>
+
+[global]
+headless = true
+quiet = false
+verbose = true
+
+[execution]
+# Run for exactly 60 frames (1 second at 60fps)
+frames = 60
+
+[memory]
+# Dump the first 256 bytes of CPU RAM
+read_cpu = "0x0000-0x00FF"
+
+[output]
+format = "hex"

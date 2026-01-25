@@ -12,8 +12,10 @@ use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
-use nes_core::cli::{self, CliArgs};
-use nes_core::emulation::nes::{Nes, MASTER_CYCLES_PER_FRAME};
+use nes_core::cli::{
+    self, CliArgs, ExecutionConfig, ExecutionEngine, SavestateConfig, StopReason,
+};
+use nes_core::emulation::nes::Nes;
 use nes_core::emulation::rom::RomFile;
 use nes_core::frontend::egui_frontend;
 use serde::Serialize;
@@ -60,7 +62,7 @@ fn main() -> ExitCode {
     match result {
         Ok(_) => {
             if !args.quiet {
-                println!("Emulator finished execution");
+                eprintln!("Emulator finished execution");
             }
             ExitCode::from(EXIT_SUCCESS)
         }
@@ -90,16 +92,57 @@ fn run_headless(args: &CliArgs) -> Result<(), String> {
         return handle_rom_info(args);
     }
 
-    // Initialize emulator
-    let mut emu = setup_emulator(args)?;
+    let start = Instant::now();
+
+    // Build execution and savestate configs from CLI args
+    let exec_config = ExecutionConfig::from_cli_args(args);
+    let savestate_config = SavestateConfig::from_cli_args(args);
+
+    // Create and configure the execution engine
+    let mut engine = ExecutionEngine::new()
+        .with_config(exec_config)
+        .with_savestate_config(savestate_config);
+
+    // Load ROM
+    if let Some(ref rom_path) = args.rom.rom {
+        engine.load_rom(rom_path)?;
+    }
+
+    // Load savestate if configured
+    engine.load_savestate()?;
+
+    // Power on (unless --no-power is specified)
+    if !args.power.no_power {
+        engine.power_on();
+    }
+
+    // Handle reset
+    if args.power.reset {
+        engine.reset();
+    }
 
     // Run emulation
-    let execution_result = execute_emulation(&mut emu, args);
+    let result = engine.run()?;
 
-    // Output results
-    output_results(&emu, args)?;
+    // Print execution summary if verbose
+    if args.verbose {
+        eprintln!("Execution time: {:?}", start.elapsed());
+        eprintln!("Total cycles: {}", result.total_cycles);
+        eprintln!("Total frames: {}", result.total_frames);
+        eprintln!("Stop reason: {:?}", result.stop_reason);
+    }
 
-    execution_result
+    // Save savestate if configured
+    engine.save_savestate()?;
+
+    // Output memory dumps
+    output_results(engine.emulator(), args)?;
+
+    // Check for error stop reason
+    match result.stop_reason {
+        StopReason::Error(e) => Err(e),
+        _ => Ok(()),
+    }
 }
 
 /// Handle --rom-info flag
@@ -110,66 +153,6 @@ fn handle_rom_info(args: &CliArgs) -> Result<(), String> {
         .as_ref()
         .ok_or("--rom-info requires --rom to be specified")?;
     print_rom_info(rom_path)
-}
-
-/// Set up the emulator with ROM, power state, etc.
-fn setup_emulator(args: &CliArgs) -> Result<Nes, String> {
-    let mut emu = Nes::default();
-
-    // Load ROM
-    if let Some(ref rom_path) = args.rom.rom {
-        emu.load_rom(rom_path);
-    } else if args.savestate.load_state.is_none() && !args.savestate.state_stdin {
-        return Err(
-            "Headless runs must specify the ROM file using the -r (--rom) argument".to_string(),
-        );
-    }
-
-    // Power on (unless --no-power is specified)
-    if !args.power.no_power {
-        emu.power();
-    }
-
-    // Handle reset
-    if args.power.reset {
-        emu.reset();
-    }
-
-    Ok(emu)
-}
-
-/// Execute emulation for the specified duration/conditions
-fn execute_emulation(emu: &mut Nes, args: &CliArgs) -> Result<(), String> {
-    let start = Instant::now();
-
-    // Determine execution limit
-    let target_cycles = calculate_target_cycles(args);
-
-    // Run emulation
-    let result = emu.run_until(target_cycles);
-
-    if args.verbose {
-        println!("Execution time: {:?}", start.elapsed());
-        println!("Target cycles: {}", target_cycles);
-    }
-
-    // Convert ExecutionFinishedType to simple Result
-    match result {
-        Ok(_) => Ok(()),
-        Err(e) => Err(e),
-    }
-}
-
-/// Calculate target cycles based on CLI args
-fn calculate_target_cycles(args: &CliArgs) -> u128 {
-    if let Some(cycles) = args.execution.cycles {
-        cycles
-    } else if let Some(frames) = args.execution.frames {
-        frames as u128 * MASTER_CYCLES_PER_FRAME as u128
-    } else {
-        // Default: run for 60 frames (1 second at 60fps)
-        60 * MASTER_CYCLES_PER_FRAME as u128
-    }
 }
 
 // =============================================================================
