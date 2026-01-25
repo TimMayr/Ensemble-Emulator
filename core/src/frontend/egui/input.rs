@@ -5,6 +5,7 @@ use egui::Context;
 
 use crate::emulation::messages::{ControllerEvent, FrontendMessage};
 use crate::frontend::egui::config::AppConfig;
+use crate::frontend::messages::AsyncFrontendMessage;
 
 /// Handle keyboard input from the user.
 ///
@@ -18,6 +19,7 @@ pub fn handle_keyboard_input(
     to_emulator: &Sender<FrontendMessage>,
     config: &mut AppConfig,
     last_frame_request: &mut Instant,
+    to_frontend: &Sender<AsyncFrontendMessage>,
 ) {
     ctx.input(|i| {
         // Debug controls
@@ -31,8 +33,17 @@ pub fn handle_keyboard_input(
             config.speed_config.is_paused = !config.speed_config.is_paused;
             *last_frame_request = Instant::now();
         }
+
         if i.key_pressed(egui::Key::R) {
             let _ = to_emulator.send(FrontendMessage::Reset);
+        }
+
+        if i.key_pressed(egui::Key::F5) {
+            let _ = to_frontend.send(AsyncFrontendMessage::Quicksave);
+        }
+
+        if i.key_pressed(egui::Key::F8) {
+            let _ = to_frontend.send(AsyncFrontendMessage::Quickload);
         }
 
         // NES controller input

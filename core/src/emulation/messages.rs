@@ -34,7 +34,7 @@ pub const NAMETABLE_COLS: usize = 32;
 pub const PATTERN_TABLE_SIZE: usize = 256;
 
 /// Messages sent from the frontend to the emulator
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum FrontendMessage {
     /// Request to quit the emulator
     Quit,
@@ -51,12 +51,20 @@ pub enum FrontendMessage {
     LoadRom(PathBuf),
     WritePpu(u16, u8),
     WriteCpu(u16, u8),
-    CreateSaveState,
+    CreateSaveState(SaveType),
     LoadSaveState(Box<SaveState>),
 }
 
+#[derive(Debug, Default, Eq, PartialEq, Copy, Clone, Hash)]
+pub enum SaveType {
+    #[default]
+    Manual,
+    Quicksave,
+    Autosave,
+}
+
 /// Controller input events
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ControllerEvent {
     Left,
     Right,
@@ -69,12 +77,13 @@ pub enum ControllerEvent {
 }
 
 /// Messages sent from the emulator to the frontend
+#[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum EmulatorMessage {
     FrameReady(Vec<u32>),
     /// Emulator has stopped/quit
     Stopped,
     DebugData(EmulatorFetchable),
-    SaveState(Box<SaveState>),
+    SaveState(Box<SaveState>, SaveType),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]

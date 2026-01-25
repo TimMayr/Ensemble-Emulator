@@ -31,6 +31,10 @@ pub enum AsyncFrontendMessage {
     RomVerificationFailed(Box<SavestateLoadContext>, SavestateLoadError),
     /// File save completed (success or error message)
     FileSaveCompleted(Option<String>),
+    Quickload,
+    Quicksave,
+    LoadRom(PathBuf),
+    ChangeWindowTitle(String),
 }
 
 /// Context for the multistep savestate loading process

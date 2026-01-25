@@ -8,7 +8,7 @@ use crate::emulation::mem::OpenBus;
 use crate::emulation::ppu::{Ppu, VRAM_SIZE};
 use crate::emulation::rom::RomFile;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CpuState {
     pub program_counter: u16,
     pub stack_pointer: u8,
@@ -90,7 +90,7 @@ impl From<&Cpu> for CpuState {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PpuState {
     pub cycle_counter: u128,
     pub vbl_reset_counter: u8,
@@ -190,7 +190,7 @@ impl From<&Ppu> for PpuState {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct SaveState {
     pub cpu: CpuState,
     pub ppu: PpuState,

@@ -39,7 +39,7 @@ pub trait RomParser: Debug {
     fn parse(&self, rom: &[u8], file: Option<PathBuf>) -> Result<RomFile, ParseError>;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct RomFile {
     pub name: Option<String>,
     pub prg_memory: PrgMemory,
@@ -62,7 +62,7 @@ pub struct RomFile {
     pub data: Vec<u8>,
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct PrgMemory {
     pub prg_rom_size: u32,
     pub prg_ram_size: u32,
@@ -79,7 +79,7 @@ impl PrgMemory {
     }
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct ChrMemory {
     pub chr_rom_size: u32,
     pub chr_ram_size: u32,

@@ -191,9 +191,9 @@ pub fn spawn_file_picker(
 }
 
 /// Spawn a file picker for palette files that loads the palette asynchronously.
-/// 
+///
 /// This reads and parses the palette file in a background thread to avoid blocking the UI.
-/// 
+///
 /// # Arguments
 /// * `sender` - Channel to send the loaded palette back to the UI thread
 /// * `previous_path` - Used to set the initial directory for the file picker dialog
@@ -385,4 +385,34 @@ pub fn spawn_rom_picker_for_savestate(
             ));
         }
     });
+}
+
+pub fn rom_display_name(path: &Path, sha256: &[u8; 32]) -> String {
+    match path.file_stem().and_then(|s| s.to_str()) {
+        Some(name) if !name.is_empty() => name.to_owned(),
+        _ => format!("Unknown ROM ({})", short_hash_hex(sha256)),
+    }
+}
+pub fn short_hash_hex(hash: &[u8; 32]) -> String {
+    use std::fmt::Write;
+    let mut s = String::with_capacity(12);
+    for b in &hash[..6] {
+        write!(&mut s, "{:02x}", b).unwrap();
+    }
+    s
+}
+
+pub fn append_to_filename(path: &Path, suffix: &str, overwrite: usize) -> PathBuf {
+    let parent = path.parent().unwrap_or_else(|| Path::new(""));
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let ext = path.extension().and_then(|e| e.to_str());
+
+    let cut = stem.len().saturating_sub(overwrite);
+    let mut name = String::from(&stem[..cut]);
+    name.push_str(suffix);
+
+    match ext {
+        Some(ext) => parent.join(format!("{name}.{ext}")),
+        None => parent.join(name),
+    }
 }

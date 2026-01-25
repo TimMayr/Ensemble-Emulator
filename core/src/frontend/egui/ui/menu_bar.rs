@@ -1,11 +1,11 @@
 use crossbeam_channel::Sender;
 use egui::Context;
 
-use crate::emulation::messages::FrontendMessage;
+use crate::emulation::messages::{FrontendMessage, SaveType};
 use crate::frontend::egui::config::AppConfig;
-use crate::frontend::egui::tiles::{Pane, add_pane_if_missing};
+use crate::frontend::egui::tiles::{add_pane_if_missing, Pane};
 use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
-use crate::frontend::util::{FileType, spawn_file_picker, spawn_savestate_picker};
+use crate::frontend::util::{spawn_file_picker, spawn_savestate_picker, FileType};
 
 pub fn add_menu_bar(
     ctx: &Context,
@@ -27,7 +27,7 @@ pub fn add_menu_bar(
                 }
                 ui.menu_button("Savestates", |ui| {
                     if ui.button("Save State").clicked() {
-                        let _ = to_emu.send(FrontendMessage::CreateSaveState);
+                        let _ = to_emu.send(FrontendMessage::CreateSaveState(SaveType::Manual));
                     }
 
                     if ui.button("Load State").clicked() {
@@ -47,7 +47,7 @@ pub fn add_menu_bar(
                 if ui.button("Power cycle").clicked() {
                     let _ = to_emu.send(FrontendMessage::PowerOff);
                     if let Some(p) = config.user_config.previous_rom_path.clone() {
-                        let _ = to_emu.send(FrontendMessage::LoadRom(p));
+                        let _ = async_sender.send(AsyncFrontendMessage::LoadRom(p));
                     }
                     let _ = to_emu.send(FrontendMessage::Power);
                     config.console_config.is_powered = true;
@@ -55,7 +55,7 @@ pub fn add_menu_bar(
                 if !config.console_config.is_powered {
                     if ui.button("Power On").clicked() {
                         if let Some(p) = config.user_config.previous_rom_path.clone() {
-                            let _ = to_emu.send(FrontendMessage::LoadRom(p));
+                            let _ = async_sender.send(AsyncFrontendMessage::LoadRom(p));
                         }
                         let _ = to_emu.send(FrontendMessage::Power);
                         config.console_config.is_powered = true;

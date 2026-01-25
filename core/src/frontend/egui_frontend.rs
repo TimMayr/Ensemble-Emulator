@@ -16,12 +16,12 @@ use std::time::{Duration, Instant};
 
 
 use crossbeam_channel::{Receiver, Sender};
-use egui::{Context, Style, Visuals};
+use egui::{Context, Style, ViewportCommand, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
 use crate::emulation::messages::{
-    EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette, TileData,
-    TILE_COUNT,
+    EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette, SaveType,
+    TileData, TILE_COUNT,
 };
 use crate::emulation::nes::Nes;
 use crate::frontend::egui::config::{
@@ -37,7 +37,9 @@ use crate::frontend::egui::tiles::{
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
 use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
 use crate::frontend::palettes::parse_palette_from_file;
-use crate::frontend::persistence::{get_egui_storage_path, load_config};
+use crate::frontend::persistence::{
+    get_data_file_path, get_egui_storage_path, load_config, write_file_async,
+};
 use crate::frontend::util;
 use crate::frontend::util::{FileType, ToBytes};
 
@@ -177,9 +179,8 @@ impl EguiApp {
                                 && let Ok(p) = p.canonicalize()
                             {
                                 let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-                                let _ = self.to_emulator.send(FrontendMessage::LoadRom(p.clone()));
+                                self.load_rom(p);
                                 let _ = self.to_emulator.send(FrontendMessage::Power);
-                                self.config.user_config.previous_rom_path = Some(p)
                             }
                         }
                     }
@@ -331,8 +332,36 @@ impl EguiApp {
                             context,
                         });
                 }
+                AsyncFrontendMessage::Quickload => {}
+                AsyncFrontendMessage::Quicksave => {
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::CreateSaveState(SaveType::Quicksave));
+                }
+                AsyncFrontendMessage::LoadRom(path) => {
+                    self.load_rom(path);
+                }
+                AsyncFrontendMessage::ChangeWindowTitle(title) => {
+                    ctx.send_viewport_cmd(ViewportCommand::Title(title))
+                }
             }
         }
+    }
+
+    fn load_rom(&mut self, rom_path: PathBuf) {
+        let _ = self
+            .to_emulator
+            .send(FrontendMessage::LoadRom(rom_path.clone()));
+
+        self.config.user_config.previous_rom_path = Some(rom_path.clone());
+        let _ = self
+            .async_sender
+            .send(AsyncFrontendMessage::ChangeWindowTitle(
+                rom_path
+                    .file_stem()
+                    .map(|f| format!("Tensordance - {}", f.to_string_lossy()))
+                    .unwrap_or("Tensordance".to_string()),
+            ));
     }
 
     /// Load a savestate after ROM has been verified/selected
@@ -343,9 +372,7 @@ impl EguiApp {
     ) {
         // First power off, load ROM, power on
         let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-        let _ = self
-            .to_emulator
-            .send(FrontendMessage::LoadRom(rom_path.to_path_buf()));
+        self.load_rom(rom_path.to_path_buf());
         let _ = self.to_emulator.send(FrontendMessage::Power);
 
         // Then load the savestate
@@ -356,7 +383,6 @@ impl EguiApp {
             )));
 
         // Update config paths
-        self.config.user_config.previous_rom_path = Some(rom_path.to_path_buf());
         self.config.user_config.previous_savestate_path = Some(context.savestate_path.clone());
     }
 
@@ -424,14 +450,39 @@ impl EguiApp {
                     }
                 },
                 EmulatorMessage::Stopped => {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    ctx.send_viewport_cmd(ViewportCommand::Close);
                 }
-                EmulatorMessage::SaveState(s) => util::spawn_save_dialog(
-                    Some(&self.async_sender),
-                    self.config.user_config.previous_savestate_path.as_ref(),
-                    FileType::Savestate,
-                    s.to_bytes(),
-                ),
+                EmulatorMessage::SaveState(s, t) => match t {
+                    SaveType::Manual => util::spawn_save_dialog(
+                        Some(&self.async_sender),
+                        self.config.user_config.previous_savestate_path.as_ref(),
+                        FileType::Savestate,
+                        s.to_bytes(),
+                    ),
+                    SaveType::Quicksave => {
+                        if let Some(rom) = &self.channel_emu.nes.rom_file {
+                            let rom_hash = &rom.data_checksum;
+                            let prev_path = &self.config.user_config.previous_rom_path;
+                            if let Some(prev_path) = prev_path {
+                                let display_name = util::rom_display_name(prev_path, rom_hash);
+
+                                let path = get_data_file_path(
+                                    format!(
+                                        "{}/quicksave_{}.sav",
+                                        display_name,
+                                        chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
+                                    )
+                                    .as_str(),
+                                );
+
+                                if let Some(path) = path {
+                                    let _ = write_file_async(path, s.to_bytes(), false);
+                                }
+                            }
+                        }
+                    }
+                    SaveType::Autosave => {}
+                },
             }
         }
     }
@@ -530,7 +581,7 @@ impl EguiApp {
                 while self.accumulator >= frame_budget {
                     if let Err(e) = self.channel_emu.execute_frame() {
                         eprintln!("Emulator error: {}", e);
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        ctx.send_viewport_cmd(ViewportCommand::Close);
                         break;
                     }
 
@@ -606,11 +657,12 @@ impl eframe::App for EguiApp {
             &self.to_emulator,
             &mut self.config,
             &mut self.emu_textures.last_frame_request,
+            &self.async_sender,
         );
 
         if let Err(e) = self.channel_emu.process_messages() {
             eprintln!("Emulator error: {}", e);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            ctx.send_viewport_cmd(ViewportCommand::Close);
             return;
         }
 
@@ -706,8 +758,8 @@ pub fn run(
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1024.0, 768.0])
-            .with_title("NES Emulator - Egui")
-            .with_app_id("nes-emulator"),
+            .with_title("Tensordance")
+            .with_app_id("tensordance"),
         vsync: false, // Disable vsync for uncapped performance
         // Enable persistence with custom storage path
         persistence_path: storage_path,
@@ -716,7 +768,7 @@ pub fn run(
 
     // Run the application
     eframe::run_native(
-        "NES Emulator - Egui",
+        "Tensordance",
         options,
         Box::new(move |cc| {
             let style = Style {
