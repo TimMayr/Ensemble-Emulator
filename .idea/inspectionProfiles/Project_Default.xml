@@ -6,6 +6,7 @@
         <language minSize="67" name="Rust" />
       </Languages>
     </inspection_tool>
+    <inspection_tool class="NewCrateVersionAvailable" enabled="false" level="WARNING" enabled_by_default="false" />
     <inspection_tool class="PyShadowingNamesInspection" enabled="false" level="WEAK WARNING" enabled_by_default="false" />
   </profile>
 </component>
