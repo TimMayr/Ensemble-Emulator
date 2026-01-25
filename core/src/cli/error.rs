@@ -570,7 +570,9 @@ impl From<toml::de::Error> for CliError {
         Self::ConfigParse {
             path: PathBuf::new(),
             message: err.to_string(),
-            line: err.span().map(|s| s.start), // Use span start as approximate line info
+            // Note: TOML errors don't provide line numbers directly,
+            // the error message itself contains location info
+            line: None,
         }
     }
 }

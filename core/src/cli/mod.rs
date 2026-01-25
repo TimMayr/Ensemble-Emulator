@@ -286,7 +286,7 @@ fn validate_output_format(args: &CliArgs) -> Result<(), CliError> {
         (args.output.binary, "--binary"),
     ]
     .iter()
-    .filter_map(|(flag, name)| if *flag { Some(*name) } else { None })
+    .filter_map(|(flag, name)| flag.then_some(*name))
     .collect();
 
     if format_flags.len() > 1 {
@@ -357,6 +357,13 @@ fn validate_memory_condition_syntax(cond: &str) -> Result<(), CliError> {
 ///
 /// Both `START` and `END`/`LENGTH` should be hexadecimal values (with or without 0x prefix).
 ///
+/// # Errors
+///
+/// Returns an error if:
+/// - The format is invalid (not START-END or START:LENGTH)
+/// - The hex values cannot be parsed
+/// - The resulting range would be invalid (end < start)
+///
 /// # Examples
 ///
 /// ```
@@ -372,11 +379,34 @@ pub fn parse_memory_range(range: &str) -> Result<(u16, u16), String> {
     if let Some((start_str, end_str)) = range.split_once('-') {
         let start = parse_hex_u16(start_str)?;
         let end = parse_hex_u16(end_str)?;
+        if end < start {
+            return Err(format!(
+                "Invalid memory range '{}': end address (0x{:04X}) is less than start (0x{:04X})",
+                range, end, start
+            ));
+        }
         Ok((start, end))
     } else if let Some((start_str, len_str)) = range.split_once(':') {
         let start = parse_hex_u16(start_str)?;
         let len = parse_hex_u16(len_str)?;
-        Ok((start, start.saturating_add(len).saturating_sub(1)))
+        
+        if len == 0 {
+            return Err(format!(
+                "Invalid memory range '{}': length cannot be zero",
+                range
+            ));
+        }
+        
+        // Calculate end address, checking for overflow
+        let end = match start.checked_add(len.saturating_sub(1)) {
+            Some(e) => e,
+            None => {
+                // Overflow - clamp to max address
+                0xFFFF
+            }
+        };
+        
+        Ok((start, end))
     } else {
         Err(format!(
             "Invalid memory range format: '{}'. Use START-END or START:LENGTH (e.g., 0x0000-0x07FF or 0x6000:0x100)",
@@ -419,11 +449,15 @@ mod tests {
     fn test_parse_memory_range_invalid() {
         assert!(parse_memory_range("invalid").is_err());
         assert!(parse_memory_range("").is_err());
+        // Zero length should error
+        assert!(parse_memory_range("0x0000:0x0000").is_err());
+        // End less than start should error
+        assert!(parse_memory_range("0x1000-0x0FFF").is_err());
     }
 
     #[test]
     fn test_parse_memory_range_edge_cases() {
-        // Single byte
+        // Single byte (length 1)
         assert_eq!(parse_memory_range("0x0000:0x0001").unwrap(), (0x0000, 0x0000));
         // Maximum address
         assert_eq!(parse_memory_range("0xFFFF-0xFFFF").unwrap(), (0xFFFF, 0xFFFF));
@@ -433,20 +467,16 @@ mod tests {
 
     #[test]
     fn test_parse_memory_range_overflow_protection() {
-        // Length that would overflow - should saturate
-        // 0xFFFF:0xFFFF -> start=0xFFFF, saturating_add(0xFFFF)=0xFFFF, saturating_sub(1)=0xFFFE
-        // This is actually less than start, which is a limitation of the current implementation
-        // For now, just ensure it doesn't panic
-        let result = parse_memory_range("0xFFFF:0xFFFF");
-        assert!(result.is_ok());
+        // Large length that would overflow - should clamp to 0xFFFF
+        let (start, end) = parse_memory_range("0xFFFF:0xFFFF").unwrap();
+        assert_eq!(start, 0xFFFF);
+        assert_eq!(end, 0xFFFF); // Clamped to max
         
-        // Test a more reasonable overflow case: 0xFF00:0x200 should give full range
+        // Test a case where overflow would occur: 0xFF00 + 0x200 - 1 = 0x100FF (overflow)
+        // With checked_add, 0xFF00 + 0x1FF = 0x100FF would overflow, so clamp to 0xFFFF
         let (start, end) = parse_memory_range("0xFF00:0x200").unwrap();
         assert_eq!(start, 0xFF00);
-        // saturating_add would give 0xFFFF (max), then sub 1 gives 0xFFFE
-        // But that's less than 0xFF00 + 0x200 - 1 = 0x10FF which wraps
-        // The saturating logic gives: 0xFF00 + 0x200 = 0x10100 -> saturates to 0xFFFF, then -1 = 0xFFFE
-        assert_eq!(end, 0xFFFE);
+        assert_eq!(end, 0xFFFF); // Clamped due to overflow
     }
 
     // =========================================================================
