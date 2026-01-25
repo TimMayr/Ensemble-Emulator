@@ -7,7 +7,7 @@ use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::ui::widgets::{PainterGridConfig, color_cell};
 use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
 use crate::frontend::util::{
-    AsU32, FileType, FromU32, Hashable, ToBytes, spawn_file_picker, spawn_save_dialog,
+    AsU32, FileType, FromU32, Hashable, ToBytes, spawn_palette_picker, spawn_save_dialog,
 };
 
 pub fn render_palettes(
@@ -75,16 +75,16 @@ pub fn render_palettes(
     egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
             if ui.button("Load Palette").clicked() {
-                spawn_file_picker(
+                spawn_palette_picker(
                     to_frontend,
                     config.user_config.previous_palette_path.as_ref(),
-                    FileType::Palette,
-                    RelayType::LoadPalette,
+                    config.user_config.previous_palette_path.clone(),
                 );
             }
 
             if ui.button("Save Palette").clicked() {
                 spawn_save_dialog(
+                    Some(to_frontend),
                     config.user_config.previous_palette_path.as_ref(),
                     FileType::Palette,
                     config.view_config.palette_rgb_data.to_bytes(),

@@ -150,6 +150,7 @@ impl EguiApp {
                 AsyncFrontendMessage::EmuRelay(r, p) => {
                     match r {
                         RelayType::LoadPalette => {
+                            // Legacy path - when no file data is provided, use default palette
                             let palette = parse_palette_from_file(
                                 p.clone(),
                                 self.config.user_config.previous_palette_path.clone(),
@@ -181,6 +182,29 @@ impl EguiApp {
                                 self.config.user_config.previous_rom_path = Some(p)
                             }
                         }
+                    }
+                }
+                AsyncFrontendMessage::PaletteLoaded(palette, path) => {
+                    // Palette was loaded asynchronously - apply it
+                    self.config.view_config.palette_rgb_data = palette;
+                    self.config.user_config.previous_palette_path = Some(path);
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::SetPalette(Box::new(palette)));
+                    // Only update tile textures if a tile viewer is visible
+                    if self.is_tile_viewer_visible() {
+                        self.emu_textures.update_tile_textures(
+                            ctx,
+                            &self.config.view_config.palette_rgb_data,
+                            None,
+                            None,
+                        );
+                    }
+                }
+                AsyncFrontendMessage::FileSaveCompleted(error) => {
+                    // Handle save completion - log any errors
+                    if let Some(e) = error {
+                        eprintln!("File save error: {}", e);
                     }
                 }
                 AsyncFrontendMessage::RefreshPalette => {
@@ -403,6 +427,7 @@ impl EguiApp {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
                 EmulatorMessage::SaveState(s) => util::spawn_save_dialog(
+                    Some(&self.async_sender),
                     self.config.user_config.previous_savestate_path.as_ref(),
                     FileType::Savestate,
                     s.to_bytes(),
