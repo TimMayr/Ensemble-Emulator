@@ -97,7 +97,11 @@ impl std::fmt::Display for MemoryType {
 impl MemoryDump {
     /// Create a new memory dump
     pub fn new(mem_type: MemoryType, start_addr: u16, data: Vec<u8>) -> Self {
-        let end_addr = start_addr.saturating_add(data.len() as u16).saturating_sub(1);
+        let end_addr = if data.is_empty() {
+            start_addr
+        } else {
+            start_addr.saturating_add((data.len() - 1) as u16)
+        };
         Self {
             mem_type,
             start_addr,
@@ -282,7 +286,12 @@ impl OutputFormat {
 
     /// Get the file extension for this format.
     pub fn extension(&self) -> &'static str {
-        self.formatter().file_extension()
+        match self {
+            OutputFormat::Hex => "hex",
+            OutputFormat::Json => "json",
+            OutputFormat::Toml => "toml",
+            OutputFormat::Binary => "bin",
+        }
     }
 }
 
@@ -291,6 +300,8 @@ impl OutputFormat {
 // =============================================================================
 
 /// Track whether the output file has been initialized (created/truncated).
+/// Note: This is intentionally global to support multiple OutputWriter instances
+/// writing to the same file in append mode within a single CLI run.
 static OUTPUT_FILE_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 /// Manages output writing with support for file and stdout.
