@@ -5,10 +5,11 @@
 //!
 //! See `docs/CLI_INTERFACE.md` for full CLI documentation.
 
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use nes_core::cli::{self, CliArgs};
@@ -16,6 +17,9 @@ use nes_core::emulation::nes::{Nes, MASTER_CYCLES_PER_FRAME};
 use nes_core::emulation::rom::RomFile;
 use nes_core::frontend::egui_frontend;
 use serde::Serialize;
+
+/// Track whether the output file has been initialized (created/truncated)
+static OUTPUT_FILE_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 // =============================================================================
 // Exit Codes (as documented in CLI_INTERFACE.md)
@@ -174,6 +178,9 @@ fn calculate_target_cycles(args: &CliArgs) -> u128 {
 
 /// Output results based on CLI args
 fn output_results(emu: &Nes, args: &CliArgs) -> Result<(), String> {
+    // Reset the output file initialized flag for this run
+    OUTPUT_FILE_INITIALIZED.store(false, Ordering::SeqCst);
+    
     if let Some(ref range) = args.memory.read_cpu {
         output_cpu_memory(emu, range, args)?;
     }
@@ -260,11 +267,21 @@ fn format_and_output_memory(
     }
 }
 
-/// Get output writer - either file or stdout
+/// Get output writer - either file (append mode after first write) or stdout
 fn get_output_writer(args: &CliArgs) -> Result<Box<dyn Write>, String> {
     if let Some(ref path) = args.output.output {
-        let file =
-            File::create(path).map_err(|e| format!("Failed to create output file: {}", e))?;
+        // Check if this is the first write to the file
+        let is_first_write = !OUTPUT_FILE_INITIALIZED.swap(true, Ordering::SeqCst);
+        
+        let file = if is_first_write {
+            // First write: create/truncate the file
+            File::create(path)
+        } else {
+            // Subsequent writes: append to the file
+            OpenOptions::new().append(true).open(path)
+        }
+        .map_err(|e| format!("Failed to open output file: {}", e))?;
+        
         Ok(Box::new(file))
     } else {
         Ok(Box::new(std::io::stdout()))
