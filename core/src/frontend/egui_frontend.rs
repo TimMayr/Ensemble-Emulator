@@ -36,9 +36,7 @@ use crate::frontend::egui::tiles::{
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
 use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
 use crate::frontend::palettes::parse_palette_from_file;
-use crate::frontend::persistence::{
-    PersistentConfig, get_egui_storage_path, load_config, save_config_async,
-};
+use crate::frontend::persistence::{PersistentConfig, get_egui_storage_path, load_config};
 use crate::frontend::util;
 use crate::frontend::util::{FileType, ToBytes};
 
@@ -642,14 +640,15 @@ impl eframe::App for EguiApp {
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        // Save configuration to TOML file before exiting
+        // Save configuration to TOML file before exiting (synchronous to ensure completion)
         let persistent_config = PersistentConfig {
             user_config: (&self.config.user_config).into(),
             speed_config: (&self.config.speed_config).into(),
             console_config: (&self.config.console_config).into(),
         };
-        // Save asynchronously but don't wait for completion
-        let _ = save_config_async(persistent_config);
+        if let Err(e) = crate::frontend::persistence::save_config(&persistent_config) {
+            eprintln!("Failed to save configuration: {}", e);
+        }
 
         let _ = self.to_emulator.send(FrontendMessage::Quit);
     }

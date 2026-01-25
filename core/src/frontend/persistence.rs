@@ -25,7 +25,16 @@ const APP_QUALIFIER: &str = "com";
 const APP_ORGANIZATION: &str = "TimMayr";
 const APP_NAME: &str = "NESEmulator";
 
-/// Singleton for project directories
+/// Singleton for project directories.
+///
+/// This uses a `OnceLock` to lazily initialize the project directories on first access.
+/// The singleton pattern is used here because:
+/// 1. Directory paths are determined by the OS and don't change during runtime
+/// 2. Creating `ProjectDirs` multiple times is wasteful
+/// 3. All parts of the application need consistent paths for config/data/cache
+///
+/// Note: The directories crate returns `Option<ProjectDirs>` because on some platforms
+/// (like Linux without a proper home directory) it may fail to determine paths.
 static PROJECT_DIRS: OnceLock<Option<ProjectDirs>> = OnceLock::new();
 
 /// Get the project directories (lazily initialized)
@@ -94,9 +103,28 @@ pub enum AsyncFileResult {
     Error(String),
 }
 
-/// Read a file asynchronously, returning the result through a channel
+/// Read a file asynchronously, returning the result through a channel.
 ///
-/// This avoids blocking the UI thread when reading potentially large files.
+/// This spawns a new thread for each operation to avoid blocking the UI thread
+/// when reading potentially large files. The result is returned through a
+/// crossbeam channel.
+///
+/// Note: For frequent small file operations, consider batching requests or using
+/// the synchronous `read_file_sync` if blocking is acceptable. Thread spawning
+/// has overhead that may not be justified for very small files.
+///
+/// # Usage
+/// ```ignore
+/// let rx = read_file_async(path);
+/// // Later, in the UI update loop:
+/// if let Ok(result) = rx.try_recv() {
+///     match result {
+///         AsyncFileResult::ReadSuccess(data) => { /* use data */ }
+///         AsyncFileResult::Error(e) => { /* handle error */ }
+///         _ => {}
+///     }
+/// }
+/// ```
 pub fn read_file_async(path: PathBuf) -> Receiver<AsyncFileResult> {
     let (tx, rx) = bounded(1);
     thread::spawn(move || {
@@ -106,9 +134,13 @@ pub fn read_file_async(path: PathBuf) -> Receiver<AsyncFileResult> {
     rx
 }
 
-/// Write data to a file asynchronously, returning the result through a channel
+/// Write data to a file asynchronously, returning the result through a channel.
 ///
-/// This avoids blocking the UI thread when writing files.
+/// This spawns a new thread for each operation to avoid blocking the UI thread
+/// when writing files. The result is returned through a crossbeam channel.
+///
+/// Note: For operations that must complete before proceeding (like saving config
+/// on exit), use the synchronous `save_config` function instead.
 pub fn write_file_async(path: PathBuf, data: Vec<u8>) -> Receiver<AsyncFileResult> {
     let (tx, rx) = bounded(1);
     thread::spawn(move || {
@@ -364,15 +396,40 @@ impl From<&PersistentConsoleConfig> for ConsoleConfig {
     }
 }
 
-/// Load configuration from the config file
+/// Load configuration from the config file.
+///
+/// Returns `None` if:
+/// - The config directory cannot be determined
+/// - The config file doesn't exist (first run)
+/// - The config file cannot be read or parsed
+///
+/// Parsing errors are logged to stderr but not treated as fatal,
+/// allowing the application to start with default config if the
+/// config file is malformed.
 pub fn load_config() -> Option<PersistentConfig> {
     let config_path = get_config_file_path(CONFIG_FILENAME)?;
     if !config_path.exists() {
         return None;
     }
 
-    let contents = fs::read_to_string(&config_path).ok()?;
-    toml::from_str(&contents).ok()
+    let contents = match fs::read_to_string(&config_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Failed to read config file: {}", e);
+            return None;
+        }
+    };
+
+    match toml::from_str(&contents) {
+        Ok(config) => Some(config),
+        Err(e) => {
+            eprintln!(
+                "Failed to parse config file (using defaults): {}",
+                e
+            );
+            None
+        }
+    }
 }
 
 /// Save configuration to the config file
