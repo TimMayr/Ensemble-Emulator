@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use clap::{Args, Parser, ValueEnum, value_parser};
 
 /// NES Emulator CLI - A cycle-accurate NES emulator with comprehensive CLI support
-#[derive(Parser, Debug, Clone)]
+#[derive(Parser, Debug, Clone, Default)]
 #[command(name = "nes_main")]
 #[command(version, about, long_about = None)]
 #[command(after_help = "For more information, see docs/CLI_INTERFACE.md")]
