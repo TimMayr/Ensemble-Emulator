@@ -183,9 +183,6 @@ Arguments are organized into logical groups:
 
 - `exit` - Save when emulator exits normally
 - `stop` - Save when any stop condition is triggered
-- `cycle:N` - Save at specific cycle N
-- `pc:ADDR` - Save when PC reaches address
-- `frame:N` - Save after N frames
 
 #### Memory Operations
 
