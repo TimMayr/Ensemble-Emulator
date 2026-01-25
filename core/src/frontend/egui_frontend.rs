@@ -35,7 +35,7 @@ use crate::frontend::egui::tiles::{
     compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
 };
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
-use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
+use crate::frontend::messages::{AsyncFrontendMessage, RelayType, SavestateLoadContext};
 use crate::frontend::palettes::parse_palette_from_file;
 use crate::frontend::persistence::{
     get_data_file_path, get_egui_storage_path, load_config, write_file_async,
@@ -181,7 +181,7 @@ impl EguiApp {
                                 && let Ok(p) = p.canonicalize()
                             {
                                 let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-                                self.load_rom(p);
+                                self.load_rom(ctx, p);
                                 let _ = self.to_emulator.send(FrontendMessage::Power);
                             }
                         }
@@ -239,7 +239,7 @@ impl EguiApp {
                 }
                 AsyncFrontendMessage::UseMatchingRom(context, rom_path) => {
                     // User chose to use the matching ROM - load the savestate
-                    self.load_savestate_with_rom(&context, &rom_path);
+                    self.load_savestate_with_rom(ctx, &context, &rom_path);
                 }
                 AsyncFrontendMessage::ManuallySelectRom(context) => {
                     // User chose to manually select a ROM
@@ -255,7 +255,7 @@ impl EguiApp {
                         Some(checksum) => {
                             if checksum == context.savestate.rom_file.data_checksum {
                                 // Checksum matches, load the savestate
-                                self.load_savestate_with_rom(&context, &rom_path);
+                                self.load_savestate_with_rom(ctx, &context, &rom_path);
                             } else {
                                 // Checksum mismatch, show warning dialog
                                 self.config.pending_dialogs.checksum_mismatch_dialog =
@@ -286,7 +286,7 @@ impl EguiApp {
                 }
                 AsyncFrontendMessage::LoadSavestateAnyway(context, rom_path) => {
                     // User chose to load anyway despite checksum mismatch
-                    self.load_savestate_with_rom(&context, &rom_path);
+                    self.load_savestate_with_rom(ctx, &context, &rom_path);
                 }
                 AsyncFrontendMessage::SelectAnotherRom(context) => {
                     // User chose to select a different ROM after checksum mismatch
@@ -341,40 +341,44 @@ impl EguiApp {
                         .send(FrontendMessage::CreateSaveState(SaveType::Quicksave));
                 }
                 AsyncFrontendMessage::LoadRom(path) => {
-                    self.load_rom(path);
+                    self.load_rom(ctx, path);
                 }
                 AsyncFrontendMessage::ChangeWindowTitle(title) => {
-                    ctx.send_viewport_cmd(ViewportCommand::Title(title))
+                    EguiApp::set_window_tile(ctx, title)
                 }
             }
         }
     }
 
-    fn load_rom(&mut self, rom_path: PathBuf) {
+    fn set_window_tile(ctx: &Context, title: String) {
+        ctx.send_viewport_cmd(ViewportCommand::Title(title))
+    }
+
+    fn load_rom(&mut self, ctx: &Context, rom_path: PathBuf) {
         let _ = self
             .to_emulator
             .send(FrontendMessage::LoadRom(rom_path.clone()));
 
         self.config.user_config.previous_rom_path = Some(rom_path.clone());
-        let _ = self
-            .async_sender
-            .send(AsyncFrontendMessage::ChangeWindowTitle(
-                rom_path
-                    .file_stem()
-                    .map(|f| format!("Tensordance - {}", f.to_string_lossy()))
-                    .unwrap_or("Tensordance".to_string()),
-            ));
+        EguiApp::set_window_tile(
+            ctx,
+            rom_path
+                .file_stem()
+                .map(|f| format!("Tensordance - {}", f.to_string_lossy()))
+                .unwrap_or("Tensordance".to_string()),
+        );
     }
 
     /// Load a savestate after ROM has been verified/selected
     fn load_savestate_with_rom(
         &mut self,
-        context: &crate::frontend::messages::SavestateLoadContext,
+        ctx: &Context,
+        context: &SavestateLoadContext,
         rom_path: &Path,
     ) {
         // First power off, load ROM, power on
         let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-        self.load_rom(rom_path.to_path_buf());
+        self.load_rom(ctx, rom_path.to_path_buf());
         let _ = self.to_emulator.send(FrontendMessage::Power);
 
         // Then load the savestate
