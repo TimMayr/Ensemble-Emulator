@@ -21,7 +21,8 @@
 
 ## Overview
 
-This document describes a standardized CLI interface for the NES emulator that enables programmatic automation of emulation tasks. The interface is designed to support complex multi-step behaviors driven entirely by command-line arguments, making it suitable for:
+This document describes a standardized CLI interface for the NES emulator that enables programmatic automation of emulation tasks. The interface is designed to support complex multi-step behaviors driven entirely by command-line arguments,
+making it suitable for:
 
 - Automated testing and verification
 - Tool-assisted speedrun (TAS) development
@@ -47,17 +48,17 @@ The CLI interface builds upon the existing message-based architecture (`Frontend
 
 The CLI interface should map directly to existing `FrontendMessage` variants where possible:
 
-| CLI Operation | Existing Message |
-|--------------|------------------|
-| Load ROM | `FrontendMessage::LoadRom(PathBuf)` |
-| Reset | `FrontendMessage::Reset` |
-| Power On | `FrontendMessage::Power` |
-| Power Off | `FrontendMessage::PowerOff` |
-| Set Palette | `FrontendMessage::SetPalette(Box<RgbPalette>)` |
-| Write CPU Memory | `FrontendMessage::WriteCpu(u16, u8)` |
-| Write PPU Memory | `FrontendMessage::WritePpu(u16, u8)` |
-| Load Savestate | `FrontendMessage::LoadSaveState(Box<SaveState>)` |
-| Create Savestate | `FrontendMessage::CreateSaveState` |
+| CLI Operation    | Existing Message                                 |
+|------------------|--------------------------------------------------|
+| Load ROM         | `FrontendMessage::LoadRom(PathBuf)`              |
+| Reset            | `FrontendMessage::Reset`                         |
+| Power On         | `FrontendMessage::Power`                         |
+| Power Off        | `FrontendMessage::PowerOff`                      |
+| Set Palette      | `FrontendMessage::SetPalette(Box<RgbPalette>)`   |
+| Write CPU Memory | `FrontendMessage::WriteCpu(u16, u8)`             |
+| Write PPU Memory | `FrontendMessage::WritePpu(u16, u8)`             |
+| Load Savestate   | `FrontendMessage::LoadSaveState(Box<SaveState>)` |
+| Create Savestate | `FrontendMessage::CreateSaveState`               |
 
 ---
 
@@ -67,14 +68,14 @@ The CLI interface should map directly to existing `FrontendMessage` variants whe
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        CLI Entry Point                               │
+│                        CLI Entry Point                              │
 │                   (core/src/bin/main.rs)                            │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     Argument Parser (clap)                          │
-│                                                                      │
+│                                                                     │
 │  • Parses and validates all CLI arguments                           │
 │  • Builds CliConfig struct with all options                         │
 │  • Handles argument groups and conflicts                            │
@@ -83,22 +84,22 @@ The CLI interface should map directly to existing `FrontendMessage` variants whe
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      CLI Execution Engine                           │
-│                                                                      │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │
-│  │   Phase 1:   │  │   Phase 2:   │  │        Phase 3:          │  │
-│  │    Setup     │─▶│  Initialize  │─▶│        Execute           │  │
-│  │              │  │              │  │                          │  │
-│  │ • Load ROM   │  │ • Init Memory│  │ • Run until condition    │  │
-│  │ • Load State │  │ • Set Palette│  │ • Handle stop triggers   │  │
-│  │ • Power On   │  │ • Init Regs  │  │ • Capture outputs        │  │
-│  └──────────────┘  └──────────────┘  └──────────────────────────┘  │
+│                                                                     │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐   │
+│  │   Phase 1:   │  │   Phase 2:   │  │        Phase 3:          │   │
+│  │    Setup     │─▶│  Initialize  │─▶│        Execute          │   │
+│  │              │  │              │  │                          │   │
+│  │ • Load ROM   │  │ • Init Memory│  │ • Run until condition    │   │
+│  │ • Load State │  │ • Set Palette│  │ • Handle stop triggers   │   │
+│  │ • Power On   │  │ • Init Regs  │  │ • Capture outputs        │   │
+│  └──────────────┘  └──────────────┘  └──────────────────────────┘   │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     Output Handler                                   │
-│                                                                      │
-│  • Memory dumps (hex/binary/JSON)                                   │
+│                     Output Handler                                  │
+│                                                                     │
+│  • Memory dumps (hex/binary/JSON/toml)                                   │
 │  • Screenshots (PNG)                                                │
 │  • Video files (using external encoder)                             │
 │  • Savestates (rkyv serialized)                                     │
@@ -152,32 +153,34 @@ Arguments are organized into logical groups:
 
 #### Global Options
 
-| Flag | Long Form | Description | Type | Default |
-|------|-----------|-------------|------|---------|
-| `-H` | `--headless` | Run without GUI | bool | false |
-| `-q` | `--quiet` | Suppress non-error output | bool | false |
-| `-v` | `--verbose` | Enable verbose output | bool | false |
-| `--version` | | Print version and exit | | |
-| `--help` | | Print help information | | |
+| Flag        | Long Form    | Description               | Type    | Default |
+|-------------|--------------|---------------------------|---------|---------|
+| `-H`        | `--headless` | Run without GUI           | bool    | false   |
+| `-q`        | `--quiet`    | Suppress non-error output | bool    | false   |
+| `-v`        | `--verbose`  | Enable verbose output     | bool    | false   |
+| `--version` |              | Print version and exit    |         |         |
+| `--help`    |              | Print help information    |         |         |
+| `-c`        | `--config`   | Load config from file     | PathBuf | false   |
 
 #### ROM Loading
 
-| Flag | Long Form | Description | Type |
-|------|-----------|-------------|------|
-| `-r` | `--rom` | Path to ROM file | PathBuf |
-| | `--rom-info` | Print ROM information and exit | bool |
+| Flag | Long Form    | Description                    | Type    |
+|------|--------------|--------------------------------|---------|
+| `-r` | `--rom`      | Path to ROM file               | PathBuf |
+|      | `--rom-info` | Print ROM information and exit | bool    |
 
 #### Savestate Operations
 
-| Flag | Long Form | Description | Type |
-|------|-----------|-------------|------|
-| `-l` | `--load-state` | Load savestate from file | PathBuf |
-| `-s` | `--save-state` | Save state to file on exit | PathBuf |
-| | `--state-stdin` | Read savestate from stdin | bool |
-| | `--state-stdout` | Write savestate to stdout on exit | bool |
-| | `--save-state-on` | When to save state (see below) | String |
+| Flag | Long Form         | Description                       | Type    |
+|------|-------------------|-----------------------------------|---------|
+| `-l` | `--load-state`    | Load savestate from file          | PathBuf |
+| `-s` | `--save-state`    | Save state to file on exit        | PathBuf |
+|      | `--state-stdin`   | Read savestate from stdin         | bool    |
+|      | `--state-stdout`  | Write savestate to stdout on exit | bool    |
+|      | `--save-state-on` | When to save state (see below)    | String  |
 
 **`--save-state-on` Options:**
+
 - `exit` - Save when emulator exits normally
 - `stop` - Save when any stop condition is triggered
 - `cycle:N` - Save at specific cycle N
@@ -186,86 +189,96 @@ Arguments are organized into logical groups:
 
 #### Memory Operations
 
-| Flag | Long Form | Description | Type |
-|------|-----------|-------------|------|
-| | `--read-cpu` | Read CPU memory range | String |
-| | `--read-ppu` | Read PPU memory range | String |
-| | `--read-oam` | Dump OAM (sprite) memory | bool |
-| | `--read-palette` | Dump palette RAM | bool |
-| | `--init-cpu` | Initialize CPU memory | String |
-| | `--init-ppu` | Initialize PPU memory | String |
-| | `--init-oam` | Initialize OAM from file | PathBuf |
-| | `--init-file` | Load init values from file | PathBuf |
+| Flag | Long Form           | Description                | Type    |
+|------|---------------------|----------------------------|---------|
+|      | `--read-cpu`        | Read CPU memory range      | String  |
+|      | `--read-ppu`        | Read PPU memory range      | String  |
+|      | `--dump-oam`        | Dump OAM (sprite) memory   | bool    |
+|      | `--dump-nametables` | Dump Nametables            | bool    |
+|      | `--init-cpu`        | Initialize CPU memory      | String  |
+|      | `--init-ppu`        | Initialize PPU memory      | String  |
+|      | `--init-oam`        | Initialize OAM             | String  |
+|      | `--init-file`       | Load init values from file | PathBuf |
 
 **Memory Range Format:** `START-END` or `START:LENGTH` (hex addresses)
+
 - Examples: `0x0000-0x07FF`, `0x6000:0x2000`, `0x2000-0x3FFF`
 
 **Memory Init Format:** `ADDR=VALUE` or `ADDR=VALUE1,VALUE2,...` (hex)
+
 - Examples: `0x0000=0xFF`, `0x6000=0x01,0x02,0x03,0x04`
+
+**Memory Init from File:** Configure memory init in file with json/toml/binary format
 
 #### Power Control
 
-| Flag | Long Form | Description | Type | Default |
-|------|-----------|-------------|------|---------|
-| | `--no-power` | Don't auto-power on after ROM load | bool | false |
-| | `--reset` | Reset after loading | bool | false |
-| | `--power-cycles` | Warm-up cycles before execution | u64 | 0 |
+| Flag | Long Form    | Description                        | Type | Default |
+|------|--------------|------------------------------------|------|---------|
+|      | `--no-power` | Don't auto-power on after ROM load | bool | false   |
+|      | `--reset`    | Reset after loading                | bool | false   |
 
 #### Palette Configuration
 
-| Flag | Long Form | Description | Type |
-|------|-----------|-------------|------|
-| `-p` | `--palette` | Path to .pal RGB palette file | PathBuf |
-| | `--palette-builtin` | Use built-in palette by name | String |
+| Flag | Long Form           | Description                   | Type    |
+|------|---------------------|-------------------------------|---------|
+| `-p` | `--palette`         | Path to .pal RGB palette file | PathBuf |
+|      | `--palette-builtin` | Use built-in palette by name  | String  |
 
 **Built-in Palettes:**
+
 - `2C02G` (default) - Standard 2C02G palette
-- `2C02G-smooth` - Smooth variant
 - `composite` - NTSC composite simulation
 
 #### Video/Screenshot Export
 
-| Flag | Long Form | Description | Type |
-|------|-----------|-------------|------|
-| | `--screenshot` | Save screenshot on exit | PathBuf |
-| | `--screenshot-on` | When to capture (same as save-state-on) | String |
-| | `--video` | Record video to file | PathBuf |
-| | `--video-format` | Video output format | String |
-| | `--video-fps` | Video frame rate | u32 |
-| | `--export-nametables` | Export nametable viewer | PathBuf |
-| | `--export-pattern-tables` | Export pattern table viewer | PathBuf |
-| | `--export-sprites` | Export sprite viewer | PathBuf |
+| Flag | Long Form                       | Description                                      | Type    |
+|------|---------------------------------|--------------------------------------------------|---------|
+|      | `--screenshot`                  | Save screenshot on exit                          | PathBuf |
+|      | `--screenshot-on`               | When to capture (same as save-state-on)          | String  |
+|      | `--video`                       | Record video to file                             | PathBuf |
+|      | `--video-format`                | Video output format                              | String  |
+|      | `--video-fps`                   | Video frame rate                                 | u32     |
+|      | `--export-nametables`           | Export nametable visualization as screenshot     | PathBuf |
+|      | `--export-nametables-video`     | Export nametable visualization as video          | PathBuf |
+|      | `--export-pattern-tables`       | Export pattern table visualization as screenshot | PathBuf |
+|      | `--export-pattern-tables-video` | Export pattern table visualization as video      | PathBuf |
+|      | `--export-sprites`              | Export sprite visualization as screenshot        | PathBuf |
+|      | `--export-sprites-video`        | Export sprite visualization as video             | PathBuf |
 
 **Video Formats:**
-- `raw` - Raw RGBA frames (for piping to ffmpeg)
+
+- `raw` - Raw RGBA frames (for piping to FFmpeg)
 - `ppm` - PPM image sequence
 - `png` - PNG image sequence
+- `mp4` - MP4 video
 
 #### Execution Control
 
-| Flag | Long Form | Description | Type |
-|------|-----------|-------------|------|
-| `-c` | `--cycles` | Run for N master cycles | u128 |
-| `-f` | `--frames` | Run for N frames | u64 |
-| | `--until-pc` | Run until PC reaches address | u16 |
-| | `--until-opcode` | Run until specific opcode executes | u8 |
-| | `--until-mem` | Run until memory condition | String |
-| | `--until-hlt` | Run until HLT instruction | bool |
-| | `--step` | Single-step mode | bool |
-| | `--trace` | Enable instruction trace | PathBuf |
-| | `--breakpoint` | Set breakpoint at address | Vec<u16> |
+| Flag | Long Form        | Description                        | Type     |
+|------|------------------|------------------------------------|----------|
+| `-c` | `--cycles`       | Run for N master cycles            | u128     |
+| `-f` | `--frames`       | Run for N frames                   | u64      |
+|      | `--until-pc`     | Run until PC reaches address       | u16      |
+|      | `--until-opcode` | Run until specific opcode executes | u8       |
+|      | `--until-mem`    | Run until memory condition         | String   |
+|      | `--until-hlt`    | Run until HLT instruction          | bool     |
+|      | `--step`         | Single-step mode                   | bool     |
+|      | `--trace`        | Enable instruction trace           | PathBuf  |
+|      | `--breakpoint`   | Set breakpoint at address          | Vec<u16> |
 
 **Memory Condition Format:** `ADDR==VALUE`, `ADDR!=VALUE`, `ADDR&MASK==VALUE`
+
 - Examples: `0x6000==0x80`, `0x2002&0x80!=0x00`
 
 #### Output Control
 
-| Flag | Long Form | Description | Type | Default |
-|------|-----------|-------------|------|---------|
-| `-o` | `--output` | Output file for memory dumps | PathBuf | stdout |
-| | `--output-format` | Output format | String | hex |
-| | `--json` | Output in JSON format | bool | false |
-| | `--binary` | Output in binary format | bool | false |
+| Flag | Long Form         | Description                  | Type    | Default |
+|------|-------------------|------------------------------|---------|---------|
+| `-o` | `--output`        | Output file for memory dumps | PathBuf | stdout  |
+|      | `--output-format` | Output format                | String  | hex     |
+|      | `--json`          | Output in JSON format        | bool    | false   |
+|      | `--toml`          | Output in TOML format        | bool    | false   |
+|      | `--binary`        | Output in binary format      | bool    | false   |
 
 ---
 
@@ -321,7 +334,7 @@ nes_main -H --rom game.nes -l input.sav --frames 60 -s output.sav
 
 ### Pipe-Based Savestates (Streaming Workflows)
 
-For multi-step automation pipelines, savestates can be read from stdin and written to stdout:
+For multistep automation pipelines, savestates can be read from stdin and written to stdout:
 
 ```bash
 # Single step pipeline
@@ -395,17 +408,17 @@ nes_main -H --rom game.nes --frames 100 --read-ppu 0x0000-0x1FFF
 nes_main -H --rom game.nes --frames 100 --read-ppu 0x2000-0x2FFF
 
 # Read palette RAM
-nes_main -H --rom game.nes --frames 100 --read-palette
+nes_main -H --rom game.nes --frames 100 --dump-palette
 ```
 
 #### OAM (Sprite Memory)
 
 ```bash
 # Dump full OAM (256 bytes, 64 sprites)
-nes_main -H --rom game.nes --frames 100 --read-oam
+nes_main -H --rom game.nes --frames 100 --dump-oam
 
 # JSON format with sprite interpretation
-nes_main -H --rom game.nes --frames 100 --read-oam --json
+nes_main -H --rom game.nes --frames 100 --dump-oam --json
 ```
 
 ### Initializing Memory
@@ -443,7 +456,6 @@ nes_main -H --rom game.nes --init-ppu 0x3F00=0x0F,0x00,0x10,0x20 --frames 100
 # {
 #   "cpu": {"0x0050": [1, 2, 3, 4], "0x0060": [255]},
 #   "ppu": {"0x3F00": [15, 0, 16, 32]},
-#   "oam": "base64encodeddata..."
 # }
 nes_main -H --rom game.nes --init-file init.json --frames 100
 ```
@@ -451,6 +463,7 @@ nes_main -H --rom game.nes --init-file init.json --frames 100
 ### Memory Access Timing
 
 Memory initialization happens:
+
 1. **After ROM loading** - ROM is loaded and mapped
 2. **After power-on** - CPU/PPU are in initialized state
 3. **After savestate load** - If loading a savestate
@@ -484,15 +497,6 @@ nes_main -H --rom game.nes --frames 100 -s pre_reset.sav
 nes_main -H --rom game.nes -l pre_reset.sav --reset --frames 100 -s post_reset.sav
 ```
 
-### Power Cycles (Warm-up)
-
-Some tests require the emulator to run for a specific number of cycles before the main execution begins:
-
-```bash
-# Run 1000 power-up cycles before main execution
-nes_main -H --rom game.nes --power-cycles 1000 --frames 100
-```
-
 ---
 
 ## Palette Configuration
@@ -512,10 +516,12 @@ nes_main -H --rom game.nes --palette-builtin 2C02G --frames 100
 The emulator supports the standard NES palette format:
 
 **192-byte format (single palette):**
+
 - 64 colors × 3 bytes (RGB) = 192 bytes
 - Colors are in NES palette order (0x00-0x3F)
 
 **1536-byte format (8 emphasis variants):**
+
 - 8 emphasis modes × 64 colors × 3 bytes = 1536 bytes
 - Emphasis modes: Normal, R, G, RG, B, RB, GB, RGB
 
@@ -553,6 +559,9 @@ nes_main -H --rom game.nes --frames 600 --video frame_%04d.png --video-format pn
 
 # Record PPM sequence (faster, larger files)
 nes_main -H --rom game.nes --frames 600 --video frame_%04d.ppm --video-format ppm
+
+# Record MP4
+nes_main -H --rom game.nes --frames 600 --video video.mp4 --video-format mp4
 ```
 
 ### Debug Viewer Exports
@@ -618,6 +627,7 @@ nes_main -H --rom game.nes --trace execution.log --frames 10
 ```
 
 **Trace Format:**
+
 ```
 C000  78        SEI            A:00 X:00 Y:00 P:04 SP:FD CYC:7
 C001  D8        CLD            A:00 X:00 Y:00 P:04 SP:FD CYC:9
@@ -645,45 +655,45 @@ Raw binary data written to file or stdout.
 
 ```json
 {
-  "memory_dump": {
-    "type": "cpu",
-    "start": "0x0000",
-    "end": "0x07FF",
-    "data": "AAAAAAAAAAAAAAAA..."
-  },
-  "registers": {
-    "pc": "0xC000",
-    "a": "0x00",
-    "x": "0x00",
-    "y": "0x00",
-    "sp": "0xFD",
-    "p": "0x04"
-  },
-  "cycles": 1000000,
-  "frames": 16
+	"memory_dump": {
+		"type": "cpu",
+		"start": "0x0000",
+		"end": "0x07FF",
+		"data": "AAAAAAAAAAAAAAAA..."
+	},
+	"registers": {
+		"pc": "0xC000",
+		"a": "0x00",
+		"x": "0x00",
+		"y": "0x00",
+		"sp": "0xFD",
+		"p": "0x04"
+	},
+	"cycles": 1000000,
+	"frames": 16
 }
 ```
 
-### OAM JSON Format
+### OAM Interpret Format (Json example)
 
 ```json
 {
-  "sprites": [
-    {
-      "index": 0,
-      "y": 64,
-      "tile": 1,
-      "attributes": {
-        "palette": 0,
-        "priority": false,
-        "flip_h": false,
-        "flip_v": false
-      },
-      "x": 128
-    },
-    ...
-  ],
-  "raw": "base64..."
+	"sprites": [
+		{
+			"index": 0,
+			"y": 64,
+			"tile": 1,
+			"attributes": {
+				"palette": 0,
+				"priority": false,
+				"flip_h": false,
+				"flip_v": false
+			},
+			"x": 128
+		},
+		...
+	],
+	"raw": "base64..."
 }
 ```
 
@@ -798,19 +808,20 @@ The CLI can optionally use the `ChannelEmulator` infrastructure for consistency:
 
 ```rust
 // Option 1: Direct Nes manipulation (current headless approach)
-let mut emu = Nes::default();
-emu.load_rom(&rom_path);
+let mut emu = Nes::default ();
+emu.load_rom( & rom_path);
 emu.power();
 emu.run_until(target_cycles);
 
 // Option 2: Message-based approach (more consistent with GUI)
-let (mut channel_emu, tx, rx) = ChannelEmulator::new(Nes::default());
+let ( mut channel_emu, tx, rx) = ChannelEmulator::new(Nes::default ());
 tx.send(FrontendMessage::LoadRom(rom_path));
 tx.send(FrontendMessage::Power);
 // Process messages in a loop
 ```
 
 For the CLI, **Option 1 (direct manipulation)** is recommended for:
+
 - Lower overhead
 - Simpler control flow
 - Easier cycle-accurate timing
@@ -832,7 +843,7 @@ fn apply_memory_init(nes: &mut Nes, cpu_inits: &[(u16, Vec<u8>)], ppu_inits: &[(
             nes.cpu.memory.init(*addr + i as u16, *byte);
         }
     }
-    
+
     for (addr, bytes) in ppu_inits {
         for (i, byte) in bytes.iter().enumerate() {
             // Uses mem_init for direct PPU memory initialization
@@ -941,15 +952,15 @@ fn read_state_stdin() -> io::Result<SaveState> {
 
 The CLI should use standard exit codes:
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | General error |
-| 2 | Invalid arguments |
-| 3 | ROM load failed |
-| 4 | Savestate load failed |
-| 5 | I/O error |
-| 6 | Timeout/stop condition not met |
+| Code | Meaning                        |
+|------|--------------------------------|
+| 0    | Success                        |
+| 1    | General error                  |
+| 2    | Invalid arguments              |
+| 3    | ROM load failed                |
+| 4    | Savestate load failed          |
+| 5    | I/O error                      |
+| 6    | Timeout/stop condition not met |
 
 ### Configuration File Support (Future)
 
@@ -990,12 +1001,14 @@ This CLI interface design provides:
 5. **Extensibility** for future features
 
 The design prioritizes:
+
 - Minimal changes to existing code
 - Reuse of existing infrastructure (messages, savestate format, etc.)
 - Clear separation between CLI parsing, execution, and output
 - Compatibility with shell scripting and pipeline workflows
 
 Implementation should proceed in phases:
+
 1. Basic ROM loading and cycle-count execution
 2. Savestate load/save with pipe support
 3. Memory read/write operations
