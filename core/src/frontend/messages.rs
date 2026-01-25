@@ -1,11 +1,14 @@
 use std::path::PathBuf;
 
+use crate::emulation::messages::RgbPalette;
 use crate::emulation::savestate::SaveState;
 use crate::frontend::util::SavestateLoadError;
 
 pub enum AsyncFrontendMessage {
     EmuRelay(RelayType, Option<PathBuf>),
     RefreshPalette,
+    /// Palette file was loaded asynchronously - includes the parsed palette data and path
+    PaletteLoaded(RgbPalette, PathBuf),
     /// User has selected a savestate file, now need to verify/select ROM
     SavestateLoaded(Box<SavestateLoadContext>),
     /// Show dialog asking if user wants to load the found matching ROM
@@ -26,6 +29,8 @@ pub enum AsyncFrontendMessage {
     SavestateLoadFailed(SavestateLoadError),
     /// An error occurred while verifying the ROM
     RomVerificationFailed(Box<SavestateLoadContext>, SavestateLoadError),
+    /// File save completed (success or error message)
+    FileSaveCompleted(Option<String>),
 }
 
 /// Context for the multistep savestate loading process

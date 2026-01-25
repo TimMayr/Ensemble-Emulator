@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use crossbeam_channel::Sender;
 use egui::WidgetText;
 use egui_tiles::{Behavior, SimplificationOptions, TileId, Tiles, UiResponse};
+use serde::{Deserialize, Serialize};
 
 use crate::emulation::channel_emu::{ChannelEmulator, FETCH_DEPS};
 use crate::emulation::messages::{EmulatorFetchable, FrontendMessage};
@@ -14,7 +15,7 @@ use crate::frontend::egui::ui::{
 use crate::frontend::messages::AsyncFrontendMessage;
 
 /// The different pane types that can be displayed in the tile tree
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Pane {
     /// Main emulator output - cannot be closed
     EmulatorOutput,

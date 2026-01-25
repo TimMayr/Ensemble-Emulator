@@ -14,13 +14,14 @@ use std::fmt::{Debug, Formatter};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+
 use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
 use crate::emulation::messages::{
-    EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette, TILE_COUNT,
-    TileData,
+    EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette, TileData,
+    TILE_COUNT,
 };
 use crate::emulation::nes::Nes;
 use crate::frontend::egui::config::{
@@ -31,13 +32,17 @@ use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
-    Pane, TreeBehavior, compute_required_fetches_from_tree, create_tree,
+    compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
 };
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
 use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
 use crate::frontend::palettes::parse_palette_from_file;
+use crate::frontend::persistence::{get_egui_storage_path, load_config};
 use crate::frontend::util;
 use crate::frontend::util::{FileType, ToBytes};
+
+/// Key used for storing egui_tiles tree state in egui's persistence
+const EGUI_TILES_TREE_KEY: &str = "emulator_tiles_tree";
 
 /// Main egui application state
 pub struct EguiApp {
@@ -60,6 +65,7 @@ pub struct EguiApp {
 
 impl EguiApp {
     pub fn new(
+        cc: &eframe::CreationContext<'_>,
         channel_emu: ChannelEmulator,
         to_emulator: Sender<FrontendMessage>,
         from_emulator: Receiver<EmulatorMessage>,
@@ -67,7 +73,25 @@ impl EguiApp {
         from_async: Receiver<AsyncFrontendMessage>,
         rgb_palette: RgbPalette,
     ) -> Self {
-        let mut s = Self {
+        // Load configuration from TOML file
+        let loaded_config = load_config();
+
+        // Try to restore the tile tree from egui's storage, fall back to default
+        let tree = cc
+            .storage
+            .and_then(|storage| {
+                eframe::get_value::<egui_tiles::Tree<Pane>>(storage, EGUI_TILES_TREE_KEY)
+            })
+            .unwrap_or_else(create_tree);
+
+        // Create default config and apply loaded settings
+        let mut config = AppConfig::default();
+        if let Some(ref persistent_config) = loaded_config {
+            config = persistent_config.into();
+        }
+        config.view_config.palette_rgb_data = rgb_palette;
+
+        Self {
             channel_emu,
             to_emulator,
             from_emulator,
@@ -76,15 +100,11 @@ impl EguiApp {
             emu_textures: Default::default(),
             fps_counter: Default::default(),
             accumulator: Default::default(),
-            config: Default::default(),
-            tree: create_tree(),
+            config,
+            tree,
             pattern_tables_was_visible: false,
             nametables_was_visible: false,
-        };
-
-        s.config.view_config.palette_rgb_data = rgb_palette;
-
-        s
+        }
     }
 
     /// Calculate the frame budget based on current speed settings
@@ -130,6 +150,7 @@ impl EguiApp {
                 AsyncFrontendMessage::EmuRelay(r, p) => {
                     match r {
                         RelayType::LoadPalette => {
+                            // Legacy path - when no file data is provided, use default palette
                             let palette = parse_palette_from_file(
                                 p.clone(),
                                 self.config.user_config.previous_palette_path.clone(),
@@ -161,6 +182,29 @@ impl EguiApp {
                                 self.config.user_config.previous_rom_path = Some(p)
                             }
                         }
+                    }
+                }
+                AsyncFrontendMessage::PaletteLoaded(palette, path) => {
+                    // Palette was loaded asynchronously - apply it
+                    self.config.view_config.palette_rgb_data = palette;
+                    self.config.user_config.previous_palette_path = Some(path);
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::SetPalette(Box::new(palette)));
+                    // Only update tile textures if a tile viewer is visible
+                    if self.is_tile_viewer_visible() {
+                        self.emu_textures.update_tile_textures(
+                            ctx,
+                            &self.config.view_config.palette_rgb_data,
+                            None,
+                            None,
+                        );
+                    }
+                }
+                AsyncFrontendMessage::FileSaveCompleted(error) => {
+                    // Handle save completion - log any errors
+                    if let Some(e) = error {
+                        eprintln!("File save error: {}", e);
                     }
                 }
                 AsyncFrontendMessage::RefreshPalette => {
@@ -383,6 +427,7 @@ impl EguiApp {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
                 EmulatorMessage::SaveState(s) => util::spawn_save_dialog(
+                    Some(&self.async_sender),
                     self.config.user_config.previous_savestate_path.as_ref(),
                     FileType::Savestate,
                     s.to_bytes(),
@@ -393,13 +438,13 @@ impl EguiApp {
 
     /// Check if the pattern tables pane is visible
     fn is_pattern_tables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{Pane, find_pane};
+        use crate::frontend::egui::tiles::{find_pane, Pane};
         find_pane(&self.tree.tiles, &Pane::PatternTables).is_some()
     }
 
     /// Check if the nametables pane is visible
     fn is_nametables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{Pane, find_pane};
+        use crate::frontend::egui::tiles::{find_pane, Pane};
         find_pane(&self.tree.tiles, &Pane::Nametables).is_some()
     }
 
@@ -615,7 +660,18 @@ impl eframe::App for EguiApp {
         ctx.request_repaint();
     }
 
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        // Save the tile tree layout to egui's built-in storage
+        eframe::set_value(storage, EGUI_TILES_TREE_KEY, &self.tree);
+    }
+
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        // Save configuration to TOML file before exiting (synchronous to ensure completion)
+        let persistent_config = (&self.config).into();
+        if let Err(e) = crate::frontend::persistence::save_config(&persistent_config) {
+            eprintln!("Failed to save configuration: {}", e);
+        }
+
         let _ = self.to_emulator.send(FrontendMessage::Quit);
     }
 }
@@ -642,6 +698,9 @@ pub fn run(
     let _ = to_frontend.send(AsyncFrontendMessage::EmuRelay(RelayType::LoadRom, rom));
     let _ = tx_to_emu.send(FrontendMessage::SetPalette(Box::new(palette)));
 
+    // Get the storage path for egui persistence
+    let storage_path = get_egui_storage_path();
+
     // Configure eframe options
     // Disable vsync to allow uncapped frame rates - emulator handles its own timing
     let options = eframe::NativeOptions {
@@ -650,6 +709,8 @@ pub fn run(
             .with_title("NES Emulator - Egui")
             .with_app_id("nes-emulator"),
         vsync: false, // Disable vsync for uncapped performance
+        // Enable persistence with custom storage path
+        persistence_path: storage_path,
         ..Default::default()
     };
 
@@ -657,7 +718,7 @@ pub fn run(
     eframe::run_native(
         "NES Emulator - Egui",
         options,
-        Box::new(|cc| {
+        Box::new(move |cc| {
             let style = Style {
                 visuals: Visuals::dark(),
                 ..Default::default()
@@ -665,6 +726,7 @@ pub fn run(
             cc.egui_ctx.set_style(style);
             cc.egui_ctx.set_theme(egui::Theme::Dark);
             Ok(Box::new(EguiApp::new(
+                cc,
                 channel_emu,
                 tx_to_emu,
                 rx_from_emu,

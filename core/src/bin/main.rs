@@ -366,7 +366,8 @@ fn output_toml(mem: &[u8], start_addr: u16, mem_type: &str, args: &CliArgs) -> R
 // =============================================================================
 
 fn print_rom_info(rom_path: &PathBuf) -> Result<(), String> {
-    let rom = RomFile::load(rom_path);
+    let path_str = rom_path.to_string_lossy().to_string();
+    let rom = RomFile::load(&path_str);
 
     println!("ROM Information:");
     println!("  File: {}", rom_path.display());

@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 use crate::emulation::messages::RgbPalette;
 use crate::emulation::savestate::{self, SaveState};
 use crate::frontend::messages::{AsyncFrontendMessage, RelayType, SavestateLoadContext};
+use crate::frontend::palettes::parse_palette_from_file;
 
 /// Enum to represent errors that can occur during savestate loading UI flow
 pub enum SavestateLoadError {
@@ -189,18 +190,58 @@ pub fn spawn_file_picker(
     });
 }
 
-/// Spawn a save dialog for a palette file in a background thread.
-pub fn spawn_save_dialog(previous_path: Option<&PathBuf>, file_type: FileType, data: Vec<u8>) {
+/// Spawn a file picker for palette files that loads the palette asynchronously.
+/// 
+/// This reads and parses the palette file in a background thread to avoid blocking the UI.
+/// 
+/// # Arguments
+/// * `sender` - Channel to send the loaded palette back to the UI thread
+/// * `previous_path` - Used to set the initial directory for the file picker dialog
+/// * `fallback_path` - Used as fallback if the selected file cannot be parsed
+pub fn spawn_palette_picker(
+    sender: &Sender<AsyncFrontendMessage>,
+    previous_path: Option<&PathBuf>,
+    fallback_path: Option<PathBuf>,
+) {
+    let sender = sender.clone();
     let prev_dir = get_parent_dir(previous_path);
     std::thread::spawn(move || {
-        if let Some(p) = save_file(prev_dir, file_type)
-            && let Ok(mut file) = OpenOptions::new()
+        if let Some(path) = pick_file(prev_dir, FileType::Palette) {
+            // Parse the palette file in this background thread
+            let palette = parse_palette_from_file(Some(path.clone()), fallback_path);
+            let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette, path));
+        }
+    });
+}
+
+/// Spawn a save dialog for a file in a background thread.
+/// The file is written asynchronously after the user selects a path.
+pub fn spawn_save_dialog(
+    sender: Option<&Sender<AsyncFrontendMessage>>,
+    previous_path: Option<&PathBuf>,
+    file_type: FileType,
+    data: Vec<u8>,
+) {
+    let prev_dir = get_parent_dir(previous_path);
+    let sender = sender.cloned();
+    std::thread::spawn(move || {
+        if let Some(p) = save_file(prev_dir, file_type) {
+            let result = match OpenOptions::new()
                 .write(true)
                 .create(true)
                 .truncate(true)
-                .open(p)
-        {
-            let _ = file.write_all(&data);
+                .open(&p)
+            {
+                Ok(mut file) => match file.write_all(&data) {
+                    Ok(_) => None,
+                    Err(e) => Some(format!("Failed to write file: {}", e)),
+                },
+                Err(e) => Some(format!("Failed to create file: {}", e)),
+            };
+            // Notify completion if a sender was provided
+            if let Some(sender) = sender {
+                let _ = sender.send(AsyncFrontendMessage::FileSaveCompleted(result));
+            }
         }
     });
 }
