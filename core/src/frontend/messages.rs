@@ -22,9 +22,8 @@ pub enum FrontendEvent {
 /// operations without directly sending FrontendMessages to the emulator.
 /// This consolidates all emulator communication logic in one place.
 pub enum AsyncFrontendMessage {
-    EmuRelay(RelayType, Option<PathBuf>),
     /// Palette file was loaded asynchronously - includes the parsed palette data and path
-    PaletteLoaded(RgbPalette, PathBuf),
+    PaletteLoaded(RgbPalette, Option<PathBuf>),
     /// User has selected a savestate file, now need to verify/select ROM
     SavestateLoaded(Box<SavestateLoadContext>),
     /// Show dialog asking if user wants to load the found matching ROM
@@ -49,13 +48,12 @@ pub enum AsyncFrontendMessage {
     FileSaveCompleted(Option<String>),
     Quickload,
     Quicksave,
-    LoadRom(PathBuf),
+    LoadRom(Option<PathBuf>),
 
     // =========================================================================
     // Consolidated emulator operations
     // These replace direct FrontendMessage sends from UI components
     // =========================================================================
-
     /// Power on the console (updates is_powered config)
     PowerOn,
     /// Power off the console (updates is_powered config)
@@ -67,7 +65,10 @@ pub enum AsyncFrontendMessage {
     /// Set the RGB palette and refresh tile textures
     SetPalette(RgbPalette),
     /// Write to PPU palette RAM and request updated palette data
-    WritePpuPalette { address: u16, value: u8 },
+    WritePpuPalette {
+        address: u16,
+        value: u8,
+    },
     /// Write to PPU pattern table and request updated tile data
     WritePpuPattern {
         addr_0: u16,
@@ -84,9 +85,4 @@ pub enum AsyncFrontendMessage {
 pub struct SavestateLoadContext {
     pub savestate: SaveState,
     pub savestate_path: PathBuf,
-}
-
-pub enum RelayType {
-    LoadRom,
-    LoadPalette,
 }

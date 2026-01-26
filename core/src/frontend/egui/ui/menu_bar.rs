@@ -3,8 +3,8 @@ use egui::Context;
 
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::tiles::{add_pane_if_missing, Pane};
-use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
-use crate::frontend::util::{spawn_file_picker, spawn_savestate_picker, FileType};
+use crate::frontend::messages::AsyncFrontendMessage;
+use crate::frontend::util::{spawn_rom_picker, spawn_savestate_picker};
 
 pub fn add_menu_bar(
     ctx: &Context,
@@ -16,12 +16,7 @@ pub fn add_menu_bar(
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui.button("Load Rom").clicked() {
-                    spawn_file_picker(
-                        async_sender,
-                        config.user_config.previous_rom_path.as_ref(),
-                        FileType::Rom,
-                        RelayType::LoadRom,
-                    );
+                    spawn_rom_picker(async_sender, config.user_config.previous_rom_path.as_ref());
                 }
                 ui.menu_button("Savestates", |ui| {
                     if ui.button("Save State").clicked() {
@@ -45,14 +40,14 @@ pub fn add_menu_bar(
                 if ui.button("Power cycle").clicked() {
                     let _ = async_sender.send(AsyncFrontendMessage::PowerOff);
                     if let Some(p) = config.user_config.previous_rom_path.clone() {
-                        let _ = async_sender.send(AsyncFrontendMessage::LoadRom(p));
+                        let _ = async_sender.send(AsyncFrontendMessage::LoadRom(Some(p)));
                     }
                     let _ = async_sender.send(AsyncFrontendMessage::PowerOn);
                 }
                 if !config.console_config.is_powered {
                     if ui.button("Power On").clicked() {
                         if let Some(p) = config.user_config.previous_rom_path.clone() {
-                            let _ = async_sender.send(AsyncFrontendMessage::LoadRom(p));
+                            let _ = async_sender.send(AsyncFrontendMessage::LoadRom(Some(p)));
                         }
                         let _ = async_sender.send(AsyncFrontendMessage::PowerOn);
                     }

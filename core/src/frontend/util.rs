@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 
 use crate::emulation::messages::RgbPalette;
 use crate::emulation::savestate::{self, SaveState};
-use crate::frontend::messages::{AsyncFrontendMessage, RelayType, SavestateLoadContext};
+use crate::frontend::messages::{AsyncFrontendMessage, SavestateLoadContext};
 use crate::frontend::palettes::parse_palette_from_file;
 
 /// Enum to represent errors that can occur during savestate loading UI flow
@@ -176,20 +176,6 @@ pub fn get_parent_dir(path: Option<&PathBuf>) -> PathBuf {
         .unwrap_or_default()
 }
 
-pub fn spawn_file_picker(
-    sender: &Sender<AsyncFrontendMessage>,
-    previous_path: Option<&PathBuf>,
-    file_type: FileType,
-    message: RelayType,
-) {
-    let sender = sender.clone();
-    let prev_dir = get_parent_dir(previous_path);
-    std::thread::spawn(move || {
-        let path = pick_file(prev_dir, file_type);
-        let _ = sender.send(AsyncFrontendMessage::EmuRelay(message, path));
-    });
-}
-
 /// Spawn a file picker for palette files that loads the palette asynchronously.
 ///
 /// This reads and parses the palette file in a background thread to avoid blocking the UI.
@@ -209,7 +195,17 @@ pub fn spawn_palette_picker(
         if let Some(path) = pick_file(prev_dir, FileType::Palette) {
             // Parse the palette file in this background thread
             let palette = parse_palette_from_file(Some(path.clone()), fallback_path);
-            let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette, path));
+            let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette, Some(path)));
+        }
+    });
+}
+
+pub fn spawn_rom_picker(sender: &Sender<AsyncFrontendMessage>, previous_path: Option<&PathBuf>) {
+    let sender = sender.clone();
+    let prev_dir = get_parent_dir(previous_path);
+    std::thread::spawn(move || {
+        if let Some(path) = pick_file(prev_dir, FileType::Rom) {
+            let _ = sender.send(AsyncFrontendMessage::LoadRom(Some(path)));
         }
     });
 }

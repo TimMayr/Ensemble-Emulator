@@ -3,10 +3,11 @@ use crossbeam_channel::Sender;
 use crate::emulation::ppu::PALETTE_RAM_START_ADDRESS;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
-use crate::frontend::egui::ui::widgets::{PainterGridConfig, color_cell};
-use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
+use crate::frontend::egui::ui::widgets::{color_cell, PainterGridConfig};
+use crate::frontend::messages::AsyncFrontendMessage;
+use crate::frontend::palettes::parse_palette_from_file;
 use crate::frontend::util::{
-    AsU32, FileType, FromU32, Hashable, ToBytes, spawn_palette_picker, spawn_save_dialog,
+    spawn_palette_picker, spawn_save_dialog, AsU32, FileType, FromU32, Hashable, ToBytes,
 };
 
 pub fn render_palettes(
@@ -90,8 +91,13 @@ pub fn render_palettes(
             }
 
             if ui.button("Reset Palette").clicked() {
-                let _ =
-                    async_sender.send(AsyncFrontendMessage::EmuRelay(RelayType::LoadPalette, None));
+                let path = config.user_config.previous_palette_path.clone();
+                let sender = async_sender.clone();
+
+                std::thread::spawn(move || {
+                    let palette = parse_palette_from_file(None, path.clone());
+                    let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette, path));
+                });
             }
         })
     });
