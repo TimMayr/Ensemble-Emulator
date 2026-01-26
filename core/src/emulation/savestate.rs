@@ -150,7 +150,7 @@ impl From<&Ppu> for PpuState {
             // Only save nametable VRAM (2KB) - addresses 0x2000-0x27FF
             nametable_ram: ppu
                 .memory
-                .get_memory_debug(Some(0x2000..=(0x2000 + (VRAM_SIZE as u16) - 1))),
+                .get_memory_debug(Some(0x2000..=(0x2000 + (VRAM_SIZE as u16 * 2)))),
             ppu_addr_register: ppu.v_register,
             oam_addr_register: ppu.oam_addr_register,
             write_latch: ppu.write_latch.get(),
