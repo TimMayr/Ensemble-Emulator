@@ -327,8 +327,14 @@ impl EguiApp {
                         .send(FrontendMessage::CreateSaveState(SaveType::Quicksave));
                 }
                 AsyncFrontendMessage::LoadRom(path) => {
-                    if let Some(path) = path {
-                        self.load_rom(path);
+                    if let Some(path) = path
+                        && let Ok(p) = path.canonicalize()
+                    {
+                        // Power cycle the console when loading a new ROM
+                        let _ = self.to_emulator.send(FrontendMessage::PowerOff);
+                        self.load_rom(p);
+                        let _ = self.to_emulator.send(FrontendMessage::Power);
+                        self.config.console_config.is_powered = true;
                     }
                 }
 
