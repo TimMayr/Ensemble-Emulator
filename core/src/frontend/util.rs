@@ -142,6 +142,7 @@ pub fn save_file(previous: PathBuf, file_type: FileType) -> Option<PathBuf> {
         .save_file()
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub enum FileType {
     Rom,
     Savestate,
@@ -156,6 +157,15 @@ impl FileType {
             FileType::Savestate => dialog.add_filter("Savestate", &["sav"]),
             FileType::Palette => dialog.add_filter("NES Palette File", &["pal"]),
             FileType::All => dialog.add_filter("All Files", &["*"]),
+        }
+    }
+
+    pub fn get_default_extension(&self) -> &str {
+        match self {
+            FileType::Rom => "nes",
+            FileType::Savestate => "sav",
+            FileType::Palette => "pal",
+            FileType::All => "",
         }
     }
 }
@@ -226,6 +236,11 @@ pub fn spawn_save_dialog(
     let sender = sender.cloned();
     std::thread::spawn(move || {
         if let Some(p) = save_file(prev_dir, file_type) {
+            let p = p
+                .extension()
+                .map(|_| p.clone())
+                .unwrap_or(p.with_extension(file_type.get_default_extension()));
+
             let result = match OpenOptions::new()
                 .write(true)
                 .create(true)
