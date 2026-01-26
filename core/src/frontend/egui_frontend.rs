@@ -24,6 +24,7 @@ use crate::emulation::messages::{
     TileData, TILE_COUNT,
 };
 use crate::emulation::nes::Nes;
+use crate::emulation::savestate;
 use crate::frontend::egui::config::{
     AppConfig, AppSpeed, ChecksumMismatchDialogState, ErrorDialogState, MatchingRomDialogState,
     RomSelectionDialogState,
@@ -38,10 +39,10 @@ use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_d
 use crate::frontend::messages::{AsyncFrontendMessage, RelayType, SavestateLoadContext};
 use crate::frontend::palettes::parse_palette_from_file;
 use crate::frontend::persistence::{
-    get_data_file_path, get_egui_storage_path, load_config, write_file_async,
+    get_data_dir, get_data_file_path, get_egui_storage_path, load_config, write_file_async,
 };
 use crate::frontend::util;
-use crate::frontend::util::{FileType, ToBytes};
+use crate::frontend::util::{FileType, SavestateLoadError, ToBytes};
 
 /// Key used for storing egui_tiles tree state in egui's persistence
 const EGUI_TILES_TREE_KEY: &str = "emulator_tiles_tree";
@@ -299,10 +300,10 @@ impl EguiApp {
                 AsyncFrontendMessage::SavestateLoadFailed(error) => {
                     // Show error dialog for failed savestate loading
                     let message = match error {
-                        util::SavestateLoadError::FailedToLoadSavestate => {
+                        SavestateLoadError::FailedToLoadSavestate => {
                             "Failed to load or parse the savestate file. The file may be corrupted or invalid."
                         }
-                        util::SavestateLoadError::FailedToComputeChecksum => {
+                        SavestateLoadError::FailedToComputeChecksum => {
                             "Failed to compute checksum for the ROM file."
                         }
                     };
@@ -314,10 +315,10 @@ impl EguiApp {
                 AsyncFrontendMessage::RomVerificationFailed(context, error) => {
                     // Show error dialog for failed ROM verification
                     let message = match error {
-                        util::SavestateLoadError::FailedToLoadSavestate => {
+                        SavestateLoadError::FailedToLoadSavestate => {
                             "Unexpected error during ROM verification."
                         }
-                        util::SavestateLoadError::FailedToComputeChecksum => {
+                        SavestateLoadError::FailedToComputeChecksum => {
                             "Failed to read or compute checksum for the ROM file."
                         }
                     };
@@ -334,7 +335,31 @@ impl EguiApp {
                             context,
                         });
                 }
-                AsyncFrontendMessage::Quickload => {}
+                AsyncFrontendMessage::Quickload => {
+                    if let Some(path) = self.get_current_quicksave_path() {
+                        let savestate = match savestate::try_load_state(&path) {
+                            Some(s) => s,
+                            None => {
+                                // Failed to load savestate - send error notification
+                                let _ = self.async_sender.send(
+                                    AsyncFrontendMessage::SavestateLoadFailed(
+                                        SavestateLoadError::FailedToLoadSavestate,
+                                    ),
+                                );
+                                return;
+                            }
+                        };
+
+                        let context = SavestateLoadContext {
+                            savestate,
+                            savestate_path: path,
+                        };
+
+                        if let Some(rom_path) = self.config.user_config.previous_rom_path.clone() {
+                            self.load_savestate_with_rom(ctx, &context, &rom_path)
+                        }
+                    }
+                }
                 AsyncFrontendMessage::Quicksave => {
                     let _ = self
                         .to_emulator
@@ -474,7 +499,7 @@ impl EguiApp {
 
                                 let path = get_data_file_path(
                                     format!(
-                                        "{}/quicksave_{}.sav",
+                                        "saves/{}/quicksaves/quicksave_{}.sav",
                                         display_name,
                                         chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
                                     )
@@ -491,6 +516,72 @@ impl EguiApp {
                 },
             }
         }
+    }
+
+    fn get_current_quicksave_path(&self) -> Option<PathBuf> {
+        let data_dir = get_data_dir();
+
+        if let Some(rom) = &self.channel_emu.nes.rom_file
+            && let Some(prev_path) = &self.config.user_config.previous_rom_path
+            && let Some(data_dir) = data_dir
+            && data_dir.exists()
+        {
+            let rom_hash = &rom.data_checksum;
+
+            let quicksave_dir = data_dir
+                .join("saves")
+                .join(util::rom_display_name(prev_path, rom_hash))
+                .join("quicksaves");
+
+            if std::fs::create_dir_all(quicksave_dir.clone()).is_ok() {
+                let children = quicksave_dir.read_dir();
+
+                let mut quicksave_path = None;
+                if let Ok(children) = children {
+                    for child in children {
+                        if let Ok(child) = child {
+                            let stem = child.path().file_stem()?.to_string_lossy().to_string();
+
+                            let time_version = stem.split_once('_')?.1;
+
+                            let (timestamp, version) =
+                                if time_version.chars().filter(|c| *c == '_').count() > 1 {
+                                    time_version.rsplit_once('_')?
+                                } else {
+                                    (time_version, "0")
+                                };
+
+                            let time =
+                                chrono::NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d_%H-%M-%S");
+
+                            let version = version.parse::<u8>().unwrap_or(0);
+
+                            if let Ok(time) = time {
+                                if quicksave_path.is_none() {
+                                    quicksave_path = Some((child.path(), time, version))
+                                }
+
+                                if let Some(path) = quicksave_path.clone() {
+                                    if path.1 < time {
+                                        quicksave_path = Some((child.path(), time, version));
+                                    }
+
+                                    if path.1 == time {
+                                        if path.2 < version {
+                                            quicksave_path = Some((child.path(), time, version));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return quicksave_path.map(|p| p.0);
+            }
+        }
+
+        None
     }
 
     /// Check if the pattern tables pane is visible

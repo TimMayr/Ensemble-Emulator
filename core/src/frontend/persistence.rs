@@ -7,12 +7,13 @@
 //! - Helper functions for saving files to data and cache directories
 
 use std::collections::HashSet;
+use std::ffi::OsStr;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::{fs, thread};
-use std::ffi::OsStr;
-use crossbeam_channel::{Receiver, bounded};
+
+use crossbeam_channel::{bounded, Receiver};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 
@@ -204,11 +205,11 @@ fn write_file_sync(path: &Path, data: &[u8], overwrite: bool) -> AsyncFileResult
 }
 
 fn extract(f: &OsStr) -> String {
-        f.to_string_lossy()
-            .split('_')
-            .next_back()
-            .unwrap_or("0")
-            .to_string()
+    f.to_string_lossy()
+        .split('_')
+        .next_back()
+        .unwrap_or("0")
+        .to_string()
 }
 
 /// Save data to the data directory asynchronously
