@@ -39,7 +39,7 @@ use crate::frontend::egui::tiles::{
     compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
 };
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
-use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent};
+use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent, SavestateLoadContext};
 use crate::frontend::palettes::parse_palette_from_file;
 use crate::frontend::persistence::{
     get_data_dir, get_data_file_path, get_egui_storage_path, load_config, write_file_async,
@@ -352,21 +352,13 @@ impl EguiApp {
                         .send(FrontendMessage::CreateSaveState(SaveType::Quicksave));
                 }
                 AsyncFrontendMessage::LoadRom(path) => {
-                                            let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-                    self.load_rom(ctx, path);
-                                            let _ = self.to_emulator.send(FrontendMessage::Power);
-                                        self.config.console_config.is_powered = true;
-
+                    if let Some(path) = path {
+                        let _ = self.to_emulator.send(FrontendMessage::PowerOff);
+                        self.load_rom(ctx, path);
+                        let _ = self.to_emulator.send(FrontendMessage::Power);
+                        self.config.console_config.is_powered = true;
+                    }
                 }
-                AsyncFrontendMessage::ChangeWindowTitle(title) => {
-                    EguiApp::set_window_tile(ctx, title)
-                }
-            }
-        }
-    }
-
-    fn set_window_tile(ctx: &Context, title: String) {
-        ctx.send_viewport_cmd(ViewportCommand::Title(title))
 
                 // Consolidated emulator operations
                 AsyncFrontendMessage::PowerOn => {
@@ -434,6 +426,10 @@ impl EguiApp {
                 }
             }
         }
+    }
+
+    fn set_window_tile(ctx: &Context, title: String) {
+        ctx.send_viewport_cmd(ViewportCommand::Title(title));
     }
 
     fn load_rom(&mut self, ctx: &Context, rom_path: PathBuf) {
@@ -616,8 +612,10 @@ impl EguiApp {
                                     (time_version, "0")
                                 };
 
-                            let time =
-                                chrono::NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d_%H-%M-%S");
+                            let time = chrono::NaiveDateTime::parse_from_str(
+                                timestamp,
+                                "%Y-%m-%d_%H-%M-%S",
+                            );
 
                             let version = version.parse::<u8>().unwrap_or(0);
 
