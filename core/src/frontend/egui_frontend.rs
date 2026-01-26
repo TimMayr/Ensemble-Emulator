@@ -449,9 +449,6 @@ impl EguiApp {
         while let Ok(msg) = self.from_emulator.try_recv() {
             match msg {
                 EmulatorMessage::FrameReady(frame) => {
-
-                    println!("{frame:02X?}");
-
                     self.emu_textures.current_frame = Some(frame);
                     self.fps_counter.update();
                     self.emu_textures.update_emulator_texture(ctx);
