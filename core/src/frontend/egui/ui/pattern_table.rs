@@ -2,9 +2,10 @@ use crossbeam_channel::Sender;
 use eframe::epaint::TextureHandle;
 use egui::Ui;
 
-use crate::emulation::messages::{EmulatorFetchable, FrontendMessage, TileData};
+use crate::emulation::messages::TileData;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::ui::widgets::{PainterGridConfig, image_cell};
+use crate::frontend::messages::AsyncFrontendMessage;
 use crate::frontend::util::{FromU32, color_radio};
 
 /// Draw a pattern table (left or right) in the UI
@@ -14,7 +15,7 @@ pub fn draw_pattern_table(
     emu_textures: &[TextureHandle],
     palette: [u32; 4],
     pattern_data: &[TileData],
-    to_emu: &Sender<FrontendMessage>,
+    async_sender: &Sender<AsyncFrontendMessage>,
     config: &mut AppConfig,
 ) {
     let grid_config = PainterGridConfig::square(width, 16);
@@ -103,13 +104,13 @@ pub fn draw_pattern_table(
                     let primary_down = ui.input(|i| i.pointer.primary_down());
                     let secondary_down = ui.input(|i| i.pointer.secondary_down());
                     if response.clicked() || (pointer_in_rect && primary_down) {
-                        handle_pixel_edit(&tile_data, index, config, to_emu, false);
+                        handle_pixel_edit(&tile_data, index, config, async_sender, false);
                     }
 
                     if response.clicked_by(egui::PointerButton::Secondary)
                         || (pointer_in_rect && secondary_down)
                     {
-                        handle_pixel_edit(&tile_data, index, config, to_emu, true);
+                        handle_pixel_edit(&tile_data, index, config, async_sender, true);
                     }
 
                     if response.hovered() || pointer_in_rect {
@@ -130,7 +131,7 @@ fn handle_pixel_edit(
     tile_data: &TileData,
     index: usize,
     config: &AppConfig,
-    to_emu: &Sender<FrontendMessage>,
+    async_sender: &Sender<AsyncFrontendMessage>,
     clear: bool,
 ) {
     let new_color = if !clear {
@@ -157,10 +158,11 @@ fn handle_pixel_edit(
         let addr_0 = tile_data.address + ppu_row as u16;
         let addr_1 = tile_data.address + ppu_row as u16 + 8;
 
-        let _ = to_emu.send(FrontendMessage::WritePpu(addr_0, new_byte_0));
-        let _ = to_emu.send(FrontendMessage::WritePpu(addr_1, new_byte_1));
-        let _ = to_emu.send(FrontendMessage::RequestDebugData(EmulatorFetchable::Tiles(
-            None,
-        )));
+        let _ = async_sender.send(AsyncFrontendMessage::WritePpuPattern {
+            addr_0,
+            value_0: new_byte_0,
+            addr_1,
+            value_1: new_byte_1,
+        });
     }
 }
