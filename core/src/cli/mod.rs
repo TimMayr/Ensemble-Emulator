@@ -183,7 +183,10 @@ pub use execution::{
     ExecutionConfig, ExecutionEngine, ExecutionResult, SavestateConfig, SavestateDestination,
     SavestateSource, StopCondition, StopReason,
 };
-pub use output::{MemoryDump, MemoryFormatter, MemoryType, OutputWriter};
+pub use output::{
+    InterpretedNametable, InterpretedNametables, InterpretedOam, MemoryDump, MemoryFormatter,
+    MemoryType, OamSprite, OutputWriter,
+};
 
 // =============================================================================
 // Argument Parsing
