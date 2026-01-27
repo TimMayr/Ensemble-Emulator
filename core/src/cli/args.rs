@@ -244,7 +244,7 @@ pub struct ExecutionArgs {
 
     /// Run until memory condition (e.g., 0x6000==0x80)
     #[arg(long)]
-    pub until_mem: Option<String>,
+    pub until_mem: Option<Vec<String>>,
 
     /// Run until HLT (illegal halt) instruction
     #[arg(long, default_value_t = false)]

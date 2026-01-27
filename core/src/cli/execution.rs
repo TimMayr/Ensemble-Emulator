@@ -14,8 +14,8 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use crate::cli::args::parse_hex_u8;
-use crate::emulation::nes::{MASTER_CYCLES_PER_FRAME, Nes};
-use crate::emulation::savestate::{SaveState, try_load_state};
+use crate::emulation::nes::{Nes, MASTER_CYCLES_PER_FRAME};
+use crate::emulation::savestate::{try_load_state, SaveState};
 
 // =============================================================================
 // Stop Conditions
@@ -54,9 +54,17 @@ pub enum StopCondition {
     /// Stop when opcode is executed
     Opcode(u8),
     /// Stop when memory address equals value
-    MemoryEquals { addr: u16, value: u8 },
+    MemoryEquals {
+        addr: u16,
+        value: u8,
+        and: Option<Box<StopCondition>>,
+    },
     /// Stop when memory address does not equal value
-    MemoryNotEquals { addr: u16, value: u8 },
+    MemoryNotEquals {
+        addr: u16,
+        value: u8,
+        and: Option<Box<StopCondition>>,
+    },
     /// Stop on HLT instruction
     OnHalt,
     /// Breakpoint at address
@@ -65,13 +73,62 @@ pub enum StopCondition {
 
 impl StopCondition {
     /// Parse a memory condition string like "0x6000==0x80" or "0x6000!=0x00"
-    pub fn parse_memory_condition(s: &str) -> Result<Self, String> {
+    pub fn parse_memory_condition(vec: &Vec<String>) -> Result<Vec<Self>, String> {
+        let mut res = Vec::new();
+        for s in vec {
+            let cond = Self::parse_single_condition(s);
+
+            if let Ok(cond) = cond {
+                res.push(cond)
+            } else if let Err(cond) = cond {
+                return Err(cond);
+            }
+        }
+
+        Ok(res)
+    }
+
+    pub fn parse_single_condition(s: &String) -> Result<Self, String> {
+        if let Some((cond1, cond2)) = s.split_once("&&") {
+            let cond1 = Self::parse_single_condition(&cond1.to_string());
+            let cond2 = Self::parse_single_condition(&cond2.to_string());
+
+            if let (Ok(cond1), Ok(cond2)) = (cond1, cond2) {
+                match cond1 {
+                    StopCondition::MemoryEquals {
+                        addr,
+                        value,
+                        ..
+                    } => {
+                        return Ok(StopCondition::MemoryEquals {
+                            addr,
+                            value,
+                            and: Some(Box::new(cond2)),
+                        });
+                    }
+                    StopCondition::MemoryNotEquals {
+                        addr,
+                        value,
+                        ..
+                    } => {
+                        return Ok(StopCondition::MemoryNotEquals {
+                            addr,
+                            value,
+                            and: Some(Box::new(cond2)),
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         if let Some((addr_str, val_str)) = s.split_once("==") {
             let addr = parse_hex_u16(addr_str.trim())?;
             let value = parse_hex_u8(val_str.trim())?;
             Ok(StopCondition::MemoryEquals {
                 addr,
                 value,
+                and: None,
             })
         } else if let Some((addr_str, val_str)) = s.split_once("!=") {
             let addr = parse_hex_u16(addr_str.trim())?;
@@ -79,12 +136,92 @@ impl StopCondition {
             Ok(StopCondition::MemoryNotEquals {
                 addr,
                 value,
+                and: None,
             })
         } else {
             Err(format!(
                 "Invalid memory condition '{}'. Expected format: ADDR==VALUE or ADDR!=VALUE",
                 s
             ))
+        }
+    }
+
+    pub fn check(&self, emu: &Nes, cycles: u128, frames: u64) -> bool {
+        match self {
+            StopCondition::Cycles(target) => cycles >= *target,
+            StopCondition::Frames(target) => frames >= *target,
+            StopCondition::PcEquals(addr) => emu.cpu.program_counter == *addr,
+            StopCondition::Opcode(op) => {
+                if let Some(current) = emu.cpu.current_opcode
+                    && current.opcode == *op
+                {
+                    return true;
+                }
+
+                false
+            }
+            StopCondition::MemoryEquals {
+                addr,
+                value,
+                and,
+            } => {
+                let and = and.as_ref().map(|and| and.check(emu, cycles, frames));
+
+                let mem_val = emu.get_memory_debug(Some(*addr..=*addr))[0]
+                    .first()
+                    .copied()
+                    .unwrap_or(0);
+
+                if let Some(and) = and {
+                    mem_val == *value && and
+                } else {
+                    mem_val == *value
+                }
+            }
+            StopCondition::MemoryNotEquals {
+                addr,
+                value,
+                and,
+            } => {
+                let and = and.as_ref().map(|and| and.check(emu, cycles, frames));
+
+                let mem_val = emu.get_memory_debug(Some(*addr..=*addr))[0]
+                    .first()
+                    .copied()
+                    .unwrap_or(0);
+
+                if let Some(and) = and {
+                    mem_val != *value && and
+                } else {
+                    mem_val != *value
+                }
+            }
+            StopCondition::OnHalt => emu.cpu.is_halted,
+            StopCondition::Breakpoint(addr) => emu.cpu.program_counter == *addr,
+        }
+    }
+
+    pub fn reason(&self, emu: &Nes, cycles: u128, frames: u64) -> StopReason {
+        match self {
+            StopCondition::Cycles(_) => StopReason::CyclesReached(cycles),
+            StopCondition::Frames(_) => StopReason::FramesReached(frames),
+            StopCondition::PcEquals(addr) => StopReason::PcReached(*addr),
+            StopCondition::Opcode(_) => StopReason::PcReached(emu.cpu.program_counter),
+            StopCondition::MemoryEquals {
+                addr, ..
+            }
+            | StopCondition::MemoryNotEquals {
+                addr, ..
+            } => {
+                let mem_val = emu.get_memory_debug(Some(*addr..=*addr))[0]
+                    .first()
+                    .copied()
+                    .unwrap_or(0);
+
+                StopReason::MemoryCondition(*addr, mem_val)
+            }
+            StopCondition::OnHalt => StopReason::Halted,
+            StopCondition::Breakpoint(addr) => StopReason::Breakpoint(*addr),
         }
     }
 }
@@ -181,54 +318,8 @@ impl ExecutionConfig {
     /// Check if any stop condition is met
     fn check_conditions(&self, emu: &Nes, cycles: u128, frames: u64) -> Option<StopReason> {
         for cond in &self.stop_conditions {
-            match cond {
-                StopCondition::Cycles(target) if cycles >= *target => {
-                    return Some(StopReason::CyclesReached(cycles));
-                }
-                StopCondition::Frames(target) if frames >= *target => {
-                    return Some(StopReason::FramesReached(frames));
-                }
-                StopCondition::PcEquals(addr) if emu.cpu.program_counter == *addr => {
-                    return Some(StopReason::PcReached(*addr));
-                }
-                StopCondition::Opcode(op) => {
-                    if let Some(current) = emu.cpu.current_opcode
-                        && current.opcode == *op
-                    {
-                        return Some(StopReason::PcReached(emu.cpu.program_counter));
-                    }
-                }
-                StopCondition::MemoryEquals {
-                    addr,
-                    value,
-                } => {
-                    let mem_val = emu.get_memory_debug(Some(*addr..=*addr))[0]
-                        .first()
-                        .copied()
-                        .unwrap_or(0);
-                    if mem_val == *value {
-                        return Some(StopReason::MemoryCondition(*addr, mem_val));
-                    }
-                }
-                StopCondition::MemoryNotEquals {
-                    addr,
-                    value,
-                } => {
-                    let mem_val = emu.get_memory_debug(Some(*addr..=*addr))[0]
-                        .first()
-                        .copied()
-                        .unwrap_or(0);
-                    if mem_val != *value {
-                        return Some(StopReason::MemoryCondition(*addr, mem_val));
-                    }
-                }
-                StopCondition::OnHalt if emu.cpu.is_halted => {
-                    return Some(StopReason::Halted);
-                }
-                StopCondition::Breakpoint(addr) if emu.cpu.program_counter == *addr => {
-                    return Some(StopReason::Breakpoint(*addr));
-                }
-                _ => {}
+            if cond.check(emu, cycles, frames) {
+                return Some(cond.reason(emu, cycles, frames));
             }
         }
 
@@ -504,7 +595,7 @@ fn encode_savestate(state: &SaveState) -> Result<Vec<u8>, String> {
 // Builder from CLI Args
 // =============================================================================
 
-use super::{CliArgs, parse_hex_u16};
+use super::{parse_hex_u16, CliArgs};
 
 impl ExecutionConfig {
     /// Build execution config from CLI arguments
@@ -533,7 +624,7 @@ impl ExecutionConfig {
         if let Some(ref mem_cond) = args.execution.until_mem
             && let Ok(cond) = StopCondition::parse_memory_condition(mem_cond)
         {
-            config.stop_conditions.push(cond);
+            config.stop_conditions.extend(cond);
         }
 
         // Add HLT stop
@@ -591,11 +682,13 @@ mod tests {
 
     #[test]
     fn test_parse_memory_condition_equals() {
-        let cond = StopCondition::parse_memory_condition("0x6000==0x80").unwrap();
-        match cond {
+        let cond =
+            StopCondition::parse_memory_condition(&vec!["0x6000==0x80".to_string()]).unwrap();
+        match cond[0] {
             StopCondition::MemoryEquals {
                 addr,
                 value,
+                and: None,
             } => {
                 assert_eq!(addr, 0x6000);
                 assert_eq!(value, 0x80);
@@ -606,11 +699,13 @@ mod tests {
 
     #[test]
     fn test_parse_memory_condition_not_equals() {
-        let cond = StopCondition::parse_memory_condition("0x6000!=0x00").unwrap();
-        match cond {
+        let cond =
+            StopCondition::parse_memory_condition(&vec!["0x6000!=0x00".to_string()]).unwrap();
+        match cond[0] {
             StopCondition::MemoryNotEquals {
                 addr,
                 value,
+                and: None,
             } => {
                 assert_eq!(addr, 0x6000);
                 assert_eq!(value, 0x00);

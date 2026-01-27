@@ -140,7 +140,7 @@ pub struct ExecutionConfig {
     pub frames: Option<u64>,
     pub until_pc: Option<String>,
     pub until_opcode: Option<String>,
-    pub until_mem: Option<String>,
+    pub until_mem: Option<Vec<String>>,
     pub until_hlt: Option<bool>,
     pub step: Option<bool>,
     pub trace: Option<PathBuf>,

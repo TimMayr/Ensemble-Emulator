@@ -175,7 +175,7 @@ pub mod error;
 pub mod execution;
 pub mod output;
 
-pub use args::{CliArgs, OutputFormat, parse_hex_u16};
+pub use args::{parse_hex_u16, CliArgs, OutputFormat};
 use clap::Parser;
 pub use config::ConfigFile;
 pub use error::{CliError, CliResult};
@@ -340,12 +340,14 @@ fn validate_execution_args(args: &CliArgs) -> Result<(), CliError> {
 }
 
 /// Validate memory condition syntax.
-fn validate_memory_condition_syntax(cond: &str) -> Result<(), CliError> {
-    if !cond.contains("==") && !cond.contains("!=") {
-        return Err(CliError::invalid_stop_condition(
-            cond,
-            "missing comparison operator",
-        ));
+fn validate_memory_condition_syntax(cond: &Vec<String>) -> Result<(), CliError> {
+    for s in cond {
+        if !s.contains("==") && !s.contains("!=") {
+            return Err(CliError::invalid_stop_condition(
+                s,
+                "missing comparison operator",
+            ));
+        }
     }
     Ok(())
 }
@@ -570,12 +572,12 @@ mod tests {
     #[test]
     fn test_validate_memory_condition_syntax() {
         // Valid conditions
-        assert!(validate_memory_condition_syntax("0x6000==0x80").is_ok());
-        assert!(validate_memory_condition_syntax("0x6000!=0x00").is_ok());
+        assert!(validate_memory_condition_syntax(&vec!["0x6000==0x80".to_string()]).is_ok());
+        assert!(validate_memory_condition_syntax(&vec!["0x6000!=0x00".to_string()]).is_ok());
 
         // Invalid conditions
-        assert!(validate_memory_condition_syntax("0x6000").is_err());
-        assert!(validate_memory_condition_syntax("invalid").is_err());
+        assert!(validate_memory_condition_syntax(&vec!["0x6000".to_string()]).is_err());
+        assert!(validate_memory_condition_syntax(&vec!["invalid".to_string()]).is_err());
     }
 
     // =========================================================================

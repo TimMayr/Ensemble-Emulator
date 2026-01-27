@@ -13,7 +13,7 @@ verbose = true
 [execution]
 # Run until memory condition is met or max frames reached
 frames = 6000      # 100 seconds max
-until_mem = "0x6000!=0x00"  # Stop when 0x6000 becomes non-zero
+until_mem = ["0x6000==0x00&&0x6001!=0x00"]  # Stop when 0x6000 becomes non-zero
 
 [memory]
 # Dump test result area
