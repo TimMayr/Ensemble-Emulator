@@ -419,6 +419,7 @@ pub struct ExecutionEngine {
     pub config: ExecutionConfig,
     /// Savestate configuration
     pub savestate_config: SavestateConfig,
+    pub frames: Vec<Vec<u32>>,
     /// Track current frame count
     frame_count: u64,
 }
@@ -430,6 +431,7 @@ impl ExecutionEngine {
             emu: Nes::default(),
             config: ExecutionConfig::new(),
             savestate_config: SavestateConfig::new(),
+            frames: vec![],
             frame_count: 0,
         }
     }
@@ -440,6 +442,7 @@ impl ExecutionEngine {
             emu,
             config: ExecutionConfig::new(),
             savestate_config: SavestateConfig::new(),
+            frames: vec![],
             frame_count: 0,
         }
     }
@@ -536,6 +539,8 @@ impl ExecutionEngine {
                     });
                 }
             }
+
+            self.frames.push(self.emu.get_pixel_buffer());
 
             self.frame_count += 1;
             let cycles_run = self.emu.total_cycles - start_cycles;

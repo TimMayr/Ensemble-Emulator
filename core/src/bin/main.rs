@@ -8,11 +8,12 @@
 use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
-
+use image::{ImageBuffer, Rgba};
 use nes_core::cli::{
     self, CliArgs, ExecutionConfig, ExecutionEngine, MemoryDump, MemoryType, OutputWriter,
     SavestateConfig, StopReason,
 };
+use nes_core::cli::args::VideoFormat;
 use nes_core::emulation::nes::Nes;
 use nes_core::emulation::rom::RomFile;
 use nes_core::frontend::egui_frontend;
@@ -131,6 +132,7 @@ fn run_headless(args: &CliArgs) -> Result<(), String> {
 
     // Output memory dumps
     output_results(engine.emulator(), args)?;
+    save_video(engine.frames, args)?
 
     // Check for error stop reason
     match result.stop_reason {
@@ -183,6 +185,21 @@ fn output_results(emu: &Nes, args: &CliArgs) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn save_video(frames: &Vec<Vec<u32>>, args: &CliArgs) -> Result<(), String> {
+    if let Some(video_path) = args.video.video {
+        match args.video.video_format {
+            VideoFormat::Raw => todo!(),
+            VideoFormat::Ppm => {}
+            VideoFormat::Png => {}
+            VideoFormat::Mp4 => {}
+        }
+    }
+}
+
+fn get_image(data: &Vec<u32>)-> Result<(), image::ImageError> {
+
 }
 
 // =============================================================================
