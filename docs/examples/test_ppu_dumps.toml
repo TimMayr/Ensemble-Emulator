@@ -19,4 +19,4 @@ dump_nametables = true
 
 [output]
 format = "toml"
-file = "ppu_dump_output.toml"
+path = "ppu_dump_output.toml"

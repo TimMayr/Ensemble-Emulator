@@ -1,5 +1,5 @@
 # Test Configuration: Pipe Workflow Savestate
-# Tests stdin/stdout savestate piping for multi-step workflows
+# Tests stdin/stdout savestate piping for multistep workflows
 #
 # Usage (single command demonstrating the pipe pattern):
 #   nes_main -H -r game.nes -f 100 --state-stdout | \

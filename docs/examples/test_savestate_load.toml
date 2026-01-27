@@ -15,9 +15,9 @@ frames = 50
 
 [savestate]
 # Load state from file
-load_state = "test_state.sav"
+load = "test_state.sav"
 # Save final state
-save_state = "test_state_final.sav"
+save = "test_state_final.sav"
 
 [memory]
 # Dump work RAM area to verify state was loaded

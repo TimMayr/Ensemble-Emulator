@@ -10,8 +10,8 @@ headless = true
 verbose = true
 
 [execution]
-frames = 100
+until_mem = ["0x6000==0x00&&0x6001!=0x00"]  # Stop when 0x6000 becomes non-zero
 
 [savestate]
 # Save state to file after execution
-save_state = "test_state.sav"
+save = "test_state.sav"
