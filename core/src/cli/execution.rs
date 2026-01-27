@@ -13,7 +13,8 @@
 use std::io::{Read, Write};
 use std::path::PathBuf;
 
-use crate::emulation::nes::{Nes, MASTER_CYCLES_PER_FRAME};
+use crate::cli::args::parse_hex_u8;
+use crate::emulation::nes::{MASTER_CYCLES_PER_FRAME, Nes};
 use crate::emulation::savestate::{SaveState, try_load_state};
 
 // =============================================================================
@@ -68,11 +69,17 @@ impl StopCondition {
         if let Some((addr_str, val_str)) = s.split_once("==") {
             let addr = parse_hex_u16(addr_str.trim())?;
             let value = parse_hex_u8(val_str.trim())?;
-            Ok(StopCondition::MemoryEquals { addr, value })
+            Ok(StopCondition::MemoryEquals {
+                addr,
+                value,
+            })
         } else if let Some((addr_str, val_str)) = s.split_once("!=") {
             let addr = parse_hex_u16(addr_str.trim())?;
             let value = parse_hex_u8(val_str.trim())?;
-            Ok(StopCondition::MemoryNotEquals { addr, value })
+            Ok(StopCondition::MemoryNotEquals {
+                addr,
+                value,
+            })
         } else {
             Err(format!(
                 "Invalid memory condition '{}'. Expected format: ADDR==VALUE or ADDR!=VALUE",
@@ -87,7 +94,7 @@ impl StopCondition {
 // =============================================================================
 
 /// Configuration for an execution run.
-/// 
+///
 /// This struct is designed to be constructed either from CLI arguments
 /// or programmatically when using the crate as a library.
 #[derive(Debug, Clone, Default)]
@@ -106,9 +113,7 @@ pub struct ExecutionConfig {
 
 impl ExecutionConfig {
     /// Create a new empty execution config
-    pub fn new() -> Self {
-        Self::default()
-    }
+    pub fn new() -> Self { Self::default() }
 
     /// Add a stop condition
     pub fn with_stop_condition(mut self, condition: StopCondition) -> Self {
@@ -187,13 +192,16 @@ impl ExecutionConfig {
                     return Some(StopReason::PcReached(*addr));
                 }
                 StopCondition::Opcode(op) => {
-                    if let Some(current) = emu.cpu.current_opcode {
-                        if current.opcode == *op {
-                            return Some(StopReason::PcReached(emu.cpu.program_counter));
-                        }
+                    if let Some(current) = emu.cpu.current_opcode
+                        && current.opcode == *op
+                    {
+                        return Some(StopReason::PcReached(emu.cpu.program_counter));
                     }
                 }
-                StopCondition::MemoryEquals { addr, value } => {
+                StopCondition::MemoryEquals {
+                    addr,
+                    value,
+                } => {
                     let mem_val = emu.get_memory_debug(Some(*addr..=*addr))[0]
                         .first()
                         .copied()
@@ -202,7 +210,10 @@ impl ExecutionConfig {
                         return Some(StopReason::MemoryCondition(*addr, mem_val));
                     }
                 }
-                StopCondition::MemoryNotEquals { addr, value } => {
+                StopCondition::MemoryNotEquals {
+                    addr,
+                    value,
+                } => {
                     let mem_val = emu.get_memory_debug(Some(*addr..=*addr))[0]
                         .first()
                         .copied()
@@ -219,18 +230,6 @@ impl ExecutionConfig {
                 }
                 _ => {}
             }
-        }
-
-        // Check breakpoints
-        for &bp in &self.breakpoints {
-            if emu.cpu.program_counter == bp {
-                return Some(StopReason::Breakpoint(bp));
-            }
-        }
-
-        // Check halt condition
-        if self.stop_on_halt && emu.cpu.is_halted {
-            return Some(StopReason::Halted);
         }
 
         None
@@ -287,9 +286,7 @@ pub struct SavestateConfig {
 
 impl SavestateConfig {
     /// Create a new empty savestate config
-    pub fn new() -> Self {
-        Self::default()
-    }
+    pub fn new() -> Self { Self::default() }
 
     /// Set load source to file
     pub fn load_from_file(mut self, path: PathBuf) -> Self {
@@ -321,7 +318,7 @@ impl SavestateConfig {
 // =============================================================================
 
 /// The main execution engine for CLI-driven emulation.
-/// 
+///
 /// This struct manages the emulator lifecycle and provides a clean API
 /// for running emulation with various configurations.
 pub struct ExecutionEngine {
@@ -375,29 +372,20 @@ impl ExecutionEngine {
     }
 
     /// Power on the emulator
-    pub fn power_on(&mut self) {
-        self.emu.power();
-    }
+    pub fn power_on(&mut self) { self.emu.power(); }
 
     /// Power off the emulator
-    pub fn power_off(&mut self) {
-        self.emu.power_off();
-    }
+    pub fn power_off(&mut self) { self.emu.power_off(); }
 
     /// Reset the emulator
-    pub fn reset(&mut self) {
-        self.emu.reset();
-    }
+    pub fn reset(&mut self) { self.emu.reset(); }
 
     /// Load savestate based on configuration
     pub fn load_savestate(&mut self) -> Result<(), String> {
         if let Some(ref source) = self.savestate_config.load_from {
             let state = match source {
-                SavestateSource::File(path) => {
-                    try_load_state(path).ok_or_else(|| {
-                        format!("Failed to load savestate from {}", path.display())
-                    })?
-                }
+                SavestateSource::File(path) => try_load_state(path)
+                    .ok_or_else(|| format!("Failed to load savestate from {}", path.display()))?,
                 SavestateSource::Stdin => {
                     let mut buffer = Vec::new();
                     std::io::stdin()
@@ -420,8 +408,9 @@ impl ExecutionEngine {
 
             match dest {
                 SavestateDestination::File(path) => {
-                    std::fs::write(path, &encoded)
-                        .map_err(|e| format!("Failed to write savestate to {}: {}", path.display(), e))?;
+                    std::fs::write(path, &encoded).map_err(|e| {
+                        format!("Failed to write savestate to {}: {}", path.display(), e)
+                    })?;
                 }
                 SavestateDestination::Stdout => {
                     std::io::stdout()
@@ -437,7 +426,7 @@ impl ExecutionEngine {
     pub fn run(&mut self) -> Result<ExecutionResult, String> {
         // Set up trace if configured
         if let Some(ref path) = self.config.trace_path {
-            self.emu.set_trace_log_path(Some(path.to_string_lossy().to_string()));
+            self.emu.set_trace_log_path(Some(path.clone()));
         }
 
         let max_cycles = self.config.max_cycles();
@@ -461,7 +450,10 @@ impl ExecutionEngine {
             let cycles_run = self.emu.total_cycles - start_cycles;
 
             // Check stop conditions
-            if let Some(reason) = self.config.check_conditions(&self.emu, cycles_run, self.frame_count) {
+            if let Some(reason) =
+                self.config
+                    .check_conditions(&self.emu, cycles_run, self.frame_count)
+            {
                 return Ok(ExecutionResult {
                     stop_reason: reason,
                     total_cycles: cycles_run,
@@ -481,43 +473,19 @@ impl ExecutionEngine {
     }
 
     /// Get reference to the emulator
-    pub fn emulator(&self) -> &Nes {
-        &self.emu
-    }
+    pub fn emulator(&self) -> &Nes { &self.emu }
 
     /// Get mutable reference to the emulator
-    pub fn emulator_mut(&mut self) -> &mut Nes {
-        &mut self.emu
-    }
+    pub fn emulator_mut(&mut self) -> &mut Nes { &mut self.emu }
 }
 
 impl Default for ExecutionEngine {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
 // =============================================================================
 // Helper Functions
 // =============================================================================
-
-/// Parse a hexadecimal u16 value
-fn parse_hex_u16(s: &str) -> Result<u16, String> {
-    let s = s
-        .strip_prefix("0x")
-        .or_else(|| s.strip_prefix("0X"))
-        .unwrap_or(s);
-    u16::from_str_radix(s, 16).map_err(|e| format!("Invalid hex value '{}': {}", s, e))
-}
-
-/// Parse a hexadecimal u8 value
-fn parse_hex_u8(s: &str) -> Result<u8, String> {
-    let s = s
-        .strip_prefix("0x")
-        .or_else(|| s.strip_prefix("0X"))
-        .unwrap_or(s);
-    u8::from_str_radix(s, 16).map_err(|e| format!("Invalid hex value '{}': {}", s, e))
-}
 
 /// Decode a savestate from bytes
 fn decode_savestate(bytes: &[u8]) -> Result<SaveState, String> {
@@ -536,7 +504,7 @@ fn encode_savestate(state: &SaveState) -> Result<Vec<u8>, String> {
 // Builder from CLI Args
 // =============================================================================
 
-use super::CliArgs;
+use super::{CliArgs, parse_hex_u16};
 
 impl ExecutionConfig {
     /// Build execution config from CLI arguments
@@ -562,10 +530,10 @@ impl ExecutionConfig {
         }
 
         // Add memory condition
-        if let Some(ref mem_cond) = args.execution.until_mem {
-            if let Ok(cond) = StopCondition::parse_memory_condition(mem_cond) {
-                config.stop_conditions.push(cond);
-            }
+        if let Some(ref mem_cond) = args.execution.until_mem
+            && let Ok(cond) = StopCondition::parse_memory_condition(mem_cond)
+        {
+            config.stop_conditions.push(cond);
         }
 
         // Add HLT stop
@@ -583,7 +551,10 @@ impl ExecutionConfig {
         config.verbose = args.verbose;
 
         // If no stop conditions, default to 60 frames (1 second)
-        if config.stop_conditions.is_empty() && !config.stop_on_halt && config.breakpoints.is_empty() {
+        if config.stop_conditions.is_empty()
+            && !config.stop_on_halt
+            && config.breakpoints.is_empty()
+        {
             config.stop_conditions.push(StopCondition::Frames(60));
         }
 
@@ -622,7 +593,10 @@ mod tests {
     fn test_parse_memory_condition_equals() {
         let cond = StopCondition::parse_memory_condition("0x6000==0x80").unwrap();
         match cond {
-            StopCondition::MemoryEquals { addr, value } => {
+            StopCondition::MemoryEquals {
+                addr,
+                value,
+            } => {
                 assert_eq!(addr, 0x6000);
                 assert_eq!(value, 0x80);
             }
@@ -634,7 +608,10 @@ mod tests {
     fn test_parse_memory_condition_not_equals() {
         let cond = StopCondition::parse_memory_condition("0x6000!=0x00").unwrap();
         match cond {
-            StopCondition::MemoryNotEquals { addr, value } => {
+            StopCondition::MemoryNotEquals {
+                addr,
+                value,
+            } => {
                 assert_eq!(addr, 0x6000);
                 assert_eq!(value, 0x00);
             }

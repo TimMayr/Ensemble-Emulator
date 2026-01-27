@@ -360,7 +360,7 @@ pub fn parse_hex_u16(s: &str) -> Result<u16, String> {
 }
 
 /// Parse a hexadecimal u8 value (with or without 0x prefix)
-fn parse_hex_u8(s: &str) -> Result<u8, String> {
+pub fn parse_hex_u8(s: &str) -> Result<u8, String> {
     let s = s
         .strip_prefix("0x")
         .or_else(|| s.strip_prefix("0X"))

@@ -191,9 +191,9 @@ pub fn spawn_file_picker(
 }
 
 /// Spawn a file picker for palette files that loads the palette asynchronously.
-/// 
+///
 /// This reads and parses the palette file in a background thread to avoid blocking the UI.
-/// 
+///
 /// # Arguments
 /// * `sender` - Channel to send the loaded palette back to the UI thread
 /// * `previous_path` - Used to set the initial directory for the file picker dialog
@@ -209,7 +209,7 @@ pub fn spawn_palette_picker(
         if let Some(path) = pick_file(prev_dir, FileType::Palette) {
             // Parse the palette file in this background thread
             let palette = parse_palette_from_file(Some(path.clone()), fallback_path);
-            let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette, path));
+            let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(Box::new(palette), path));
         }
     });
 }

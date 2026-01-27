@@ -8,7 +8,7 @@ pub enum AsyncFrontendMessage {
     EmuRelay(RelayType, Option<PathBuf>),
     RefreshPalette,
     /// Palette file was loaded asynchronously - includes the parsed palette data and path
-    PaletteLoaded(RgbPalette, PathBuf),
+    PaletteLoaded(Box<RgbPalette>, PathBuf),
     /// User has selected a savestate file, now need to verify/select ROM
     SavestateLoaded(Box<SavestateLoadContext>),
     /// Show dialog asking if user wants to load the found matching ROM

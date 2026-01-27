@@ -48,10 +48,7 @@ pub enum CliError {
     },
 
     /// Missing required argument
-    MissingArgument {
-        arg: String,
-        context: String,
-    },
+    MissingArgument { arg: String, context: String },
 
     /// Conflicting arguments specified
     ConflictingArguments {
@@ -61,19 +58,13 @@ pub enum CliError {
     },
 
     /// Invalid combination of arguments
-    InvalidArgumentCombination {
-        args: Vec<String>,
-        reason: String,
-    },
+    InvalidArgumentCombination { args: Vec<String>, reason: String },
 
     // =========================================================================
     // Config File Errors
     // =========================================================================
     /// Failed to read config file
-    ConfigIo {
-        path: PathBuf,
-        message: String,
-    },
+    ConfigIo { path: PathBuf, message: String },
 
     /// Failed to parse config file
     ConfigParse {
@@ -94,30 +85,19 @@ pub enum CliError {
     // ROM Errors
     // =========================================================================
     /// Failed to load ROM
-    RomLoad {
-        path: PathBuf,
-        message: String,
-    },
+    RomLoad { path: PathBuf, message: String },
 
     /// ROM not found
-    RomNotFound {
-        path: PathBuf,
-    },
+    RomNotFound { path: PathBuf },
 
     /// Invalid ROM format
-    RomInvalid {
-        path: PathBuf,
-        reason: String,
-    },
+    RomInvalid { path: PathBuf, reason: String },
 
     // =========================================================================
     // Savestate Errors
     // =========================================================================
     /// Failed to load savestate
-    SavestateLoad {
-        source: String,
-        message: String,
-    },
+    SavestateLoad { source: String, message: String },
 
     /// Failed to save savestate
     SavestateSave {
@@ -126,19 +106,13 @@ pub enum CliError {
     },
 
     /// Invalid savestate format
-    SavestateInvalid {
-        source: String,
-        reason: String,
-    },
+    SavestateInvalid { source: String, reason: String },
 
     // =========================================================================
     // Memory Errors
     // =========================================================================
     /// Invalid memory address
-    InvalidAddress {
-        address: String,
-        reason: String,
-    },
+    InvalidAddress { address: String, reason: String },
 
     /// Invalid memory range
     InvalidMemoryRange {
@@ -190,15 +164,10 @@ pub enum CliError {
     // Generic Errors
     // =========================================================================
     /// I/O error
-    Io {
-        operation: String,
-        message: String,
-    },
+    Io { operation: String, message: String },
 
     /// Internal error (should not happen)
-    Internal {
-        message: String,
-    },
+    Internal { message: String },
 }
 
 impl CliError {
@@ -207,7 +176,11 @@ impl CliError {
     // =========================================================================
 
     /// Create an invalid argument error.
-    pub fn invalid_arg(arg: impl Into<String>, value: impl Into<String>, reason: impl Into<String>) -> Self {
+    pub fn invalid_arg(
+        arg: impl Into<String>,
+        value: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> Self {
         Self::InvalidArgument {
             arg: arg.into(),
             value: value.into(),
@@ -282,7 +255,9 @@ impl CliError {
         Self::InvalidMemoryRange {
             range: range.into(),
             reason: reason.into(),
-            hint: Some("Use START-END (e.g., 0x0000-0x07FF) or START:LENGTH (e.g., 0x6000:0x100)".into()),
+            hint: Some(
+                "Use START-END (e.g., 0x0000-0x07FF) or START:LENGTH (e.g., 0x6000:0x100)".into(),
+            ),
         }
     }
 
@@ -406,19 +381,51 @@ impl CliError {
     pub fn exit_code(&self) -> u8 {
         match self {
             // Invalid arguments
-            Self::InvalidArgument { .. }
-            | Self::MissingArgument { .. }
-            | Self::ConflictingArguments { .. }
-            | Self::InvalidArgumentCombination { .. } => 2,
+            Self::InvalidArgument {
+                ..
+            }
+            | Self::MissingArgument {
+                ..
+            }
+            | Self::ConflictingArguments {
+                ..
+            }
+            | Self::InvalidArgumentCombination {
+                ..
+            } => 2,
 
             // ROM errors
-            Self::RomLoad { .. } | Self::RomNotFound { .. } | Self::RomInvalid { .. } => 3,
+            Self::RomLoad {
+                ..
+            }
+            | Self::RomNotFound {
+                ..
+            }
+            | Self::RomInvalid {
+                ..
+            } => 3,
 
             // Savestate errors
-            Self::SavestateLoad { .. } | Self::SavestateSave { .. } | Self::SavestateInvalid { .. } => 4,
+            Self::SavestateLoad {
+                ..
+            }
+            | Self::SavestateSave {
+                ..
+            }
+            | Self::SavestateInvalid {
+                ..
+            } => 4,
 
             // I/O errors
-            Self::ConfigIo { .. } | Self::OutputWrite { .. } | Self::Io { .. } => 5,
+            Self::ConfigIo {
+                ..
+            }
+            | Self::OutputWrite {
+                ..
+            }
+            | Self::Io {
+                ..
+            } => 5,
 
             // Other errors
             _ => 1,
@@ -430,35 +437,80 @@ impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             // Argument errors
-            Self::InvalidArgument { arg, value, reason, hint } => {
-                write!(f, "Invalid value '{}' for argument '{}': {}", value, arg, reason)?;
+            Self::InvalidArgument {
+                arg,
+                value,
+                reason,
+                hint,
+            } => {
+                write!(
+                    f,
+                    "Invalid value '{}' for argument '{}': {}",
+                    value, arg, reason
+                )?;
                 if let Some(h) = hint {
                     write!(f, "\nHint: {}", h)?;
                 }
                 Ok(())
             }
-            Self::MissingArgument { arg, context } => {
+            Self::MissingArgument {
+                arg,
+                context,
+            } => {
                 write!(f, "Missing required argument '{}': {}", arg, context)
             }
-            Self::ConflictingArguments { arg1, arg2, reason } => {
-                write!(f, "Cannot use '{}' and '{}' together: {}", arg1, arg2, reason)
+            Self::ConflictingArguments {
+                arg1,
+                arg2,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "Cannot use '{}' and '{}' together: {}",
+                    arg1, arg2, reason
+                )
             }
-            Self::InvalidArgumentCombination { args, reason } => {
-                write!(f, "Invalid argument combination [{}]: {}", args.join(", "), reason)
+            Self::InvalidArgumentCombination {
+                args,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "Invalid argument combination [{}]: {}",
+                    args.join(", "),
+                    reason
+                )
             }
 
             // Config errors
-            Self::ConfigIo { path, message } => {
-                write!(f, "Failed to read config file '{}': {}", path.display(), message)
+            Self::ConfigIo {
+                path,
+                message,
+            } => {
+                write!(
+                    f,
+                    "Failed to read config file '{}': {}",
+                    path.display(),
+                    message
+                )
             }
-            Self::ConfigParse { path, message, line } => {
+            Self::ConfigParse {
+                path,
+                message,
+                line,
+            } => {
                 write!(f, "Failed to parse config file '{}'", path.display())?;
                 if let Some(l) = line {
                     write!(f, " at line {}", l)?;
                 }
                 write!(f, ": {}", message)
             }
-            Self::ConfigValue { path, key, value, reason } => {
+            Self::ConfigValue {
+                path,
+                key,
+                value,
+                reason,
+            } => {
                 write!(
                     f,
                     "Invalid value '{}' for key '{}' in config '{}': {}",
@@ -470,44 +522,84 @@ impl fmt::Display for CliError {
             }
 
             // ROM errors
-            Self::RomLoad { path, message } => {
+            Self::RomLoad {
+                path,
+                message,
+            } => {
                 write!(f, "Failed to load ROM '{}': {}", path.display(), message)
             }
-            Self::RomNotFound { path } => {
+            Self::RomNotFound {
+                path,
+            } => {
                 write!(f, "ROM file not found: {}", path.display())
             }
-            Self::RomInvalid { path, reason } => {
+            Self::RomInvalid {
+                path,
+                reason,
+            } => {
                 write!(f, "Invalid ROM file '{}': {}", path.display(), reason)
             }
 
             // Savestate errors
-            Self::SavestateLoad { source, message } => {
+            Self::SavestateLoad {
+                source,
+                message,
+            } => {
                 write!(f, "Failed to load savestate from {}: {}", source, message)
             }
-            Self::SavestateSave { destination, message } => {
-                write!(f, "Failed to save savestate to {}: {}", destination, message)
+            Self::SavestateSave {
+                destination,
+                message,
+            } => {
+                write!(
+                    f,
+                    "Failed to save savestate to {}: {}",
+                    destination, message
+                )
             }
-            Self::SavestateInvalid { source, reason } => {
+            Self::SavestateInvalid {
+                source,
+                reason,
+            } => {
                 write!(f, "Invalid savestate from {}: {}", source, reason)
             }
 
             // Memory errors
-            Self::InvalidAddress { address, reason } => {
+            Self::InvalidAddress {
+                address,
+                reason,
+            } => {
                 write!(f, "Invalid address '{}': {}", address, reason)
             }
-            Self::InvalidMemoryRange { range, reason, hint } => {
+            Self::InvalidMemoryRange {
+                range,
+                reason,
+                hint,
+            } => {
                 write!(f, "Invalid memory range '{}': {}", range, reason)?;
                 if let Some(h) = hint {
                     write!(f, "\nHint: {}", h)?;
                 }
                 Ok(())
             }
-            Self::MemoryAccess { operation, address, message } => {
-                write!(f, "Memory {} at 0x{:04X} failed: {}", operation, address, message)
+            Self::MemoryAccess {
+                operation,
+                address,
+                message,
+            } => {
+                write!(
+                    f,
+                    "Memory {} at 0x{:04X} failed: {}",
+                    operation, address, message
+                )
             }
 
             // Execution errors
-            Self::Execution { message, cycles, frames } => {
+            Self::Execution {
+                message,
+                cycles,
+                frames,
+            } => {
                 write!(f, "Execution error: {}", message)?;
                 if let Some(c) = cycles {
                     write!(f, " (after {} cycles", c)?;
@@ -518,7 +610,11 @@ impl fmt::Display for CliError {
                 }
                 Ok(())
             }
-            Self::InvalidStopCondition { condition, reason, hint } => {
+            Self::InvalidStopCondition {
+                condition,
+                reason,
+                hint,
+            } => {
                 write!(f, "Invalid stop condition '{}': {}", condition, reason)?;
                 if let Some(h) = hint {
                     write!(f, "\nHint: {}", h)?;
@@ -527,10 +623,16 @@ impl fmt::Display for CliError {
             }
 
             // Output errors
-            Self::OutputWrite { destination, message } => {
+            Self::OutputWrite {
+                destination,
+                message,
+            } => {
                 write!(f, "Failed to write output to {}: {}", destination, message)
             }
-            Self::InvalidOutputFormat { format, valid_formats } => {
+            Self::InvalidOutputFormat {
+                format,
+                valid_formats,
+            } => {
                 write!(
                     f,
                     "Invalid output format '{}'. Valid formats: {}",
@@ -540,10 +642,15 @@ impl fmt::Display for CliError {
             }
 
             // Generic errors
-            Self::Io { operation, message } => {
+            Self::Io {
+                operation,
+                message,
+            } => {
                 write!(f, "I/O error during {}: {}", operation, message)
             }
-            Self::Internal { message } => {
+            Self::Internal {
+                message,
+            } => {
                 write!(f, "Internal error: {}", message)
             }
         }
@@ -607,7 +714,11 @@ mod tests {
 
     #[test]
     fn test_conflicting_args() {
-        let err = CliError::conflicting_args("--state-stdin", "--load-state", "can only use one input source");
+        let err = CliError::conflicting_args(
+            "--state-stdin",
+            "--load-state",
+            "can only use one input source",
+        );
         assert!(err.to_string().contains("--state-stdin"));
         assert!(err.to_string().contains("--load-state"));
     }
@@ -615,7 +726,13 @@ mod tests {
     #[test]
     fn test_exit_codes() {
         assert_eq!(CliError::invalid_arg("a", "b", "c").exit_code(), 2);
-        assert_eq!(CliError::RomNotFound { path: PathBuf::new() }.exit_code(), 3);
+        assert_eq!(
+            CliError::RomNotFound {
+                path: PathBuf::new()
+            }
+            .exit_code(),
+            3
+        );
         assert_eq!(CliError::savestate_load("file", "err").exit_code(), 4);
         assert_eq!(CliError::io("read", "err").exit_code(), 5);
     }

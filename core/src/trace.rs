@@ -1,5 +1,6 @@
 use std::fs::OpenOptions;
 use std::io::Write;
+use std::path::PathBuf;
 
 use crate::emulation::cpu::{
     CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, OpType, Source, UNUSED_BIT,
@@ -12,17 +13,17 @@ use crate::util::add_to_low_byte;
 
 pub struct TraceLog {
     pub log: String,
-    pub output: String,
+    pub output: PathBuf,
 }
 impl Default for TraceLog {
-    fn default() -> Self { Self::new(&String::from("./trace-log.txt")) }
+    fn default() -> Self { Self::new("./trace-log.txt".into()) }
 }
 
 impl TraceLog {
-    pub fn new(path: &str) -> Self {
+    pub fn new(path: PathBuf) -> Self {
         Self {
             log: String::from(""),
-            output: path.to_string(),
+            output: path,
         }
     }
 
@@ -116,14 +117,21 @@ impl TraceLog {
 
         let mut file = match file {
             Ok(f) => f,
-            Err(e) => return Err(format!("Error opening log file: {}\n\t{}", self.output, e)),
+            Err(e) => {
+                return Err(format!(
+                    "Error opening log file: {}\n\t{}",
+                    self.output.to_string_lossy(),
+                    e
+                ));
+            }
         };
 
         match file.write_all(self.log.as_bytes()) {
             Ok(_) => Ok(()),
             Err(e) => Err(format!(
                 "Error saving log to file: {}\n\t{}",
-                self.output, e
+                self.output.to_string_lossy(),
+                e
             )),
         }
     }

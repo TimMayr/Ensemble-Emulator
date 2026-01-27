@@ -14,14 +14,13 @@ use std::fmt::{Debug, Formatter};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-
 use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
 use crate::emulation::messages::{
-    EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette, TileData,
-    TILE_COUNT,
+    EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette, TILE_COUNT,
+    TileData,
 };
 use crate::emulation::nes::Nes;
 use crate::frontend::egui::config::{
@@ -32,7 +31,7 @@ use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
-    compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
+    Pane, TreeBehavior, compute_required_fetches_from_tree, create_tree,
 };
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
 use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
@@ -185,6 +184,7 @@ impl EguiApp {
                     }
                 }
                 AsyncFrontendMessage::PaletteLoaded(palette, path) => {
+                    let palette = *palette;
                     // Palette was loaded asynchronously - apply it
                     self.config.view_config.palette_rgb_data = palette;
                     self.config.user_config.previous_palette_path = Some(path);
@@ -438,13 +438,13 @@ impl EguiApp {
 
     /// Check if the pattern tables pane is visible
     fn is_pattern_tables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{find_pane, Pane};
+        use crate::frontend::egui::tiles::{Pane, find_pane};
         find_pane(&self.tree.tiles, &Pane::PatternTables).is_some()
     }
 
     /// Check if the nametables pane is visible
     fn is_nametables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{find_pane, Pane};
+        use crate::frontend::egui::tiles::{Pane, find_pane};
         find_pane(&self.tree.tiles, &Pane::Nametables).is_some()
     }
 

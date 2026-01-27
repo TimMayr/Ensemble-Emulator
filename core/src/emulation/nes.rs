@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::ops::{Deref, RangeInclusive};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -80,7 +81,7 @@ impl Nes {
         ]
     }
 
-    pub fn set_trace_log_path(&mut self, path: Option<String>) {
+    pub fn set_trace_log_path(&mut self, path: Option<PathBuf>) {
         if path.is_none() {
             self.trace_log = None;
             return;
@@ -89,7 +90,7 @@ impl Nes {
         let path = path.unwrap();
 
         if self.trace_log.is_none() {
-            self.trace_log = Some(TraceLog::new(&path));
+            self.trace_log = Some(TraceLog::new(path.clone()));
         }
 
         if let Some(ref mut trace) = self.trace_log {

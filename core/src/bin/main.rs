@@ -5,7 +5,7 @@
 //!
 //! See `docs/CLI_INTERFACE.md` for full CLI documentation.
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
 
@@ -159,10 +159,7 @@ fn output_results(emu: &Nes, args: &CliArgs) -> Result<(), String> {
     OutputWriter::reset();
 
     // Create the output writer with configured format and destination
-    let writer = OutputWriter::new(
-        args.output.output.clone(),
-        args.output.effective_format(),
-    );
+    let writer = OutputWriter::new(args.output.output.clone(), args.output.effective_format());
 
     // Process each requested memory dump
     if let Some(ref range) = args.memory.read_cpu {
@@ -226,7 +223,7 @@ fn create_nametables_dump(emu: &Nes) -> MemoryDump {
 // ROM Info
 // =============================================================================
 
-fn print_rom_info(rom_path: &PathBuf) -> Result<(), String> {
+fn print_rom_info(rom_path: &Path) -> Result<(), String> {
     let path_str = rom_path.to_string_lossy().to_string();
     let rom = RomFile::load(&path_str);
 

@@ -121,14 +121,10 @@ impl MemoryDump {
     }
 
     /// Create OAM memory dump
-    pub fn oam(data: Vec<u8>) -> Self {
-        Self::new(MemoryType::Oam, 0, data)
-    }
+    pub fn oam(data: Vec<u8>) -> Self { Self::new(MemoryType::Oam, 0, data) }
 
     /// Create nametables memory dump
-    pub fn nametables(data: Vec<u8>) -> Self {
-        Self::new(MemoryType::Nametables, 0x2000, data)
-    }
+    pub fn nametables(data: Vec<u8>) -> Self { Self::new(MemoryType::Nametables, 0x2000, data) }
 }
 
 // =============================================================================
@@ -146,9 +142,7 @@ pub trait MemoryFormatter: Send + Sync {
     fn file_extension(&self) -> &'static str;
 
     /// Whether this format is human-readable (affects stdout display).
-    fn is_text(&self) -> bool {
-        true
-    }
+    fn is_text(&self) -> bool { true }
 }
 
 // =============================================================================
@@ -176,26 +170,18 @@ impl MemoryFormatter for HexFormatter {
         Ok(output.into_bytes())
     }
 
-    fn file_extension(&self) -> &'static str {
-        "hex"
-    }
+    fn file_extension(&self) -> &'static str { "hex" }
 }
 
 /// Raw binary formatter
 pub struct BinaryFormatter;
 
 impl MemoryFormatter for BinaryFormatter {
-    fn format(&self, dump: &MemoryDump) -> Result<Vec<u8>, String> {
-        Ok(dump.data.clone())
-    }
+    fn format(&self, dump: &MemoryDump) -> Result<Vec<u8>, String> { Ok(dump.data.clone()) }
 
-    fn file_extension(&self) -> &'static str {
-        "bin"
-    }
+    fn file_extension(&self) -> &'static str { "bin" }
 
-    fn is_text(&self) -> bool {
-        false
-    }
+    fn is_text(&self) -> bool { false }
 }
 
 /// JSON formatter
@@ -235,9 +221,7 @@ impl MemoryFormatter for JsonFormatter {
         Ok(format!("{}\n", json_str).into_bytes())
     }
 
-    fn file_extension(&self) -> &'static str {
-        "json"
-    }
+    fn file_extension(&self) -> &'static str { "json" }
 }
 
 /// TOML formatter
@@ -262,9 +246,7 @@ impl MemoryFormatter for TomlFormatter {
         Ok(format!("{}\n", toml_str).into_bytes())
     }
 
-    fn file_extension(&self) -> &'static str {
-        "toml"
-    }
+    fn file_extension(&self) -> &'static str { "toml" }
 }
 
 // =============================================================================
@@ -315,13 +297,14 @@ pub struct OutputWriter {
 impl OutputWriter {
     /// Create a new output writer.
     pub fn new(path: Option<PathBuf>, format: OutputFormat) -> Self {
-        Self { path, format }
+        Self {
+            path,
+            format,
+        }
     }
 
     /// Reset the output file state (call at start of output session).
-    pub fn reset() {
-        OUTPUT_FILE_INITIALIZED.store(false, Ordering::SeqCst);
-    }
+    pub fn reset() { OUTPUT_FILE_INITIALIZED.store(false, Ordering::SeqCst); }
 
     /// Write a memory dump using the configured format.
     pub fn write(&self, dump: &MemoryDump) -> Result<(), String> {

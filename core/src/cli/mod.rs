@@ -5,7 +5,7 @@
 //!
 //! # Architecture
 //!
-//! The CLI is organized into several sub-modules, each with a specific responsibility:
+//! The CLI is organized into several submodules, each with a specific responsibility:
 //!
 //! | Module | Purpose |
 //! |--------|---------|
@@ -249,7 +249,8 @@ fn validate_headless_requirements(args: &CliArgs) -> Result<(), CliError> {
     {
         return Err(CliError::MissingArgument {
             arg: "--rom, --load-state, or --state-stdin".to_string(),
-            context: "Headless mode requires an input source (ROM, savestate file, or stdin)".to_string(),
+            context: "Headless mode requires an input source (ROM, savestate file, or stdin)"
+                .to_string(),
         });
     }
     Ok(())
@@ -389,23 +390,20 @@ pub fn parse_memory_range(range: &str) -> Result<(u16, u16), String> {
     } else if let Some((start_str, len_str)) = range.split_once(':') {
         let start = parse_hex_u16(start_str)?;
         let len = parse_hex_u16(len_str)?;
-        
+
         if len == 0 {
             return Err(format!(
                 "Invalid memory range '{}': length cannot be zero",
                 range
             ));
         }
-        
+
         // Calculate end address, checking for overflow
-        let end = match start.checked_add(len.saturating_sub(1)) {
-            Some(e) => e,
-            None => {
-                // Overflow - clamp to max address
-                0xFFFF
-            }
-        };
-        
+        let end = start.checked_add(len.saturating_sub(1)).unwrap_or({
+            // Overflow - clamp to max address
+            0xFFFF
+        });
+
         Ok((start, end))
     } else {
         Err(format!(
@@ -458,11 +456,20 @@ mod tests {
     #[test]
     fn test_parse_memory_range_edge_cases() {
         // Single byte (length 1)
-        assert_eq!(parse_memory_range("0x0000:0x0001").unwrap(), (0x0000, 0x0000));
+        assert_eq!(
+            parse_memory_range("0x0000:0x0001").unwrap(),
+            (0x0000, 0x0000)
+        );
         // Maximum address
-        assert_eq!(parse_memory_range("0xFFFF-0xFFFF").unwrap(), (0xFFFF, 0xFFFF));
+        assert_eq!(
+            parse_memory_range("0xFFFF-0xFFFF").unwrap(),
+            (0xFFFF, 0xFFFF)
+        );
         // Full range
-        assert_eq!(parse_memory_range("0x0000-0xFFFF").unwrap(), (0x0000, 0xFFFF));
+        assert_eq!(
+            parse_memory_range("0x0000-0xFFFF").unwrap(),
+            (0x0000, 0xFFFF)
+        );
     }
 
     #[test]
@@ -471,7 +478,7 @@ mod tests {
         let (start, end) = parse_memory_range("0xFFFF:0xFFFF").unwrap();
         assert_eq!(start, 0xFFFF);
         assert_eq!(end, 0xFFFF); // Clamped to max
-        
+
         // Test a case where overflow would occur: 0xFF00 + 0x200 - 1 = 0x100FF (overflow)
         // With checked_add, 0xFF00 + 0x1FF = 0x100FF would overflow, so clamp to 0xFFFF
         let (start, end) = parse_memory_range("0xFF00:0x200").unwrap();
