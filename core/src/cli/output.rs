@@ -88,7 +88,15 @@ pub struct OamSprite {
 
 impl OamSprite {
     /// Create a sprite from 4 raw OAM bytes.
+    ///
+    /// # Panics
+    /// Panics if bytes slice has fewer than 4 elements.
     pub fn from_bytes(index: u8, bytes: &[u8]) -> Self {
+        assert!(
+            bytes.len() >= 4,
+            "OAM sprite requires at least 4 bytes, got {}",
+            bytes.len()
+        );
         let y = bytes[0];
         let tile = bytes[1];
         let attr = bytes[2];
@@ -121,7 +129,7 @@ pub struct InterpretedOam {
 }
 
 impl InterpretedOam {
-    /// Create interpreted OAM from raw 256-byte OAM data.
+    /// Create interpreted OAM from raw OAM data (up to 256 bytes for 64 sprites).
     pub fn from_raw(data: &[u8]) -> Self {
         let mut sprites = Vec::with_capacity(64);
         let mut visible_count = 0u8;
@@ -138,7 +146,7 @@ impl InterpretedOam {
         }
 
         Self {
-            sprite_count: 64,
+            sprite_count: sprites.len() as u8,
             visible_count,
             sprites,
         }
@@ -871,8 +879,7 @@ mod tests {
 
     #[test]
     fn test_interpreted_oam_from_raw() {
-        // Create minimal OAM data (8 bytes = 2 sprites)
-        // Create OAM data with all sprites hidden by default
+        // Create full 256-byte OAM data (64 sprites × 4 bytes) with all sprites hidden by default
         let mut data = vec![0xFFu8; 256]; // Y=0xFF means hidden
         // Sprite 0: visible
         data[0] = 0x10; // Y
