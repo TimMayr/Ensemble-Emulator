@@ -4,7 +4,9 @@
 
 This document evaluates approaches for exporting NES emulator frame buffer data (256×240 @ 60fps, ARGB u32) to MP4 video files.
 
-**Recommended Approach:** **FFmpeg piping with `video-rs` as fallback for self-contained builds.**
+**Recommended Approach:** **Self-contained encoding with `rav1e` + WebM for pure Rust, or bundled FFmpeg via `video-rs` for MP4 support.**
+
+> **Design Decision:** Since this is user-facing software, we should NOT assume users have ffmpeg installed. The primary implementation should be self-contained with no external runtime dependencies. FFmpeg pipe mode can be offered as an advanced/optional feature for power users who want maximum control.
 
 ---
 
@@ -25,23 +27,165 @@ pub pixel_buffer: Vec<u32>  // 256×240 = 61,440 pixels
 
 ## Approach Comparison
 
-| Approach | Pros | Cons | Complexity | Dependencies |
-|----------|------|------|------------|--------------|
-| **FFmpeg pipe** | Mature, efficient, all codecs | Requires ffmpeg installed | Low | External binary |
-| **video-rs** | Rust API, ffmpeg features | Requires ffmpeg libs | Medium | ffmpeg libs |
-| **rsmpeg** | Modern API, well-maintained | Requires ffmpeg libs | Medium | ffmpeg libs |
-| **ffmpeg-next** | Feature-complete | Maintenance mode, complex | High | ffmpeg libs |
-| **GIF (gif crate)** | Pure Rust, no deps | Not MP4, 256 color limit | Low | None |
-| **PNG sequence** | Simple, lossless | Large files, needs ffmpeg to stitch | Very Low | None |
-| **WebM (rav1e)** | Pure Rust AV1 | Slow encoding, not MP4 | High | None |
+| Approach | Self-Contained | Pros | Cons | Recommendation |
+|----------|----------------|------|------|----------------|
+| **rav1e + WebM** | ✅ Yes | Pure Rust, no deps | Not MP4, slower encoding | ✅ **Default for WebM** |
+| **video-rs (bundled)** | ✅ Yes | Full MP4 support, fast | Larger binary (~2MB) | ✅ **Default for MP4** |
+| **PNG sequence** | ✅ Yes | Simple, lossless | Large files, post-process needed | ✅ **For lossless** |
+| **GIF (gif crate)** | ✅ Yes | Universal support | 256 color limit | ✅ **For short clips** |
+| **FFmpeg pipe** | ❌ No | All codecs, flexible | Requires ffmpeg installed | ⚠️ **Advanced/optional** |
+| **rsmpeg** | ❌ No | Modern API | Requires ffmpeg libs | ⚠️ **Advanced/optional** |
+| **ffmpeg-next** | ❌ No | Feature-complete | Maintenance mode, needs libs | ❌ Not recommended |
 
 ---
 
 ## Detailed Analysis
 
-### Option 1: FFmpeg Pipe (Recommended for CLI)
+### Option 1: video-rs with Bundled FFmpeg (Recommended for MP4)
 
-The simplest and most robust approach. Output raw frames to stdout, pipe to external ffmpeg.
+The `video-rs` crate provides a high-level Rust API that bundles FFmpeg statically, meaning **no external dependencies required at runtime**.
+
+**Cargo.toml:**
+
+```toml
+[dependencies]
+video-rs = { version = "0.10", features = ["ndarray"] }
+ndarray = "0.16"
+```
+
+**Implementation:**
+
+```rust
+use video_rs::encode::{Encoder, Settings};
+use video_rs::time::Time;
+use ndarray::Array3;
+
+pub struct VideoRsEncoder {
+    encoder: Encoder,
+    position: Time,
+    duration: Time,
+}
+
+impl VideoRsEncoder {
+    pub fn new(output_path: &str, width: usize, height: usize, fps: u32) -> Result<Self, video_rs::Error> {
+        video_rs::init()?;
+        
+        let settings = Settings::preset_h264_yuv420p(width, height, false);
+        let encoder = Encoder::new(std::path::Path::new(output_path), settings)?;
+        
+        let duration = Time::from_nth_of_a_second(fps);
+        
+        Ok(Self {
+            encoder,
+            position: Time::zero(),
+            duration,
+        })
+    }
+    
+    /// Write a frame from NES pixel buffer (ARGB u32)
+    pub fn write_frame(&mut self, pixel_buffer: &[u32], width: usize, height: usize) -> Result<(), video_rs::Error> {
+        // Convert ARGB u32 to RGB u8 ndarray
+        let frame = Array3::from_shape_fn((height, width, 3), |(y, x, c)| {
+            let pixel = pixel_buffer[y * width + x];
+            match c {
+                0 => ((pixel >> 16) & 0xFF) as u8,  // R
+                1 => ((pixel >> 8) & 0xFF) as u8,   // G
+                2 => (pixel & 0xFF) as u8,          // B
+                _ => unreachable!(),
+            }
+        });
+        
+        self.encoder.encode(&frame, self.position)?;
+        self.position = self.position.aligned_with(self.duration).add();
+        
+        Ok(())
+    }
+    
+    pub fn finish(self) -> Result<(), video_rs::Error> {
+        self.encoder.finish()
+    }
+}
+```
+
+**Pros:**
+- ✅ **Self-contained** - No runtime dependencies for end users
+- ✅ Clean Rust API
+- ✅ Full H.264/H.265 MP4 support
+- ✅ Handles all encoding complexity internally
+- ✅ Cross-platform (Windows, macOS, Linux)
+
+**Cons:**
+- Increases binary size by ~2-5MB (bundled ffmpeg libs)
+- Requires ffmpeg libraries at compile time (but NOT at runtime)
+- Longer compile times
+
+---
+
+### Option 2: Pure Rust AV1/WebM (rav1e + webm crate)
+
+For a completely pure Rust solution with no C dependencies at all.
+
+**Cargo.toml:**
+
+```toml
+[dependencies]
+rav1e = "0.7"
+webm = "1.0"
+```
+
+**Implementation:**
+
+```rust
+use rav1e::prelude::*;
+
+pub struct Rav1eEncoder {
+    ctx: Context<u8>,
+    // ...
+}
+
+impl Rav1eEncoder {
+    pub fn new(output_path: &str, width: usize, height: usize, fps: u32) -> Result<Self, rav1e::EncoderStatus> {
+        let enc = EncoderConfig {
+            width,
+            height,
+            bit_depth: 8,
+            time_base: Rational::new(1, fps as u64),
+            ..Default::default()
+        };
+        
+        let cfg = Config::new().with_encoder_config(enc);
+        let ctx = cfg.new_context()?;
+        
+        Ok(Self { ctx })
+    }
+    
+    pub fn write_frame(&mut self, pixel_buffer: &[u32]) -> Result<(), rav1e::EncoderStatus> {
+        // Convert ARGB to YUV planes
+        let mut frame = self.ctx.new_frame();
+        // ... conversion logic ...
+        self.ctx.send_frame(frame)?;
+        Ok(())
+    }
+}
+```
+
+**Pros:**
+- ✅ **100% Pure Rust** - No C dependencies whatsoever
+- ✅ Modern AV1 codec (excellent quality)
+- ✅ Smaller binary than bundled ffmpeg
+
+**Cons:**
+- Output is WebM/AV1, not MP4 (though widely supported)
+- Slower encoding than hardware-accelerated codecs
+- More complex implementation
+
+---
+
+### Option 3: FFmpeg Pipe (Advanced/Optional Feature)
+
+For power users who have ffmpeg installed and want maximum control.
+
+> **Note:** This should NOT be the default. It's an advanced option for users who explicitly want custom ffmpeg pipelines.
 
 **Implementation:**
 
@@ -118,110 +262,20 @@ encoder.finish()?;
 ```
 
 **Pros:**
-- No build-time dependencies
-- Full codec support (H.264, H.265, VP9, AV1, etc.)
-- Battle-tested, industry standard
-- Easy to customize (bitrate, quality, filters)
+- Maximum flexibility for custom encoding
+- Access to all ffmpeg features
+- No binary size increase
 
 **Cons:**
-- Requires ffmpeg installed on system
+- ❌ **Requires ffmpeg installed** - Not suitable as default for user-facing software
 - External process management
-
-**CLI Integration:**
-
-```bash
-# User-friendly command
-nes_main -H --rom game.nes --frames 600 --video output.mp4
-
-# Advanced: pipe raw for custom encoding
-nes_main -H --rom game.nes --frames 600 --video-format raw --video - | \
-  ffmpeg -f rawvideo -pixel_format bgra -video_size 256x240 \
-         -framerate 60 -i - -c:v libx264 -preset slow -crf 15 output.mp4
-```
+- Poor user experience if ffmpeg not found
 
 ---
 
-### Option 2: video-rs Crate (Recommended for Embedded)
+### Option 4: PNG Sequence (Universal Fallback)
 
-High-level Rust wrapper around ffmpeg. Good balance of simplicity and features.
-
-**Cargo.toml:**
-
-```toml
-[dependencies]
-video-rs = { version = "0.10", features = ["ndarray"] }
-ndarray = "0.16"
-```
-
-**Implementation:**
-
-```rust
-use video_rs::encode::{Encoder, Settings};
-use video_rs::time::Time;
-use ndarray::Array3;
-
-pub struct VideoRsEncoder {
-    encoder: Encoder,
-    position: Time,
-    duration: Time,
-}
-
-impl VideoRsEncoder {
-    pub fn new(output_path: &str, width: usize, height: usize, fps: u32) -> Result<Self, video_rs::Error> {
-        video_rs::init()?;
-        
-        let settings = Settings::preset_h264_yuv420p(width, height, false);
-        let encoder = Encoder::new(std::path::Path::new(output_path), settings)?;
-        
-        let duration = Time::from_nth_of_a_second(fps);
-        
-        Ok(Self {
-            encoder,
-            position: Time::zero(),
-            duration,
-        })
-    }
-    
-    /// Write a frame from NES pixel buffer (ARGB u32)
-    pub fn write_frame(&mut self, pixel_buffer: &[u32], width: usize, height: usize) -> Result<(), video_rs::Error> {
-        // Convert ARGB u32 to RGB u8 ndarray
-        let frame = Array3::from_shape_fn((height, width, 3), |(y, x, c)| {
-            let pixel = pixel_buffer[y * width + x];
-            match c {
-                0 => ((pixel >> 16) & 0xFF) as u8,  // R
-                1 => ((pixel >> 8) & 0xFF) as u8,   // G
-                2 => (pixel & 0xFF) as u8,          // B
-                _ => unreachable!(),
-            }
-        });
-        
-        self.encoder.encode(&frame, self.position)?;
-        self.position = self.position.aligned_with(self.duration).add();
-        
-        Ok(())
-    }
-    
-    pub fn finish(self) -> Result<(), video_rs::Error> {
-        self.encoder.finish()
-    }
-}
-```
-
-**Pros:**
-- Clean Rust API
-- Handles ffmpeg complexities internally
-- No shell process spawning
-
-**Cons:**
-- Requires ffmpeg libraries at build time
-- Platform-specific build setup
-- Additional 2MB+ binary size
-
----
-
-### Option 3: PNG Sequence + Post-Processing
-
-For maximum simplicity and flexibility, export PNG sequence then convert.
+Pure Rust, always works, for users who want to post-process themselves.
 
 **Implementation:**
 
@@ -269,7 +323,7 @@ ffmpeg -framerate 60 -i frames/frame_%04d.png -c:v libx264 -crf 18 -pix_fmt yuv4
 
 ---
 
-### Option 4: GIF Output (for simple sharing)
+### Option 5: GIF Output (for simple sharing)
 
 Useful for short clips, not recommended for long recordings.
 
@@ -325,21 +379,27 @@ impl GifEncoder {
 
 ## Recommended Implementation Strategy
 
-### Phase 1: FFmpeg Pipe (Immediate)
+### Design Principles
 
-1. Add `--video <path>` and `--video-format` arguments (already in args.rs)
-2. Implement `FfmpegPipeEncoder` in `cli/video.rs`
-3. Support formats: `raw`, `mp4`, `png`, `gif`
-4. For `mp4`: spawn ffmpeg, pipe raw frames
-5. For `raw`: write to stdout (for custom ffmpeg commands)
-6. For `png`: use `image` crate sequence
-7. For `gif`: use `gif` crate
+1. **Self-contained by default** - Users should NOT need to install external tools
+2. **Multiple output options** - Different formats for different use cases
+3. **Advanced features optional** - FFmpeg pipe for power users only
 
-### Phase 2: Self-Contained (Optional)
+### Phase 1: Self-Contained Implementation (Primary)
 
-1. Add `video-rs` as optional dependency behind feature flag
-2. Use for embedded builds where ffmpeg install isn't guaranteed
-3. Feature: `video-builtin`
+| Format | Implementation | User Experience |
+|--------|---------------|-----------------|
+| **MP4** | `video-rs` (bundled ffmpeg) | ✅ Just works - no install needed |
+| **WebM** | `rav1e` (pure Rust) | ✅ Just works - no install needed |
+| **PNG** | `image` crate | ✅ Just works - lossless frames |
+| **GIF** | `gif` crate | ✅ Just works - short clips |
+
+### Phase 2: Advanced Features (Optional)
+
+| Format | Implementation | User Experience |
+|--------|---------------|-----------------|
+| **Raw pipe** | FFmpeg pipe | ⚠️ Requires ffmpeg - for power users |
+| **Custom** | FFmpeg pipe | ⚠️ Requires ffmpeg - advanced control |
 
 ### Proposed Module Structure
 
@@ -347,10 +407,11 @@ impl GifEncoder {
 // core/src/cli/video.rs
 
 pub enum VideoFormat {
-    Raw,      // Raw BGRA bytes to stdout
-    Mp4,      // FFmpeg pipe to MP4
-    Png,      // PNG sequence
-    Gif,      // Animated GIF
+    Mp4,      // Self-contained via video-rs (default)
+    WebM,     // Pure Rust via rav1e
+    Png,      // PNG sequence via image crate
+    Gif,      // Animated GIF via gif crate
+    Raw,      // Raw BGRA bytes (for advanced ffmpeg piping)
 }
 
 pub trait VideoEncoder {
@@ -358,19 +419,29 @@ pub trait VideoEncoder {
     fn finish(self) -> Result<(), VideoError>;
 }
 
-pub struct FfmpegEncoder { /* ... */ }
-pub struct PngSequenceEncoder { /* ... */ }
-pub struct GifEncoder { /* ... */ }
-pub struct RawEncoder { /* ... */ }  // Just writes bytes to stdout
+// Self-contained encoders (no external deps at runtime)
+pub struct Mp4Encoder { /* video-rs */ }
+pub struct WebMEncoder { /* rav1e */ }
+pub struct PngSequenceEncoder { /* image crate */ }
+pub struct GifEncoder { /* gif crate */ }
+
+// Advanced encoder (requires ffmpeg installed)
+pub struct RawEncoder { /* writes to stdout for ffmpeg piping */ }
 
 impl VideoFormat {
-    pub fn encoder(&self, path: &str, width: u32, height: u32, fps: f64) -> Box<dyn VideoEncoder> {
+    pub fn encoder(&self, path: &str, width: u32, height: u32, fps: f64) -> Result<Box<dyn VideoEncoder>, VideoError> {
         match self {
-            VideoFormat::Raw => Box::new(RawEncoder::new()),
-            VideoFormat::Mp4 => Box::new(FfmpegEncoder::new(path, width, height, fps)),
-            VideoFormat::Png => Box::new(PngSequenceEncoder::new(path)),
-            VideoFormat::Gif => Box::new(GifEncoder::new(path, width, height)),
+            VideoFormat::Mp4 => Ok(Box::new(Mp4Encoder::new(path, width, height, fps)?)),
+            VideoFormat::WebM => Ok(Box::new(WebMEncoder::new(path, width, height, fps)?)),
+            VideoFormat::Png => Ok(Box::new(PngSequenceEncoder::new(path)?)),
+            VideoFormat::Gif => Ok(Box::new(GifEncoder::new(path, width, height)?)),
+            VideoFormat::Raw => Ok(Box::new(RawEncoder::new())),
         }
+    }
+    
+    /// Returns true if this format requires external tools (ffmpeg)
+    pub fn requires_external_tools(&self) -> bool {
+        matches!(self, VideoFormat::Raw)
     }
 }
 ```
@@ -381,18 +452,23 @@ impl VideoFormat {
 
 ```toml
 [dependencies]
+# For self-contained MP4 export (bundles ffmpeg codecs)
+video-rs = { version = "0.10", features = ["ndarray"] }
+ndarray = "0.16"
+
 # For PNG sequence export
 image = { version = "0.25", default-features = false, features = ["png"] }
 
 # For GIF export  
 gif = "0.13"
 
-# Optional: For self-contained MP4 (requires ffmpeg libs)
-# video-rs = { version = "0.10", features = ["ndarray"], optional = true }
-# ndarray = { version = "0.16", optional = true }
+# For pure Rust WebM/AV1 (optional, no C deps)
+# rav1e = { version = "0.7", optional = true }
+# webm = { version = "1.0", optional = true }
 
 [features]
-# video-builtin = ["video-rs", "ndarray"]
+# Enable pure Rust AV1/WebM encoding (slower but zero C dependencies)
+# pure-rust-video = ["rav1e", "webm"]
 ```
 
 ---
@@ -400,22 +476,25 @@ gif = "0.13"
 ## CLI Usage Examples
 
 ```bash
-# Record 10 seconds of gameplay to MP4 (requires ffmpeg)
+# Record 10 seconds of gameplay to MP4 (self-contained, just works!)
 nes_main -H --rom game.nes --frames 600 --video gameplay.mp4
+
+# Record to WebM (pure Rust, no external deps)
+nes_main -H --rom game.nes --frames 600 --video gameplay.webm --video-format webm
 
 # Record with custom quality
 nes_main -H --rom game.nes --frames 600 --video gameplay.mp4 --video-quality high
 
-# Record raw for custom ffmpeg pipeline
-nes_main -H --rom game.nes --frames 600 --video-format raw | \
-  ffmpeg -f rawvideo -pixel_format bgra -video_size 256x240 \
-         -framerate 60 -i - -c:v libx265 -crf 20 output.mp4
-
-# Record PNG sequence
+# Record PNG sequence (lossless)
 nes_main -H --rom game.nes --frames 600 --video-format png --video "frames/frame_%04d.png"
 
 # Record animated GIF (short clips only)
 nes_main -H --rom game.nes --frames 60 --video clip.gif --video-format gif
+
+# ADVANCED: Raw output for custom ffmpeg pipeline (requires ffmpeg installed)
+nes_main -H --rom game.nes --frames 600 --video-format raw | \
+  ffmpeg -f rawvideo -pixel_format bgra -video_size 256x240 \
+         -framerate 60 -i - -c:v libx265 -crf 20 output.mp4
 
 # Record debug views
 nes_main -H --rom game.nes --frames 600 --export-nametables-video nametables.mp4
@@ -463,14 +542,18 @@ impl From<std::io::Error> for VideoError {
 
 ## Conclusion
 
-**FFmpeg pipe** is the recommended approach because:
+**Self-contained `video-rs`** is the recommended primary approach because:
 
-1. **No build complexity** - No need to compile ffmpeg or link libraries
-2. **Full codec support** - Any codec ffmpeg supports
-3. **Industry standard** - Well-tested, documented
-4. **Flexible** - Users can customize encoding
-5. **Minimal code** - ~50 lines of Rust
+1. **Just works for users** - No need to install ffmpeg or any external tools
+2. **Full MP4/H.264 support** - Industry standard format that plays everywhere
+3. **Cross-platform** - Works on Windows, macOS, and Linux out of the box
+4. **Clean Rust API** - Easy to integrate and maintain
+5. **Reasonable binary size** - Only adds ~2-5MB to the executable
 
-The only requirement is that users have ffmpeg installed, which is standard for video work and available on all platforms via package managers.
+For users who need additional options:
+- **WebM/AV1** via `rav1e` for pure Rust (optional feature)
+- **PNG sequence** for lossless frames
+- **GIF** for short shareable clips
+- **Raw pipe** for advanced users with ffmpeg installed
 
-For users who need a fully self-contained binary, `video-rs` can be added as an optional feature in the future.
+> **Key Principle:** User-facing software should work out of the box. External dependencies like ffmpeg should only be required for optional advanced features, never for basic functionality.
