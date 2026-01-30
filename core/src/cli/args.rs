@@ -111,6 +111,10 @@ pub struct MemoryArgs {
     #[arg(long, default_value_t = false)]
     pub dump_nametables: bool,
 
+    /// Dump palette RAM (32 bytes at $3F00-$3F1F)
+    #[arg(long, default_value_t = false)]
+    pub dump_palette: bool,
+
     /// Initialize CPU memory (ADDR=VALUE or ADDR=V1,V2,...)
     #[arg(long, action = clap::ArgAction::Append)]
     pub init_cpu: Vec<String>,

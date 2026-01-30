@@ -171,6 +171,7 @@
 
 pub mod args;
 pub mod config;
+pub mod debug_export;
 pub mod error;
 pub mod execution;
 pub mod memory_init;
@@ -180,6 +181,11 @@ pub mod video;
 pub use args::{CliArgs, OutputFormat, VideoFormat, parse_hex_u16};
 use clap::Parser;
 pub use config::ConfigFile;
+pub use debug_export::{
+    export_nametables, export_pattern_tables, export_sprites, nametables_dimensions,
+    pattern_tables_dimensions, render_nametables, render_pattern_tables, render_sprites,
+    sprites_dimensions,
+};
 pub use error::{CliError, CliResult};
 pub use execution::{
     ExecutionConfig, ExecutionEngine, ExecutionResult, SavestateConfig, SavestateDestination,

@@ -88,6 +88,7 @@ pub struct MemoryConfig {
     pub read_ppu: Option<String>,
     pub dump_oam: Option<bool>,
     pub dump_nametables: Option<bool>,
+    pub dump_palette: Option<bool>,
     pub init_file: Option<PathBuf>,
 
     /// CPU memory initialization: address -> values
@@ -217,6 +218,9 @@ impl ConfigFile {
         }
         if !cli.memory.dump_nametables {
             cli.memory.dump_nametables = self.memory.dump_nametables.unwrap_or(false);
+        }
+        if !cli.memory.dump_palette {
+            cli.memory.dump_palette = self.memory.dump_palette.unwrap_or(false);
         }
         if cli.memory.init_file.is_none() {
             cli.memory.init_file = self.memory.init_file.clone();

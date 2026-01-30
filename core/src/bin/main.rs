@@ -12,7 +12,8 @@ use std::time::Instant;
 use nes_core::cli::{
     self, CliArgs, ExecutionConfig, ExecutionEngine, MemoryDump, MemoryInit, MemoryInitConfig,
     MemoryType, OutputWriter, SavestateConfig, StopReason, VideoFormat, VideoResolution,
-    apply_memory_init, apply_memory_init_config, is_ffmpeg_available,
+    apply_memory_init, apply_memory_init_config, export_nametables, export_pattern_tables,
+    export_sprites, is_ffmpeg_available,
 };
 use nes_core::emulation::messages::RgbColor;
 use nes_core::emulation::nes::Nes;
@@ -145,6 +146,9 @@ fn run_headless(args: &CliArgs) -> Result<(), String> {
 
     // Output memory dumps
     output_results(engine.emulator(), args)?;
+
+    // Export debug visualizations
+    export_debug_visualizations(engine.emulator(), args)?;
 
     // Save screenshot (only if we have frames - in buffered mode)
     if !use_streaming {
@@ -319,6 +323,11 @@ fn output_results(emu: &Nes, args: &CliArgs) -> Result<(), String> {
         writer.write(&dump)?;
     }
 
+    if args.memory.dump_palette {
+        let dump = create_palette_dump(emu);
+        writer.write(&dump)?;
+    }
+
     Ok(())
 }
 
@@ -438,6 +447,17 @@ fn create_nametables_dump(emu: &Nes) -> MemoryDump {
         .memory
         .get_memory_debug(Some(0x2000..=0x2FFF));
     MemoryDump::nametables(mem)
+}
+
+/// Create a palette RAM memory dump from the emulator
+fn create_palette_dump(emu: &Nes) -> MemoryDump {
+    // Palette RAM is at PPU addresses $3F00-$3F1F (32 bytes)
+    let mem = emu
+        .ppu
+        .borrow()
+        .memory
+        .get_memory_debug(Some(0x3F00..=0x3F1F));
+    MemoryDump::palette_ram(mem)
 }
 
 // =============================================================================
@@ -577,6 +597,61 @@ fn save_screenshot(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), Strin
         if !args.quiet {
             eprintln!("Screenshot saved successfully");
         }
+    }
+
+    Ok(())
+}
+
+// =============================================================================
+// Debug Visualization Export
+// =============================================================================
+
+/// Export debug visualizations (pattern tables, nametables, sprites) based on CLI args.
+fn export_debug_visualizations(emu: &Nes, args: &CliArgs) -> Result<(), String> {
+    // Export pattern tables screenshot
+    if let Some(ref path) = args.video.export_pattern_tables {
+        if !args.quiet {
+            eprintln!("Exporting pattern tables to {}...", path.display());
+        }
+        export_pattern_tables(emu, path)?;
+        if !args.quiet {
+            eprintln!("Pattern tables exported successfully");
+        }
+    }
+
+    // Export nametables screenshot
+    if let Some(ref path) = args.video.export_nametables {
+        if !args.quiet {
+            eprintln!("Exporting nametables to {}...", path.display());
+        }
+        export_nametables(emu, path)?;
+        if !args.quiet {
+            eprintln!("Nametables exported successfully");
+        }
+    }
+
+    // Export sprites screenshot
+    if let Some(ref path) = args.video.export_sprites {
+        if !args.quiet {
+            eprintln!("Exporting sprites to {}...", path.display());
+        }
+        export_sprites(emu, path)?;
+        if !args.quiet {
+            eprintln!("Sprites exported successfully");
+        }
+    }
+
+    // Note: Video exports for debug visualizations would require additional
+    // infrastructure similar to the main video export. For now, only screenshots
+    // are implemented. Video exports can be added in a future enhancement.
+    if args.video.export_pattern_tables_video.is_some()
+        || args.video.export_nametables_video.is_some()
+        || args.video.export_sprites_video.is_some()
+    {
+        eprintln!(
+            "Warning: Debug viewer video exports are not yet implemented. \
+            Use screenshot exports (--export-pattern-tables, --export-nametables, --export-sprites) instead."
+        );
     }
 
     Ok(())
