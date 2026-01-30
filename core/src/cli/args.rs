@@ -193,30 +193,6 @@ pub struct VideoArgs {
     /// Video output resolution (native, 2x, 3x, 4x, 720p, 1080p, 4k, or WIDTHxHEIGHT)
     #[arg(long)]
     pub video_scale: Option<String>,
-
-    /// Export nametable visualization as screenshot
-    #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
-    pub export_nametables: Option<PathBuf>,
-
-    /// Export nametable visualization as video
-    #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
-    pub export_nametables_video: Option<PathBuf>,
-
-    /// Export pattern table visualization as screenshot
-    #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
-    pub export_pattern_tables: Option<PathBuf>,
-
-    /// Export pattern table visualization as video
-    #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
-    pub export_pattern_tables_video: Option<PathBuf>,
-
-    /// Export sprite visualization as screenshot
-    #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
-    pub export_sprites: Option<PathBuf>,
-
-    /// Export sprite visualization as video
-    #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
-    pub export_sprites_video: Option<PathBuf>,
 }
 
 /// Video format options
@@ -259,11 +235,7 @@ pub struct ExecutionArgs {
     /// Run until HLT (illegal halt) instruction
     #[arg(long, default_value_t = false)]
     pub until_hlt: bool,
-
-    /// Single-step mode
-    #[arg(long, default_value_t = false)]
-    pub step: bool,
-
+    
     /// Enable instruction trace to file
     #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
     pub trace: Option<PathBuf>,

@@ -127,12 +127,6 @@ pub struct VideoConfig {
     pub video_format: Option<String>,
     pub video_fps: Option<f64>,
     pub video_scale: Option<String>,
-    pub export_nametables: Option<PathBuf>,
-    pub export_nametables_video: Option<PathBuf>,
-    pub export_pattern_tables: Option<PathBuf>,
-    pub export_pattern_tables_video: Option<PathBuf>,
-    pub export_sprites: Option<PathBuf>,
-    pub export_sprites_video: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -144,7 +138,6 @@ pub struct ExecutionConfig {
     pub until_opcode: Option<String>,
     pub until_mem: Option<Vec<String>>,
     pub until_hlt: Option<bool>,
-    pub step: Option<bool>,
     pub trace: Option<PathBuf>,
     #[serde(default)]
     pub breakpoints: Vec<String>,
@@ -305,24 +298,6 @@ impl ConfigFile {
         {
             cli.video.video_fps = fps;
         }
-        if cli.video.export_nametables.is_none() {
-            cli.video.export_nametables = self.video.export_nametables.clone();
-        }
-        if cli.video.export_nametables_video.is_none() {
-            cli.video.export_nametables_video = self.video.export_nametables_video.clone();
-        }
-        if cli.video.export_pattern_tables.is_none() {
-            cli.video.export_pattern_tables = self.video.export_pattern_tables.clone();
-        }
-        if cli.video.export_pattern_tables_video.is_none() {
-            cli.video.export_pattern_tables_video = self.video.export_pattern_tables_video.clone();
-        }
-        if cli.video.export_sprites.is_none() {
-            cli.video.export_sprites = self.video.export_sprites.clone();
-        }
-        if cli.video.export_sprites_video.is_none() {
-            cli.video.export_sprites_video = self.video.export_sprites_video.clone();
-        }
 
         // Execution options
         if cli.execution.cycles.is_none() {
@@ -346,9 +321,6 @@ impl ConfigFile {
         }
         if !cli.execution.until_hlt {
             cli.execution.until_hlt = self.execution.until_hlt.unwrap_or(false);
-        }
-        if !cli.execution.step {
-            cli.execution.step = self.execution.step.unwrap_or(false);
         }
         if cli.execution.trace.is_none() {
             cli.execution.trace = self.execution.trace.clone();
