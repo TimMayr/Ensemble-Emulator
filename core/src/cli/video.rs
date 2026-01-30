@@ -391,11 +391,9 @@ impl FfmpegMp4Encoder {
         }
 
         // Create a temporary file for ffmpeg stderr so we can read errors
-        let stderr_path = std::env::temp_dir().join(format!(
-            "nes_ffmpeg_stderr_{}.log",
-            std::process::id()
-        ));
-        let stderr_file = fs::File::create(&stderr_path)?;
+        let stderr_path =
+            std::env::temp_dir().join(format!("nes_ffmpeg_stderr_{}.log", std::process::id()));
+        let stderr_file = File::create(&stderr_path)?;
 
         // Start ffmpeg process
         let mut child = Command::new("ffmpeg")
@@ -421,6 +419,8 @@ impl FfmpegMp4Encoder {
                 "yuv420p", // Output pixel format
                 "-movflags",
                 "+faststart", // Enable streaming
+                "-f",
+                "mp4",
                 output_path.to_str().unwrap_or("output.mp4"),
             ])
             .stdin(Stdio::piped())
@@ -477,20 +477,20 @@ impl VideoEncoder for FfmpegMp4Encoder {
             })
             .collect();
 
-        if let Some(ref mut stdin) = self.stdin {
-            if let Err(e) = stdin.write_all(&bytes) {
-                // If we get a broken pipe, FFmpeg may have exited early
-                // Try to get the error message from stderr
-                if e.kind() == io::ErrorKind::BrokenPipe {
-                    let ffmpeg_error = self.read_stderr_error();
-                    return Err(VideoError::FfmpegFailed(format!(
-                        "FFmpeg pipe closed unexpectedly after {} frames. FFmpeg error: {}",
-                        self.frame_count,
-                        ffmpeg_error.unwrap_or_else(|| "Unknown error".to_string())
-                    )));
-                }
-                return Err(VideoError::IoError(e));
+        if let Some(ref mut stdin) = self.stdin
+            && let Err(e) = stdin.write_all(&bytes)
+        {
+            // If we get a broken pipe, FFmpeg may have exited early
+            // Try to get the error message from stderr
+            if e.kind() == io::ErrorKind::BrokenPipe {
+                let ffmpeg_error = self.read_stderr_error();
+                return Err(VideoError::FfmpegFailed(format!(
+                    "FFmpeg pipe closed unexpectedly after {} frames. FFmpeg error: {}",
+                    self.frame_count,
+                    ffmpeg_error.unwrap_or_else(|| "Unknown error".to_string())
+                )));
             }
+            return Err(VideoError::IoError(e));
         }
         self.frame_count += 1;
         Ok(())
@@ -533,18 +533,18 @@ impl VideoEncoder for FfmpegMp4Encoder {
 impl FfmpegMp4Encoder {
     /// Read the FFmpeg stderr log file to get error details.
     fn read_stderr_error(&self) -> Option<String> {
-        if let Some(ref path) = self.stderr_path {
-            if let Ok(content) = fs::read_to_string(path) {
-                // Return the last few lines which usually contain the error
-                let lines: Vec<&str> = content.lines().collect();
-                let relevant = if lines.len() > 10 {
-                    lines[lines.len() - 10..].join("\n")
-                } else {
-                    lines.join("\n")
-                };
-                if !relevant.is_empty() {
-                    return Some(relevant);
-                }
+        if let Some(ref path) = self.stderr_path
+            && let Ok(content) = fs::read_to_string(path)
+        {
+            // Return the last few lines which usually contain the error
+            let lines: Vec<&str> = content.lines().collect();
+            let relevant = if lines.len() > 10 {
+                lines[lines.len() - 10..].join("\n")
+            } else {
+                lines.join("\n")
+            };
+            if !relevant.is_empty() {
+                return Some(relevant);
             }
         }
         None

@@ -146,6 +146,7 @@ pub enum FileType {
     Rom,
     Savestate,
     Palette,
+    Mp4,
     All,
 }
 
@@ -155,6 +156,7 @@ impl FileType {
             FileType::Rom => dialog.add_filter("NES ROM File", &["nes"]),
             FileType::Savestate => dialog.add_filter("Savestate", &["sav"]),
             FileType::Palette => dialog.add_filter("NES Palette File", &["pal"]),
+            FileType::Mp4 => dialog.add_filter("Mp4 Video", &["mp4"]),
             FileType::All => dialog.add_filter("All Files", &["*"]),
         }
     }
