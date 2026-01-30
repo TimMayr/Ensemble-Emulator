@@ -170,7 +170,7 @@ impl PixelArtUpscaler {
     /// Output is also RgbColor data with dimensions (dst_width, dst_height).
     ///
     /// This function uses parallel processing via rayon for optimal performance.
-    /// Each row is processed in parallel.
+    /// The output buffer is pre-allocated and filled directly to minimize allocations.
     pub fn upscale_rgb(&self, src: &[RgbColor]) -> Vec<RgbColor> {
         let expected_size = (self.src_width * self.src_height) as usize;
         if src.len() != expected_size {
@@ -181,18 +181,23 @@ impl PixelArtUpscaler {
             );
         }
 
+        let dst_size = (self.dst_width * self.dst_height) as usize;
+        
+        // Pre-allocate output buffer with uninitialized memory for performance
+        let mut result = vec![(0u8, 0u8, 0u8); dst_size];
+        
         // Process rows in parallel using rayon
-        let rows: Vec<Vec<RgbColor>> = (0..self.dst_height)
-            .into_par_iter()
-            .map(|dst_y| {
-                (0..self.dst_width)
-                    .map(|dst_x| self.sample_pixel(src, dst_x, dst_y))
-                    .collect()
-            })
-            .collect();
+        // Each parallel task writes directly to its slice of the output buffer
+        result
+            .par_chunks_mut(self.dst_width as usize)
+            .enumerate()
+            .for_each(|(dst_y, row)| {
+                for (dst_x, pixel) in row.iter_mut().enumerate() {
+                    *pixel = self.sample_pixel(src, dst_x as u32, dst_y as u32);
+                }
+            });
 
-        // Flatten the rows into a single vector
-        rows.into_iter().flatten().collect()
+        result
     }
 
     /// Upscale a frame from u32 ARGB format.

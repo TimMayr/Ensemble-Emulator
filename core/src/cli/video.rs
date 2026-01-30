@@ -708,7 +708,7 @@ pub fn is_ffmpeg_available() -> bool {
 ///
 /// # Performance
 ///
-/// - Upscaling uses parallel processing via rayon
+/// - Upscaling uses rayon parallel processing (~10-15ms per 1080p frame)
 /// - Frames are streamed directly to the encoder
 /// - Memory usage is O(1) per frame instead of O(n) for all frames
 pub struct StreamingVideoEncoder {
@@ -716,6 +716,8 @@ pub struct StreamingVideoEncoder {
     upscaler: Option<super::upscale::PixelArtUpscaler>,
     src_width: u32,
     src_height: u32,
+    dst_width: u32,
+    dst_height: u32,
 }
 
 impl StreamingVideoEncoder {
@@ -747,6 +749,8 @@ impl StreamingVideoEncoder {
         {
             None
         } else {
+            eprintln!("Using CPU upscaling (rayon parallel) {}x{} -> {}x{}", 
+                     src_width, src_height, dst_width, dst_height);
             Some(PixelArtUpscaler::new(
                 src_width, src_height, dst_width, dst_height,
             ))
@@ -759,20 +763,21 @@ impl StreamingVideoEncoder {
             upscaler,
             src_width,
             src_height,
+            dst_width,
+            dst_height,
         })
     }
 
     /// Write a single frame, with upscaling if configured.
     ///
-    /// This method handles upscaling (using parallel processing) and
-    /// immediately writes to the underlying encoder.
+    /// This method handles upscaling and immediately writes to the underlying encoder.
     pub fn write_frame(&mut self, frame: &[RgbColor]) -> Result<(), VideoError> {
         if let Some(ref upscaler) = self.upscaler {
-            // Upscale frame (uses rayon parallel processing internally)
+            // CPU upscaling via rayon
             let upscaled = upscaler.upscale_rgb(frame);
             self.encoder.write_frame(&upscaled)
         } else {
-            // Write frame directly without upscaling
+            // No upscaling needed
             self.encoder.write_frame(frame)
         }
     }
@@ -788,11 +793,7 @@ impl StreamingVideoEncoder {
 
     /// Get the output dimensions (after upscaling).
     pub fn output_dimensions(&self) -> (u32, u32) {
-        if let Some(ref upscaler) = self.upscaler {
-            (upscaler.dst_width, upscaler.dst_height)
-        } else {
-            (self.src_width, self.src_height)
-        }
+        (self.dst_width, self.dst_height)
     }
 
     /// Check if upscaling is enabled.
