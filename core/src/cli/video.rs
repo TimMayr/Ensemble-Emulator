@@ -421,6 +421,8 @@ impl FfmpegMp4Encoder {
                 "yuv420p", // Output pixel format
                 "-movflags",
                 "+faststart", // Enable streaming
+                "-f",
+                "mp4", // Explicitly specify MP4 format (in case path has no extension)
                 output_path.to_str().unwrap_or("output.mp4"),
             ])
             .stdin(Stdio::piped())
