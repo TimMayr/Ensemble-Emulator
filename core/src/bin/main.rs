@@ -194,7 +194,7 @@ fn output_results(emu: &Nes, args: &CliArgs) -> Result<(), String> {
 
 /// Save recorded frames to video file
 fn save_video(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String> {
-    if let Some(ref video_path) = args.video.video {
+    if let Some(ref video_path) = args.video.video_path {
         // Check if format requires FFmpeg and warn if not available
         if args.video.video_format == VideoFormat::Mp4 && !is_ffmpeg_available() {
             return Err("MP4 export requires FFmpeg to be installed. \
@@ -208,7 +208,7 @@ fn save_video(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String> {
         }
 
         // Parse video resolution
-        let resolution = VideoResolution::parse(&args.video.video_scale)
+        let resolution = VideoResolution::parse(&args.video.video_scale.clone().unwrap())
             .map_err(|e| format!("Invalid video scale: {}", e))?;
 
         // NES resolution

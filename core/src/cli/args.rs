@@ -175,7 +175,7 @@ pub struct VideoArgs {
 
     /// Record video to file
     #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
-    pub video: Option<PathBuf>,
+    pub video_path: Option<PathBuf>,
 
     /// Video output format
     #[arg(long, default_value = "raw")]
@@ -186,8 +186,8 @@ pub struct VideoArgs {
     pub video_fps: f64,
 
     /// Video output resolution (native, 2x, 3x, 4x, 720p, 1080p, 4k, or WIDTHxHEIGHT)
-    #[arg(long, default_value = "native")]
-    pub video_scale: String,
+    #[arg(long)]
+    pub video_scale: Option<String>,
 
     /// Export nametable visualization as screenshot
     #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]

@@ -21,4 +21,5 @@ format = "hex"
 
 [video]
 video_path = "./out/export"
+video_scale = "1080p"
 video_format = "mp4"

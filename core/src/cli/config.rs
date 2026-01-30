@@ -125,6 +125,7 @@ pub struct VideoConfig {
     pub video_path: Option<PathBuf>,
     pub video_format: Option<String>,
     pub video_fps: Option<f64>,
+    pub video_scale: Option<String>,
     pub export_nametables: Option<PathBuf>,
     pub export_nametables_video: Option<PathBuf>,
     pub export_pattern_tables: Option<PathBuf>,
@@ -279,13 +280,20 @@ impl ConfigFile {
         if cli.video.screenshot_on.is_none() {
             cli.video.screenshot_on = self.video.screenshot_on.clone();
         }
-        if cli.video.video.is_none() {
-            cli.video.video = self.video.video_path.clone();
+        if cli.video.video_path.is_none() {
+            cli.video.video_path = self.video.video_path.clone();
         }
         if let Some(ref fmt) = self.video.video_format {
             // Only override if CLI is at default
             if cli.video.video_format == VideoFormat::Raw {
                 cli.video.video_format = VideoFormat::from_str(fmt).unwrap_or(VideoFormat::Raw);
+            }
+        }
+        if cli.video.video_scale.is_none() {
+            if self.video.video_scale.is_none() {
+                cli.video.video_scale = Some("native".to_string());
+            } else {
+                cli.video.video_scale = self.video.video_scale.clone();
             }
         }
         if cli.video.video_fps == DEFAULT_VIDEO_FPS
