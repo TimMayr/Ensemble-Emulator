@@ -130,6 +130,19 @@ pub trait VideoEncoder: Send {
     /// The pixel buffer is in RGB format as (R, G, B) tuples,
     /// as a flat array of width × height values.
     fn write_frame(&mut self, pixel_buffer: &[RgbColor]) -> Result<(), VideoError>;
+    
+    /// Write a frame from raw BGRA bytes (4 bytes per pixel).
+    ///
+    /// This method is used when the GPU upscaler outputs BGRA directly.
+    /// Default implementation converts to RGB and calls write_frame.
+    fn write_frame_bgra_bytes(&mut self, bgra_bytes: &[u8]) -> Result<(), VideoError> {
+        // Convert BGRA bytes to RgbColor array
+        let rgb_pixels: Vec<RgbColor> = bgra_bytes
+            .chunks_exact(4)
+            .map(|chunk| (chunk[2], chunk[1], chunk[0]))  // BGRA -> RGB
+            .collect();
+        self.write_frame(&rgb_pixels)
+    }
 
     /// Finish encoding and flush any remaining data.
     fn finish(&mut self) -> Result<(), VideoError>;
@@ -469,23 +482,20 @@ impl VideoEncoder for FfmpegMp4Encoder {
             .flat_map(|&(r, g, b)| [b, g, r, 255u8])
             .collect();
 
-        if let Some(ref mut stdin) = self.stdin
-            && let Err(e) = stdin.write_all(&bytes)
-        {
-            // If we get a broken pipe, FFmpeg may have exited early
-            // Try to get the error message from stderr
-            if e.kind() == io::ErrorKind::BrokenPipe {
-                let ffmpeg_error = self.read_stderr_error();
-                return Err(VideoError::FfmpegFailed(format!(
-                    "FFmpeg pipe closed unexpectedly after {} frames. FFmpeg error: {}",
-                    self.frame_count,
-                    ffmpeg_error.unwrap_or_else(|| "Unknown error".to_string())
-                )));
-            }
-            return Err(VideoError::IoError(e));
+        self.write_bgra_bytes_internal(&bytes)
+    }
+    
+    fn write_frame_bgra_bytes(&mut self, bgra_bytes: &[u8]) -> Result<(), VideoError> {
+        let expected_size = (self.width * self.height * 4) as usize;
+        if bgra_bytes.len() != expected_size {
+            return Err(VideoError::FfmpegFailed(format!(
+                "Invalid BGRA byte count: expected {}, got {}",
+                expected_size, bgra_bytes.len()
+            )));
         }
-        self.frame_count += 1;
-        Ok(())
+        
+        // BGRA bytes can be written directly to FFmpeg
+        self.write_bgra_bytes_internal(bgra_bytes)
     }
 
     fn finish(&mut self) -> Result<(), VideoError> {
@@ -523,6 +533,27 @@ impl VideoEncoder for FfmpegMp4Encoder {
 }
 
 impl FfmpegMp4Encoder {
+    /// Internal helper to write BGRA bytes to FFmpeg stdin.
+    fn write_bgra_bytes_internal(&mut self, bytes: &[u8]) -> Result<(), VideoError> {
+        if let Some(ref mut stdin) = self.stdin
+            && let Err(e) = stdin.write_all(bytes)
+        {
+            // If we get a broken pipe, FFmpeg may have exited early
+            // Try to get the error message from stderr
+            if e.kind() == io::ErrorKind::BrokenPipe {
+                let ffmpeg_error = self.read_stderr_error();
+                return Err(VideoError::FfmpegFailed(format!(
+                    "FFmpeg pipe closed unexpectedly after {} frames. FFmpeg error: {}",
+                    self.frame_count,
+                    ffmpeg_error.unwrap_or_else(|| "Unknown error".to_string())
+                )));
+            }
+            return Err(VideoError::IoError(e));
+        }
+        self.frame_count += 1;
+        Ok(())
+    }
+    
     /// Read the FFmpeg stderr log file to get error details.
     fn read_stderr_error(&self) -> Option<String> {
         if let Some(ref path) = self.stderr_path
@@ -711,9 +742,23 @@ pub fn is_ffmpeg_available() -> bool {
 /// - Upscaling uses rayon parallel processing (~10-15ms per 1080p frame)
 /// - Frames are streamed directly to the encoder
 /// - Memory usage is O(1) per frame instead of O(n) for all frames
+/// Upscaling backend
+enum UpscaleBackend {
+    /// No upscaling needed
+    None,
+    /// CPU-based upscaling with rayon parallelism
+    Cpu(super::upscale::PixelArtUpscaler),
+    /// GPU-based upscaling with wgpu compute shaders
+    Gpu(super::gpu_upscale::GpuUpscaler),
+}
+
+/// Combined video encoder with optional upscaling.
+///
+/// This encoder handles both upscaling and encoding in a streaming fashion,
+/// writing frames directly as they are received rather than buffering them.
 pub struct StreamingVideoEncoder {
     encoder: Box<dyn VideoEncoder>,
-    upscaler: Option<super::upscale::PixelArtUpscaler>,
+    upscale_backend: UpscaleBackend,
     src_width: u32,
     src_height: u32,
     dst_width: u32,
@@ -731,6 +776,7 @@ impl StreamingVideoEncoder {
     /// * `src_height` - Source frame height (NES: 240)
     /// * `resolution` - Target output resolution
     /// * `fps` - Frame rate
+    /// * `no_gpu` - If true, disable GPU acceleration (use CPU)
     pub fn new(
         format: VideoFormat,
         output_path: &Path,
@@ -738,29 +784,54 @@ impl StreamingVideoEncoder {
         src_height: u32,
         resolution: &super::upscale::VideoResolution,
         fps: f64,
+        no_gpu: bool,
     ) -> Result<Self, VideoError> {
+        use super::gpu_upscale::GpuUpscaler;
         use super::upscale::{PixelArtUpscaler, VideoResolution};
 
         let (dst_width, dst_height) = resolution.dimensions(src_width, src_height);
+        
+        // Get effective source dimensions for PAR correction
+        let (effective_width, effective_height) = resolution.effective_source_dimensions(src_width, src_height);
 
-        // Determine if upscaling is needed
-        let upscaler = if *resolution == VideoResolution::Native
+        // Determine upscaling backend
+        let upscale_backend = if *resolution == VideoResolution::Native
             || (dst_width == src_width && dst_height == src_height)
         {
-            None
-        } else {
+            UpscaleBackend::None
+        } else if no_gpu {
+            // User explicitly requested CPU
             eprintln!("Using CPU upscaling (rayon parallel) {}x{} -> {}x{}", 
                      src_width, src_height, dst_width, dst_height);
-            Some(PixelArtUpscaler::new(
+            UpscaleBackend::Cpu(PixelArtUpscaler::new(
                 src_width, src_height, dst_width, dst_height,
             ))
+        } else {
+            // Try GPU first, fall back to CPU
+            match GpuUpscaler::try_new(
+                src_width, src_height, dst_width, dst_height,
+                effective_width as f32, effective_height as f32,
+            ) {
+                Some(gpu_upscaler) => {
+                    eprintln!("Using GPU upscaling (wgpu compute) {}x{} -> {}x{}", 
+                             src_width, src_height, dst_width, dst_height);
+                    UpscaleBackend::Gpu(gpu_upscaler)
+                }
+                None => {
+                    eprintln!("GPU not available, falling back to CPU upscaling {}x{} -> {}x{}", 
+                             src_width, src_height, dst_width, dst_height);
+                    UpscaleBackend::Cpu(PixelArtUpscaler::new(
+                        src_width, src_height, dst_width, dst_height,
+                    ))
+                }
+            }
         };
 
         let encoder = create_encoder(format, output_path, dst_width, dst_height, fps)?;
 
         Ok(Self {
             encoder,
-            upscaler,
+            upscale_backend,
             src_width,
             src_height,
             dst_width,
@@ -772,13 +843,21 @@ impl StreamingVideoEncoder {
     ///
     /// This method handles upscaling and immediately writes to the underlying encoder.
     pub fn write_frame(&mut self, frame: &[RgbColor]) -> Result<(), VideoError> {
-        if let Some(ref upscaler) = self.upscaler {
-            // CPU upscaling via rayon
-            let upscaled = upscaler.upscale_rgb(frame);
-            self.encoder.write_frame(&upscaled)
-        } else {
-            // No upscaling needed
-            self.encoder.write_frame(frame)
+        match &self.upscale_backend {
+            UpscaleBackend::None => {
+                // No upscaling needed
+                self.encoder.write_frame(frame)
+            }
+            UpscaleBackend::Cpu(upscaler) => {
+                // CPU upscaling via rayon
+                let upscaled = upscaler.upscale_rgb(frame);
+                self.encoder.write_frame(&upscaled)
+            }
+            UpscaleBackend::Gpu(gpu_upscaler) => {
+                // GPU upscaling - returns BGRA bytes directly
+                let bgra_bytes = gpu_upscaler.upscale(frame);
+                self.encoder.write_frame_bgra_bytes(&bgra_bytes)
+            }
         }
     }
 
@@ -797,7 +876,10 @@ impl StreamingVideoEncoder {
     }
 
     /// Check if upscaling is enabled.
-    pub fn is_upscaling(&self) -> bool { self.upscaler.is_some() }
+    pub fn is_upscaling(&self) -> bool { !matches!(self.upscale_backend, UpscaleBackend::None) }
+    
+    /// Check if GPU upscaling is being used.
+    pub fn is_using_gpu(&self) -> bool { matches!(self.upscale_backend, UpscaleBackend::Gpu(_)) }
 }
 // Tests
 // =============================================================================

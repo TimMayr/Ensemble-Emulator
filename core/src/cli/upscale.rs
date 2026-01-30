@@ -57,26 +57,44 @@ pub const NES_PAR: f32 = NES_PAR_WIDTH as f32 / NES_PAR_HEIGHT as f32;
 /// Smoothstep function for smooth interpolation.
 /// Maps input from [0, 1] to [0, 1] with smooth derivatives at boundaries.
 #[inline]
+/// Standard smoothstep function (for reference, not used in bandlimited filter).
+#[allow(dead_code)]
 fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
     let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
 }
 
-/// Compute the blend weight using pseudo-bandlimited filtering.
-///
-/// This creates smooth transitions at pixel boundaries while keeping
-/// pixels sharp in their interior. The filter width is inversely
-/// proportional to the scale factor.
-#[inline]
-fn smoothstep_blend(frac: f32, scale: f32) -> f32 {
-    // The filter width determines the transition zone size
-    // At higher scales, smaller transition zone = sharper pixels
-    // At lower scales, larger transition zone = smoother AA
-    let filter_width = (1.0 / scale).min(0.5);
+// Taylor series normalization constant
+const TAYLOR_NORMALIZATION: f32 = 1.0 / 1.00452485553;
+const PI_HALF: f32 = std::f32::consts::FRAC_PI_2;
 
-    // Use smoothstep to create smooth transition from 0 to 1
-    // The transition zone is centered at 0.5
-    smoothstep(filter_width, 1.0 - filter_width, frac)
+/// Taylor series sin approximation for values in [-PI, PI].
+/// From themaister's bandlimited pixel filter.
+#[inline]
+fn taylor_sin(p: f32) -> f32 {
+    let p2 = p * p;
+    let p3 = p * p2;
+    let p5 = p2 * p3;
+    (TAYLOR_NORMALIZATION * (p - p3 / 6.0 + p5 / 120.0)).clamp(-1.0, 1.0)
+}
+
+/// Compute the UV shift for pseudo-bandlimited filtering.
+///
+/// This is the core of themaister's algorithm:
+/// shift = 0.5 + 0.5 * sin(PI/2 * clamp((phase - 0.5) / extent, -1, 1))
+///
+/// The result is a UV offset that creates sharp pixel edges with smooth
+/// transitions at sub-pixel positions.
+#[inline]
+fn bandlimited_shift(phase: f32, extent: f32) -> f32 {
+    // phase: fractional position within pixel [0, 1)
+    // extent: filter width (inverse of scale factor)
+    
+    // The shift formula from themaister's GLSL:
+    // shift = 0.5 + 0.5 * sin(PI/2 * clamp((phase - 0.5) / min(extent, 0.5), -1, 1))
+    let clamped_extent = extent.min(0.5);
+    let normalized = ((phase - 0.5) / clamped_extent).clamp(-1.0, 1.0);
+    0.5 + 0.5 * taylor_sin(PI_HALF * normalized)
 }
 
 /// Bilinear interpolation between four colors.
@@ -107,6 +125,19 @@ fn bilinear_blend(
         r.clamp(0.0, 255.0) as u8,
         g.clamp(0.0, 255.0) as u8,
         b.clamp(0.0, 255.0) as u8,
+    )
+}
+
+/// Linear interpolation between two colors.
+#[inline]
+fn lerp_color(a: RgbColor, b: RgbColor, t: f32) -> RgbColor {
+    let r = a.0 as f32 * (1.0 - t) + b.0 as f32 * t;
+    let g = a.1 as f32 * (1.0 - t) + b.1 as f32 * t;
+    let bl = a.2 as f32 * (1.0 - t) + b.2 as f32 * t;
+    (
+        r.clamp(0.0, 255.0) as u8,
+        g.clamp(0.0, 255.0) as u8,
+        bl.clamp(0.0, 255.0) as u8,
     )
 }
 
@@ -228,36 +259,80 @@ impl PixelArtUpscaler {
 
     /// Sample a single pixel using pseudo-bandlimited filtering.
     ///
-    /// This implements a simplified version of the pseudo-bandlimited algorithm:
-    /// - At integer scales, pixels are sharp (nearest neighbor behavior)
-    /// - At non-integer scales, smooth anti-aliased transitions occur at pixel boundaries
+    /// This implements themaister's bandlimited pixel filter algorithm:
+    /// - Computes a sinusoidal UV shift based on phase and extent
+    /// - At high scales, produces sharp pixel edges
+    /// - At sub-pixel positions, creates smooth anti-aliased transitions
     fn sample_pixel(&self, src: &[RgbColor], dst_x: u32, dst_y: u32) -> RgbColor {
         // Map destination coordinates to source coordinates
-        let src_x_f = (dst_x as f32 + 0.5) / self.scale_x - 0.5;
-        let src_y_f = (dst_y as f32 + 0.5) / self.scale_y - 0.5;
+        // This gives us u,v in source texture space
+        let u = (dst_x as f32 + 0.5) / self.dst_width as f32;
+        let v = (dst_y as f32 + 0.5) / self.dst_height as f32;
+        
+        let src_x = u * self.src_width as f32;
+        let src_y = v * self.src_height as f32;
 
-        // Get integer source coordinates and fractional parts
-        let src_x0 = src_x_f.floor() as i32;
-        let src_y0 = src_y_f.floor() as i32;
+        // Compute extent (derivative in texel space)
+        // For magnification, extent = src_size / dst_size < 1
+        let extent_x = (self.src_width as f32 / self.dst_width as f32).max(1.0 / 256.0);
+        let extent_y = (self.src_height as f32 / self.dst_height as f32).max(1.0 / 256.0);
+        
+        let max_extent = extent_x.max(extent_y);
 
-        let frac_x = src_x_f - src_x0 as f32;
-        let frac_y = src_y_f - src_y0 as f32;
-
-        // For pseudo-bandlimited filtering:
-        // The blend weight is modified based on the scale factor
-        // At high scales (integer scales), blend sharply at pixel centers
-        // At low scales (non-integer), blend smoothly across boundaries
-        let blend_x = smoothstep_blend(frac_x, self.scale_x);
-        let blend_y = smoothstep_blend(frac_y, self.scale_y);
-
-        // Get the four neighboring pixels
-        let c00 = self.get_pixel_clamped(src, src_x0, src_y0);
-        let c10 = self.get_pixel_clamped(src, src_x0 + 1, src_y0);
-        let c01 = self.get_pixel_clamped(src, src_x0, src_y0 + 1);
-        let c11 = self.get_pixel_clamped(src, src_x0 + 1, src_y0 + 1);
-
-        // Blend using the pseudo-bandlimited weights
-        bilinear_blend(c00, c10, c01, c11, blend_x, blend_y)
+        // Get base pixel and phase
+        let pixel_x = src_x - 0.5;
+        let pixel_y = src_y - 0.5;
+        let base_x = pixel_x.floor();
+        let base_y = pixel_y.floor();
+        let phase_x = pixel_x - base_x;
+        let phase_y = pixel_y - base_y;
+        
+        if max_extent > 1.0 {
+            // Minification: use simple bilinear
+            let src_x0 = base_x as i32;
+            let src_y0 = base_y as i32;
+            let c00 = self.get_pixel_clamped(src, src_x0, src_y0);
+            let c10 = self.get_pixel_clamped(src, src_x0 + 1, src_y0);
+            let c01 = self.get_pixel_clamped(src, src_x0, src_y0 + 1);
+            let c11 = self.get_pixel_clamped(src, src_x0 + 1, src_y0 + 1);
+            bilinear_blend(c00, c10, c01, c11, phase_x, phase_y)
+        } else {
+            // Magnification: apply bandlimited filter
+            // Compute the sinusoidal UV shift
+            let shift_x = bandlimited_shift(phase_x, extent_x);
+            let shift_y = bandlimited_shift(phase_y, extent_y);
+            
+            // Compute lerp factor: max_extent = 1 -> l = 0, max_extent = 0.5 -> l = 1
+            let l = (2.0 - 2.0 * max_extent).clamp(0.0, 1.0);
+            
+            // Sample at shifted position
+            let sample_x = base_x + 0.5 + shift_x;
+            let sample_y = base_y + 0.5 + shift_y;
+            
+            // Get the four neighboring pixels for bilinear sampling
+            let sx0 = sample_x.floor() as i32;
+            let sy0 = sample_y.floor() as i32;
+            let fx = sample_x - sample_x.floor();
+            let fy = sample_y - sample_y.floor();
+            
+            let c00 = self.get_pixel_clamped(src, sx0, sy0);
+            let c10 = self.get_pixel_clamped(src, sx0 + 1, sy0);
+            let c01 = self.get_pixel_clamped(src, sx0, sy0 + 1);
+            let c11 = self.get_pixel_clamped(src, sx0 + 1, sy0 + 1);
+            let bandlimited = bilinear_blend(c00, c10, c01, c11, fx, fy);
+            
+            // Blend between regular bilinear and bandlimited based on extent
+            let src_x0 = base_x as i32;
+            let src_y0 = base_y as i32;
+            let c00 = self.get_pixel_clamped(src, src_x0, src_y0);
+            let c10 = self.get_pixel_clamped(src, src_x0 + 1, src_y0);
+            let c01 = self.get_pixel_clamped(src, src_x0, src_y0 + 1);
+            let c11 = self.get_pixel_clamped(src, src_x0 + 1, src_y0 + 1);
+            let regular = bilinear_blend(c00, c10, c01, c11, phase_x, phase_y);
+            
+            // Mix: result = mix(regular, bandlimited, l)
+            lerp_color(regular, bandlimited, l)
+        }
     }
 
     /// Get a pixel from the source buffer with clamping.
@@ -383,6 +458,35 @@ impl VideoResolution {
             "Unknown resolution: '{}'. Use native, 2x, 3x, 4x, 720p, 1080p, 4k, or WIDTHxHEIGHT",
             s
         ))
+    }
+    
+    /// Get the effective source dimensions for GPU upscaling.
+    ///
+    /// This returns the dimensions the GPU shader should use for UV mapping,
+    /// accounting for PAR correction if applicable.
+    ///
+    /// # Arguments
+    ///
+    /// * `src_width` - Actual source width (e.g., 256 for NES)
+    /// * `src_height` - Actual source height (e.g., 240 for NES)
+    ///
+    /// # Returns
+    ///
+    /// Effective source dimensions (width, height) for UV mapping.
+    pub fn effective_source_dimensions(&self, src_width: u32, src_height: u32) -> (u32, u32) {
+        match self {
+            // Integer scales: use actual source dimensions (no PAR correction)
+            VideoResolution::Native 
+            | VideoResolution::Scale2x 
+            | VideoResolution::Scale3x 
+            | VideoResolution::Scale4x => (src_width, src_height),
+            // Non-integer scales: use PAR-corrected effective width
+            _ => {
+                // NES PAR is 8:7, so effective width = src_width * 8/7
+                let effective_width = (src_width as f64 * NES_PAR).round() as u32;
+                (effective_width, src_height)
+            }
+        }
     }
 }
 

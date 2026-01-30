@@ -221,6 +221,7 @@ fn run_with_streaming_video(
         NES_HEIGHT,
         &resolution,
         fps,
+        args.video.no_gpu,
     )
     .map_err(|e| format!("Failed to create video encoder: {}", e))?;
 

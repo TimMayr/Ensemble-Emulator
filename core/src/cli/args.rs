@@ -189,6 +189,10 @@ pub struct VideoArgs {
     #[arg(long)]
     pub video_scale: Option<String>,
 
+    /// Disable GPU acceleration for video upscaling (use CPU instead)
+    #[arg(long, default_value_t = false)]
+    pub no_gpu: bool,
+
     /// Export nametable visualization as screenshot
     #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
     pub export_nametables: Option<PathBuf>,

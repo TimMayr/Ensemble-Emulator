@@ -29,3 +29,6 @@ directories = { version = "6.0.0" }
 toml = { version = "0.9.11" }
 image = { version = "0.25.9" }
 rayon = { version = "1.10" }
+wgpu = { version = "24.0" }
+pollster = { version = "0.4" }
+bytemuck = { version = "1.22", features = ["derive"] }
