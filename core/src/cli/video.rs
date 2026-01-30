@@ -359,6 +359,7 @@ impl VideoEncoder for PpmSequenceEncoder {
 pub struct FfmpegMp4Encoder {
     child: Option<Child>,
     stdin: Option<BufWriter<std::process::ChildStdin>>,
+    stderr_path: Option<PathBuf>,
     width: u32,
     height: u32,
     frame_count: u64,
@@ -389,6 +390,13 @@ impl FfmpegMp4Encoder {
             fs::create_dir_all(parent)?;
         }
 
+        // Create a temporary file for ffmpeg stderr so we can read errors
+        let stderr_path = std::env::temp_dir().join(format!(
+            "nes_ffmpeg_stderr_{}.log",
+            std::process::id()
+        ));
+        let stderr_file = fs::File::create(&stderr_path)?;
+
         // Start ffmpeg process
         let mut child = Command::new("ffmpeg")
             .args([
@@ -417,7 +425,7 @@ impl FfmpegMp4Encoder {
             ])
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stderr(Stdio::from(stderr_file))
             .spawn()
             .map_err(|e| {
                 if e.kind() == io::ErrorKind::NotFound {
@@ -435,6 +443,7 @@ impl FfmpegMp4Encoder {
         Ok(Self {
             child: Some(child),
             stdin: Some(BufWriter::new(stdin)),
+            stderr_path: Some(stderr_path),
             width,
             height,
             frame_count: 0,
@@ -468,9 +477,20 @@ impl VideoEncoder for FfmpegMp4Encoder {
             })
             .collect();
 
-        //TODO: Works for first frame, then Emulator finished with error: "I/O error: Broken pipe (os error 32)"
         if let Some(ref mut stdin) = self.stdin {
-            stdin.write_all(&bytes)?;
+            if let Err(e) = stdin.write_all(&bytes) {
+                // If we get a broken pipe, FFmpeg may have exited early
+                // Try to get the error message from stderr
+                if e.kind() == io::ErrorKind::BrokenPipe {
+                    let ffmpeg_error = self.read_stderr_error();
+                    return Err(VideoError::FfmpegFailed(format!(
+                        "FFmpeg pipe closed unexpectedly after {} frames. FFmpeg error: {}",
+                        self.frame_count,
+                        ffmpeg_error.unwrap_or_else(|| "Unknown error".to_string())
+                    )));
+                }
+                return Err(VideoError::IoError(e));
+            }
         }
         self.frame_count += 1;
         Ok(())
@@ -479,24 +499,56 @@ impl VideoEncoder for FfmpegMp4Encoder {
     fn finish(&mut self) -> Result<(), VideoError> {
         // Flush and drop stdin to signal EOF to ffmpeg
         if let Some(mut stdin) = self.stdin.take() {
-            stdin.flush()?;
+            let _ = stdin.flush(); // Ignore flush errors, we're closing anyway
         }
 
         // Wait for FFmpeg to finish
         if let Some(mut child) = self.child.take() {
             let status = child.wait()?;
             if !status.success() {
+                let ffmpeg_error = self.read_stderr_error();
+                // Clean up stderr file
+                if let Some(ref path) = self.stderr_path {
+                    let _ = fs::remove_file(path);
+                }
                 return Err(VideoError::FfmpegFailed(format!(
-                    "FFmpeg exited with status: {}",
-                    status
+                    "FFmpeg exited with status: {}. Error: {}",
+                    status,
+                    ffmpeg_error.unwrap_or_else(|| "Unknown error".to_string())
                 )));
             }
+        }
+
+        // Clean up stderr file
+        if let Some(ref path) = self.stderr_path {
+            let _ = fs::remove_file(path);
         }
 
         Ok(())
     }
 
     fn frames_written(&self) -> u64 { self.frame_count }
+}
+
+impl FfmpegMp4Encoder {
+    /// Read the FFmpeg stderr log file to get error details.
+    fn read_stderr_error(&self) -> Option<String> {
+        if let Some(ref path) = self.stderr_path {
+            if let Ok(content) = fs::read_to_string(path) {
+                // Return the last few lines which usually contain the error
+                let lines: Vec<&str> = content.lines().collect();
+                let relevant = if lines.len() > 10 {
+                    lines[lines.len() - 10..].join("\n")
+                } else {
+                    lines.join("\n")
+                };
+                if !relevant.is_empty() {
+                    return Some(relevant);
+                }
+            }
+        }
+        None
+    }
 }
 
 // =============================================================================
