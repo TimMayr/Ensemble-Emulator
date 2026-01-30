@@ -200,15 +200,23 @@ fn run_with_streaming_video(
                 NES_WIDTH,
                 NES_HEIGHT
             );
-        } else {
+        } else if matches!(args.video.video_format, VideoFormat::Mp4) {
             eprintln!(
-                "Exporting to {} as {:?} ({}x{} → {}x{}) [streaming mode with parallel upscaling]...",
+                "Exporting to {} as {:?} ({}x{} → {}x{} via FFmpeg nearest-neighbor) [streaming mode]...",
                 video_path.display(),
                 args.video.video_format,
                 NES_WIDTH,
                 NES_HEIGHT,
                 dst_width,
                 dst_height
+            );
+        } else {
+            eprintln!(
+                "Exporting to {} as {:?} ({}x{}) [streaming mode, scaling only supported for MP4]...",
+                video_path.display(),
+                args.video.video_format,
+                NES_WIDTH,
+                NES_HEIGHT
             );
         }
     }
@@ -349,7 +357,7 @@ fn save_video(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String> {
                     NES_WIDTH,
                     NES_HEIGHT
                 );
-            } else {
+            } else if matches!(args.video.video_format, VideoFormat::Mp4) {
                 eprintln!(
                     "Exporting {} frames to {} as {:?} ({}x{} → {}x{} via FFmpeg nearest-neighbor)...",
                     frames.len(),
@@ -359,6 +367,15 @@ fn save_video(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String> {
                     NES_HEIGHT,
                     dst_width,
                     dst_height
+                );
+            } else {
+                eprintln!(
+                    "Exporting {} frames to {} as {:?} ({}x{})...",
+                    frames.len(),
+                    video_path.display(),
+                    args.video.video_format,
+                    NES_WIDTH,
+                    NES_HEIGHT
                 );
             }
         }

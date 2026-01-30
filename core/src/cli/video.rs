@@ -300,7 +300,7 @@ impl PngSequenceEncoder {
     /// Create a new PNG sequence encoder.
     pub fn new(output_path: &Path, width: u32, height: u32) -> Result<Self, VideoError> {
         if let Some(parent) = output_path.parent() {
-            if !parent.as_os_str().is_empty() && !parent.exists() {
+            if !parent.exists() {
                 fs::create_dir_all(parent)?;
             }
         }
@@ -372,7 +372,7 @@ impl PpmSequenceEncoder {
     /// Create a new PPM sequence encoder.
     pub fn new(output_path: &Path, width: u32, height: u32) -> Result<Self, VideoError> {
         if let Some(parent) = output_path.parent() {
-            if !parent.as_os_str().is_empty() && !parent.exists() {
+            if !parent.exists() {
                 fs::create_dir_all(parent)?;
             }
         }
@@ -474,7 +474,7 @@ impl FfmpegMp4Encoder {
 
         // Create output directory if needed
         if let Some(parent) = output_path.parent() {
-            if !parent.as_os_str().is_empty() && !parent.exists() {
+            if !parent.exists() {
                 fs::create_dir_all(parent)?;
             }
         }
@@ -579,8 +579,21 @@ impl VideoEncoder for FfmpegMp4Encoder {
             bgra_buffer.extend_from_slice(&[b, g, r, 255]);
         }
 
-        if let Some(ref mut stdin) = self.stdin {
-            stdin.write_all(&bgra_buffer)?;
+        match &mut self.stdin {
+            Some(stdin) => {
+                stdin.write_all(&bgra_buffer).map_err(|e| {
+                    if e.kind() == io::ErrorKind::BrokenPipe {
+                        VideoError::FfmpegFailed("FFmpeg closed input pipe unexpectedly".to_string())
+                    } else {
+                        VideoError::IoError(e)
+                    }
+                })?;
+            }
+            None => {
+                return Err(VideoError::FfmpegFailed(
+                    "FFmpeg stdin not available".to_string(),
+                ));
+            }
         }
 
         self.frame_count += 1;
@@ -647,6 +660,7 @@ pub struct RawEncoder {
     width: u32,
     height: u32,
     frame_count: u64,
+    stdout: BufWriter<io::Stdout>,
 }
 
 impl RawEncoder {
@@ -656,6 +670,7 @@ impl RawEncoder {
             width,
             height,
             frame_count: 0,
+            stdout: BufWriter::new(io::stdout()),
         })
     }
 }
@@ -672,11 +687,8 @@ impl VideoEncoder for RawEncoder {
         }
 
         // Convert RGB to BGRA and write to stdout
-        let stdout = io::stdout();
-        let mut handle = stdout.lock();
-
         for &(r, g, b) in pixel_buffer {
-            handle.write_all(&[b, g, r, 255])?;
+            self.stdout.write_all(&[b, g, r, 255])?;
         }
 
         self.frame_count += 1;
@@ -684,7 +696,7 @@ impl VideoEncoder for RawEncoder {
     }
 
     fn finish(&mut self) -> Result<(), VideoError> {
-        io::stdout().flush()?;
+        self.stdout.flush()?;
         Ok(())
     }
 
