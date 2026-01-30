@@ -420,7 +420,7 @@ impl FfmpegMp4Encoder {
                 "-movflags",
                 "+faststart", // Enable streaming
                 "-f",
-                "mp4",
+                "mp4", // Explicitly specify MP4 format (in case path has no extension)
                 output_path.to_str().unwrap_or("output.mp4"),
             ])
             .stdin(Stdio::piped())
