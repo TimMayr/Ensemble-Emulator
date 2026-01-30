@@ -658,6 +658,55 @@ pub fn encode_frames(
     Ok(encoder.frames_written())
 }
 
+/// Encode collected frames to video with optional upscaling.
+///
+/// This version supports pseudo-bandlimited pixel art upscaling before encoding.
+///
+/// # Arguments
+///
+/// * `frames` - Vector of frame pixel buffers (ARGB u32)
+/// * `format` - Output format
+/// * `output_path` - Path to output file
+/// * `src_width` - Source frame width (default: 256 for NES)
+/// * `src_height` - Source frame height (default: 240 for NES)
+/// * `resolution` - Target output resolution
+/// * `fps` - Frame rate (default: 60 for NES)
+///
+/// # Returns
+///
+/// Number of frames written, or an error.
+pub fn encode_frames_with_upscale(
+    frames: &[Vec<u32>],
+    format: VideoFormat,
+    output_path: &Path,
+    src_width: u32,
+    src_height: u32,
+    resolution: &super::upscale::VideoResolution,
+    fps: f64,
+) -> Result<u64, VideoError> {
+    use super::upscale::{PixelArtUpscaler, VideoResolution};
+
+    let (dst_width, dst_height) = resolution.dimensions(src_width, src_height);
+
+    // If native resolution, don't upscale
+    if *resolution == VideoResolution::Native || (dst_width == src_width && dst_height == src_height) {
+        return encode_frames(frames, format, output_path, src_width, src_height, fps);
+    }
+
+    // Create upscaler and encoder
+    let upscaler = PixelArtUpscaler::new(src_width, src_height, dst_width, dst_height);
+    let mut encoder = create_encoder(format, output_path, dst_width, dst_height, fps)?;
+
+    // Upscale and encode each frame
+    for frame in frames {
+        let upscaled = upscaler.upscale_argb(frame);
+        encoder.write_frame(&upscaled)?;
+    }
+
+    encoder.finish()?;
+    Ok(encoder.frames_written())
+}
+
 /// Check if FFmpeg is available for MP4 encoding.
 pub fn is_ffmpeg_available() -> bool {
     Command::new("ffmpeg")

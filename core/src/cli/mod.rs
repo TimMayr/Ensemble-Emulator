@@ -175,6 +175,7 @@ pub mod error;
 pub mod execution;
 pub mod memory_init;
 pub mod output;
+pub mod upscale;
 pub mod video;
 
 pub use args::{parse_hex_u16, CliArgs, OutputFormat, VideoFormat};
@@ -190,7 +191,11 @@ pub use output::{
     InterpretedNametable, InterpretedNametables, InterpretedOam, MemoryDump, MemoryFormatter,
     MemoryType, OamSprite, OutputWriter,
 };
-pub use video::{VideoEncoder, VideoError, create_encoder, encode_frames, is_ffmpeg_available};
+pub use upscale::{PixelArtUpscaler, VideoResolution};
+pub use video::{
+    VideoEncoder, VideoError, create_encoder, encode_frames, encode_frames_with_upscale,
+    is_ffmpeg_available,
+};
 
 // =============================================================================
 // Argument Parsing

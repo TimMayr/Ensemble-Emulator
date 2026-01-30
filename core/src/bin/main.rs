@@ -10,7 +10,7 @@ use std::process::ExitCode;
 use std::time::Instant;
 use nes_core::cli::{
     self, CliArgs, ExecutionConfig, ExecutionEngine, MemoryDump, MemoryInit, MemoryInitConfig,
-    MemoryType, OutputWriter, SavestateConfig, StopReason, VideoFormat,
+    MemoryType, OutputWriter, SavestateConfig, StopReason, VideoFormat, VideoResolution,
     apply_memory_init, apply_memory_init_config, encode_frames, is_ffmpeg_available,
 };
 use nes_core::emulation::nes::Nes;
@@ -211,26 +211,48 @@ fn save_video(frames: &[Vec<u32>], args: &CliArgs) -> Result<(), String> {
             return Ok(());
         }
 
+        // Parse video resolution
+        let resolution = VideoResolution::parse(&args.video.video_scale)
+            .map_err(|e| format!("Invalid video scale: {}", e))?;
+
         // NES resolution
         const NES_WIDTH: u32 = 256;
         const NES_HEIGHT: u32 = 240;
 
+        let (dst_width, dst_height) = resolution.dimensions(NES_WIDTH, NES_HEIGHT);
+
         let fps = args.video.video_fps;
         if !args.quiet {
-            eprintln!(
-                "Exporting {} frames to {} as {:?}...",
-                frames.len(),
-                video_path.display(),
-                args.video.video_format
-            );
+            if resolution == VideoResolution::Native {
+                eprintln!(
+                    "Exporting {} frames to {} as {:?} ({}x{})...",
+                    frames.len(),
+                    video_path.display(),
+                    args.video.video_format,
+                    NES_WIDTH,
+                    NES_HEIGHT
+                );
+            } else {
+                eprintln!(
+                    "Exporting {} frames to {} as {:?} (upscaled {}x{} → {}x{} using pseudo-bandlimited filter)...",
+                    frames.len(),
+                    video_path.display(),
+                    args.video.video_format,
+                    NES_WIDTH,
+                    NES_HEIGHT,
+                    dst_width,
+                    dst_height
+                );
+            }
         }
 
-        let frames_written = encode_frames(
+        let frames_written = nes_core::cli::video::encode_frames_with_upscale(
             frames,
             args.video.video_format,
             video_path,
             NES_WIDTH,
             NES_HEIGHT,
+            &resolution,
             fps,
         )
         .map_err(|e| e.to_string())?;

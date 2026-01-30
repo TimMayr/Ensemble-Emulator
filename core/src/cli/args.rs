@@ -185,6 +185,10 @@ pub struct VideoArgs {
     #[arg(long, default_value_t = DEFAULT_VIDEO_FPS)]
     pub video_fps: f64,
 
+    /// Video output resolution (native, 2x, 3x, 4x, 720p, 1080p, 4k, or WIDTHxHEIGHT)
+    #[arg(long, default_value = "native")]
+    pub video_scale: String,
+
     /// Export nametable visualization as screenshot
     #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
     pub export_nametables: Option<PathBuf>,
