@@ -46,5 +46,7 @@ pub fn parse_palette_from_file(path: Option<PathBuf>, fallback: Option<PathBuf>)
         }
     }
 
-    RgbPalette { colors }
+    RgbPalette {
+        colors,
+    }
 }

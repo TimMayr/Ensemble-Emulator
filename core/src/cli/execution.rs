@@ -15,8 +15,8 @@ use std::path::PathBuf;
 
 use crate::cli::args::parse_hex_u8;
 use crate::emulation::messages::RgbColor;
-use crate::emulation::nes::{Nes, MASTER_CYCLES_PER_FRAME};
-use crate::emulation::savestate::{try_load_state, SaveState};
+use crate::emulation::nes::{MASTER_CYCLES_PER_FRAME, Nes};
+use crate::emulation::savestate::{SaveState, try_load_state};
 
 // =============================================================================
 // Stop Conditions
@@ -700,7 +700,7 @@ fn encode_savestate(state: &SaveState) -> Result<Vec<u8>, String> {
 // Builder from CLI Args
 // =============================================================================
 
-use super::{parse_hex_u16, CliArgs};
+use super::{CliArgs, parse_hex_u16};
 
 impl ExecutionConfig {
     /// Build execution config from CLI arguments

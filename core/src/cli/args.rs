@@ -3,10 +3,11 @@
 //! This module defines all command-line arguments for the NES emulator CLI.
 //! Arguments are organized into logical groups matching the documentation.
 
-use crate::cli::config::DEFAULT_VIDEO_FPS;
 use std::path::PathBuf;
 
 use clap::{Args, Parser, ValueEnum, value_parser};
+
+use crate::cli::config::DEFAULT_VIDEO_FPS;
 
 /// NES Emulator CLI - A cycle-accurate NES emulator with comprehensive CLI support
 #[derive(Parser, Debug, Clone, Default)]

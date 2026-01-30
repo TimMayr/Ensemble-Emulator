@@ -177,7 +177,7 @@ pub mod memory_init;
 pub mod output;
 pub mod video;
 
-pub use args::{parse_hex_u16, CliArgs, OutputFormat, VideoFormat};
+pub use args::{CliArgs, OutputFormat, VideoFormat, parse_hex_u16};
 use clap::Parser;
 pub use config::ConfigFile;
 pub use error::{CliError, CliResult};
@@ -541,7 +541,7 @@ mod tests {
     #[test]
     fn test_validate_headless_without_input() {
         let mut args = CliArgs::default();
-        args.headless = true;  // Enable headless mode
+        args.headless = true; // Enable headless mode
         let result = validate_headless_requirements(&args);
         assert!(result.is_err());
     }
@@ -549,7 +549,7 @@ mod tests {
     #[test]
     fn test_validate_headless_with_rom() {
         let mut args = CliArgs::default();
-        args.headless = true;  // Enable headless mode
+        args.headless = true; // Enable headless mode
         args.rom.rom = Some(std::path::PathBuf::from("game.nes"));
 
         let result = validate_headless_requirements(&args);
@@ -559,7 +559,7 @@ mod tests {
     #[test]
     fn test_validate_headless_with_stdin() {
         let mut args = CliArgs::default();
-        args.headless = true;  // Enable headless mode
+        args.headless = true; // Enable headless mode
         args.savestate.state_stdin = true;
 
         let result = validate_headless_requirements(&args);

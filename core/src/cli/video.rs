@@ -501,17 +501,17 @@ impl FfmpegMp4Encoder {
         ];
 
         // Add scaling filter if requested (nearest neighbor for sharp pixels)
-        if let Some((dst_w, dst_h)) = scale_to {
-            if dst_w != width || dst_h != height {
-                eprintln!(
-                    "FFmpeg scaling {}x{} -> {}x{} (nearest neighbor)",
-                    width, height, dst_w, dst_h
-                );
-                args.extend([
-                    "-vf".to_string(),
-                    format!("scale={}:{}:flags=neighbor", dst_w, dst_h),
-                ]);
-            }
+        if let Some((dst_w, dst_h)) = scale_to
+            && (dst_w != width || dst_h != height)
+        {
+            eprintln!(
+                "FFmpeg scaling {}x{} -> {}x{} (nearest neighbor)",
+                width, height, dst_w, dst_h
+            );
+            args.extend([
+                "-vf".to_string(),
+                format!("scale={}:{}:flags=neighbor", dst_w, dst_h),
+            ]);
         }
 
         // Encoder settings

@@ -9,7 +9,11 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
 
-use nes_core::cli::{self, apply_memory_init, apply_memory_init_config, is_ffmpeg_available, CliArgs, ExecutionConfig, ExecutionEngine, MemoryDump, MemoryInit, MemoryInitConfig, MemoryType, OutputWriter, SavestateConfig, StopReason, VideoFormat, VideoResolution};
+use nes_core::cli::{
+    self, CliArgs, ExecutionConfig, ExecutionEngine, MemoryDump, MemoryInit, MemoryInitConfig,
+    MemoryType, OutputWriter, SavestateConfig, StopReason, VideoFormat, VideoResolution,
+    apply_memory_init, apply_memory_init_config, is_ffmpeg_available,
+};
 use nes_core::emulation::messages::RgbColor;
 use nes_core::emulation::nes::Nes;
 use nes_core::emulation::rom::RomFile;
@@ -172,11 +176,9 @@ fn run_with_streaming_video(
 
     // Check if format requires FFmpeg and warn if not available
     if args.video.video_format == VideoFormat::Mp4 && !is_ffmpeg_available() {
-        return Err(
-            "MP4 export requires FFmpeg to be installed. \
+        return Err("MP4 export requires FFmpeg to be installed. \
              Use --video-format png or --video-format ppm for self-contained export."
-                .to_string(),
-        );
+            .to_string());
     }
 
     // Parse video resolution
@@ -259,11 +261,10 @@ fn save_single_screenshot(frame: &[RgbColor], args: &CliArgs) -> Result<(), Stri
         const NES_WIDTH: u32 = 256;
         const NES_HEIGHT: u32 = 240;
 
-        let img: image::RgbaImage =
-            image::ImageBuffer::from_fn(NES_WIDTH, NES_HEIGHT, |x, y| {
-                let (r, g, b) = frame[(y * NES_WIDTH + x) as usize];
-                image::Rgba([r, g, b, 255])
-            });
+        let img: image::RgbaImage = image::ImageBuffer::from_fn(NES_WIDTH, NES_HEIGHT, |x, y| {
+            let (r, g, b) = frame[(y * NES_WIDTH + x) as usize];
+            image::Rgba([r, g, b, 255])
+        });
 
         img.save(screenshot_path)
             .map_err(|e| format!("Failed to save screenshot: {}", e))?;

@@ -419,12 +419,8 @@ impl MemoryFormatter for HexFormatter {
                 "Total sprites: {}, Visible: {}\n\n",
                 oam.sprite_count, oam.visible_count
             ));
-            output.push_str(
-                "Idx |  X  |  Y  | Tile | Pal | Pri | FlipH | FlipV | Visible\n",
-            );
-            output.push_str(
-                "----+-----+-----+------+-----+-----+-------+-------+--------\n",
-            );
+            output.push_str("Idx |  X  |  Y  | Tile | Pal | Pri | FlipH | FlipV | Visible\n");
+            output.push_str("----+-----+-----+------+-----+-----+-------+-------+--------\n");
             for sprite in &oam.sprites {
                 output.push_str(&format!(
                     "{:3} | {:3} | {:3} | 0x{:02X} |  {}  | {} |   {}   |   {}   | {}\n",

@@ -60,7 +60,10 @@ impl MemoryInit {
             return Err(format!("Memory init '{}' has no values", s));
         }
 
-        Ok(Self { address, values })
+        Ok(Self {
+            address,
+            values,
+        })
     }
 }
 
@@ -145,8 +148,13 @@ impl MemoryInitConfig {
 
     /// Load from binary file (raw bytes for CPU memory starting at 0x0000)
     fn load_binary(path: &Path) -> Result<Self, String> {
-        let mut file = std::fs::File::open(path)
-            .map_err(|e| format!("Failed to open binary init file '{}': {}", path.display(), e))?;
+        let mut file = std::fs::File::open(path).map_err(|e| {
+            format!(
+                "Failed to open binary init file '{}': {}",
+                path.display(),
+                e
+            )
+        })?;
 
         let mut data = Vec::new();
         file.read_to_end(&mut data)
