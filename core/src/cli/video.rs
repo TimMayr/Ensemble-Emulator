@@ -12,28 +12,10 @@
 //! | MP4 | FFmpeg subprocess | FFmpeg installed |
 //! | Raw | Writes raw BGRA bytes | None |
 //!
-//! # Usage Examples
+//! # Scaling
 //!
-//! ```rust,ignore
-//! use nes_core::cli::video::{VideoEncoder, VideoFormat, create_encoder};
-//!
-//! // Create an encoder for the specified format
-//! let mut encoder = create_encoder(
-//!     VideoFormat::Png,
-//!     "frames/frame",
-//!     256,
-//!     240,
-//!     60
-//! )?;
-//!
-//! // Write frames
-//! for frame in frames {
-//!     encoder.write_frame(&frame)?;
-//! }
-//!
-//! // Finish encoding
-//! encoder.finish()?;
-//! ```
+//! Video scaling is handled natively by FFmpeg using the nearest neighbor
+//! filter, which preserves sharp pixel edges for retro games.
 
 use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
@@ -45,6 +27,122 @@ use image::{ImageBuffer, Rgba, RgbaImage};
 use super::args::VideoFormat;
 use crate::emulation::messages::RgbColor;
 use crate::frontend::util::FileType;
+
+// =============================================================================
+// Video Resolution
+// =============================================================================
+
+/// Target video resolution for output.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VideoResolution {
+    /// Native resolution (256x240 for NES)
+    Native,
+    /// Integer scale (2x, 3x, 4x, etc.)
+    IntegerScale(u32),
+    /// 720p (1280x720) - fit within bounds
+    Hd720,
+    /// 1080p (1920x1080) - fit within bounds
+    Hd1080,
+    /// 4K (3840x2160) - fit within bounds
+    Uhd4k,
+    /// Custom resolution
+    Custom(u32, u32),
+}
+
+impl VideoResolution {
+    /// Parse a video resolution string.
+    ///
+    /// Supported formats:
+    /// - "native" - Native resolution
+    /// - "2x", "3x", "4x" - Integer scales
+    /// - "720p", "1080p", "4k" - Standard resolutions
+    /// - "WxH" or "WIDTHxHEIGHT" - Custom resolution (e.g., "1920x1080")
+    pub fn parse(s: &str) -> Result<Self, String> {
+        let s = s.to_lowercase();
+        match s.as_str() {
+            "native" | "1x" => Ok(VideoResolution::Native),
+            "2x" => Ok(VideoResolution::IntegerScale(2)),
+            "3x" => Ok(VideoResolution::IntegerScale(3)),
+            "4x" => Ok(VideoResolution::IntegerScale(4)),
+            "5x" => Ok(VideoResolution::IntegerScale(5)),
+            "6x" => Ok(VideoResolution::IntegerScale(6)),
+            "720p" | "hd" => Ok(VideoResolution::Hd720),
+            "1080p" | "fullhd" | "fhd" => Ok(VideoResolution::Hd1080),
+            "4k" | "uhd" | "2160p" => Ok(VideoResolution::Uhd4k),
+            _ => {
+                // Try to parse as WxH
+                if let Some((w, h)) = s.split_once('x') {
+                    let width = w
+                        .trim()
+                        .parse()
+                        .map_err(|_| format!("Invalid width: {}", w))?;
+                    let height = h
+                        .trim()
+                        .parse()
+                        .map_err(|_| format!("Invalid height: {}", h))?;
+                    Ok(VideoResolution::Custom(width, height))
+                } else {
+                    Err(format!(
+                        "Unknown resolution: '{}'. Try: native, 2x, 3x, 4x, 720p, 1080p, 4k, or WxH",
+                        s
+                    ))
+                }
+            }
+        }
+    }
+
+    /// Calculate the output dimensions for a given source size.
+    ///
+    /// For preset resolutions (720p, 1080p, 4k), the output is scaled to fit
+    /// within the target while maintaining aspect ratio with the NES PAR (8:7).
+    pub fn dimensions(&self, src_width: u32, src_height: u32) -> (u32, u32) {
+        // NES pixel aspect ratio: 8:7 (pixels are slightly wider than tall)
+        const NES_PAR: f64 = 8.0 / 7.0;
+
+        match self {
+            VideoResolution::Native => (src_width, src_height),
+            VideoResolution::IntegerScale(scale) => (src_width * scale, src_height * scale),
+            VideoResolution::Hd720 => {
+                fit_to_bounds(src_width, src_height, 1280, 720, NES_PAR)
+            }
+            VideoResolution::Hd1080 => {
+                fit_to_bounds(src_width, src_height, 1920, 1080, NES_PAR)
+            }
+            VideoResolution::Uhd4k => {
+                fit_to_bounds(src_width, src_height, 3840, 2160, NES_PAR)
+            }
+            VideoResolution::Custom(w, h) => (*w, *h),
+        }
+    }
+}
+
+/// Fit source dimensions to target bounds while maintaining aspect ratio.
+fn fit_to_bounds(
+    src_width: u32,
+    src_height: u32,
+    max_width: u32,
+    max_height: u32,
+    par: f64,
+) -> (u32, u32) {
+    // Calculate the maximum integer scale that fits within bounds
+    let scale_x = max_width as f64 / (src_width as f64 * par);
+    let scale_y = max_height as f64 / src_height as f64;
+    let scale = scale_x.min(scale_y);
+
+    // Use integer scale for clean pixel scaling
+    let int_scale = scale.floor() as u32;
+    let int_scale = int_scale.max(1); // At least 1x
+
+    // Calculate output dimensions
+    let out_width = (src_width as f64 * par * int_scale as f64).round() as u32;
+    let out_height = src_height * int_scale;
+
+    // Ensure dimensions are even (required for many video codecs)
+    let out_width = (out_width + 1) & !1;
+    let out_height = (out_height + 1) & !1;
+
+    (out_width, out_height)
+}
 
 // =============================================================================
 // Error Types
@@ -80,10 +178,7 @@ impl std::fmt::Display for VideoError {
             VideoError::FfmpegFailed(msg) => write!(f, "FFmpeg encoding failed: {}", msg),
             VideoError::IoError(e) => write!(f, "I/O error: {}", e),
             VideoError::ImageError(e) => write!(f, "Image encoding error: {}", e),
-            VideoError::InvalidDimensions {
-                expected,
-                got,
-            } => {
+            VideoError::InvalidDimensions { expected, got } => {
                 write!(
                     f,
                     "Invalid frame dimensions: expected {}x{}, got {}x{}",
@@ -114,7 +209,9 @@ impl From<io::Error> for VideoError {
 }
 
 impl From<image::ImageError> for VideoError {
-    fn from(e: image::ImageError) -> Self { VideoError::ImageError(e.to_string()) }
+    fn from(e: image::ImageError) -> Self {
+        VideoError::ImageError(e.to_string())
+    }
 }
 
 // =============================================================================
@@ -130,19 +227,6 @@ pub trait VideoEncoder: Send {
     /// The pixel buffer is in RGB format as (R, G, B) tuples,
     /// as a flat array of width × height values.
     fn write_frame(&mut self, pixel_buffer: &[RgbColor]) -> Result<(), VideoError>;
-    
-    /// Write a frame from raw BGRA bytes (4 bytes per pixel).
-    ///
-    /// This method is used when the GPU upscaler outputs BGRA directly.
-    /// Default implementation converts to RGB and calls write_frame.
-    fn write_frame_bgra_bytes(&mut self, bgra_bytes: &[u8]) -> Result<(), VideoError> {
-        // Convert BGRA bytes to RgbColor array
-        let rgb_pixels: Vec<RgbColor> = bgra_bytes
-            .chunks_exact(4)
-            .map(|chunk| (chunk[2], chunk[1], chunk[0]))  // BGRA -> RGB
-            .collect();
-        self.write_frame(&rgb_pixels)
-    }
 
     /// Finish encoding and flush any remaining data.
     fn finish(&mut self) -> Result<(), VideoError>;
@@ -156,6 +240,8 @@ pub trait VideoEncoder: Send {
 // =============================================================================
 
 /// Create a video encoder for the specified format.
+///
+/// For MP4 format with scaling, use `create_encoder_with_scale` instead.
 pub fn create_encoder(
     format: VideoFormat,
     output_path: &Path,
@@ -163,38 +249,39 @@ pub fn create_encoder(
     height: u32,
     fps: f64,
 ) -> Result<Box<dyn VideoEncoder>, VideoError> {
-    create_encoder_with_hw(format, output_path, width, height, fps, HwEncoder::Auto)
-}
-
-/// Create a video encoder for the specified format with hardware encoder option.
-pub fn create_encoder_with_hw(
-    format: VideoFormat,
-    output_path: &Path,
-    width: u32,
-    height: u32,
-    fps: f64,
-    hw_encoder: HwEncoder,
-) -> Result<Box<dyn VideoEncoder>, VideoError> {
     match format {
         VideoFormat::Png => Ok(Box::new(PngSequenceEncoder::new(
-            output_path,
-            width,
-            height,
+            output_path, width, height,
         )?)),
         VideoFormat::Ppm => Ok(Box::new(PpmSequenceEncoder::new(
-            output_path,
-            width,
-            height,
+            output_path, width, height,
         )?)),
-        VideoFormat::Mp4 => Ok(Box::new(FfmpegMp4Encoder::new_with_hw(
-            output_path,
-            width,
-            height,
-            fps,
-            hw_encoder,
+        VideoFormat::Mp4 => Ok(Box::new(FfmpegMp4Encoder::new(
+            output_path, width, height, fps, None,
         )?)),
         VideoFormat::Raw => Ok(Box::new(RawEncoder::new(width, height)?)),
     }
+}
+
+/// Create an MP4 encoder with FFmpeg native nearest-neighbor scaling.
+///
+/// This passes scaling to FFmpeg using `-vf scale=W:H:flags=neighbor`,
+/// which is efficient and produces sharp pixel edges.
+pub fn create_encoder_with_scale(
+    output_path: &Path,
+    src_width: u32,
+    src_height: u32,
+    dst_width: u32,
+    dst_height: u32,
+    fps: f64,
+) -> Result<Box<dyn VideoEncoder>, VideoError> {
+    Ok(Box::new(FfmpegMp4Encoder::new(
+        output_path,
+        src_width,
+        src_height,
+        fps,
+        Some((dst_width, dst_height)),
+    )?))
 }
 
 // =============================================================================
@@ -202,10 +289,6 @@ pub fn create_encoder_with_hw(
 // =============================================================================
 
 /// Encoder that outputs a sequence of PNG images.
-///
-/// Output files are named: `{base_path}_{frame:06}.png`
-///
-/// This is a pure Rust implementation with no external dependencies.
 pub struct PngSequenceEncoder {
     base_path: PathBuf,
     width: u32,
@@ -215,13 +298,11 @@ pub struct PngSequenceEncoder {
 
 impl PngSequenceEncoder {
     /// Create a new PNG sequence encoder.
-    /// Creates the output directory if it doesn't exist.
     pub fn new(output_path: &Path, width: u32, height: u32) -> Result<Self, VideoError> {
-        // Create output directory if needed
-        if let Some(parent) = output_path.parent()
-            && !parent.exists()
-        {
-            fs::create_dir_all(parent)?;
+        if let Some(parent) = output_path.parent() {
+            if !parent.as_os_str().is_empty() && !parent.exists() {
+                fs::create_dir_all(parent)?;
+            }
         }
 
         Ok(Self {
@@ -232,7 +313,6 @@ impl PngSequenceEncoder {
         })
     }
 
-    /// Get the path for a specific frame number
     fn frame_path(&self, frame: u64) -> PathBuf {
         let stem = self
             .base_path
@@ -255,13 +335,11 @@ impl VideoEncoder for PngSequenceEncoder {
             });
         }
 
-        // Convert RgbColor to RGBA image
         let img: RgbaImage = ImageBuffer::from_fn(self.width, self.height, |x, y| {
             let (r, g, b) = pixel_buffer[(y * self.width + x) as usize];
             Rgba([r, g, b, 255])
         });
 
-        // Save the frame
         let path = self.frame_path(self.frame_count);
         img.save(&path)?;
 
@@ -270,11 +348,12 @@ impl VideoEncoder for PngSequenceEncoder {
     }
 
     fn finish(&mut self) -> Result<(), VideoError> {
-        // PNG sequence doesn't need finalization
         Ok(())
     }
 
-    fn frames_written(&self) -> u64 { self.frame_count }
+    fn frames_written(&self) -> u64 {
+        self.frame_count
+    }
 }
 
 // =============================================================================
@@ -282,9 +361,6 @@ impl VideoEncoder for PngSequenceEncoder {
 // =============================================================================
 
 /// Encoder that outputs a sequence of PPM images.
-///
-/// PPM is a simple format that's easy to convert with external tools.
-/// This is a pure Rust implementation with no external dependencies.
 pub struct PpmSequenceEncoder {
     base_path: PathBuf,
     width: u32,
@@ -295,10 +371,10 @@ pub struct PpmSequenceEncoder {
 impl PpmSequenceEncoder {
     /// Create a new PPM sequence encoder.
     pub fn new(output_path: &Path, width: u32, height: u32) -> Result<Self, VideoError> {
-        if let Some(parent) = output_path.parent()
-            && !parent.exists()
-        {
-            fs::create_dir_all(parent)?;
+        if let Some(parent) = output_path.parent() {
+            if !parent.as_os_str().is_empty() && !parent.exists() {
+                fs::create_dir_all(parent)?;
+            }
         }
 
         Ok(Self {
@@ -335,12 +411,10 @@ impl VideoEncoder for PpmSequenceEncoder {
         let file = File::create(&path)?;
         let mut writer = BufWriter::new(file);
 
-        // Write PPM header
         writeln!(writer, "P6")?;
         writeln!(writer, "{} {}", self.width, self.height)?;
         writeln!(writer, "255")?;
 
-        // Write RGB data
         for &(r, g, b) in pixel_buffer {
             writer.write_all(&[r, g, b])?;
         }
@@ -350,97 +424,22 @@ impl VideoEncoder for PpmSequenceEncoder {
         Ok(())
     }
 
-    fn finish(&mut self) -> Result<(), VideoError> { Ok(()) }
+    fn finish(&mut self) -> Result<(), VideoError> {
+        Ok(())
+    }
 
-    fn frames_written(&self) -> u64 { self.frame_count }
+    fn frames_written(&self) -> u64 {
+        self.frame_count
+    }
 }
 
 // =============================================================================
-// FFmpeg MP4 Encoder with Hardware Encoding Support
+// FFmpeg MP4 Encoder
 // =============================================================================
-
-/// Hardware video encoder options.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum HwEncoder {
-    /// Automatically detect available hardware encoder
-    Auto,
-    /// NVIDIA NVENC
-    Nvenc,
-    /// AMD AMF/VCE
-    Amf,
-    /// Intel/Linux VAAPI
-    Vaapi,
-    /// Intel QuickSync Video
-    Qsv,
-    /// Software encoding (libx264)
-    Software,
-}
-
-impl HwEncoder {
-    /// Parse from string
-    pub fn parse(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
-            "auto" => HwEncoder::Auto,
-            "nvenc" | "nvidia" => HwEncoder::Nvenc,
-            "amf" | "amd" | "vce" => HwEncoder::Amf,
-            "vaapi" | "va-api" | "linux" => HwEncoder::Vaapi,
-            "qsv" | "quicksync" | "intel" => HwEncoder::Qsv,
-            "sw" | "software" | "libx264" | "cpu" => HwEncoder::Software,
-            _ => HwEncoder::Auto,
-        }
-    }
-    
-    /// Get the FFmpeg codec name for this encoder
-    fn codec_name(&self) -> &'static str {
-        match self {
-            HwEncoder::Auto => "libx264",  // Will be overridden by detect
-            HwEncoder::Nvenc => "h264_nvenc",
-            HwEncoder::Amf => "h264_amf",
-            HwEncoder::Vaapi => "h264_vaapi",
-            HwEncoder::Qsv => "h264_qsv",
-            HwEncoder::Software => "libx264",
-        }
-    }
-    
-    /// Check if this encoder is available
-    fn is_available(&self) -> bool {
-        match self {
-            HwEncoder::Software | HwEncoder::Auto => true,
-            _ => {
-                // Try to check if the encoder exists
-                let output = Command::new("ffmpeg")
-                    .args(["-hide_banner", "-encoders"])
-                    .output();
-                    
-                if let Ok(output) = output {
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-                    stdout.contains(self.codec_name())
-                } else {
-                    false
-                }
-            }
-        }
-    }
-}
-
-/// Detect the best available hardware encoder.
-pub fn detect_hw_encoder() -> HwEncoder {
-    // Try encoders in order of preference
-    for encoder in [HwEncoder::Nvenc, HwEncoder::Amf, HwEncoder::Vaapi, HwEncoder::Qsv] {
-        if encoder.is_available() {
-            eprintln!("Detected hardware encoder: {:?}", encoder);
-            return encoder;
-        }
-    }
-    eprintln!("No hardware encoder detected, using software (libx264)");
-    HwEncoder::Software
-}
 
 /// Encoder that pipes frames to FFmpeg for MP4 encoding.
 ///
-/// Requires FFmpeg to be installed and available in PATH.
-///
-/// Supports hardware encoders (NVENC, AMF, VAAPI, QSV) when available.
+/// Supports native nearest-neighbor scaling via FFmpeg's scale filter.
 pub struct FfmpegMp4Encoder {
     child: Option<Child>,
     stdin: Option<BufWriter<std::process::ChildStdin>>,
@@ -451,22 +450,16 @@ pub struct FfmpegMp4Encoder {
 }
 
 impl FfmpegMp4Encoder {
-    /// Create a new FFmpeg MP4 encoder with automatic hardware encoder detection.
+    /// Create a new FFmpeg MP4 encoder.
     ///
-    /// # Errors
-    ///
-    /// Returns `VideoError::FfmpegNotFound` if FFmpeg is not installed.
-    pub fn new(output_path: &Path, width: u32, height: u32, fps: f64) -> Result<Self, VideoError> {
-        Self::new_with_hw(output_path, width, height, fps, HwEncoder::Auto)
-    }
-    
-    /// Create a new FFmpeg MP4 encoder with the specified hardware encoder.
-    pub fn new_with_hw(
+    /// If `scale_to` is provided, FFmpeg will scale to that resolution using
+    /// nearest-neighbor interpolation (sharp pixel edges).
+    pub fn new(
         output_path: &Path,
         width: u32,
         height: u32,
         fps: f64,
-        hw_encoder: HwEncoder,
+        scale_to: Option<(u32, u32)>,
     ) -> Result<Self, VideoError> {
         // Check if ffmpeg exists
         let ffmpeg_check = Command::new("ffmpeg").arg("-version").output();
@@ -478,103 +471,57 @@ impl FfmpegMp4Encoder {
             Err(e) => return Err(VideoError::IoError(e)),
             Ok(_) => {}
         }
-        
-        // Resolve the actual encoder to use
-        let encoder = match hw_encoder {
-            HwEncoder::Auto => detect_hw_encoder(),
-            other if other.is_available() => other,
-            _ => {
-                eprintln!("Requested encoder {:?} not available, falling back to software", hw_encoder);
-                HwEncoder::Software
-            }
-        };
 
         // Create output directory if needed
-        if let Some(parent) = output_path.parent()
-            && !parent.exists()
-        {
-            fs::create_dir_all(parent)?;
+        if let Some(parent) = output_path.parent() {
+            if !parent.as_os_str().is_empty() && !parent.exists() {
+                fs::create_dir_all(parent)?;
+            }
         }
 
-        // Create a temporary file for ffmpeg stderr so we can read errors
         let stderr_path =
             std::env::temp_dir().join(format!("nes_ffmpeg_stderr_{}.log", std::process::id()));
         let stderr_file = File::create(&stderr_path)?;
 
         let path = output_path.with_extension(FileType::Mp4.get_default_extension());
-        
-        // Build ffmpeg arguments based on encoder
-        let codec_name = encoder.codec_name();
-        let is_hw = !matches!(encoder, HwEncoder::Software);
-        
+
+        // Build FFmpeg arguments
         let mut args = vec![
-            "-y".to_string(),           // Overwrite output
+            "-y".to_string(),
             "-f".to_string(),
-            "rawvideo".to_string(),     // Input format
+            "rawvideo".to_string(),
             "-pixel_format".to_string(),
-            "bgra".to_string(),         // Input pixel format
+            "bgra".to_string(),
             "-video_size".to_string(),
-            format!("{}x{}", width, height),  // Frame size
+            format!("{}x{}", width, height),
             "-framerate".to_string(),
-            format!("{}", fps),         // Frame rate
+            format!("{}", fps),
             "-i".to_string(),
-            "-".to_string(),            // Read from stdin
+            "-".to_string(),
         ];
-        
-        // Encoder-specific arguments
-        args.extend(["-c:v".to_string(), codec_name.to_string()]);
-        
-        if is_hw {
-            // Hardware encoder quality settings
-            match encoder {
-                HwEncoder::Nvenc => {
-                    args.extend([
-                        "-preset".to_string(),
-                        "p4".to_string(),  // Medium quality/speed
-                        "-rc".to_string(),
-                        "vbr".to_string(),
-                        "-cq".to_string(),
-                        "19".to_string(),
-                    ]);
-                }
-                HwEncoder::Amf => {
-                    args.extend([
-                        "-quality".to_string(),
-                        "balanced".to_string(),
-                        "-rc".to_string(),
-                        "vbr_latency".to_string(),
-                    ]);
-                }
-                HwEncoder::Vaapi => {
-                    args.extend([
-                        "-vaapi_device".to_string(),
-                        "/dev/dri/renderD128".to_string(),
-                        "-vf".to_string(),
-                        "format=nv12,hwupload".to_string(),
-                    ]);
-                }
-                HwEncoder::Qsv => {
-                    args.extend([
-                        "-preset".to_string(),
-                        "medium".to_string(),
-                        "-global_quality".to_string(),
-                        "25".to_string(),
-                    ]);
-                }
-                _ => {}
+
+        // Add scaling filter if requested (nearest neighbor for sharp pixels)
+        if let Some((dst_w, dst_h)) = scale_to {
+            if dst_w != width || dst_h != height {
+                eprintln!(
+                    "FFmpeg scaling {}x{} -> {}x{} (nearest neighbor)",
+                    width, height, dst_w, dst_h
+                );
+                args.extend([
+                    "-vf".to_string(),
+                    format!("scale={}:{}:flags=neighbor", dst_w, dst_h),
+                ]);
             }
-        } else {
-            // Software encoder settings
-            args.extend([
-                "-preset".to_string(),
-                "fast".to_string(),
-                "-crf".to_string(),
-                "16".to_string(),
-            ]);
         }
-        
-        // Common output arguments
+
+        // Encoder settings
         args.extend([
+            "-c:v".to_string(),
+            "libx264".to_string(),
+            "-preset".to_string(),
+            "fast".to_string(),
+            "-crf".to_string(),
+            "16".to_string(),
             "-vsync".to_string(),
             "cfr".to_string(),
             "-video_track_timescale".to_string(),
@@ -587,10 +534,7 @@ impl FfmpegMp4Encoder {
             "mp4".to_string(),
             path.to_str().unwrap_or("output.mp4").to_string(),
         ]);
-        
-        eprintln!("Using {} encoder for MP4 output", codec_name);
-        
-        // Start ffmpeg process
+
         let mut child = Command::new("ffmpeg")
             .args(&args)
             .stdin(Stdio::piped())
@@ -605,14 +549,11 @@ impl FfmpegMp4Encoder {
                 }
             })?;
 
-        let stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| VideoError::FfmpegFailed("Failed to open FFmpeg stdin".to_string()))?;
+        let stdin = child.stdin.take().map(BufWriter::new);
 
         Ok(Self {
             child: Some(child),
-            stdin: Some(BufWriter::new(stdin)),
+            stdin,
             stderr_path: Some(stderr_path),
             width,
             height,
@@ -632,49 +573,37 @@ impl VideoEncoder for FfmpegMp4Encoder {
             });
         }
 
-        // Convert RgbColor to BGRA bytes for FFmpeg
-        // Input: (R, G, B)
-        // Output: B, G, R, A (little-endian BGRA for FFmpeg)
-        let bytes: Vec<u8> = pixel_buffer
-            .iter()
-            .flat_map(|&(r, g, b)| [b, g, r, 255u8])
-            .collect();
-
-        self.write_bgra_bytes_internal(&bytes)
-    }
-    
-    fn write_frame_bgra_bytes(&mut self, bgra_bytes: &[u8]) -> Result<(), VideoError> {
-        let expected_size = (self.width * self.height * 4) as usize;
-        if bgra_bytes.len() != expected_size {
-            return Err(VideoError::FfmpegFailed(format!(
-                "Invalid BGRA byte count: expected {}, got {}",
-                expected_size, bgra_bytes.len()
-            )));
+        // Convert RGB to BGRA
+        let mut bgra_buffer = Vec::with_capacity(pixel_buffer.len() * 4);
+        for &(r, g, b) in pixel_buffer {
+            bgra_buffer.extend_from_slice(&[b, g, r, 255]);
         }
-        
-        // BGRA bytes can be written directly to FFmpeg
-        self.write_bgra_bytes_internal(bgra_bytes)
+
+        if let Some(ref mut stdin) = self.stdin {
+            stdin.write_all(&bgra_buffer)?;
+        }
+
+        self.frame_count += 1;
+        Ok(())
     }
 
     fn finish(&mut self) -> Result<(), VideoError> {
-        // Flush and drop stdin to signal EOF to ffmpeg
-        if let Some(mut stdin) = self.stdin.take() {
-            let _ = stdin.flush(); // Ignore flush errors, we're closing anyway
-        }
+        // Close stdin to signal EOF to ffmpeg
+        self.stdin.take();
 
-        // Wait for FFmpeg to finish
+        // Wait for ffmpeg to finish
         if let Some(mut child) = self.child.take() {
             let status = child.wait()?;
             if !status.success() {
-                let ffmpeg_error = self.read_stderr_error();
-                // Clean up stderr file
-                if let Some(ref path) = self.stderr_path {
-                    let _ = fs::remove_file(path);
-                }
+                let stderr_content = if let Some(ref path) = self.stderr_path {
+                    fs::read_to_string(path).unwrap_or_default()
+                } else {
+                    String::new()
+                };
                 return Err(VideoError::FfmpegFailed(format!(
-                    "FFmpeg exited with status: {}. Error: {}",
+                    "FFmpeg exited with status {}: {}",
                     status,
-                    ffmpeg_error.unwrap_or_else(|| "Unknown error".to_string())
+                    stderr_content.lines().take(10).collect::<Vec<_>>().join("\n")
                 )));
             }
         }
@@ -687,48 +616,25 @@ impl VideoEncoder for FfmpegMp4Encoder {
         Ok(())
     }
 
-    fn frames_written(&self) -> u64 { self.frame_count }
+    fn frames_written(&self) -> u64 {
+        self.frame_count
+    }
 }
 
-impl FfmpegMp4Encoder {
-    /// Internal helper to write BGRA bytes to FFmpeg stdin.
-    fn write_bgra_bytes_internal(&mut self, bytes: &[u8]) -> Result<(), VideoError> {
-        if let Some(ref mut stdin) = self.stdin
-            && let Err(e) = stdin.write_all(bytes)
-        {
-            // If we get a broken pipe, FFmpeg may have exited early
-            // Try to get the error message from stderr
-            if e.kind() == io::ErrorKind::BrokenPipe {
-                let ffmpeg_error = self.read_stderr_error();
-                return Err(VideoError::FfmpegFailed(format!(
-                    "FFmpeg pipe closed unexpectedly after {} frames. FFmpeg error: {}",
-                    self.frame_count,
-                    ffmpeg_error.unwrap_or_else(|| "Unknown error".to_string())
-                )));
-            }
-            return Err(VideoError::IoError(e));
+impl Drop for FfmpegMp4Encoder {
+    fn drop(&mut self) {
+        // Ensure stdin is closed
+        self.stdin.take();
+
+        // Try to wait for child process
+        if let Some(mut child) = self.child.take() {
+            let _ = child.wait();
         }
-        self.frame_count += 1;
-        Ok(())
-    }
-    
-    /// Read the FFmpeg stderr log file to get error details.
-    fn read_stderr_error(&self) -> Option<String> {
-        if let Some(ref path) = self.stderr_path
-            && let Ok(content) = fs::read_to_string(path)
-        {
-            // Return the last few lines which usually contain the error
-            let lines: Vec<&str> = content.lines().collect();
-            let relevant = if lines.len() > 10 {
-                lines[lines.len() - 10..].join("\n")
-            } else {
-                lines.join("\n")
-            };
-            if !relevant.is_empty() {
-                return Some(relevant);
-            }
+
+        // Clean up stderr file
+        if let Some(ref path) = self.stderr_path {
+            let _ = fs::remove_file(path);
         }
-        None
     }
 }
 
@@ -736,24 +642,20 @@ impl FfmpegMp4Encoder {
 // Raw Encoder
 // =============================================================================
 
-/// Encoder that writes raw BGRA frames to stdout.
-///
-/// Useful for piping to external tools like FFmpeg.
+/// Encoder that outputs raw BGRA frames.
 pub struct RawEncoder {
     width: u32,
     height: u32,
     frame_count: u64,
-    writer: BufWriter<io::Stdout>,
 }
 
 impl RawEncoder {
-    /// Create a new raw encoder that writes to stdout.
+    /// Create a new raw encoder.
     pub fn new(width: u32, height: u32) -> Result<Self, VideoError> {
         Ok(Self {
             width,
             height,
             frame_count: 0,
-            writer: BufWriter::new(io::stdout()),
         })
     }
 }
@@ -769,23 +671,26 @@ impl VideoEncoder for RawEncoder {
             });
         }
 
-        // Convert RgbColor to BGRA bytes
-        let bytes: Vec<u8> = pixel_buffer
-            .iter()
-            .flat_map(|&(r, g, b)| [b, g, r, 255u8])
-            .collect();
+        // Convert RGB to BGRA and write to stdout
+        let stdout = io::stdout();
+        let mut handle = stdout.lock();
 
-        self.writer.write_all(&bytes)?;
+        for &(r, g, b) in pixel_buffer {
+            handle.write_all(&[b, g, r, 255])?;
+        }
+
         self.frame_count += 1;
         Ok(())
     }
 
     fn finish(&mut self) -> Result<(), VideoError> {
-        self.writer.flush()?;
+        io::stdout().flush()?;
         Ok(())
     }
 
-    fn frames_written(&self) -> u64 { self.frame_count }
+    fn frames_written(&self) -> u64 {
+        self.frame_count
+    }
 }
 
 // =============================================================================
@@ -793,21 +698,6 @@ impl VideoEncoder for RawEncoder {
 // =============================================================================
 
 /// Encode collected frames to video.
-///
-/// This is the main entry point for video export from the CLI.
-///
-/// # Arguments
-///
-/// * `frames` - Vector of frame pixel buffers (RgbColor tuples)
-/// * `format` - Output format
-/// * `output_path` - Path to output file
-/// * `width` - Frame width (default: 256 for NES)
-/// * `height` - Frame height (default: 240 for NES)
-/// * `fps` - Frame rate (default: 60 for NES)
-///
-/// # Returns
-///
-/// Number of frames written, or an error.
 pub fn encode_frames(
     frames: &[Vec<RgbColor>],
     format: VideoFormat,
@@ -820,57 +710,6 @@ pub fn encode_frames(
 
     for frame in frames {
         encoder.write_frame(frame)?;
-    }
-
-    encoder.finish()?;
-    Ok(encoder.frames_written())
-}
-
-/// Encode collected frames to video with optional upscaling.
-///
-/// This version supports pseudo-bandlimited pixel art upscaling before encoding.
-///
-/// # Arguments
-///
-/// * `frames` - Vector of frame pixel buffers (RgbColor tuples)
-/// * `format` - Output format
-/// * `output_path` - Path to output file
-/// * `src_width` - Source frame width (default: 256 for NES)
-/// * `src_height` - Source frame height (default: 240 for NES)
-/// * `resolution` - Target output resolution
-/// * `fps` - Frame rate (default: 60 for NES)
-///
-/// # Returns
-///
-/// Number of frames written, or an error.
-pub fn encode_frames_with_upscale(
-    frames: &[Vec<RgbColor>],
-    format: VideoFormat,
-    output_path: &Path,
-    src_width: u32,
-    src_height: u32,
-    resolution: &super::upscale::VideoResolution,
-    fps: f64,
-) -> Result<u64, VideoError> {
-    use super::upscale::{PixelArtUpscaler, VideoResolution};
-
-    let (dst_width, dst_height) = resolution.dimensions(src_width, src_height);
-
-    // If native resolution, don't upscale
-    if *resolution == VideoResolution::Native
-        || (dst_width == src_width && dst_height == src_height)
-    {
-        return encode_frames(frames, format, output_path, src_width, src_height, fps);
-    }
-
-    // Create upscaler and encoder
-    let upscaler = PixelArtUpscaler::new(src_width, src_height, dst_width, dst_height);
-    let mut encoder = create_encoder(format, output_path, dst_width, dst_height, fps)?;
-
-    // Upscale and encode each frame
-    for frame in frames {
-        let upscaled = upscaler.upscale_rgb(frame);
-        encoder.write_frame(&upscaled)?;
     }
 
     encoder.finish()?;
@@ -890,33 +729,15 @@ pub fn is_ffmpeg_available() -> bool {
 // Streaming Video Encoder
 // =============================================================================
 
-/// A streaming video encoder that handles upscaling and encoding in one step.
+/// A streaming video encoder that handles scaling via FFmpeg.
 ///
 /// This encoder is designed for use during emulation - frames are written
 /// immediately as they are generated, without buffering all frames in memory.
 ///
-/// # Performance
-///
-/// - Upscaling uses rayon parallel processing (~10-15ms per 1080p frame)
-/// - Frames are streamed directly to the encoder
-/// - Memory usage is O(1) per frame instead of O(n) for all frames
-/// Upscaling backend
-enum UpscaleBackend {
-    /// No upscaling needed
-    None,
-    /// CPU-based upscaling with rayon parallelism
-    Cpu(super::upscale::PixelArtUpscaler),
-    /// GPU-based upscaling with wgpu compute shaders
-    Gpu(super::gpu_upscale::GpuUpscaler),
-}
-
-/// Combined video encoder with optional upscaling.
-///
-/// This encoder handles both upscaling and encoding in a streaming fashion,
-/// writing frames directly as they are received rather than buffering them.
+/// Scaling is handled natively by FFmpeg using nearest-neighbor interpolation,
+/// which is efficient and produces sharp pixel edges.
 pub struct StreamingVideoEncoder {
     encoder: Box<dyn VideoEncoder>,
-    upscale_backend: UpscaleBackend,
     src_width: u32,
     src_height: u32,
     dst_width: u32,
@@ -925,69 +746,53 @@ pub struct StreamingVideoEncoder {
 
 impl StreamingVideoEncoder {
     /// Create a new streaming encoder.
+    ///
+    /// If the resolution specifies scaling, FFmpeg will handle it natively
+    /// using nearest-neighbor interpolation.
     pub fn new(
         format: VideoFormat,
         output_path: &Path,
         src_width: u32,
         src_height: u32,
-        resolution: &super::upscale::VideoResolution,
+        resolution: &VideoResolution,
         fps: f64,
-        no_gpu: bool,
     ) -> Result<Self, VideoError> {
-        Self::new_with_hw(format, output_path, src_width, src_height, resolution, fps, no_gpu, HwEncoder::Auto)
-    }
-    
-    /// Create a new streaming encoder with hardware encoder option.
-    pub fn new_with_hw(
-        format: VideoFormat,
-        output_path: &Path,
-        src_width: u32,
-        src_height: u32,
-        resolution: &super::upscale::VideoResolution,
-        fps: f64,
-        no_gpu: bool,
-        hw_encoder: HwEncoder,
-    ) -> Result<Self, VideoError> {
-        use super::gpu_upscale::GpuUpscaler;
-        use super::upscale::{PixelArtUpscaler, VideoResolution};
-
         let (dst_width, dst_height) = resolution.dimensions(src_width, src_height);
 
-        // Determine upscaling backend
-        let upscale_backend = if *resolution == VideoResolution::Native
-            || (dst_width == src_width && dst_height == src_height)
-        {
-            UpscaleBackend::None
-        } else if no_gpu {
-            // User explicitly requested CPU
-            eprintln!("Using CPU upscaling (rayon parallel) {}x{} -> {}x{}", 
-                     src_width, src_height, dst_width, dst_height);
-            UpscaleBackend::Cpu(PixelArtUpscaler::new(
-                src_width, src_height, dst_width, dst_height,
-            ))
-        } else {
-            // Try GPU first, fall back to CPU
-            match GpuUpscaler::try_new(src_width, src_height, dst_width, dst_height) {
-                Some(gpu_upscaler) => {
-                    eprintln!("Using GPU upscaling (wgpu compute) {}x{} -> {}x{}", 
-                             src_width, src_height, dst_width, dst_height);
-                    UpscaleBackend::Gpu(gpu_upscaler)
+        let encoder: Box<dyn VideoEncoder> = match format {
+            VideoFormat::Mp4 => {
+                if dst_width != src_width || dst_height != src_height {
+                    // Use FFmpeg native scaling
+                    Box::new(FfmpegMp4Encoder::new(
+                        output_path,
+                        src_width,
+                        src_height,
+                        fps,
+                        Some((dst_width, dst_height)),
+                    )?)
+                } else {
+                    Box::new(FfmpegMp4Encoder::new(
+                        output_path,
+                        src_width,
+                        src_height,
+                        fps,
+                        None,
+                    )?)
                 }
-                None => {
-                    eprintln!("GPU not available, falling back to CPU upscaling {}x{} -> {}x{}", 
-                             src_width, src_height, dst_width, dst_height);
-                    UpscaleBackend::Cpu(PixelArtUpscaler::new(
-                        src_width, src_height, dst_width, dst_height,
-                    ))
+            }
+            _ => {
+                // For non-MP4 formats, no scaling (use native resolution)
+                if dst_width != src_width || dst_height != src_height {
+                    eprintln!(
+                        "Warning: Scaling only supported for MP4 format. Using native resolution."
+                    );
                 }
+                create_encoder(format, output_path, src_width, src_height, fps)?
             }
         };
 
-        let encoder = create_encoder_with_hw(format, output_path, dst_width, dst_height, fps, hw_encoder)?;
-
         Ok(Self {
             encoder,
-            upscale_backend,
             src_width,
             src_height,
             dst_width,
@@ -995,54 +800,74 @@ impl StreamingVideoEncoder {
         })
     }
 
-    /// Write a single frame, with upscaling if configured.
-    ///
-    /// This method handles upscaling and immediately writes to the underlying encoder.
+    /// Write a single frame.
     pub fn write_frame(&mut self, frame: &[RgbColor]) -> Result<(), VideoError> {
-        match &self.upscale_backend {
-            UpscaleBackend::None => {
-                // No upscaling needed
-                self.encoder.write_frame(frame)
-            }
-            UpscaleBackend::Cpu(upscaler) => {
-                // CPU upscaling via rayon
-                let upscaled = upscaler.upscale_rgb(frame);
-                self.encoder.write_frame(&upscaled)
-            }
-            UpscaleBackend::Gpu(gpu_upscaler) => {
-                // GPU upscaling - returns BGRA bytes directly
-                let bgra_bytes = gpu_upscaler.upscale(frame);
-                self.encoder.write_frame_bgra_bytes(&bgra_bytes)
-            }
-        }
+        self.encoder.write_frame(frame)
     }
 
     /// Finish encoding and finalize the output file.
-    pub fn finish(&mut self) -> Result<(), VideoError> { self.encoder.finish() }
+    pub fn finish(&mut self) -> Result<(), VideoError> {
+        self.encoder.finish()
+    }
 
     /// Get the number of frames written so far.
-    pub fn frames_written(&self) -> u64 { self.encoder.frames_written() }
+    pub fn frames_written(&self) -> u64 {
+        self.encoder.frames_written()
+    }
 
     /// Get the source dimensions.
-    pub fn source_dimensions(&self) -> (u32, u32) { (self.src_width, self.src_height) }
+    pub fn source_dimensions(&self) -> (u32, u32) {
+        (self.src_width, self.src_height)
+    }
 
-    /// Get the output dimensions (after upscaling).
+    /// Get the output dimensions (after scaling).
     pub fn output_dimensions(&self) -> (u32, u32) {
         (self.dst_width, self.dst_height)
     }
 
-    /// Check if upscaling is enabled.
-    pub fn is_upscaling(&self) -> bool { !matches!(self.upscale_backend, UpscaleBackend::None) }
-    
-    /// Check if GPU upscaling is being used.
-    pub fn is_using_gpu(&self) -> bool { matches!(self.upscale_backend, UpscaleBackend::Gpu(_)) }
+    /// Check if scaling is enabled.
+    pub fn is_scaling(&self) -> bool {
+        self.dst_width != self.src_width || self.dst_height != self.src_height
+    }
 }
+
+// =============================================================================
 // Tests
 // =============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_video_resolution_parse() {
+        assert_eq!(VideoResolution::parse("native").unwrap(), VideoResolution::Native);
+        assert_eq!(VideoResolution::parse("1x").unwrap(), VideoResolution::Native);
+        assert_eq!(VideoResolution::parse("2x").unwrap(), VideoResolution::IntegerScale(2));
+        assert_eq!(VideoResolution::parse("4x").unwrap(), VideoResolution::IntegerScale(4));
+        assert_eq!(VideoResolution::parse("720p").unwrap(), VideoResolution::Hd720);
+        assert_eq!(VideoResolution::parse("1080p").unwrap(), VideoResolution::Hd1080);
+        assert_eq!(VideoResolution::parse("4k").unwrap(), VideoResolution::Uhd4k);
+        assert_eq!(
+            VideoResolution::parse("1920x1080").unwrap(),
+            VideoResolution::Custom(1920, 1080)
+        );
+    }
+
+    #[test]
+    fn test_video_resolution_dimensions() {
+        // Native
+        assert_eq!(VideoResolution::Native.dimensions(256, 240), (256, 240));
+
+        // Integer scale
+        assert_eq!(VideoResolution::IntegerScale(2).dimensions(256, 240), (512, 480));
+        assert_eq!(VideoResolution::IntegerScale(4).dimensions(256, 240), (1024, 960));
+
+        // 1080p should fit within bounds
+        let (w, h) = VideoResolution::Hd1080.dimensions(256, 240);
+        assert!(w <= 1920);
+        assert!(h <= 1080);
+    }
 
     #[test]
     fn test_video_error_display() {
@@ -1076,7 +901,6 @@ mod tests {
 
     #[test]
     fn test_ffmpeg_availability_check() {
-        // This test just checks that the function doesn't panic
         let _available = is_ffmpeg_available();
     }
 
@@ -1085,15 +909,11 @@ mod tests {
         let mut encoder =
             PpmSequenceEncoder::new(Path::new("/tmp/test_invalid"), 256, 240).unwrap();
 
-        // Wrong size frame
-        let bad_frame: Vec<RgbColor> = vec![(0, 0, 0); 100]; // Much too small
+        let bad_frame: Vec<RgbColor> = vec![(0, 0, 0); 100];
         let result = encoder.write_frame(&bad_frame);
 
         assert!(result.is_err());
-        if let Err(VideoError::InvalidDimensions {
-            expected, ..
-        }) = result
-        {
+        if let Err(VideoError::InvalidDimensions { expected, .. }) = result {
             assert_eq!(expected, (256, 240));
         } else {
             panic!("Expected InvalidDimensions error");

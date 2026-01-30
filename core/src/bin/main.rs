@@ -221,7 +221,6 @@ fn run_with_streaming_video(
         NES_HEIGHT,
         &resolution,
         fps,
-        args.video.no_gpu,
     )
     .map_err(|e| format!("Failed to create video encoder: {}", e))?;
 
@@ -352,7 +351,7 @@ fn save_video(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String> {
                 );
             } else {
                 eprintln!(
-                    "Exporting {} frames to {} as {:?} (upscaled {}x{} → {}x{} using pseudo-bandlimited filter)...",
+                    "Exporting {} frames to {} as {:?} ({}x{} → {}x{} via FFmpeg nearest-neighbor)...",
                     frames.len(),
                     video_path.display(),
                     args.video.video_format,
@@ -364,8 +363,8 @@ fn save_video(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String> {
             }
         }
 
-        let frames_written = cli::video::encode_frames_with_upscale(
-            frames,
+        // Use streaming encoder for proper scaling support
+        let mut encoder = cli::StreamingVideoEncoder::new(
             args.video.video_format,
             video_path,
             NES_WIDTH,
@@ -373,10 +372,16 @@ fn save_video(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String> {
             &resolution,
             fps,
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("Failed to create video encoder: {}", e))?;
+
+        for frame in frames {
+            encoder.write_frame(frame).map_err(|e| e.to_string())?;
+        }
+
+        encoder.finish().map_err(|e| e.to_string())?;
 
         if !args.quiet {
-            eprintln!("Exported {} frames successfully", frames_written);
+            eprintln!("Exported {} frames successfully", encoder.frames_written());
         }
     }
 

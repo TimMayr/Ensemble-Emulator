@@ -173,10 +173,8 @@ pub mod args;
 pub mod config;
 pub mod error;
 pub mod execution;
-pub mod gpu_upscale;
 pub mod memory_init;
 pub mod output;
-pub mod upscale;
 pub mod video;
 
 pub use args::{parse_hex_u16, CliArgs, OutputFormat, VideoFormat};
@@ -187,16 +185,14 @@ pub use execution::{
     ExecutionConfig, ExecutionEngine, ExecutionResult, SavestateConfig, SavestateDestination,
     SavestateSource, StopCondition, StopReason,
 };
-pub use gpu_upscale::GpuUpscaler;
 pub use memory_init::{MemoryInit, MemoryInitConfig, apply_memory_init, apply_memory_init_config};
 pub use output::{
     InterpretedNametable, InterpretedNametables, InterpretedOam, MemoryDump, MemoryFormatter,
     MemoryType, OamSprite, OutputWriter,
 };
-pub use upscale::{PixelArtUpscaler, VideoResolution};
 pub use video::{
-    StreamingVideoEncoder, VideoEncoder, VideoError, create_encoder, encode_frames,
-    encode_frames_with_upscale, is_ffmpeg_available,
+    StreamingVideoEncoder, VideoEncoder, VideoError, VideoResolution, create_encoder,
+    encode_frames, is_ffmpeg_available,
 };
 
 // =============================================================================

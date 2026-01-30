@@ -189,15 +189,6 @@ pub struct VideoArgs {
     #[arg(long)]
     pub video_scale: Option<String>,
 
-    /// Disable GPU acceleration for video upscaling (use CPU instead)
-    #[arg(long, default_value_t = false)]
-    pub no_gpu: bool,
-    
-    /// Hardware video encoder to use (auto, nvenc, amf, vaapi, qsv, or sw for software)
-    /// Default: auto (tries hardware encoders in order, falls back to software)
-    #[arg(long, default_value = "auto")]
-    pub hw_encoder: String,
-
     /// Export nametable visualization as screenshot
     #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
     pub export_nametables: Option<PathBuf>,
