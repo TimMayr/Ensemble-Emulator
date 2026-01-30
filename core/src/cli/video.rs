@@ -302,10 +302,10 @@ pub struct PngSequenceEncoder {
 impl PngSequenceEncoder {
     /// Create a new PNG sequence encoder.
     pub fn new(output_path: &Path, width: u32, height: u32) -> Result<Self, VideoError> {
-        if let Some(parent) = output_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent)?;
-            }
+        if let Some(parent) = output_path.parent()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent)?;
         }
 
         Ok(Self {
@@ -370,10 +370,10 @@ pub struct PpmSequenceEncoder {
 impl PpmSequenceEncoder {
     /// Create a new PPM sequence encoder.
     pub fn new(output_path: &Path, width: u32, height: u32) -> Result<Self, VideoError> {
-        if let Some(parent) = output_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent)?;
-            }
+        if let Some(parent) = output_path.parent()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent)?;
         }
 
         Ok(Self {
@@ -468,10 +468,10 @@ impl FfmpegMp4Encoder {
         }
 
         // Create output directory if needed
-        if let Some(parent) = output_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent)?;
-            }
+        if let Some(parent) = output_path.parent()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent)?;
         }
 
         let stderr_path =

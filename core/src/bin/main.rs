@@ -182,7 +182,7 @@ fn run_with_streaming_video(
     }
 
     // Parse video resolution
-    let resolution = VideoResolution::parse(&args.video.video_scale.as_ref().unwrap())
+    let resolution = VideoResolution::parse(args.video.video_scale.as_ref().unwrap())
         .map_err(|e| format!("Invalid video scale: {}", e))?;
 
     // NES resolution
