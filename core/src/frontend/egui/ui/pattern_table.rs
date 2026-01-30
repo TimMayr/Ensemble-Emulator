@@ -2,11 +2,11 @@ use crossbeam_channel::Sender;
 use eframe::epaint::TextureHandle;
 use egui::Ui;
 
-use crate::emulation::messages::{EmulatorFetchable, FrontendMessage, RgbColor, TileData};
+use crate::emulation::messages::{RgbColor, TileData};
 use crate::frontend::egui::config::AppConfig;
-use crate::frontend::egui::ui::widgets::{PainterGridConfig, image_cell};
+use crate::frontend::egui::ui::widgets::{image_cell, PainterGridConfig};
 use crate::frontend::messages::AsyncFrontendMessage;
-use crate::frontend::util::{FromU32, color_radio};
+use crate::frontend::util::color_radio;
 
 /// Draw a pattern table (left or right) in the UI
 pub fn draw_pattern_table(
