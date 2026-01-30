@@ -29,30 +29,21 @@ fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
     t * t * (3.0 - 2.0 * t)
 }
 
-/// Compute the pseudo-bandlimited sample weight.
+/// Compute the blend weight using pseudo-bandlimited filtering.
 ///
-/// This function computes a weight that creates smooth transitions between pixels
-/// based on the derivative of the texture coordinate (which corresponds to the
-/// scale factor in our case).
+/// This creates smooth transitions at pixel boundaries while keeping
+/// pixels sharp in their interior. The filter width is inversely
+/// proportional to the scale factor.
 #[inline]
-fn compute_bandlimited_weight(frac: f32, scale: f32) -> f32 {
-    // The filter width is inversely proportional to the scale
-    // At integer scales, this produces sharp edges
-    // At non-integer scales, this produces smooth anti-aliased transitions
-    let filter_width = 1.0 / scale;
+fn smoothstep_blend(frac: f32, scale: f32) -> f32 {
+    // The filter width determines the transition zone size
+    // At higher scales, smaller transition zone = sharper pixels
+    // At lower scales, larger transition zone = smoother AA
+    let filter_width = (1.0 / scale).min(0.5);
 
-    // Use smoothstep to create a smooth transition around pixel boundaries
-    // The transition zone is proportional to the filter width
-    let half_width = filter_width * 0.5;
-
-    // For fractional positions near 0 or 1, blend with neighbors
-    if frac < half_width {
-        smoothstep(0.0, half_width, frac)
-    } else if frac > 1.0 - half_width {
-        smoothstep(1.0, 1.0 - half_width, frac)
-    } else {
-        1.0
-    }
+    // Use smoothstep to create smooth transition from 0 to 1
+    // The transition zone is centered at 0.5
+    smoothstep(filter_width, 1.0 - filter_width, frac)
 }
 
 /// Bilinear interpolation between four colors.
@@ -194,6 +185,10 @@ impl PixelArtUpscaler {
     }
 
     /// Sample a single pixel using pseudo-bandlimited filtering.
+    ///
+    /// This implements a simplified version of the pseudo-bandlimited algorithm:
+    /// - At integer scales, pixels are sharp (nearest neighbor behavior)
+    /// - At non-integer scales, smooth anti-aliased transitions occur at pixel boundaries
     fn sample_pixel(&self, src: &[RgbColor], dst_x: u32, dst_y: u32) -> RgbColor {
         // Map destination coordinates to source coordinates
         let src_x_f = (dst_x as f32 + 0.5) / self.scale_x - 0.5;
@@ -206,9 +201,12 @@ impl PixelArtUpscaler {
         let frac_x = src_x_f - src_x0 as f32;
         let frac_y = src_y_f - src_y0 as f32;
 
-        // Compute bandlimited weights
-        let wx = compute_bandlimited_weight(frac_x, self.scale_x);
-        let wy = compute_bandlimited_weight(frac_y, self.scale_y);
+        // For pseudo-bandlimited filtering:
+        // The blend weight is modified based on the scale factor
+        // At high scales (integer scales), blend sharply at pixel centers
+        // At low scales (non-integer), blend smoothly across boundaries
+        let blend_x = smoothstep_blend(frac_x, self.scale_x);
+        let blend_y = smoothstep_blend(frac_y, self.scale_y);
 
         // Get the four neighboring pixels
         let c00 = self.get_pixel_clamped(src, src_x0, src_y0);
@@ -216,8 +214,8 @@ impl PixelArtUpscaler {
         let c01 = self.get_pixel_clamped(src, src_x0, src_y0 + 1);
         let c11 = self.get_pixel_clamped(src, src_x0 + 1, src_y0 + 1);
 
-        // Blend using the bandlimited weights
-        bilinear_blend(c00, c10, c01, c11, wx * frac_x, wy * frac_y)
+        // Blend using the pseudo-bandlimited weights
+        bilinear_blend(c00, c10, c01, c11, blend_x, blend_y)
     }
 
     /// Get a pixel from the source buffer with clamping.

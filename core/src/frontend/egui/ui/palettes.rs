@@ -1,10 +1,10 @@
 use crossbeam_channel::Sender;
 
-use crate::emulation::messages::{EmulatorFetchable, FrontendMessage, RgbColor, rgb_to_argb};
+use crate::emulation::messages::{EmulatorFetchable, FrontendMessage, RgbColor};
 use crate::emulation::ppu::PALETTE_RAM_START_ADDRESS;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
-use crate::frontend::egui::ui::widgets::{PainterGridConfig, color_cell, color_cell_rgb};
+use crate::frontend::egui::ui::widgets::{PainterGridConfig, color_cell_rgb};
 use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
 use crate::frontend::util::{
     AsU32, FileType, FromU32, Hashable, ToBytes, spawn_palette_picker, spawn_save_dialog,
@@ -40,7 +40,7 @@ pub fn render_palettes(
                 let rgb_color = config.view_config.palette_rgb_data.colors[0][*color as usize];
                 let rect = grid_config.cell_rect(parent.min, j);
                 let response =
-                    color_cell(ui, rect, rgb_color, egui::Sense::all(), ("palette", i, j));
+                    color_cell_rgb(ui, rect, rgb_color, egui::Sense::all(), ("palette", i, j));
 
                 let address = PALETTE_RAM_START_ADDRESS as usize | (j + (i * 4));
                 let mut new_color = *color;
@@ -62,8 +62,8 @@ pub fn render_palettes(
                     ui.label(format!("Global palette index: ${color}"));
                     ui.label(format!("Address: ${:0X}", address));
                     ui.label(format!(
-                        "Palette rgb mapping: #{:06X}",
-                        rgb_color & 0x00FFFFFF
+                        "Palette RGB mapping: #{:02X}{:02X}{:02X}",
+                        rgb_color.0, rgb_color.1, rgb_color.2
                     ));
                 });
             }

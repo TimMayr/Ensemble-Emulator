@@ -3,7 +3,7 @@
 //! This module contains common widget patterns that are used across
 //! multiple UI components to reduce code duplication.
 
-use crate::emulation::messages::{RgbColor, rgb_to_argb};
+use crate::emulation::messages::RgbColor;
 use crate::frontend::util::FromU32;
 
 /// Draw a colored cell with hover highlighting using RgbColor.

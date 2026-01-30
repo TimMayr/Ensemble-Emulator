@@ -4,7 +4,7 @@ use egui::{ColorImage, Context, TextureHandle, TextureOptions};
 
 use crate::emulation::messages::{
     NametableData, PALETTE_COUNT, PaletteData, RgbColor, RgbPalette, TILE_COUNT,
-    TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData, rgb_to_argb,
+    TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData,
 };
 use crate::emulation::ppu::TILE_SIZE;
 
