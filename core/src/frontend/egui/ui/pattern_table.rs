@@ -2,17 +2,17 @@ use crossbeam_channel::Sender;
 use eframe::epaint::TextureHandle;
 use egui::Ui;
 
-use crate::emulation::messages::{EmulatorFetchable, FrontendMessage, TileData};
+use crate::emulation::messages::{EmulatorFetchable, FrontendMessage, RgbColor, TileData};
 use crate::frontend::egui::config::AppConfig;
-use crate::frontend::egui::ui::widgets::{PainterGridConfig, image_cell};
-use crate::frontend::util::{FromU32, color_radio};
+use crate::frontend::egui::ui::widgets::{image_cell, PainterGridConfig};
+use crate::frontend::util::color_radio;
 
 /// Draw a pattern table (left or right) in the UI
 pub fn draw_pattern_table(
     ui: &mut Ui,
     width: f32,
     emu_textures: &[TextureHandle],
-    palette: [u32; 4],
+    palette: [RgbColor; 4],
     pattern_data: &[TileData],
     to_emu: &Sender<FrontendMessage>,
     config: &mut AppConfig,
@@ -50,25 +50,25 @@ pub fn draw_pattern_table(
                         ui,
                         &mut config.user_config.pattern_edit_color,
                         0,
-                        egui::Color32::from_u32(palette[0]),
+                        egui::Color32::from_rgb(palette[0].0, palette[0].1, palette[0].2),
                     );
                     color_radio(
                         ui,
                         &mut config.user_config.pattern_edit_color,
                         1,
-                        egui::Color32::from_u32(palette[1]),
+                        egui::Color32::from_rgb(palette[1].0, palette[1].1, palette[1].2),
                     );
                     color_radio(
                         ui,
                         &mut config.user_config.pattern_edit_color,
                         2,
-                        egui::Color32::from_u32(palette[2]),
+                        egui::Color32::from_rgb(palette[2].0, palette[2].1, palette[2].2),
                     );
                     color_radio(
                         ui,
                         &mut config.user_config.pattern_edit_color,
                         3,
-                        egui::Color32::from_u32(palette[3]),
+                        egui::Color32::from_rgb(palette[3].0, palette[3].1, palette[3].2),
                     );
                 });
 
@@ -91,7 +91,11 @@ pub fn draw_pattern_table(
                         egui::Sense::click_and_drag(),
                     );
 
-                    painter.rect_filled(pixel_rect, 0.0, egui::Color32::from_u32(color));
+                    painter.rect_filled(
+                        pixel_rect,
+                        0.0,
+                        egui::Color32::from_rgb(color.0, color.1, color.2),
+                    );
 
                     // Support both click and drag for editing pixels
                     // Check if clicked OR if pointer is within this pixel's rect while primary button is down
