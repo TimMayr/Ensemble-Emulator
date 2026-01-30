@@ -4,6 +4,11 @@
 //! described by Hans-Kristian Arntzen (themaister) for smooth upscaling of
 //! pixel art without traditional bilinear blurring.
 //!
+//! # Performance
+//!
+//! This module uses rayon for parallel processing. Upscaling is performed
+//! in parallel rows for optimal performance on multi-core systems.
+//!
 //! # Algorithm Overview
 //!
 //! The algorithm works by:
@@ -32,6 +37,8 @@
 //!
 //! Based on: "Pseudo-bandlimited pixel art filtering in 3D – a mathematical derivation"
 //! by Hans-Kristian Arntzen (themaister)
+
+use rayon::prelude::*;
 
 use crate::emulation::messages::RgbColor;
 
@@ -161,6 +168,9 @@ impl PixelArtUpscaler {
     ///
     /// Input is RgbColor pixel data as a flat array.
     /// Output is also RgbColor data with dimensions (dst_width, dst_height).
+    ///
+    /// This function uses parallel processing via rayon for optimal performance.
+    /// Each row is processed in parallel.
     pub fn upscale_rgb(&self, src: &[RgbColor]) -> Vec<RgbColor> {
         let expected_size = (self.src_width * self.src_height) as usize;
         if src.len() != expected_size {
@@ -171,17 +181,18 @@ impl PixelArtUpscaler {
             );
         }
 
-        let dst_size = (self.dst_width * self.dst_height) as usize;
-        let mut dst = Vec::with_capacity(dst_size);
+        // Process rows in parallel using rayon
+        let rows: Vec<Vec<RgbColor>> = (0..self.dst_height)
+            .into_par_iter()
+            .map(|dst_y| {
+                (0..self.dst_width)
+                    .map(|dst_x| self.sample_pixel(src, dst_x, dst_y))
+                    .collect()
+            })
+            .collect();
 
-        for dst_y in 0..self.dst_height {
-            for dst_x in 0..self.dst_width {
-                let pixel = self.sample_pixel(src, dst_x, dst_y);
-                dst.push(pixel);
-            }
-        }
-
-        dst
+        // Flatten the rows into a single vector
+        rows.into_iter().flatten().collect()
     }
 
     /// Upscale a frame from u32 ARGB format.

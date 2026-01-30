@@ -2477,6 +2477,7 @@ dependencies = [
  "egui_hotkey",
  "egui_tiles",
  "image",
+ "rayon",
  "rfd",
  "serde",
  "serde_json",

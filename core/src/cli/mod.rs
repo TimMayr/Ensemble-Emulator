@@ -193,8 +193,8 @@ pub use output::{
 };
 pub use upscale::{PixelArtUpscaler, VideoResolution};
 pub use video::{
-    VideoEncoder, VideoError, create_encoder, encode_frames, encode_frames_with_upscale,
-    is_ffmpeg_available,
+    StreamingVideoEncoder, VideoEncoder, VideoError, create_encoder, encode_frames,
+    encode_frames_with_upscale, is_ffmpeg_available,
 };
 
 // =============================================================================

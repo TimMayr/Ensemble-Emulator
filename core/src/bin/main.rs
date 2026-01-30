@@ -116,8 +116,17 @@ fn run_headless(args: &CliArgs) -> Result<(), String> {
     // Apply memory initialization (after power on, before execution)
     apply_memory_initialization(engine.emulator_mut(), args)?;
 
-    // Run emulation
-    let result = engine.run()?;
+    // Determine if we should use streaming video export
+    // Streaming mode: frames are written directly to encoder during execution
+    // This significantly reduces memory usage for long recordings
+    let use_streaming = args.video.video.is_some();
+
+    let result = if use_streaming {
+        run_with_streaming_video(&mut engine, args)?
+    } else {
+        // Standard buffered mode
+        engine.run()?
+    };
 
     // Print execution summary if verbose
     if args.verbose {
@@ -133,17 +142,129 @@ fn run_headless(args: &CliArgs) -> Result<(), String> {
     // Output memory dumps
     output_results(engine.emulator(), args)?;
 
-    // Save screenshot
-    save_screenshot(&engine.frames, args)?;
+    // Save screenshot (only if we have frames - in buffered mode)
+    if !use_streaming {
+        save_screenshot(&engine.frames, args)?;
+    }
 
-    // Save video
-    save_video(&engine.frames, args)?;
+    // Video was already saved in streaming mode, skip in buffered mode if already done
+    if !use_streaming {
+        save_video(&engine.frames, args)?;
+    }
 
     // Check for error stop reason
     match result.stop_reason {
         StopReason::Error(e) => Err(e),
         _ => Ok(()),
     }
+}
+
+/// Run emulation with streaming video export.
+///
+/// This mode writes frames directly to the encoder as they're generated,
+/// instead of buffering all frames in memory. This significantly reduces
+/// memory usage for long recordings.
+fn run_with_streaming_video(
+    engine: &mut ExecutionEngine,
+    args: &CliArgs,
+) -> Result<cli::ExecutionResult, String> {
+    let video_path = args.video.video.as_ref().unwrap();
+
+    // Check if format requires FFmpeg and warn if not available
+    if args.video.video_format == VideoFormat::Mp4 && !is_ffmpeg_available() {
+        return Err(
+            "MP4 export requires FFmpeg to be installed. \
+             Use --video-format png or --video-format ppm for self-contained export."
+                .to_string(),
+        );
+    }
+
+    // Parse video resolution
+    let resolution = VideoResolution::parse(&args.video.video_scale)
+        .map_err(|e| format!("Invalid video scale: {}", e))?;
+
+    // NES resolution
+    const NES_WIDTH: u32 = 256;
+    const NES_HEIGHT: u32 = 240;
+
+    let (dst_width, dst_height) = resolution.dimensions(NES_WIDTH, NES_HEIGHT);
+    let fps = args.video.video_fps;
+
+    // Print export info
+    if !args.quiet {
+        if resolution == VideoResolution::Native {
+            eprintln!(
+                "Exporting to {} as {:?} ({}x{}) [streaming mode]...",
+                video_path.display(),
+                args.video.video_format,
+                NES_WIDTH,
+                NES_HEIGHT
+            );
+        } else {
+            eprintln!(
+                "Exporting to {} as {:?} ({}x{} → {}x{}) [streaming mode with parallel upscaling]...",
+                video_path.display(),
+                args.video.video_format,
+                NES_WIDTH,
+                NES_HEIGHT,
+                dst_width,
+                dst_height
+            );
+        }
+    }
+
+    // Create streaming encoder
+    let mut encoder = cli::StreamingVideoEncoder::new(
+        args.video.video_format,
+        video_path,
+        NES_WIDTH,
+        NES_HEIGHT,
+        &resolution,
+        fps,
+    )
+    .map_err(|e| format!("Failed to create video encoder: {}", e))?;
+
+    // Run with streaming video export
+    let result = engine.run_with_video_encoder(&mut encoder)?;
+
+    // Finalize encoder
+    encoder
+        .finish()
+        .map_err(|e| format!("Failed to finalize video: {}", e))?;
+
+    if !args.quiet {
+        eprintln!("Exported {} frames successfully", encoder.frames_written());
+    }
+
+    // Handle screenshot in streaming mode (save last frame)
+    if args.screenshot.screenshot.is_some() {
+        let last_frame = engine.emulator().get_pixel_buffer();
+        save_single_screenshot(&last_frame, args)?;
+    }
+
+    Ok(result)
+}
+
+/// Save a single screenshot (used in streaming mode)
+fn save_single_screenshot(frame: &[RgbColor], args: &CliArgs) -> Result<(), String> {
+    if let Some(ref screenshot_path) = args.screenshot.screenshot {
+        const NES_WIDTH: u32 = 256;
+        const NES_HEIGHT: u32 = 240;
+
+        let img: image::RgbaImage =
+            image::ImageBuffer::from_fn(NES_WIDTH, NES_HEIGHT, |x, y| {
+                let (r, g, b) = frame[(y * NES_WIDTH + x) as usize];
+                image::Rgba([r, g, b, 255])
+            });
+
+        img.save(screenshot_path)
+            .map_err(|e| format!("Failed to save screenshot: {}", e))?;
+
+        if !args.quiet {
+            eprintln!("Screenshot saved to {}", screenshot_path.display());
+        }
+    }
+    Ok(())
 }
 
 /// Handle --rom-info flag

@@ -698,6 +698,106 @@ pub fn is_ffmpeg_available() -> bool {
 }
 
 // =============================================================================
+// Streaming Video Encoder
+// =============================================================================
+
+/// A streaming video encoder that handles upscaling and encoding in one step.
+///
+/// This encoder is designed for use during emulation - frames are written
+/// immediately as they are generated, without buffering all frames in memory.
+///
+/// # Performance
+///
+/// - Upscaling uses parallel processing via rayon
+/// - Frames are streamed directly to the encoder
+/// - Memory usage is O(1) per frame instead of O(n) for all frames
+pub struct StreamingVideoEncoder {
+    encoder: Box<dyn VideoEncoder>,
+    upscaler: Option<super::upscale::PixelArtUpscaler>,
+    src_width: u32,
+    src_height: u32,
+}
+
+impl StreamingVideoEncoder {
+    /// Create a new streaming encoder.
+    ///
+    /// # Arguments
+    ///
+    /// * `format` - Output video format
+    /// * `output_path` - Path to output file
+    /// * `src_width` - Source frame width (NES: 256)
+    /// * `src_height` - Source frame height (NES: 240)
+    /// * `resolution` - Target output resolution
+    /// * `fps` - Frame rate
+    pub fn new(
+        format: VideoFormat,
+        output_path: &Path,
+        src_width: u32,
+        src_height: u32,
+        resolution: &super::upscale::VideoResolution,
+        fps: f64,
+    ) -> Result<Self, VideoError> {
+        use super::upscale::{PixelArtUpscaler, VideoResolution};
+
+        let (dst_width, dst_height) = resolution.dimensions(src_width, src_height);
+
+        // Determine if upscaling is needed
+        let upscaler = if *resolution == VideoResolution::Native
+            || (dst_width == src_width && dst_height == src_height)
+        {
+            None
+        } else {
+            Some(PixelArtUpscaler::new(
+                src_width, src_height, dst_width, dst_height,
+            ))
+        };
+
+        let encoder = create_encoder(format, output_path, dst_width, dst_height, fps)?;
+
+        Ok(Self {
+            encoder,
+            upscaler,
+            src_width,
+            src_height,
+        })
+    }
+
+    /// Write a single frame, with upscaling if configured.
+    ///
+    /// This method handles upscaling (using parallel processing) and
+    /// immediately writes to the underlying encoder.
+    pub fn write_frame(&mut self, frame: &[RgbColor]) -> Result<(), VideoError> {
+        if let Some(ref upscaler) = self.upscaler {
+            // Upscale frame (uses rayon parallel processing internally)
+            let upscaled = upscaler.upscale_rgb(frame);
+            self.encoder.write_frame(&upscaled)
+        } else {
+            // Write frame directly without upscaling
+            self.encoder.write_frame(frame)
+        }
+    }
+
+    /// Finish encoding and finalize the output file.
+    pub fn finish(&mut self) -> Result<(), VideoError> { self.encoder.finish() }
+
+    /// Get the number of frames written so far.
+    pub fn frames_written(&self) -> u64 { self.encoder.frames_written() }
+
+    /// Get the source dimensions.
+    pub fn source_dimensions(&self) -> (u32, u32) { (self.src_width, self.src_height) }
+
+    /// Get the output dimensions (after upscaling).
+    pub fn output_dimensions(&self) -> (u32, u32) {
+        if let Some(ref upscaler) = self.upscaler {
+            (upscaler.dst_width, upscaler.dst_height)
+        } else {
+            (self.src_width, self.src_height)
+        }
+    }
+
+    /// Check if upscaling is enabled.
+    pub fn is_upscaling(&self) -> bool { self.upscaler.is_some() }
+}
 // Tests
 // =============================================================================
 

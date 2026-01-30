@@ -413,6 +413,15 @@ impl SavestateConfig {
 ///
 /// This struct manages the emulator lifecycle and provides a clean API
 /// for running emulation with various configurations.
+///
+/// # Video Export Modes
+///
+/// - **Buffered mode** (default): All frames are stored in memory, then encoded at the end.
+///   Suitable for small exports or when you need access to all frames.
+///
+/// - **Streaming mode**: Frames are encoded immediately as they are generated.
+///   Use `run_with_video_encoder()` for this mode. Significantly reduces memory usage
+///   for long recordings.
 pub struct ExecutionEngine {
     /// The emulator instance
     pub emu: Nes,
@@ -420,9 +429,12 @@ pub struct ExecutionEngine {
     pub config: ExecutionConfig,
     /// Savestate configuration
     pub savestate_config: SavestateConfig,
+    /// Collected frames (used in buffered mode)
     pub frames: Vec<Vec<RgbColor>>,
     /// Track current frame count
     frame_count: u64,
+    /// Whether to collect frames (set to false for streaming mode)
+    collect_frames: bool,
 }
 
 impl ExecutionEngine {
@@ -434,6 +446,7 @@ impl ExecutionEngine {
             savestate_config: SavestateConfig::new(),
             frames: vec![],
             frame_count: 0,
+            collect_frames: true,
         }
     }
 
@@ -445,6 +458,7 @@ impl ExecutionEngine {
             savestate_config: SavestateConfig::new(),
             frames: vec![],
             frame_count: 0,
+            collect_frames: true,
         }
     }
 
@@ -541,7 +555,10 @@ impl ExecutionEngine {
                 }
             }
 
-            self.frames.push(self.emu.get_pixel_buffer());
+            // Only collect frames if in buffered mode
+            if self.collect_frames {
+                self.frames.push(self.emu.get_pixel_buffer());
+            }
 
             self.frame_count += 1;
             let cycles_run = self.emu.total_cycles - start_cycles;
@@ -568,6 +585,88 @@ impl ExecutionEngine {
             }
         }
     }
+
+    /// Run execution with streaming video export.
+    ///
+    /// This mode writes frames directly to the video encoder as they are generated,
+    /// instead of buffering all frames in memory. This significantly reduces memory
+    /// usage for long recordings.
+    ///
+    /// # Arguments
+    ///
+    /// * `encoder` - A streaming video encoder that will receive frames as they're generated
+    ///
+    /// # Performance
+    ///
+    /// - Uses parallel upscaling via rayon (if encoder has upscaling enabled)
+    /// - O(1) memory usage per frame instead of O(n) for all frames
+    /// - Frames are written immediately, reducing peak memory usage
+    pub fn run_with_video_encoder(
+        &mut self,
+        encoder: &mut super::video::StreamingVideoEncoder,
+    ) -> Result<ExecutionResult, String> {
+        // Disable frame collection for streaming mode
+        self.collect_frames = false;
+
+        // Set up trace if configured
+        if let Some(ref path) = self.config.trace_path {
+            self.emu.set_trace_log_path(Some(path.clone()));
+        }
+
+        let max_cycles = self.config.max_cycles();
+        let start_cycles = self.emu.total_cycles;
+
+        // Run frame by frame for stop condition checking
+        loop {
+            // Run one frame
+            match self.emu.step_frame() {
+                Ok(_) => {}
+                Err(e) => {
+                    return Ok(ExecutionResult {
+                        stop_reason: StopReason::Error(e),
+                        total_cycles: self.emu.total_cycles - start_cycles,
+                        total_frames: self.frame_count,
+                    });
+                }
+            }
+
+            // Write frame directly to encoder (with upscaling if configured)
+            let frame = self.emu.get_pixel_buffer();
+            encoder
+                .write_frame(&frame)
+                .map_err(|e| format!("Video encoding error: {}", e))?;
+
+            self.frame_count += 1;
+            let cycles_run = self.emu.total_cycles - start_cycles;
+
+            // Check stop conditions
+            if let Some(reason) =
+                self.config
+                    .check_conditions(&self.emu, cycles_run, self.frame_count)
+            {
+                return Ok(ExecutionResult {
+                    stop_reason: reason,
+                    total_cycles: cycles_run,
+                    total_frames: self.frame_count,
+                });
+            }
+
+            // Check max cycles
+            if self.emu.total_cycles >= max_cycles {
+                return Ok(ExecutionResult {
+                    stop_reason: StopReason::Completed,
+                    total_cycles: cycles_run,
+                    total_frames: self.frame_count,
+                });
+            }
+        }
+    }
+
+    /// Enable or disable frame collection.
+    ///
+    /// When disabled, frames are not stored in memory during execution.
+    /// Use this for streaming mode or when you don't need frame data.
+    pub fn set_collect_frames(&mut self, collect: bool) { self.collect_frames = collect; }
 
     /// Get reference to the emulator
     pub fn emulator(&self) -> &Nes { &self.emu }
