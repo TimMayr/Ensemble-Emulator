@@ -167,17 +167,11 @@ pub struct GpuUpscaler {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
     pipeline: wgpu::ComputePipeline,
-    bind_group_layout: wgpu::BindGroupLayout,
-    
+
     // Cached buffers (recreated if size changes)
-    src_width: u32,
-    src_height: u32,
     dst_width: u32,
     dst_height: u32,
-    effective_src_width: f32,
-    effective_src_height: f32,
     
-    params_buffer: wgpu::Buffer,
     src_buffer: wgpu::Buffer,
     dst_buffer: wgpu::Buffer,
     staging_buffer: wgpu::Buffer,
@@ -287,7 +281,7 @@ impl GpuUpscaler {
         
         let params_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Params Buffer"),
-            size: std::mem::size_of::<ShaderParams>() as u64,
+            size: size_of::<ShaderParams>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -349,14 +343,8 @@ impl GpuUpscaler {
             device,
             queue,
             pipeline,
-            bind_group_layout,
-            src_width,
-            src_height,
             dst_width,
             dst_height,
-            effective_src_width,
-            effective_src_height,
-            params_buffer,
             src_buffer,
             dst_buffer,
             staging_buffer,
@@ -392,8 +380,8 @@ impl GpuUpscaler {
             compute_pass.set_bind_group(0, &self.bind_group, &[]);
             
             // Dispatch enough workgroups to cover all pixels
-            let workgroup_x = (self.dst_width + 7) / 8;
-            let workgroup_y = (self.dst_height + 7) / 8;
+            let workgroup_x = self.dst_width.div_ceil(8);
+            let workgroup_y = self.dst_height.div_ceil(8);
             compute_pass.dispatch_workgroups(workgroup_x, workgroup_y, 1);
         }
         

@@ -119,7 +119,7 @@ fn run_headless(args: &CliArgs) -> Result<(), String> {
     // Determine if we should use streaming video export
     // Streaming mode: frames are written directly to encoder during execution
     // This significantly reduces memory usage for long recordings
-    let use_streaming = args.video.video.is_some();
+    let use_streaming = args.video.video_path.is_some();
 
     let result = if use_streaming {
         run_with_streaming_video(&mut engine, args)?
@@ -168,7 +168,7 @@ fn run_with_streaming_video(
     engine: &mut ExecutionEngine,
     args: &CliArgs,
 ) -> Result<cli::ExecutionResult, String> {
-    let video_path = args.video.video.as_ref().unwrap();
+    let video_path = args.video.video_path.as_ref().unwrap();
 
     // Check if format requires FFmpeg and warn if not available
     if args.video.video_format == VideoFormat::Mp4 && !is_ffmpeg_available() {
@@ -180,7 +180,7 @@ fn run_with_streaming_video(
     }
 
     // Parse video resolution
-    let resolution = VideoResolution::parse(&args.video.video_scale)
+    let resolution = VideoResolution::parse(&args.video.video_scale.as_ref().unwrap())
         .map_err(|e| format!("Invalid video scale: {}", e))?;
 
     // NES resolution
@@ -238,7 +238,7 @@ fn run_with_streaming_video(
     }
 
     // Handle screenshot in streaming mode (save last frame)
-    if args.screenshot.screenshot.is_some() {
+    if args.video.screenshot.is_some() {
         let last_frame = engine.emulator().get_pixel_buffer();
         save_single_screenshot(&last_frame, args)?;
     }
@@ -248,7 +248,7 @@ fn run_with_streaming_video(
 
 /// Save a single screenshot (used in streaming mode)
 fn save_single_screenshot(frame: &[RgbColor], args: &CliArgs) -> Result<(), String> {
-    if let Some(ref screenshot_path) = args.screenshot.screenshot {
+    if let Some(ref screenshot_path) = args.video.screenshot {
         const NES_WIDTH: u32 = 256;
         const NES_HEIGHT: u32 = 240;
 

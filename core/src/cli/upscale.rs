@@ -7,7 +7,7 @@
 //! # Performance
 //!
 //! This module uses rayon for parallel processing. Upscaling is performed
-//! in parallel rows for optimal performance on multi-core systems.
+//! in parallel rows for optimal performance on multicore systems.
 //!
 //! # Algorithm Overview
 //!
@@ -17,13 +17,13 @@
 //! 3. Blending between neighboring pixels based on the smoothed fractional position
 //!
 //! This produces crisp pixel art at integer scales while providing smooth
-//! anti-aliased edges at non-integer scales.
+//! anti-aliased edges at noninteger scales.
 //!
 //! # NES Pixel Aspect Ratio (PAR)
 //!
 //! The NES outputs 256x240 pixels, but on CRT TVs these pixels weren't square.
 //! The pixel aspect ratio (PAR) was approximately 8:7, meaning pixels were wider
-//! than tall. This module applies PAR correction for non-integer scale outputs
+//! than tall. This module applies PAR correction for noninteger scale outputs
 //! to ensure the correct display aspect ratio.
 //!
 //! - Storage Aspect Ratio (SAR): 256:240 = 16:15
@@ -65,7 +65,7 @@ fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
 }
 
 // Taylor series normalization constant
-const TAYLOR_NORMALIZATION: f32 = 1.0 / 1.00452485553;
+const TAYLOR_NORMALIZATION: f32 = 1.0 / 1.004_524_8;
 const PI_HALF: f32 = std::f32::consts::FRAC_PI_2;
 
 /// Taylor series sin approximation for values in [-PI, PI].
@@ -154,10 +154,6 @@ pub struct PixelArtUpscaler {
     pub dst_width: u32,
     /// Destination height
     pub dst_height: u32,
-    /// Horizontal scale factor
-    scale_x: f32,
-    /// Vertical scale factor
-    scale_y: f32,
 }
 
 impl PixelArtUpscaler {
@@ -168,8 +164,6 @@ impl PixelArtUpscaler {
             src_height,
             dst_width,
             dst_height,
-            scale_x: dst_width as f32 / src_width as f32,
-            scale_y: dst_height as f32 / src_height as f32,
         }
     }
 
@@ -483,7 +477,7 @@ impl VideoResolution {
             // Non-integer scales: use PAR-corrected effective width
             _ => {
                 // NES PAR is 8:7, so effective width = src_width * 8/7
-                let effective_width = (src_width as f64 * NES_PAR).round() as u32;
+                let effective_width = (src_width as f32  * NES_PAR).round() as u32;
                 (effective_width, src_height)
             }
         }
