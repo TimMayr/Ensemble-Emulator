@@ -161,8 +161,16 @@ pub fn create_encoder(
     fps: u32,
 ) -> Result<Box<dyn VideoEncoder>, VideoError> {
     match format {
-        VideoFormat::Png => Ok(Box::new(PngSequenceEncoder::new(output_path, width, height)?)),
-        VideoFormat::Ppm => Ok(Box::new(PpmSequenceEncoder::new(output_path, width, height)?)),
+        VideoFormat::Png => Ok(Box::new(PngSequenceEncoder::new(
+            output_path,
+            width,
+            height,
+        )?)),
+        VideoFormat::Ppm => Ok(Box::new(PpmSequenceEncoder::new(
+            output_path,
+            width,
+            height,
+        )?)),
         VideoFormat::Mp4 => Ok(Box::new(FfmpegMp4Encoder::new(
             output_path,
             width,
@@ -191,14 +199,13 @@ pub struct PngSequenceEncoder {
 
 impl PngSequenceEncoder {
     /// Create a new PNG sequence encoder.
-    ///
     /// Creates the output directory if it doesn't exist.
     pub fn new(output_path: &Path, width: u32, height: u32) -> Result<Self, VideoError> {
         // Create output directory if needed
-        if let Some(parent) = output_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent)?;
-            }
+        if let Some(parent) = output_path.parent()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent)?;
         }
 
         Ok(Self {
@@ -277,10 +284,10 @@ pub struct PpmSequenceEncoder {
 impl PpmSequenceEncoder {
     /// Create a new PPM sequence encoder.
     pub fn new(output_path: &Path, width: u32, height: u32) -> Result<Self, VideoError> {
-        if let Some(parent) = output_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent)?;
-            }
+        if let Some(parent) = output_path.parent()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent)?;
         }
 
         Ok(Self {
@@ -376,36 +383,36 @@ impl FfmpegMp4Encoder {
         }
 
         // Create output directory if needed
-        if let Some(parent) = output_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent)?;
-            }
+        if let Some(parent) = output_path.parent()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent)?;
         }
 
         // Start ffmpeg process
         let mut child = Command::new("ffmpeg")
             .args([
-                "-y",                                              // Overwrite output
+                "-y", // Overwrite output
                 "-f",
-                "rawvideo",                                        // Input format
+                "rawvideo", // Input format
                 "-pixel_format",
-                "bgra",                                            // Input pixel format
+                "bgra", // Input pixel format
                 "-video_size",
-                &format!("{}x{}", width, height),                  // Frame size
+                &format!("{}x{}", width, height), // Frame size
                 "-framerate",
-                &format!("{}", fps),                               // Frame rate
+                &format!("{}", fps), // Frame rate
                 "-i",
-                "-",                                               // Read from stdin
+                "-", // Read from stdin
                 "-c:v",
-                "libx264",                                         // H.264 codec
+                "libx264", // H.264 codec
                 "-preset",
-                "fast",                                            // Encoding speed
+                "fast", // Encoding speed
                 "-crf",
-                "18",                                              // Quality (0-51, lower = better)
+                "18", // Quality (0-51, lower = better)
                 "-pix_fmt",
-                "yuv420p",                                         // Output pixel format
+                "yuv420p", // Output pixel format
                 "-movflags",
-                "+faststart",                                      // Enable streaming
+                "+faststart", // Enable streaming
                 output_path.to_str().unwrap_or("output.mp4"),
             ])
             .stdin(Stdio::piped())
@@ -461,6 +468,7 @@ impl VideoEncoder for FfmpegMp4Encoder {
             })
             .collect();
 
+        //TODO: Works for first frame, then Emulator finished with error: "I/O error: Broken pipe (os error 32)"
         if let Some(ref mut stdin) = self.stdin {
             stdin.write_all(&bytes)?;
         }
@@ -608,21 +616,6 @@ pub fn is_ffmpeg_available() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
-
-    fn test_frame() -> Vec<u32> {
-        // Create a simple 256x240 test frame with a gradient
-        let mut frame = vec![0u32; 256 * 240];
-        for y in 0..240 {
-            for x in 0..256 {
-                let r = x as u8;
-                let g = y as u8;
-                let b = ((x + y) / 2) as u8;
-                frame[y * 256 + x] = 0xFF000000 | ((r as u32) << 16) | ((g as u32) << 8) | (b as u32);
-            }
-        }
-        frame
-    }
 
     #[test]
     fn test_video_error_display() {
@@ -639,8 +632,7 @@ mod tests {
 
     #[test]
     fn test_png_encoder_frame_path() {
-        let encoder =
-            PngSequenceEncoder::new(Path::new("/tmp/test/frames"), 256, 240).unwrap();
+        let encoder = PngSequenceEncoder::new(Path::new("/tmp/test/frames"), 256, 240).unwrap();
         let path = encoder.frame_path(0);
         assert!(path.to_string_lossy().contains("frames_000000.png"));
 
@@ -650,8 +642,7 @@ mod tests {
 
     #[test]
     fn test_ppm_encoder_frame_path() {
-        let encoder =
-            PpmSequenceEncoder::new(Path::new("/tmp/test/output"), 256, 240).unwrap();
+        let encoder = PpmSequenceEncoder::new(Path::new("/tmp/test/output"), 256, 240).unwrap();
         let path = encoder.frame_path(123);
         assert!(path.to_string_lossy().contains("output_000123.ppm"));
     }
@@ -666,13 +657,16 @@ mod tests {
     fn test_invalid_frame_dimensions() {
         let mut encoder =
             PpmSequenceEncoder::new(Path::new("/tmp/test_invalid"), 256, 240).unwrap();
-        
+
         // Wrong size frame
         let bad_frame = vec![0u32; 100]; // Much too small
         let result = encoder.write_frame(&bad_frame);
-        
+
         assert!(result.is_err());
-        if let Err(VideoError::InvalidDimensions { expected, .. }) = result {
+        if let Err(VideoError::InvalidDimensions {
+            expected, ..
+        }) = result
+        {
             assert_eq!(expected, (256, 240));
         } else {
             panic!("Expected InvalidDimensions error");

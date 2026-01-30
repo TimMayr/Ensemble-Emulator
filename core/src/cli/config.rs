@@ -122,7 +122,7 @@ pub struct PaletteConfig {
 pub struct VideoConfig {
     pub screenshot: Option<PathBuf>,
     pub screenshot_on: Option<String>,
-    pub video: Option<PathBuf>,
+    pub video_path: Option<PathBuf>,
     pub video_format: Option<String>,
     pub video_fps: Option<u32>,
     pub export_nametables: Option<PathBuf>,
@@ -280,7 +280,7 @@ impl ConfigFile {
             cli.video.screenshot_on = self.video.screenshot_on.clone();
         }
         if cli.video.video.is_none() {
-            cli.video.video = self.video.video.clone();
+            cli.video.video = self.video.video_path.clone();
         }
         if let Some(ref fmt) = self.video.video_format {
             // Only override if CLI is at default

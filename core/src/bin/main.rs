@@ -207,7 +207,6 @@ fn save_video(frames: &[Vec<u32>], args: &CliArgs) -> Result<(), String> {
         const NES_HEIGHT: u32 = 240;
 
         let fps = args.video.video_fps;
-
         if !args.quiet {
             eprintln!(
                 "Exporting {} frames to {} as {:?}...",
