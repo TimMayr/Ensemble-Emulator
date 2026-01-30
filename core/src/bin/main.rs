@@ -8,11 +8,8 @@
 use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
-use nes_core::cli::{
-    self, CliArgs, ExecutionConfig, ExecutionEngine, MemoryDump, MemoryInit, MemoryInitConfig,
-    MemoryType, OutputWriter, SavestateConfig, StopReason, VideoFormat, VideoResolution,
-    apply_memory_init, apply_memory_init_config, encode_frames, is_ffmpeg_available,
-};
+
+use nes_core::cli::{self, apply_memory_init, apply_memory_init_config, is_ffmpeg_available, CliArgs, ExecutionConfig, ExecutionEngine, MemoryDump, MemoryInit, MemoryInitConfig, MemoryType, OutputWriter, SavestateConfig, StopReason, VideoFormat, VideoResolution};
 use nes_core::emulation::messages::RgbColor;
 use nes_core::emulation::nes::Nes;
 use nes_core::emulation::rom::RomFile;
@@ -135,10 +132,10 @@ fn run_headless(args: &CliArgs) -> Result<(), String> {
 
     // Output memory dumps
     output_results(engine.emulator(), args)?;
-    
+
     // Save screenshot
     save_screenshot(&engine.frames, args)?;
-    
+
     // Save video
     save_video(&engine.frames, args)?;
 
@@ -200,11 +197,9 @@ fn save_video(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String> {
     if let Some(ref video_path) = args.video.video {
         // Check if format requires FFmpeg and warn if not available
         if args.video.video_format == VideoFormat::Mp4 && !is_ffmpeg_available() {
-            return Err(
-                "MP4 export requires FFmpeg to be installed. \
+            return Err("MP4 export requires FFmpeg to be installed. \
                  Use --video-format png or --video-format ppm for self-contained export."
-                    .to_string(),
-            );
+                .to_string());
         }
 
         if frames.is_empty() {
@@ -247,7 +242,7 @@ fn save_video(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String> {
             }
         }
 
-        let frames_written = nes_core::cli::video::encode_frames_with_upscale(
+        let frames_written = cli::video::encode_frames_with_upscale(
             frames,
             args.video.video_format,
             video_path,
@@ -424,10 +419,7 @@ fn save_screenshot(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), Strin
         }
 
         // Convert RgbColor to RGB bytes for PNG
-        let rgb_data: Vec<u8> = frame
-            .iter()
-            .flat_map(|&(r, g, b)| [r, g, b])
-            .collect();
+        let rgb_data: Vec<u8> = frame.iter().flat_map(|&(r, g, b)| [r, g, b]).collect();
 
         // Create PNG using image crate
         let img: image::ImageBuffer<image::Rgb<u8>, Vec<u8>> =

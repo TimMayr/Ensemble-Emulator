@@ -52,25 +52,6 @@ impl EmuTextures {
         }
     }
 
-    /// Convert u32 ARGB pixel data to egui ColorImage (RGBA)
-    /// Kept for backward compatibility with tile rendering
-    pub fn u32_to_color_image(data: &[u32], width: usize, height: usize) -> ColorImage {
-        let mut pixels = Vec::with_capacity(width * height);
-        for &pixel in data {
-            // Input is ARGB (0xAARRGGBB), we need RGBA for egui
-            let a = ((pixel >> 24) & 0xFF) as u8;
-            let r = ((pixel >> 16) & 0xFF) as u8;
-            let g = ((pixel >> 8) & 0xFF) as u8;
-            let b = (pixel & 0xFF) as u8;
-            pixels.push(egui::Color32::from_rgba_unmultiplied(r, g, b, a));
-        }
-        ColorImage {
-            size: [width, height],
-            source_size: Default::default(),
-            pixels,
-        }
-    }
-
     /// Update the main emulator display texture
     pub fn update_emulator_texture(&mut self, ctx: &Context) {
         if let Some(ref frame) = self.current_frame {

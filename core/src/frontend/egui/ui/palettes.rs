@@ -1,13 +1,13 @@
 use crossbeam_channel::Sender;
 
-use crate::emulation::messages::{EmulatorFetchable, FrontendMessage, RgbColor};
+use crate::emulation::messages::{EmulatorFetchable, FrontendMessage};
 use crate::emulation::ppu::PALETTE_RAM_START_ADDRESS;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::ui::widgets::{PainterGridConfig, color_cell_rgb};
 use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
 use crate::frontend::util::{
-    AsU32, FileType, FromU32, Hashable, ToBytes, spawn_palette_picker, spawn_save_dialog,
+    FileType, Hashable, ToBytes, spawn_palette_picker, spawn_save_dialog,
 };
 
 pub fn render_palettes(
