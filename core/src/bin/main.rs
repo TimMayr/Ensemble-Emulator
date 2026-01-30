@@ -644,9 +644,10 @@ fn export_debug_visualizations(emu: &Nes, args: &CliArgs) -> Result<(), String> 
     // Note: Video exports for debug visualizations would require additional
     // infrastructure similar to the main video export. For now, only screenshots
     // are implemented. Video exports can be added in a future enhancement.
-    if args.video.export_pattern_tables_video.is_some()
-        || args.video.export_nametables_video.is_some()
-        || args.video.export_sprites_video.is_some()
+    if !args.quiet
+        && (args.video.export_pattern_tables_video.is_some()
+            || args.video.export_nametables_video.is_some()
+            || args.video.export_sprites_video.is_some())
     {
         eprintln!(
             "Warning: Debug viewer video exports are not yet implemented. \

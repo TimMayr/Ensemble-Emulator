@@ -375,29 +375,51 @@ pub fn render_sprites(emu: &Nes) -> Vec<RgbColor> {
         let x_offset = grid_col * TILE_SIZE;
         let y_offset = grid_row * sprite_height;
 
-        // Render the sprite tile
-        render_sprite_tile(
-            &mut pixels,
-            tile,
-            palette,
-            &rgb_palette,
-            x_offset,
-            y_offset,
-            SPRITE_VIEWER_WIDTH,
-            flip_h,
-            flip_v,
-        );
-
-        // For 8×16 sprites, render the second tile
+        // For 8×16 sprites with vertical flip, tiles are swapped
         if sprite_height == 16 && tile_idx + 1 < TILE_COUNT {
             let tile2 = &tiles[tile_idx + 1];
+
+            // When flip_v is true for 8×16 sprites, draw tiles in swapped order
+            let (top_tile, bottom_tile) = if flip_v {
+                (tile2, tile)
+            } else {
+                (tile, tile2)
+            };
+
+            // Render top tile
             render_sprite_tile(
                 &mut pixels,
-                tile2,
+                top_tile,
+                palette,
+                &rgb_palette,
+                x_offset,
+                y_offset,
+                SPRITE_VIEWER_WIDTH,
+                flip_h,
+                flip_v,
+            );
+
+            // Render bottom tile
+            render_sprite_tile(
+                &mut pixels,
+                bottom_tile,
                 palette,
                 &rgb_palette,
                 x_offset,
                 y_offset + TILE_SIZE,
+                SPRITE_VIEWER_WIDTH,
+                flip_h,
+                flip_v,
+            );
+        } else {
+            // Regular 8×8 sprite
+            render_sprite_tile(
+                &mut pixels,
+                tile,
+                palette,
+                &rgb_palette,
+                x_offset,
+                y_offset,
                 SPRITE_VIEWER_WIDTH,
                 flip_h,
                 flip_v,
@@ -520,5 +542,101 @@ mod tests {
         let (w, h) = nametables_dimensions();
         assert_eq!(w, 512); // 256 * 2
         assert_eq!(h, 480); // 240 * 2
+    }
+
+    #[test]
+    fn test_sprite_viewer_dimensions() {
+        // Sprite viewer is 8 sprites per row × 8 rows
+        // For 8x8 sprites: 64×64 pixels
+        // For 8x16 sprites: 64×128 pixels
+        assert_eq!(SPRITE_VIEWER_WIDTH, 64);
+        assert_eq!(SPRITE_VIEWER_ROWS * TILE_SIZE, 64);
+        assert_eq!(SPRITE_VIEWER_HEIGHT_8X16, 128);
+    }
+
+    #[test]
+    fn test_render_sprite_tile_no_flip() {
+        // Create a simple test tile pattern
+        let tile = TileData {
+            address: 0,
+            plane_0: 0xFF00_FF00_FF00_FF00, // Alternating rows
+            plane_1: 0x0000_0000_0000_0000,
+        };
+        let palette = [0, 1, 2, 3];
+        // Create palette where color index i maps to (i*4, i*4, i*4)
+        let mut colors = [[(0u8, 0u8, 0u8); 64]; 8];
+        for i in 0..64 {
+            colors[0][i] = ((i * 4) as u8, (i * 4) as u8, (i * 4) as u8);
+        }
+        let rgb_palette = RgbPalette { colors };
+
+        let mut pixels = vec![(0, 0, 0); TILE_SIZE * TILE_SIZE];
+        render_sprite_tile(
+            &mut pixels,
+            &tile,
+            &palette,
+            &rgb_palette,
+            0,
+            0,
+            TILE_SIZE,
+            false,
+            false,
+        );
+
+        // With plane_0 = 0xFF00... and plane_1 = 0, color indices are 0 or 1
+        // First row: all 1s, second row: all 0s, etc.
+        // Color index 1 maps to palette[1] = 1, which maps to RGB (4, 4, 4) in our test palette
+        assert_eq!(pixels[0], (4, 4, 4)); // Row 0 has plane_0 = FF (all 1s)
+        assert_eq!(pixels[8], (0, 0, 0)); // Row 1 has plane_0 = 00 (all 0s)
+    }
+
+    #[test]
+    fn test_render_sprite_tile_with_horizontal_flip() {
+        let tile = TileData {
+            address: 0,
+            plane_0: 0x8000_0000_0000_0000, // Only top-left pixel set
+            plane_1: 0x0000_0000_0000_0000,
+        };
+        let palette = [0, 1, 2, 3];
+        // Create palette where color index i maps to (i*10, 0, 0)
+        let mut colors = [[(0u8, 0u8, 0u8); 64]; 8];
+        for i in 0..64 {
+            colors[0][i] = ((i * 10) as u8, 0, 0);
+        }
+        let rgb_palette = RgbPalette { colors };
+
+        let mut pixels_no_flip = vec![(0, 0, 0); TILE_SIZE * TILE_SIZE];
+        render_sprite_tile(
+            &mut pixels_no_flip,
+            &tile,
+            &palette,
+            &rgb_palette,
+            0,
+            0,
+            TILE_SIZE,
+            false,
+            false,
+        );
+
+        let mut pixels_flip_h = vec![(0, 0, 0); TILE_SIZE * TILE_SIZE];
+        render_sprite_tile(
+            &mut pixels_flip_h,
+            &tile,
+            &palette,
+            &rgb_palette,
+            0,
+            0,
+            TILE_SIZE,
+            true,
+            false,
+        );
+
+        // Without flip: top-left (0,0) should have the pixel
+        assert_eq!(pixels_no_flip[0], (10, 0, 0));
+        assert_eq!(pixels_no_flip[7], (0, 0, 0));
+
+        // With horizontal flip: top-right (7,0) should have the pixel
+        assert_eq!(pixels_flip_h[7], (10, 0, 0));
+        assert_eq!(pixels_flip_h[0], (0, 0, 0));
     }
 }
