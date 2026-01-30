@@ -173,6 +173,7 @@ pub mod args;
 pub mod config;
 pub mod error;
 pub mod execution;
+pub mod memory_init;
 pub mod output;
 pub mod video;
 
@@ -184,6 +185,7 @@ pub use execution::{
     ExecutionConfig, ExecutionEngine, ExecutionResult, SavestateConfig, SavestateDestination,
     SavestateSource, StopCondition, StopReason,
 };
+pub use memory_init::{MemoryInit, MemoryInitConfig, apply_memory_init, apply_memory_init_config};
 pub use output::{
     InterpretedNametable, InterpretedNametables, InterpretedOam, MemoryDump, MemoryFormatter,
     MemoryType, OamSprite, OutputWriter,

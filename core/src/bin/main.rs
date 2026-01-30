@@ -9,8 +9,9 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
 use nes_core::cli::{
-    self, CliArgs, ExecutionConfig, ExecutionEngine, MemoryDump, MemoryType, OutputWriter,
-    SavestateConfig, StopReason, VideoFormat, encode_frames, is_ffmpeg_available,
+    self, CliArgs, ExecutionConfig, ExecutionEngine, MemoryDump, MemoryInit, MemoryInitConfig,
+    MemoryType, OutputWriter, SavestateConfig, StopReason, VideoFormat,
+    apply_memory_init, apply_memory_init_config, encode_frames, is_ffmpeg_available,
 };
 use nes_core::emulation::nes::Nes;
 use nes_core::emulation::rom::RomFile;
@@ -114,6 +115,9 @@ fn run_headless(args: &CliArgs) -> Result<(), String> {
         engine.reset();
     }
 
+    // Apply memory initialization (after power on, before execution)
+    apply_memory_initialization(engine.emulator_mut(), args)?;
+
     // Run emulation
     let result = engine.run()?;
 
@@ -130,6 +134,11 @@ fn run_headless(args: &CliArgs) -> Result<(), String> {
 
     // Output memory dumps
     output_results(engine.emulator(), args)?;
+    
+    // Save screenshot
+    save_screenshot(&engine.frames, args)?;
+    
+    // Save video
     save_video(&engine.frames, args)?;
 
     // Check for error stop reason
@@ -304,6 +313,116 @@ fn print_rom_info(rom_path: &Path) -> Result<(), String> {
             .map(|b| format!("{:02x}", b))
             .collect::<String>()
     );
+
+    Ok(())
+}
+
+// =============================================================================
+// Memory Initialization
+// =============================================================================
+
+/// Apply memory initialization based on CLI args
+fn apply_memory_initialization(emu: &mut Nes, args: &CliArgs) -> Result<(), String> {
+    // Parse CPU memory init commands
+    let cpu_inits: Vec<MemoryInit> = args
+        .memory
+        .init_cpu
+        .iter()
+        .map(|s| MemoryInit::parse(s))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Parse PPU memory init commands
+    let ppu_inits: Vec<MemoryInit> = args
+        .memory
+        .init_ppu
+        .iter()
+        .map(|s| MemoryInit::parse(s))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Parse OAM memory init commands
+    let oam_inits: Vec<MemoryInit> = args
+        .memory
+        .init_oam
+        .iter()
+        .map(|s| MemoryInit::parse(s))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Apply direct init commands
+    if !cpu_inits.is_empty() || !ppu_inits.is_empty() || !oam_inits.is_empty() {
+        apply_memory_init(emu, &cpu_inits, &ppu_inits, &oam_inits);
+        if args.verbose {
+            eprintln!(
+                "Applied memory init: {} CPU, {} PPU, {} OAM operations",
+                cpu_inits.len(),
+                ppu_inits.len(),
+                oam_inits.len()
+            );
+        }
+    }
+
+    // Load init config from file if specified
+    if let Some(ref init_file) = args.memory.init_file {
+        let config = MemoryInitConfig::load_from_file(init_file)?;
+        apply_memory_init_config(emu, &config);
+        if args.verbose {
+            eprintln!(
+                "Applied memory init from file: {} CPU, {} PPU, {} OAM addresses",
+                config.cpu.len(),
+                config.ppu.len(),
+                config.oam.len()
+            );
+        }
+    }
+
+    Ok(())
+}
+
+// =============================================================================
+// Screenshot Export
+// =============================================================================
+
+/// Save screenshot to file
+fn save_screenshot(frames: &[Vec<u32>], args: &CliArgs) -> Result<(), String> {
+    if let Some(ref screenshot_path) = args.video.screenshot {
+        if frames.is_empty() {
+            eprintln!("Warning: No frames to screenshot");
+            return Ok(());
+        }
+
+        // Use the last frame for screenshot
+        let frame = frames.last().unwrap();
+        
+        // NES resolution
+        const NES_WIDTH: u32 = 256;
+        const NES_HEIGHT: u32 = 240;
+
+        if !args.quiet {
+            eprintln!("Saving screenshot to {}...", screenshot_path.display());
+        }
+
+        // Convert ARGB to RGB for PNG
+        let mut rgb_data = Vec::with_capacity((NES_WIDTH * NES_HEIGHT * 3) as usize);
+        for &pixel in frame {
+            let r = ((pixel >> 16) & 0xFF) as u8;
+            let g = ((pixel >> 8) & 0xFF) as u8;
+            let b = (pixel & 0xFF) as u8;
+            rgb_data.push(r);
+            rgb_data.push(g);
+            rgb_data.push(b);
+        }
+
+        // Create PNG using image crate
+        let img: image::ImageBuffer<image::Rgb<u8>, Vec<u8>> =
+            image::ImageBuffer::from_raw(NES_WIDTH, NES_HEIGHT, rgb_data)
+                .ok_or_else(|| "Failed to create image buffer".to_string())?;
+
+        img.save(screenshot_path)
+            .map_err(|e| format!("Failed to save screenshot: {}", e))?;
+
+        if !args.quiet {
+            eprintln!("Screenshot saved successfully");
+        }
+    }
 
     Ok(())
 }
