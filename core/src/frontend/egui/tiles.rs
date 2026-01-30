@@ -85,12 +85,9 @@ impl Behavior<Pane> for TreeBehavior<'_> {
             Pane::Nametables => {
                 render_nametable(ui, self.emu_textures);
             }
-            Pane::Palettes => render_palettes(
-                ui,
-                self.config,
-                self.emu_textures,
-                self.async_sender,
-            ),
+            Pane::Palettes => {
+                render_palettes(ui, self.config, self.emu_textures, self.async_sender)
+            }
         }
         UiResponse::None
     }

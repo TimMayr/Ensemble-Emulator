@@ -4,7 +4,7 @@ use egui::Ui;
 
 use crate::emulation::messages::{RgbColor, TileData};
 use crate::frontend::egui::config::AppConfig;
-use crate::frontend::egui::ui::widgets::{image_cell, PainterGridConfig};
+use crate::frontend::egui::ui::widgets::{PainterGridConfig, image_cell};
 use crate::frontend::messages::AsyncFrontendMessage;
 use crate::frontend::util::color_radio;
 

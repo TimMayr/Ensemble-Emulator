@@ -3,12 +3,10 @@ use crossbeam_channel::Sender;
 use crate::emulation::ppu::PALETTE_RAM_START_ADDRESS;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
-use crate::frontend::egui::ui::widgets::{color_cell_rgb, PainterGridConfig};
+use crate::frontend::egui::ui::widgets::{PainterGridConfig, color_cell_rgb};
 use crate::frontend::messages::AsyncFrontendMessage;
 use crate::frontend::palettes::parse_palette_from_file;
-use crate::frontend::util::{
-    spawn_palette_picker, spawn_save_dialog,  FileType, Hashable, ToBytes,
-};
+use crate::frontend::util::{FileType, Hashable, ToBytes, spawn_palette_picker, spawn_save_dialog};
 
 pub fn render_palettes(
     ui: &mut egui::Ui,
