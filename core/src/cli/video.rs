@@ -102,15 +102,9 @@ impl VideoResolution {
         match self {
             VideoResolution::Native => (src_width, src_height),
             VideoResolution::IntegerScale(scale) => (src_width * scale, src_height * scale),
-            VideoResolution::Hd720 => {
-                fit_to_bounds(src_width, src_height, 1280, 720, NES_PAR)
-            }
-            VideoResolution::Hd1080 => {
-                fit_to_bounds(src_width, src_height, 1920, 1080, NES_PAR)
-            }
-            VideoResolution::Uhd4k => {
-                fit_to_bounds(src_width, src_height, 3840, 2160, NES_PAR)
-            }
+            VideoResolution::Hd720 => fit_to_bounds(src_width, src_height, 1280, 720, NES_PAR),
+            VideoResolution::Hd1080 => fit_to_bounds(src_width, src_height, 1920, 1080, NES_PAR),
+            VideoResolution::Uhd4k => fit_to_bounds(src_width, src_height, 3840, 2160, NES_PAR),
             VideoResolution::Custom(w, h) => (*w, *h),
         }
     }
@@ -178,7 +172,10 @@ impl std::fmt::Display for VideoError {
             VideoError::FfmpegFailed(msg) => write!(f, "FFmpeg encoding failed: {}", msg),
             VideoError::IoError(e) => write!(f, "I/O error: {}", e),
             VideoError::ImageError(e) => write!(f, "Image encoding error: {}", e),
-            VideoError::InvalidDimensions { expected, got } => {
+            VideoError::InvalidDimensions {
+                expected,
+                got,
+            } => {
                 write!(
                     f,
                     "Invalid frame dimensions: expected {}x{}, got {}x{}",
@@ -209,9 +206,7 @@ impl From<io::Error> for VideoError {
 }
 
 impl From<image::ImageError> for VideoError {
-    fn from(e: image::ImageError) -> Self {
-        VideoError::ImageError(e.to_string())
-    }
+    fn from(e: image::ImageError) -> Self { VideoError::ImageError(e.to_string()) }
 }
 
 // =============================================================================
@@ -251,13 +246,21 @@ pub fn create_encoder(
 ) -> Result<Box<dyn VideoEncoder>, VideoError> {
     match format {
         VideoFormat::Png => Ok(Box::new(PngSequenceEncoder::new(
-            output_path, width, height,
+            output_path,
+            width,
+            height,
         )?)),
         VideoFormat::Ppm => Ok(Box::new(PpmSequenceEncoder::new(
-            output_path, width, height,
+            output_path,
+            width,
+            height,
         )?)),
         VideoFormat::Mp4 => Ok(Box::new(FfmpegMp4Encoder::new(
-            output_path, width, height, fps, None,
+            output_path,
+            width,
+            height,
+            fps,
+            None,
         )?)),
         VideoFormat::Raw => Ok(Box::new(RawEncoder::new(width, height)?)),
     }
@@ -347,13 +350,9 @@ impl VideoEncoder for PngSequenceEncoder {
         Ok(())
     }
 
-    fn finish(&mut self) -> Result<(), VideoError> {
-        Ok(())
-    }
+    fn finish(&mut self) -> Result<(), VideoError> { Ok(()) }
 
-    fn frames_written(&self) -> u64 {
-        self.frame_count
-    }
+    fn frames_written(&self) -> u64 { self.frame_count }
 }
 
 // =============================================================================
@@ -424,13 +423,9 @@ impl VideoEncoder for PpmSequenceEncoder {
         Ok(())
     }
 
-    fn finish(&mut self) -> Result<(), VideoError> {
-        Ok(())
-    }
+    fn finish(&mut self) -> Result<(), VideoError> { Ok(()) }
 
-    fn frames_written(&self) -> u64 {
-        self.frame_count
-    }
+    fn frames_written(&self) -> u64 { self.frame_count }
 }
 
 // =============================================================================
@@ -485,6 +480,11 @@ impl FfmpegMp4Encoder {
 
         let path = output_path.with_extension(FileType::Mp4.get_default_extension());
 
+        // Convert FPS to a precise fractional representation for FFmpeg.
+        // This avoids frame timing drift caused by floating-point approximations.
+        // For the NES NTSC framerate (39375000/655171 ≈ 60.0988), we use the exact fraction.
+        let fps_str = fps_to_rational(fps);
+
         // Build FFmpeg arguments
         let mut args = vec![
             "-y".to_string(),
@@ -495,7 +495,7 @@ impl FfmpegMp4Encoder {
             "-video_size".to_string(),
             format!("{}x{}", width, height),
             "-framerate".to_string(),
-            format!("{}", fps),
+            fps_str,
             "-i".to_string(),
             "-".to_string(),
         ];
@@ -583,7 +583,9 @@ impl VideoEncoder for FfmpegMp4Encoder {
             Some(stdin) => {
                 stdin.write_all(&bgra_buffer).map_err(|e| {
                     if e.kind() == io::ErrorKind::BrokenPipe {
-                        VideoError::FfmpegFailed("FFmpeg closed input pipe unexpectedly".to_string())
+                        VideoError::FfmpegFailed(
+                            "FFmpeg closed input pipe unexpectedly".to_string(),
+                        )
                     } else {
                         VideoError::IoError(e)
                     }
@@ -616,7 +618,11 @@ impl VideoEncoder for FfmpegMp4Encoder {
                 return Err(VideoError::FfmpegFailed(format!(
                     "FFmpeg exited with status {}: {}",
                     status,
-                    stderr_content.lines().take(10).collect::<Vec<_>>().join("\n")
+                    stderr_content
+                        .lines()
+                        .take(10)
+                        .collect::<Vec<_>>()
+                        .join("\n")
                 )));
             }
         }
@@ -629,9 +635,7 @@ impl VideoEncoder for FfmpegMp4Encoder {
         Ok(())
     }
 
-    fn frames_written(&self) -> u64 {
-        self.frame_count
-    }
+    fn frames_written(&self) -> u64 { self.frame_count }
 }
 
 impl Drop for FfmpegMp4Encoder {
@@ -700,14 +704,56 @@ impl VideoEncoder for RawEncoder {
         Ok(())
     }
 
-    fn frames_written(&self) -> u64 {
-        self.frame_count
-    }
+    fn frames_written(&self) -> u64 { self.frame_count }
 }
 
 // =============================================================================
 // Helper Functions
 // =============================================================================
+
+/// Convert FPS to a rational string representation for FFmpeg.
+///
+/// This function converts floating-point FPS values to precise fractional
+/// representations to avoid frame timing drift in video encoding.
+///
+/// Known framerates (like NES NTSC 60.0988 FPS) are converted to their
+/// exact rational form. Other values use a high-precision approximation.
+fn fps_to_rational(fps: f64) -> String {
+    // NES NTSC framerate: 39375000 / 655171 ≈ 60.098814
+    // This is derived from the master clock (39.375 MHz) divided by
+    // the number of master cycles per frame.
+    const NES_NTSC_FPS: f64 = 39375000.0 / 655171.0;
+
+    // Check if this is the NES NTSC framerate (within tolerance)
+    if (fps - NES_NTSC_FPS).abs() < 0.0001 {
+        return "39375000/655171".to_string();
+    }
+
+    // Check for common standard framerates
+    if (fps - 60.0).abs() < 0.0001 {
+        return "60/1".to_string();
+    }
+    if (fps - 30.0).abs() < 0.0001 {
+        return "30/1".to_string();
+    }
+    if (fps - 24.0).abs() < 0.0001 {
+        return "24/1".to_string();
+    }
+    if (fps - 59.94).abs() < 0.01 {
+        return "60000/1001".to_string(); // NTSC video standard
+    }
+    if (fps - 29.97).abs() < 0.01 {
+        return "30000/1001".to_string(); // NTSC video standard
+    }
+    if (fps - 23.976).abs() < 0.01 {
+        return "24000/1001".to_string(); // Film standard
+    }
+
+    // For other framerates, use a high-precision rational approximation
+    // by multiplying by 1000 and rounding to get integer numerator
+    let numerator = (fps * 1000.0).round() as u64;
+    format!("{}/1000", numerator)
+}
 
 /// Encode collected frames to video.
 pub fn encode_frames(
@@ -818,24 +864,16 @@ impl StreamingVideoEncoder {
     }
 
     /// Finish encoding and finalize the output file.
-    pub fn finish(&mut self) -> Result<(), VideoError> {
-        self.encoder.finish()
-    }
+    pub fn finish(&mut self) -> Result<(), VideoError> { self.encoder.finish() }
 
     /// Get the number of frames written so far.
-    pub fn frames_written(&self) -> u64 {
-        self.encoder.frames_written()
-    }
+    pub fn frames_written(&self) -> u64 { self.encoder.frames_written() }
 
     /// Get the source dimensions.
-    pub fn source_dimensions(&self) -> (u32, u32) {
-        (self.src_width, self.src_height)
-    }
+    pub fn source_dimensions(&self) -> (u32, u32) { (self.src_width, self.src_height) }
 
     /// Get the output dimensions (after scaling).
-    pub fn output_dimensions(&self) -> (u32, u32) {
-        (self.dst_width, self.dst_height)
-    }
+    pub fn output_dimensions(&self) -> (u32, u32) { (self.dst_width, self.dst_height) }
 
     /// Check if scaling is enabled.
     pub fn is_scaling(&self) -> bool {
@@ -853,13 +891,34 @@ mod tests {
 
     #[test]
     fn test_video_resolution_parse() {
-        assert_eq!(VideoResolution::parse("native").unwrap(), VideoResolution::Native);
-        assert_eq!(VideoResolution::parse("1x").unwrap(), VideoResolution::Native);
-        assert_eq!(VideoResolution::parse("2x").unwrap(), VideoResolution::IntegerScale(2));
-        assert_eq!(VideoResolution::parse("4x").unwrap(), VideoResolution::IntegerScale(4));
-        assert_eq!(VideoResolution::parse("720p").unwrap(), VideoResolution::Hd720);
-        assert_eq!(VideoResolution::parse("1080p").unwrap(), VideoResolution::Hd1080);
-        assert_eq!(VideoResolution::parse("4k").unwrap(), VideoResolution::Uhd4k);
+        assert_eq!(
+            VideoResolution::parse("native").unwrap(),
+            VideoResolution::Native
+        );
+        assert_eq!(
+            VideoResolution::parse("1x").unwrap(),
+            VideoResolution::Native
+        );
+        assert_eq!(
+            VideoResolution::parse("2x").unwrap(),
+            VideoResolution::IntegerScale(2)
+        );
+        assert_eq!(
+            VideoResolution::parse("4x").unwrap(),
+            VideoResolution::IntegerScale(4)
+        );
+        assert_eq!(
+            VideoResolution::parse("720p").unwrap(),
+            VideoResolution::Hd720
+        );
+        assert_eq!(
+            VideoResolution::parse("1080p").unwrap(),
+            VideoResolution::Hd1080
+        );
+        assert_eq!(
+            VideoResolution::parse("4k").unwrap(),
+            VideoResolution::Uhd4k
+        );
         assert_eq!(
             VideoResolution::parse("1920x1080").unwrap(),
             VideoResolution::Custom(1920, 1080)
@@ -872,8 +931,14 @@ mod tests {
         assert_eq!(VideoResolution::Native.dimensions(256, 240), (256, 240));
 
         // Integer scale
-        assert_eq!(VideoResolution::IntegerScale(2).dimensions(256, 240), (512, 480));
-        assert_eq!(VideoResolution::IntegerScale(4).dimensions(256, 240), (1024, 960));
+        assert_eq!(
+            VideoResolution::IntegerScale(2).dimensions(256, 240),
+            (512, 480)
+        );
+        assert_eq!(
+            VideoResolution::IntegerScale(4).dimensions(256, 240),
+            (1024, 960)
+        );
 
         // 1080p should fit within bounds
         let (w, h) = VideoResolution::Hd1080.dimensions(256, 240);
@@ -912,9 +977,7 @@ mod tests {
     }
 
     #[test]
-    fn test_ffmpeg_availability_check() {
-        let _available = is_ffmpeg_available();
-    }
+    fn test_ffmpeg_availability_check() { let _available = is_ffmpeg_available(); }
 
     #[test]
     fn test_invalid_frame_dimensions() {
@@ -925,10 +988,33 @@ mod tests {
         let result = encoder.write_frame(&bad_frame);
 
         assert!(result.is_err());
-        if let Err(VideoError::InvalidDimensions { expected, .. }) = result {
+        if let Err(VideoError::InvalidDimensions {
+            expected, ..
+        }) = result
+        {
             assert_eq!(expected, (256, 240));
         } else {
             panic!("Expected InvalidDimensions error");
         }
+    }
+
+    #[test]
+    fn test_fps_to_rational() {
+        // NES NTSC framerate (39375000 / 655171)
+        let nes_ntsc = 39375000.0 / 655171.0;
+        assert_eq!(fps_to_rational(nes_ntsc), "39375000/655171");
+
+        // Standard framerates
+        assert_eq!(fps_to_rational(60.0), "60/1");
+        assert_eq!(fps_to_rational(30.0), "30/1");
+        assert_eq!(fps_to_rational(24.0), "24/1");
+
+        // NTSC video standards
+        assert_eq!(fps_to_rational(59.94), "60000/1001");
+        assert_eq!(fps_to_rational(29.97), "30000/1001");
+        assert_eq!(fps_to_rational(23.976), "24000/1001");
+
+        // Custom framerate (fallback to x/1000)
+        assert_eq!(fps_to_rational(50.0), "50000/1000");
     }
 }
