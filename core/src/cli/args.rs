@@ -3,6 +3,7 @@
 //! This module defines all command-line arguments for the NES emulator CLI.
 //! Arguments are organized into logical groups matching the documentation.
 
+use crate::cli::config::DEFAULT_VIDEO_FPS;
 use std::path::PathBuf;
 
 use clap::{Args, Parser, ValueEnum, value_parser};
@@ -181,8 +182,8 @@ pub struct VideoArgs {
     pub video_format: VideoFormat,
 
     /// Video frame rate
-    #[arg(long, default_value_t = 60)]
-    pub video_fps: u32,
+    #[arg(long, default_value_t = DEFAULT_VIDEO_FPS)]
+    pub video_fps: f64,
 
     /// Export nametable visualization as screenshot
     #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]

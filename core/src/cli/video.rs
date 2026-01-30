@@ -159,7 +159,7 @@ pub fn create_encoder(
     output_path: &Path,
     width: u32,
     height: u32,
-    fps: u32,
+    fps: f64,
 ) -> Result<Box<dyn VideoEncoder>, VideoError> {
     match format {
         VideoFormat::Png => Ok(Box::new(PngSequenceEncoder::new(
@@ -372,7 +372,7 @@ impl FfmpegMp4Encoder {
     /// # Errors
     ///
     /// Returns `VideoError::FfmpegNotFound` if FFmpeg is not installed.
-    pub fn new(output_path: &Path, width: u32, height: u32, fps: u32) -> Result<Self, VideoError> {
+    pub fn new(output_path: &Path, width: u32, height: u32, fps: f64) -> Result<Self, VideoError> {
         // Check if ffmpeg exists
         let ffmpeg_check = Command::new("ffmpeg").arg("-version").output();
 
@@ -415,8 +415,12 @@ impl FfmpegMp4Encoder {
                 "libx264", // H.264 codec
                 "-preset",
                 "fast", // Encoding speed
+                "-vsync",
+                "cfr",
+                "-video_track_timescale",
+                "39375000",
                 "-crf",
-                "0", // Quality (0-51, lower = better)
+                "16", // Quality (0-51, lower = better)
                 "-pix_fmt",
                 "yuv420p", // Output pixel format
                 "-movflags",
@@ -642,7 +646,7 @@ pub fn encode_frames(
     output_path: &Path,
     width: u32,
     height: u32,
-    fps: u32,
+    fps: f64,
 ) -> Result<u64, VideoError> {
     let mut encoder = create_encoder(format, output_path, width, height, fps)?;
 

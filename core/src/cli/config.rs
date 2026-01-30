@@ -13,7 +13,7 @@ use serde::Deserialize;
 use crate::cli::args::{BuiltinPalette, CliArgs, OutputFormat, VideoFormat};
 
 /// Default video FPS value
-pub const DEFAULT_VIDEO_FPS: u32 = 60;
+pub const DEFAULT_VIDEO_FPS: f64 = 39375000.0 / 655171.0;
 
 /// TOML configuration file structure
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -124,7 +124,7 @@ pub struct VideoConfig {
     pub screenshot_on: Option<String>,
     pub video_path: Option<PathBuf>,
     pub video_format: Option<String>,
-    pub video_fps: Option<u32>,
+    pub video_fps: Option<f64>,
     pub export_nametables: Option<PathBuf>,
     pub export_nametables_video: Option<PathBuf>,
     pub export_pattern_tables: Option<PathBuf>,
