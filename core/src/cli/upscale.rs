@@ -14,12 +14,38 @@
 //! This produces crisp pixel art at integer scales while providing smooth
 //! anti-aliased edges at non-integer scales.
 //!
+//! # NES Pixel Aspect Ratio (PAR)
+//!
+//! The NES outputs 256x240 pixels, but on CRT TVs these pixels weren't square.
+//! The pixel aspect ratio (PAR) was approximately 8:7, meaning pixels were wider
+//! than tall. This module applies PAR correction for non-integer scale outputs
+//! to ensure the correct display aspect ratio.
+//!
+//! - Storage Aspect Ratio (SAR): 256:240 = 16:15
+//! - Pixel Aspect Ratio (PAR): 8:7
+//! - Display Aspect Ratio (DAR): ~4:3 (when PAR is applied)
+//!
+//! Integer scales (2x, 3x, 4x) do NOT apply PAR correction to preserve
+//! pixel-perfect output for emulation purists.
+//!
 //! # Reference
 //!
 //! Based on: "Pseudo-bandlimited pixel art filtering in 3D – a mathematical derivation"
 //! by Hans-Kristian Arntzen (themaister)
 
 use crate::emulation::messages::RgbColor;
+
+/// NES Pixel Aspect Ratio (PAR) numerator.
+///
+/// The NES outputs non-square pixels on CRT TVs. The pixel aspect ratio
+/// is approximately 8:7, meaning pixels are wider than they are tall.
+pub const NES_PAR_WIDTH: u32 = 8;
+
+/// NES Pixel Aspect Ratio (PAR) denominator.
+pub const NES_PAR_HEIGHT: u32 = 7;
+
+/// NES PAR as a floating point ratio (8/7 ≈ 1.143).
+pub const NES_PAR: f32 = NES_PAR_WIDTH as f32 / NES_PAR_HEIGHT as f32;
 
 /// Smoothstep function for smooth interpolation.
 /// Maps input from [0, 1] to [0, 1] with smooth derivatives at boundaries.
@@ -229,45 +255,72 @@ impl PixelArtUpscaler {
 
 /// Resolution presets for common video export sizes.
 ///
-/// All resolutions preserve the source aspect ratio (NES: 256x240 = 16:15).
-/// For non-integer scales and custom resolutions, the output will fit within
-/// the specified dimensions while maintaining the source aspect ratio.
+/// # Pixel Aspect Ratio (PAR) Correction
+///
+/// The NES outputs 256x240 pixels with a pixel aspect ratio (PAR) of 8:7.
+/// On CRT TVs, pixels were wider than tall, resulting in a display aspect
+/// ratio of approximately 4:3.
+///
+/// **Integer scales** (2x, 3x, 4x) do NOT apply PAR correction:
+/// - These produce pixel-perfect output for emulation purists
+/// - Pixels remain square in the output
+///
+/// **All other resolutions** apply PAR correction:
+/// - The effective source width is treated as 256 × (8/7) ≈ 293 pixels
+/// - This produces the correct display aspect ratio (~4:3)
+/// - Useful for video export and sharing
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoResolution {
-    /// Native NES resolution (256x240)
+    /// Native NES resolution (256x240) - no PAR correction (square pixels)
     Native,
-    /// 2x scale (512x480) - exact integer scale
+    /// 2x scale (512x480) - exact integer scale, no PAR correction
     Scale2x,
-    /// 3x scale (768x720) - exact integer scale
+    /// 3x scale (768x720) - exact integer scale, no PAR correction
     Scale3x,
-    /// 4x scale (1024x960) - exact integer scale
+    /// 4x scale (1024x960) - exact integer scale, no PAR correction
     Scale4x,
-    /// 720p - fits within 1280x720 preserving aspect ratio
+    /// 720p - fits within 1280x720 with PAR correction (~4:3 display)
     Hd720,
-    /// 1080p - fits within 1920x1080 preserving aspect ratio
+    /// 1080p - fits within 1920x1080 with PAR correction (~4:3 display)
     Hd1080,
-    /// 4K - fits within 3840x2160 preserving aspect ratio
+    /// 4K - fits within 3840x2160 with PAR correction (~4:3 display)
     Uhd4k,
-    /// Custom max dimensions - fits within WxH preserving aspect ratio
+    /// Custom max dimensions - fits within WxH with PAR correction
     Custom(u32, u32),
 }
 
 impl VideoResolution {
-    /// Get the target dimensions, preserving aspect ratio for all resolutions.
+    /// Get the target dimensions for the given source size.
     ///
-    /// For integer scales (2x, 3x, 4x), dimensions are exact multiples of source.
-    /// For all other resolutions, output fits within the target while preserving aspect ratio.
+    /// # PAR Correction
+    ///
+    /// - **Integer scales** (Native, 2x, 3x, 4x): No PAR correction, square pixels
+    /// - **All other resolutions**: Applies 8:7 PAR correction for correct display AR
+    ///
+    /// # Returns
+    ///
+    /// The output dimensions (width, height) that will fit within the target
+    /// resolution while preserving the correct display aspect ratio.
     pub fn dimensions(&self, src_width: u32, src_height: u32) -> (u32, u32) {
         match self {
+            // Integer scales: no PAR correction (pixel-perfect)
             VideoResolution::Native => (src_width, src_height),
             VideoResolution::Scale2x => (src_width * 2, src_height * 2),
             VideoResolution::Scale3x => (src_width * 3, src_height * 3),
             VideoResolution::Scale4x => (src_width * 4, src_height * 4),
-            VideoResolution::Hd720 => fit_with_aspect_ratio(src_width, src_height, 1280, 720),
-            VideoResolution::Hd1080 => fit_with_aspect_ratio(src_width, src_height, 1920, 1080),
-            VideoResolution::Uhd4k => fit_with_aspect_ratio(src_width, src_height, 3840, 2160),
-            // Custom also preserves aspect ratio - fits within specified dimensions
-            VideoResolution::Custom(w, h) => fit_with_aspect_ratio(src_width, src_height, *w, *h),
+            // All other resolutions: apply PAR correction
+            VideoResolution::Hd720 => {
+                fit_with_par_correction(src_width, src_height, 1280, 720)
+            }
+            VideoResolution::Hd1080 => {
+                fit_with_par_correction(src_width, src_height, 1920, 1080)
+            }
+            VideoResolution::Uhd4k => {
+                fit_with_par_correction(src_width, src_height, 3840, 2160)
+            }
+            VideoResolution::Custom(w, h) => {
+                fit_with_par_correction(src_width, src_height, *w, *h)
+            }
         }
     }
 
@@ -323,7 +376,47 @@ impl std::str::FromStr for VideoResolution {
     fn from_str(s: &str) -> Result<Self, Self::Err> { VideoResolution::parse(s) }
 }
 
-/// Fit source dimensions to target dimensions while preserving aspect ratio.
+/// Fit source dimensions to target dimensions with PAR correction.
+///
+/// Applies the 8:7 NES pixel aspect ratio correction to produce the correct
+/// display aspect ratio (~4:3) in the output.
+///
+/// # Arguments
+///
+/// * `src_w` - Source width (e.g., 256 for NES)
+/// * `src_h` - Source height (e.g., 240 for NES)
+/// * `max_w` - Maximum output width
+/// * `max_h` - Maximum output height
+///
+/// # Returns
+///
+/// Output dimensions that fit within max_w x max_h while preserving the
+/// PAR-corrected display aspect ratio.
+fn fit_with_par_correction(src_w: u32, src_h: u32, max_w: u32, max_h: u32) -> (u32, u32) {
+    // Apply PAR to get the effective display width
+    // For NES: 256 pixels × (8/7) PAR = ~293 effective display pixels wide
+    let display_w = src_w as f32 * NES_PAR;
+    let display_h = src_h as f32;
+
+    // Fit within max dimensions while preserving display aspect ratio (DAR)
+    // DAR for NES: 293/240 ≈ 1.22 (close to 4:3 when overscan is considered)
+    let scale_by_width = max_w as f32 / display_w;
+    let scale_by_height = max_h as f32 / display_h;
+    let scale = scale_by_width.min(scale_by_height);
+
+    // Calculate final dimensions
+    let dst_w = (display_w * scale).round() as u32;
+    let dst_h = (display_h * scale).round() as u32;
+
+    // Round to nearest even dimensions for video codec compatibility
+    ((dst_w + 1) & !1, (dst_h + 1) & !1)
+}
+
+/// Fit source dimensions to target dimensions without PAR correction.
+///
+/// Preserves the storage aspect ratio (pixel grid ratio) without applying
+/// any pixel aspect ratio correction.
+#[allow(dead_code)]
 fn fit_with_aspect_ratio(src_w: u32, src_h: u32, max_w: u32, max_h: u32) -> (u32, u32) {
     let scale_x = max_w as f32 / src_w as f32;
     let scale_y = max_h as f32 / src_h as f32;
@@ -395,6 +488,7 @@ mod tests {
         let src_w = 256;
         let src_h = 240;
 
+        // Integer scales: no PAR correction (square pixels)
         assert_eq!(VideoResolution::Native.dimensions(src_w, src_h), (256, 240));
         assert_eq!(
             VideoResolution::Scale2x.dimensions(src_w, src_h),
@@ -405,61 +499,104 @@ mod tests {
             (1024, 960)
         );
 
-        // 1080p should fit 256x240 maintaining aspect ratio
+        // 1080p should fit with PAR correction (8:7)
         let (w, h) = VideoResolution::Hd1080.dimensions(src_w, src_h);
-        // Check that it fits within 1920x1080 and maintains aspect ratio
+        // Check that it fits within 1920x1080
         assert!(w <= 1920);
         assert!(h <= 1080);
-        // Aspect ratio should be approximately the same
-        let src_ratio = src_w as f32 / src_h as f32;
-        let dst_ratio = w as f32 / h as f32;
-        assert!((src_ratio - dst_ratio).abs() < 0.01);
+        // Output aspect ratio should match PAR-corrected display AR
+        // Expected DAR = (256 * 8/7) / 240 ≈ 1.219
+        let expected_dar = (src_w as f32 * NES_PAR) / src_h as f32;
+        let actual_dar = w as f32 / h as f32;
+        assert!(
+            (expected_dar - actual_dar).abs() < 0.02,
+            "1080p should have PAR-corrected aspect ratio: expected={:.3}, got={:.3}",
+            expected_dar,
+            actual_dar
+        );
     }
 
     #[test]
-    fn test_custom_resolution_preserves_aspect_ratio() {
+    fn test_par_correction_applied() {
         let src_w = 256;
         let src_h = 240;
-        let src_ratio = src_w as f32 / src_h as f32;
 
-        // Custom 1920x1080 should also preserve aspect ratio
-        let (w, h) = VideoResolution::Custom(1920, 1080).dimensions(src_w, src_h);
-        assert!(w <= 1920);
-        assert!(h <= 1080);
-        let dst_ratio = w as f32 / h as f32;
-        assert!(
-            (src_ratio - dst_ratio).abs() < 0.02,
-            "Custom resolution should preserve aspect ratio: src={}, dst={}",
-            src_ratio,
-            dst_ratio
-        );
+        // Expected PAR-corrected display aspect ratio
+        let expected_dar = (src_w as f32 * NES_PAR) / src_h as f32;
 
-        // Custom 800x600 should also preserve aspect ratio
-        let (w, h) = VideoResolution::Custom(800, 600).dimensions(src_w, src_h);
-        assert!(w <= 800);
-        assert!(h <= 600);
-        let dst_ratio = w as f32 / h as f32;
-        assert!(
-            (src_ratio - dst_ratio).abs() < 0.02,
-            "Custom resolution should preserve aspect ratio: src={}, dst={}",
-            src_ratio,
-            dst_ratio
-        );
-
-        // All preset resolutions should preserve aspect ratio
+        // All non-integer resolutions should have PAR correction
         for resolution in [
             VideoResolution::Hd720,
             VideoResolution::Hd1080,
             VideoResolution::Uhd4k,
+            VideoResolution::Custom(1920, 1080),
+            VideoResolution::Custom(800, 600),
         ] {
             let (w, h) = resolution.dimensions(src_w, src_h);
-            let dst_ratio = w as f32 / h as f32;
+            let actual_dar = w as f32 / h as f32;
             assert!(
-                (src_ratio - dst_ratio).abs() < 0.02,
-                "{:?} should preserve aspect ratio: src={}, dst={}",
+                (expected_dar - actual_dar).abs() < 0.02,
+                "{:?}: expected DAR={:.3}, got DAR={:.3} (w={}, h={})",
                 resolution,
-                src_ratio,
-                dst_ratio
+                expected_dar,
+                actual_dar,
+                w,
+                h
+            );
+        }
+    }
+
+    #[test]
+    fn test_integer_scales_no_par() {
+        let src_w = 256;
+        let src_h = 240;
+
+        // Integer scales should NOT apply PAR correction
+        let storage_ar = src_w as f32 / src_h as f32;
+
+        for (resolution, expected_w, expected_h) in [
+            (VideoResolution::Native, 256, 240),
+            (VideoResolution::Scale2x, 512, 480),
+            (VideoResolution::Scale3x, 768, 720),
+            (VideoResolution::Scale4x, 1024, 960),
+        ] {
+            let (w, h) = resolution.dimensions(src_w, src_h);
+            assert_eq!(
+                (w, h),
+                (expected_w, expected_h),
+                "{:?} should be exact integer scale",
+                resolution
+            );
+            let actual_ar = w as f32 / h as f32;
+            assert!(
+                (storage_ar - actual_ar).abs() < 0.001,
+                "{:?} should preserve storage AR (no PAR): expected={:.3}, got={:.3}",
+                resolution,
+                storage_ar,
+                actual_ar
+            );
+        }
+    }
+
+    #[test]
+    fn test_custom_resolution_fits_within_bounds() {
+        let src_w = 256;
+        let src_h = 240;
+
+        // Custom resolutions should fit within specified bounds
+        for (max_w, max_h) in [(1920, 1080), (1280, 720), (800, 600), (640, 480)] {
+            let (w, h) = VideoResolution::Custom(max_w, max_h).dimensions(src_w, src_h);
+            assert!(
+                w <= max_w,
+                "Width {} should fit within max {}",
+                w,
+                max_w
+            );
+            assert!(
+                h <= max_h,
+                "Height {} should fit within max {}",
+                h,
+                max_h
             );
         }
     }
