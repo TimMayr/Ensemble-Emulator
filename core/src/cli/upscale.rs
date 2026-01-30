@@ -228,28 +228,35 @@ impl PixelArtUpscaler {
 }
 
 /// Resolution presets for common video export sizes.
+///
+/// All resolutions preserve the source aspect ratio (NES: 256x240 = 16:15).
+/// For non-integer scales and custom resolutions, the output will fit within
+/// the specified dimensions while maintaining the source aspect ratio.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoResolution {
     /// Native NES resolution (256x240)
     Native,
-    /// 2x scale (512x480)
+    /// 2x scale (512x480) - exact integer scale
     Scale2x,
-    /// 3x scale (768x720)
+    /// 3x scale (768x720) - exact integer scale
     Scale3x,
-    /// 4x scale (1024x960)
+    /// 4x scale (1024x960) - exact integer scale
     Scale4x,
-    /// 720p (1280x720, with aspect ratio)
+    /// 720p - fits within 1280x720 preserving aspect ratio
     Hd720,
-    /// 1080p (1920x1080, with aspect ratio)
+    /// 1080p - fits within 1920x1080 preserving aspect ratio
     Hd1080,
-    /// 4K (3840x2160, with aspect ratio)
+    /// 4K - fits within 3840x2160 preserving aspect ratio
     Uhd4k,
-    /// Custom resolution
+    /// Custom max dimensions - fits within WxH preserving aspect ratio
     Custom(u32, u32),
 }
 
 impl VideoResolution {
-    /// Get the target dimensions, preserving aspect ratio where applicable.
+    /// Get the target dimensions, preserving aspect ratio for all resolutions.
+    ///
+    /// For integer scales (2x, 3x, 4x), dimensions are exact multiples of source.
+    /// For all other resolutions, output fits within the target while preserving aspect ratio.
     pub fn dimensions(&self, src_width: u32, src_height: u32) -> (u32, u32) {
         match self {
             VideoResolution::Native => (src_width, src_height),
@@ -259,11 +266,22 @@ impl VideoResolution {
             VideoResolution::Hd720 => fit_with_aspect_ratio(src_width, src_height, 1280, 720),
             VideoResolution::Hd1080 => fit_with_aspect_ratio(src_width, src_height, 1920, 1080),
             VideoResolution::Uhd4k => fit_with_aspect_ratio(src_width, src_height, 3840, 2160),
-            VideoResolution::Custom(w, h) => (*w, *h),
+            // Custom also preserves aspect ratio - fits within specified dimensions
+            VideoResolution::Custom(w, h) => fit_with_aspect_ratio(src_width, src_height, *w, *h),
         }
     }
 
     /// Parse from string (e.g., "1080p", "4x", "1920x1080")
+    ///
+    /// Supported formats:
+    /// - `native`, `1x` - native NES resolution (256x240)
+    /// - `2x`, `3x`, `4x` - integer scale factors
+    /// - `720p`, `hd` - fit within 1280x720
+    /// - `1080p`, `fhd`, `fullhd` - fit within 1920x1080
+    /// - `4k`, `2160p`, `uhd` - fit within 3840x2160
+    /// - `WIDTHxHEIGHT` - fit within custom dimensions (e.g., "1920x1080")
+    ///
+    /// All resolutions preserve the source aspect ratio (NES: 16:15).
     pub fn parse(s: &str) -> Result<Self, String> {
         let s = s.to_lowercase();
 
@@ -396,6 +414,54 @@ mod tests {
         let src_ratio = src_w as f32 / src_h as f32;
         let dst_ratio = w as f32 / h as f32;
         assert!((src_ratio - dst_ratio).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_custom_resolution_preserves_aspect_ratio() {
+        let src_w = 256;
+        let src_h = 240;
+        let src_ratio = src_w as f32 / src_h as f32;
+
+        // Custom 1920x1080 should also preserve aspect ratio
+        let (w, h) = VideoResolution::Custom(1920, 1080).dimensions(src_w, src_h);
+        assert!(w <= 1920);
+        assert!(h <= 1080);
+        let dst_ratio = w as f32 / h as f32;
+        assert!(
+            (src_ratio - dst_ratio).abs() < 0.02,
+            "Custom resolution should preserve aspect ratio: src={}, dst={}",
+            src_ratio,
+            dst_ratio
+        );
+
+        // Custom 800x600 should also preserve aspect ratio
+        let (w, h) = VideoResolution::Custom(800, 600).dimensions(src_w, src_h);
+        assert!(w <= 800);
+        assert!(h <= 600);
+        let dst_ratio = w as f32 / h as f32;
+        assert!(
+            (src_ratio - dst_ratio).abs() < 0.02,
+            "Custom resolution should preserve aspect ratio: src={}, dst={}",
+            src_ratio,
+            dst_ratio
+        );
+
+        // All preset resolutions should preserve aspect ratio
+        for resolution in [
+            VideoResolution::Hd720,
+            VideoResolution::Hd1080,
+            VideoResolution::Uhd4k,
+        ] {
+            let (w, h) = resolution.dimensions(src_w, src_h);
+            let dst_ratio = w as f32 / h as f32;
+            assert!(
+                (src_ratio - dst_ratio).abs() < 0.02,
+                "{:?} should preserve aspect ratio: src={}, dst={}",
+                resolution,
+                src_ratio,
+                dst_ratio
+            );
+        }
     }
 
     #[test]
