@@ -57,7 +57,9 @@ fn handle_controller_input(input: &egui::InputState, async_sender: &Sender<Async
         let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(ControllerEvent::Left));
     }
     if input.key_pressed(egui::Key::ArrowRight) {
-        let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(ControllerEvent::Right));
+        let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(
+            ControllerEvent::Right,
+        ));
     }
     if input.key_pressed(egui::Key::ArrowUp) {
         let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(ControllerEvent::Up));
@@ -68,10 +70,14 @@ fn handle_controller_input(input: &egui::InputState, async_sender: &Sender<Async
 
     // Buttons
     if input.key_pressed(egui::Key::S) {
-        let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(ControllerEvent::Start));
+        let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(
+            ControllerEvent::Start,
+        ));
     }
     if input.key_pressed(egui::Key::Tab) {
-        let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(ControllerEvent::Select));
+        let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(
+            ControllerEvent::Select,
+        ));
     }
     if input.key_pressed(egui::Key::Space) {
         let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(ControllerEvent::A));

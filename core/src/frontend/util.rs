@@ -62,13 +62,7 @@ impl ToBytes for RgbPalette {
         self.colors
             .iter()
             .flatten()
-            .flat_map(|d| {
-                let mut bytes = [0u8; 3];
-                bytes[0] = ((d >> 16) & 0xFF) as u8;
-                bytes[1] = ((d >> 8) & 0xFF) as u8;
-                bytes[2] = (d & 0xFF) as u8;
-                bytes
-            })
+            .flat_map(|&(r, g, b)| [r, g, b])
             .collect()
     }
 }
@@ -147,6 +141,7 @@ pub enum FileType {
     Rom,
     Savestate,
     Palette,
+    Mp4,
     All,
 }
 
@@ -156,6 +151,7 @@ impl FileType {
             FileType::Rom => dialog.add_filter("NES ROM File", &["nes"]),
             FileType::Savestate => dialog.add_filter("Savestate", &["sav"]),
             FileType::Palette => dialog.add_filter("NES Palette File", &["pal"]),
+            FileType::Mp4 => dialog.add_filter("Mp4 Video", &["mp4"]),
             FileType::All => dialog.add_filter("All Files", &["*"]),
         }
     }
@@ -165,6 +161,7 @@ impl FileType {
             FileType::Rom => "nes",
             FileType::Savestate => "sav",
             FileType::Palette => "pal",
+            FileType::Mp4 => "mp4",
             FileType::All => "",
         }
     }

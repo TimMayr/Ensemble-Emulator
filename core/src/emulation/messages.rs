@@ -33,6 +33,26 @@ pub const NAMETABLE_ROWS: usize = 30;
 pub const NAMETABLE_COLS: usize = 32;
 pub const PATTERN_TABLE_SIZE: usize = 256;
 
+/// RGB color represented as a tuple of (R, G, B) bytes.
+/// This is more memory-efficient than u32 ARGB (3 bytes vs 4 bytes per pixel).
+pub type RgbColor = (u8, u8, u8);
+
+/// Convert an ARGB u32 color to an RGB tuple.
+#[inline]
+pub const fn argb_to_rgb(argb: u32) -> RgbColor {
+    (
+        ((argb >> 16) & 0xFF) as u8, // R
+        ((argb >> 8) & 0xFF) as u8,  // G
+        (argb & 0xFF) as u8,         // B
+    )
+}
+
+/// Convert an RGB tuple to an ARGB u32 color (with alpha = 0xFF).
+#[inline]
+pub const fn rgb_to_argb(rgb: RgbColor) -> u32 {
+    0xFF00_0000 | ((rgb.0 as u32) << 16) | ((rgb.1 as u32) << 8) | (rgb.2 as u32)
+}
+
 /// Messages sent from the frontend to the emulator
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum FrontendMessage {
@@ -79,7 +99,7 @@ pub enum ControllerEvent {
 /// Messages sent from the emulator to the frontend
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum EmulatorMessage {
-    FrameReady(Vec<u32>),
+    FrameReady(Vec<RgbColor>),
     /// Emulator has stopped/quit
     Stopped,
     DebugData(EmulatorFetchable),
@@ -161,7 +181,7 @@ pub struct PaletteData {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct RgbPalette {
-    pub colors: [[u32; 64]; 8],
+    pub colors: [[RgbColor; 64]; 8],
 }
 
 impl Default for RgbPalette {

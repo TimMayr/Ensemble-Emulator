@@ -3,12 +3,10 @@ use crossbeam_channel::Sender;
 use crate::emulation::ppu::PALETTE_RAM_START_ADDRESS;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
-use crate::frontend::egui::ui::widgets::{color_cell, PainterGridConfig};
+use crate::frontend::egui::ui::widgets::{PainterGridConfig, color_cell_rgb};
 use crate::frontend::messages::AsyncFrontendMessage;
 use crate::frontend::palettes::parse_palette_from_file;
-use crate::frontend::util::{
-    spawn_palette_picker, spawn_save_dialog, AsU32, FileType, FromU32, Hashable, ToBytes,
-};
+use crate::frontend::util::{FileType, Hashable, ToBytes, spawn_palette_picker, spawn_save_dialog};
 
 pub fn render_palettes(
     ui: &mut egui::Ui,
@@ -39,7 +37,7 @@ pub fn render_palettes(
                 let rgb_color = config.view_config.palette_rgb_data.colors[0][*color as usize];
                 let rect = grid_config.cell_rect(parent.min, j);
                 let response =
-                    color_cell(ui, rect, rgb_color, egui::Sense::all(), ("palette", i, j));
+                    color_cell_rgb(ui, rect, rgb_color, egui::Sense::all(), ("palette", i, j));
 
                 let address = PALETTE_RAM_START_ADDRESS as usize | (j + (i * 4));
                 let mut new_color = *color;
@@ -61,8 +59,8 @@ pub fn render_palettes(
                     ui.label(format!("Global palette index: ${color}"));
                     ui.label(format!("Address: ${:0X}", address));
                     ui.label(format!(
-                        "Palette rgb mapping: #{:06X}",
-                        rgb_color & 0x00FFFFFF
+                        "Palette RGB mapping: #{:02X}{:02X}{:02X}",
+                        rgb_color.0, rgb_color.1, rgb_color.2
                     ));
                 });
             }
@@ -113,9 +111,10 @@ pub fn render_palettes(
         .enumerate()
     {
         let rect = grid_config.cell_rect(parent.min, i);
-        let response = color_cell(ui, rect, *color, egui::Sense::all(), ("rgb_palette", i));
+        let response = color_cell_rgb(ui, rect, *color, egui::Sense::all(), ("rgb_palette", i));
 
-        let mut picked_color = egui::Color32::from_u32(*color);
+        // Convert RgbColor to Color32 for the color picker
+        let mut picked_color = egui::Color32::from_rgb(color.0, color.1, color.2);
         egui::Popup::context_menu(&response)
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| {
@@ -126,11 +125,13 @@ pub fn render_palettes(
                 );
             });
 
-        config.view_config.palette_rgb_data.colors[0][i] = picked_color.as_u32();
+        // Convert Color32 back to RgbColor
+        let [r, g, b, _] = picked_color.to_array();
+        config.view_config.palette_rgb_data.colors[0][i] = (r, g, b);
 
         response.on_hover_ui(|ui| {
             ui.label(format!("Index: {i}"));
-            ui.label(format!("Hex: 0x{:06X}", color & 0x00FFFFFF));
+            ui.label(format!("RGB: ({}, {}, {})", color.0, color.1, color.2));
         });
     }
 

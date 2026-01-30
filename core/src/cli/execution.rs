@@ -1,0 +1,844 @@
+//! Execution engine for CLI-driven emulation.
+//!
+//! This module provides a generic, extensible execution engine that can run
+//! emulation until various stop conditions are met. It's designed to be usable
+//! both from the CLI and as a Rust crate API.
+//!
+//! # Design Goals
+//! - Generic stop condition system that's easy to extend
+//! - Support for frames, cycles, PC breakpoints, memory conditions
+//! - Clean separation from CLI argument parsing
+//! - Suitable for exposing as a crate API
+
+use std::io::{Read, Write};
+use std::path::PathBuf;
+
+use crate::cli::args::parse_hex_u8;
+use crate::emulation::messages::RgbColor;
+use crate::emulation::nes::{MASTER_CYCLES_PER_FRAME, Nes};
+use crate::emulation::savestate::{SaveState, try_load_state};
+
+// =============================================================================
+// Stop Conditions
+// =============================================================================
+
+/// Reason why execution stopped
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StopReason {
+    /// Reached target cycle count
+    CyclesReached(u128),
+    /// Reached target frame count
+    FramesReached(u64),
+    /// PC reached target address
+    PcReached(u16),
+    /// Memory condition was met
+    MemoryCondition(u16, u8),
+    /// HLT (illegal halt) instruction executed
+    Halted,
+    /// User-requested stop (e.g., breakpoint)
+    Breakpoint(u16),
+    /// Execution error occurred
+    Error(String),
+    /// No stop condition was set (ran to completion or max cycles)
+    Completed,
+}
+
+/// A stop condition that can be checked during execution
+#[derive(Debug, Clone)]
+pub enum StopCondition {
+    /// Stop after N master cycles
+    Cycles(u128),
+    /// Stop after N frames
+    Frames(u64),
+    /// Stop when PC reaches address
+    PcEquals(u16),
+    /// Stop when opcode is executed
+    Opcode(u8),
+    /// Stop when memory address equals value
+    MemoryEquals {
+        addr: u16,
+        value: u8,
+        and: Option<Box<StopCondition>>,
+    },
+    /// Stop when memory address does not equal value
+    MemoryNotEquals {
+        addr: u16,
+        value: u8,
+        and: Option<Box<StopCondition>>,
+    },
+    /// Stop on HLT instruction
+    OnHalt,
+    /// Breakpoint at address
+    Breakpoint(u16),
+}
+
+impl StopCondition {
+    /// Parse a memory condition string like "0x6000==0x80" or "0x6000!=0x00"
+    pub fn parse_memory_condition(vec: &Vec<String>) -> Result<Vec<Self>, String> {
+        let mut res = Vec::new();
+        for s in vec {
+            let cond = Self::parse_single_condition(s);
+
+            if let Ok(cond) = cond {
+                res.push(cond)
+            } else if let Err(cond) = cond {
+                return Err(cond);
+            }
+        }
+
+        Ok(res)
+    }
+
+    pub fn parse_single_condition(s: &String) -> Result<Self, String> {
+        if let Some((cond1, cond2)) = s.split_once("&&") {
+            let cond1 = Self::parse_single_condition(&cond1.to_string());
+            let cond2 = Self::parse_single_condition(&cond2.to_string());
+
+            if let (Ok(cond1), Ok(cond2)) = (cond1, cond2) {
+                match cond1 {
+                    StopCondition::MemoryEquals {
+                        addr,
+                        value,
+                        ..
+                    } => {
+                        return Ok(StopCondition::MemoryEquals {
+                            addr,
+                            value,
+                            and: Some(Box::new(cond2)),
+                        });
+                    }
+                    StopCondition::MemoryNotEquals {
+                        addr,
+                        value,
+                        ..
+                    } => {
+                        return Ok(StopCondition::MemoryNotEquals {
+                            addr,
+                            value,
+                            and: Some(Box::new(cond2)),
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if let Some((addr_str, val_str)) = s.split_once("==") {
+            let addr = parse_hex_u16(addr_str.trim())?;
+            let value = parse_hex_u8(val_str.trim())?;
+            Ok(StopCondition::MemoryEquals {
+                addr,
+                value,
+                and: None,
+            })
+        } else if let Some((addr_str, val_str)) = s.split_once("!=") {
+            let addr = parse_hex_u16(addr_str.trim())?;
+            let value = parse_hex_u8(val_str.trim())?;
+            Ok(StopCondition::MemoryNotEquals {
+                addr,
+                value,
+                and: None,
+            })
+        } else {
+            Err(format!(
+                "Invalid memory condition '{}'. Expected format: ADDR==VALUE or ADDR!=VALUE",
+                s
+            ))
+        }
+    }
+
+    pub fn check(&self, emu: &Nes, cycles: u128, frames: u64) -> bool {
+        match self {
+            StopCondition::Cycles(target) => cycles >= *target,
+            StopCondition::Frames(target) => frames >= *target,
+            StopCondition::PcEquals(addr) => emu.cpu.program_counter == *addr,
+            StopCondition::Opcode(op) => {
+                if let Some(current) = emu.cpu.current_opcode
+                    && current.opcode == *op
+                {
+                    return true;
+                }
+
+                false
+            }
+            StopCondition::MemoryEquals {
+                addr,
+                value,
+                and,
+            } => {
+                let and = and.as_ref().map(|and| and.check(emu, cycles, frames));
+
+                let mem_val = emu.get_memory_debug(Some(*addr..=*addr))[0]
+                    .first()
+                    .copied()
+                    .unwrap_or(0);
+
+                if let Some(and) = and {
+                    mem_val == *value && and
+                } else {
+                    mem_val == *value
+                }
+            }
+            StopCondition::MemoryNotEquals {
+                addr,
+                value,
+                and,
+            } => {
+                let and = and.as_ref().map(|and| and.check(emu, cycles, frames));
+
+                let mem_val = emu.get_memory_debug(Some(*addr..=*addr))[0]
+                    .first()
+                    .copied()
+                    .unwrap_or(0);
+
+                if let Some(and) = and {
+                    mem_val != *value && and
+                } else {
+                    mem_val != *value
+                }
+            }
+            StopCondition::OnHalt => emu.cpu.is_halted,
+            StopCondition::Breakpoint(addr) => emu.cpu.program_counter == *addr,
+        }
+    }
+
+    pub fn reason(&self, emu: &Nes, cycles: u128, frames: u64) -> StopReason {
+        match self {
+            StopCondition::Cycles(_) => StopReason::CyclesReached(cycles),
+            StopCondition::Frames(_) => StopReason::FramesReached(frames),
+            StopCondition::PcEquals(addr) => StopReason::PcReached(*addr),
+            StopCondition::Opcode(_) => StopReason::PcReached(emu.cpu.program_counter),
+            StopCondition::MemoryEquals {
+                addr, ..
+            }
+            | StopCondition::MemoryNotEquals {
+                addr, ..
+            } => {
+                let mem_val = emu.get_memory_debug(Some(*addr..=*addr))[0]
+                    .first()
+                    .copied()
+                    .unwrap_or(0);
+
+                StopReason::MemoryCondition(*addr, mem_val)
+            }
+            StopCondition::OnHalt => StopReason::Halted,
+            StopCondition::Breakpoint(addr) => StopReason::Breakpoint(*addr),
+        }
+    }
+}
+
+// =============================================================================
+// Execution Configuration
+// =============================================================================
+
+/// Configuration for an execution run.
+///
+/// This struct is designed to be constructed either from CLI arguments
+/// or programmatically when using the crate as a library.
+#[derive(Debug, Clone, Default)]
+pub struct ExecutionConfig {
+    /// Stop conditions (first one met will stop execution)
+    pub stop_conditions: Vec<StopCondition>,
+    /// Whether to stop on any HLT instruction
+    pub stop_on_halt: bool,
+    /// Breakpoint addresses
+    pub breakpoints: Vec<u16>,
+    /// Path to trace log file (if any)
+    pub trace_path: Option<PathBuf>,
+    /// Verbose output
+    pub verbose: bool,
+}
+
+impl ExecutionConfig {
+    /// Create a new empty execution config
+    pub fn new() -> Self { Self::default() }
+
+    /// Add a stop condition
+    pub fn with_stop_condition(mut self, condition: StopCondition) -> Self {
+        self.stop_conditions.push(condition);
+        self
+    }
+
+    /// Set stop after N cycles
+    pub fn with_cycles(mut self, cycles: u128) -> Self {
+        self.stop_conditions.push(StopCondition::Cycles(cycles));
+        self
+    }
+
+    /// Set stop after N frames
+    pub fn with_frames(mut self, frames: u64) -> Self {
+        self.stop_conditions.push(StopCondition::Frames(frames));
+        self
+    }
+
+    /// Set stop when PC equals address
+    pub fn with_pc_breakpoint(mut self, addr: u16) -> Self {
+        self.stop_conditions.push(StopCondition::PcEquals(addr));
+        self
+    }
+
+    /// Add a breakpoint
+    pub fn with_breakpoint(mut self, addr: u16) -> Self {
+        self.breakpoints.push(addr);
+        self
+    }
+
+    /// Set trace log path
+    pub fn with_trace(mut self, path: PathBuf) -> Self {
+        self.trace_path = Some(path);
+        self
+    }
+
+    /// Enable verbose output
+    pub fn with_verbose(mut self, verbose: bool) -> Self {
+        self.verbose = verbose;
+        self
+    }
+
+    /// Enable stop on HLT
+    pub fn with_stop_on_halt(mut self, stop: bool) -> Self {
+        self.stop_on_halt = stop;
+        self
+    }
+
+    /// Calculate the maximum cycles to run based on stop conditions
+    fn max_cycles(&self) -> u128 {
+        let mut max = u128::MAX;
+        for cond in &self.stop_conditions {
+            match cond {
+                StopCondition::Cycles(c) => max = max.min(*c),
+                StopCondition::Frames(f) => {
+                    max = max.min(*f as u128 * MASTER_CYCLES_PER_FRAME as u128)
+                }
+                _ => {}
+            }
+        }
+        max
+    }
+
+    /// Check if any stop condition is met
+    fn check_conditions(&self, emu: &Nes, cycles: u128, frames: u64) -> Option<StopReason> {
+        for cond in &self.stop_conditions {
+            if cond.check(emu, cycles, frames) {
+                return Some(cond.reason(emu, cycles, frames));
+            }
+        }
+
+        None
+    }
+}
+
+// =============================================================================
+// Execution Result
+// =============================================================================
+
+/// Result of an execution run
+#[derive(Debug, Clone)]
+pub struct ExecutionResult {
+    /// Why execution stopped
+    pub stop_reason: StopReason,
+    /// Total cycles executed
+    pub total_cycles: u128,
+    /// Total frames executed
+    pub total_frames: u64,
+}
+
+// =============================================================================
+// Savestate Configuration
+// =============================================================================
+
+/// Source for loading a savestate
+#[derive(Debug, Clone)]
+pub enum SavestateSource {
+    /// Load from file
+    File(PathBuf),
+    /// Load from stdin
+    Stdin,
+    /// Load from bytes (for programmatic use)
+    Bytes(Vec<u8>),
+}
+
+/// Destination for saving a savestate
+#[derive(Debug, Clone)]
+pub enum SavestateDestination {
+    /// Save to file
+    File(PathBuf),
+    /// Save to stdout
+    Stdout,
+}
+
+/// Configuration for savestate operations
+#[derive(Debug, Clone, Default)]
+pub struct SavestateConfig {
+    /// Source to load savestate from (if any)
+    pub load_from: Option<SavestateSource>,
+    /// Destination to save savestate to (if any)
+    pub save_to: Option<SavestateDestination>,
+}
+
+impl SavestateConfig {
+    /// Create a new empty savestate config
+    pub fn new() -> Self { Self::default() }
+
+    /// Set load source to file
+    pub fn load_from_file(mut self, path: PathBuf) -> Self {
+        self.load_from = Some(SavestateSource::File(path));
+        self
+    }
+
+    /// Set load source to stdin
+    pub fn load_from_stdin(mut self) -> Self {
+        self.load_from = Some(SavestateSource::Stdin);
+        self
+    }
+
+    /// Set save destination to file
+    pub fn save_to_file(mut self, path: PathBuf) -> Self {
+        self.save_to = Some(SavestateDestination::File(path));
+        self
+    }
+
+    /// Set save destination to stdout
+    pub fn save_to_stdout(mut self) -> Self {
+        self.save_to = Some(SavestateDestination::Stdout);
+        self
+    }
+}
+
+// =============================================================================
+// Execution Engine
+// =============================================================================
+
+/// The main execution engine for CLI-driven emulation.
+///
+/// This struct manages the emulator lifecycle and provides a clean API
+/// for running emulation with various configurations.
+///
+/// # Video Export Modes
+///
+/// - **Buffered mode** (default): All frames are stored in memory, then encoded at the end.
+///   Suitable for small exports or when you need access to all frames.
+///
+/// - **Streaming mode**: Frames are encoded immediately as they are generated.
+///   Use `run_with_video_encoder()` for this mode. Significantly reduces memory usage
+///   for long recordings.
+pub struct ExecutionEngine {
+    /// The emulator instance
+    pub emu: Nes,
+    /// Execution configuration
+    pub config: ExecutionConfig,
+    /// Savestate configuration
+    pub savestate_config: SavestateConfig,
+    /// Collected frames (used in buffered mode)
+    pub frames: Vec<Vec<RgbColor>>,
+    /// Track current frame count
+    frame_count: u64,
+    /// Whether to collect frames (set to false for streaming mode)
+    collect_frames: bool,
+}
+
+impl ExecutionEngine {
+    /// Create a new execution engine with default emulator
+    pub fn new() -> Self {
+        Self {
+            emu: Nes::default(),
+            config: ExecutionConfig::new(),
+            savestate_config: SavestateConfig::new(),
+            frames: vec![],
+            frame_count: 0,
+            collect_frames: true,
+        }
+    }
+
+    /// Create execution engine with existing emulator
+    pub fn with_emulator(emu: Nes) -> Self {
+        Self {
+            emu,
+            config: ExecutionConfig::new(),
+            savestate_config: SavestateConfig::new(),
+            frames: vec![],
+            frame_count: 0,
+            collect_frames: true,
+        }
+    }
+
+    /// Set execution configuration
+    pub fn with_config(mut self, config: ExecutionConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Set savestate configuration
+    pub fn with_savestate_config(mut self, config: SavestateConfig) -> Self {
+        self.savestate_config = config;
+        self
+    }
+
+    /// Load ROM from path
+    pub fn load_rom(&mut self, path: &PathBuf) -> Result<(), String> {
+        self.emu.load_rom(path);
+        Ok(())
+    }
+
+    /// Power on the emulator
+    pub fn power_on(&mut self) { self.emu.power(); }
+
+    /// Power off the emulator
+    pub fn power_off(&mut self) { self.emu.power_off(); }
+
+    /// Reset the emulator
+    pub fn reset(&mut self) { self.emu.reset(); }
+
+    /// Load savestate based on configuration
+    pub fn load_savestate(&mut self) -> Result<(), String> {
+        if let Some(ref source) = self.savestate_config.load_from {
+            let state = match source {
+                SavestateSource::File(path) => try_load_state(path)
+                    .ok_or_else(|| format!("Failed to load savestate from {}", path.display()))?,
+                SavestateSource::Stdin => {
+                    let mut buffer = Vec::new();
+                    std::io::stdin()
+                        .read_to_end(&mut buffer)
+                        .map_err(|e| format!("Failed to read savestate from stdin: {}", e))?;
+                    decode_savestate(&buffer)?
+                }
+                SavestateSource::Bytes(bytes) => decode_savestate(bytes)?,
+            };
+            self.emu.load_state(state);
+        }
+        Ok(())
+    }
+
+    /// Save savestate based on configuration
+    pub fn save_savestate(&self) -> Result<(), String> {
+        if let Some(ref dest) = self.savestate_config.save_to {
+            let state = self.emu.save_state();
+            let encoded = encode_savestate(&state)?;
+
+            match dest {
+                SavestateDestination::File(path) => {
+                    std::fs::write(path, &encoded).map_err(|e| {
+                        format!("Failed to write savestate to {}: {}", path.display(), e)
+                    })?;
+                }
+                SavestateDestination::Stdout => {
+                    std::io::stdout()
+                        .write_all(&encoded)
+                        .map_err(|e| format!("Failed to write savestate to stdout: {}", e))?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Run execution until a stop condition is met
+    pub fn run(&mut self) -> Result<ExecutionResult, String> {
+        // Set up trace if configured
+        if let Some(ref path) = self.config.trace_path {
+            self.emu.set_trace_log_path(Some(path.clone()));
+        }
+
+        let max_cycles = self.config.max_cycles();
+        let start_cycles = self.emu.total_cycles;
+
+        // Run frame by frame for stop condition checking
+        loop {
+            // Run one frame
+            match self.emu.step_frame() {
+                Ok(_) => {}
+                Err(e) => {
+                    return Ok(ExecutionResult {
+                        stop_reason: StopReason::Error(e),
+                        total_cycles: self.emu.total_cycles - start_cycles,
+                        total_frames: self.frame_count,
+                    });
+                }
+            }
+
+            // Only collect frames if in buffered mode
+            if self.collect_frames {
+                self.frames.push(self.emu.get_pixel_buffer());
+            }
+
+            self.frame_count += 1;
+            let cycles_run = self.emu.total_cycles - start_cycles;
+
+            // Check stop conditions
+            if let Some(reason) =
+                self.config
+                    .check_conditions(&self.emu, cycles_run, self.frame_count)
+            {
+                return Ok(ExecutionResult {
+                    stop_reason: reason,
+                    total_cycles: cycles_run,
+                    total_frames: self.frame_count,
+                });
+            }
+
+            // Check max cycles
+            if self.emu.total_cycles >= max_cycles {
+                return Ok(ExecutionResult {
+                    stop_reason: StopReason::Completed,
+                    total_cycles: cycles_run,
+                    total_frames: self.frame_count,
+                });
+            }
+        }
+    }
+
+    /// Run execution with streaming video export.
+    ///
+    /// This mode writes frames directly to the video encoder as they are generated,
+    /// instead of buffering all frames in memory. This significantly reduces memory
+    /// usage for long recordings.
+    ///
+    /// # Arguments
+    ///
+    /// * `encoder` - A streaming video encoder that will receive frames as they're generated
+    ///
+    /// # Performance
+    ///
+    /// - Uses parallel upscaling via rayon (if encoder has upscaling enabled)
+    /// - O(1) memory usage per frame instead of O(n) for all frames
+    /// - Frames are written immediately, reducing peak memory usage
+    pub fn run_with_video_encoder(
+        &mut self,
+        encoder: &mut super::video::StreamingVideoEncoder,
+    ) -> Result<ExecutionResult, String> {
+        // Disable frame collection for streaming mode
+        self.collect_frames = false;
+
+        // Set up trace if configured
+        if let Some(ref path) = self.config.trace_path {
+            self.emu.set_trace_log_path(Some(path.clone()));
+        }
+
+        let max_cycles = self.config.max_cycles();
+        let start_cycles = self.emu.total_cycles;
+
+        // Run frame by frame for stop condition checking
+        loop {
+            // Run one frame
+            match self.emu.step_frame() {
+                Ok(_) => {}
+                Err(e) => {
+                    return Ok(ExecutionResult {
+                        stop_reason: StopReason::Error(e),
+                        total_cycles: self.emu.total_cycles - start_cycles,
+                        total_frames: self.frame_count,
+                    });
+                }
+            }
+
+            // Write frame directly to encoder (with upscaling if configured)
+            let frame = self.emu.get_pixel_buffer();
+            encoder
+                .write_frame(&frame)
+                .map_err(|e| format!("Video encoding error: {}", e))?;
+
+            self.frame_count += 1;
+            let cycles_run = self.emu.total_cycles - start_cycles;
+
+            // Check stop conditions
+            if let Some(reason) =
+                self.config
+                    .check_conditions(&self.emu, cycles_run, self.frame_count)
+            {
+                return Ok(ExecutionResult {
+                    stop_reason: reason,
+                    total_cycles: cycles_run,
+                    total_frames: self.frame_count,
+                });
+            }
+
+            // Check max cycles
+            if self.emu.total_cycles >= max_cycles {
+                return Ok(ExecutionResult {
+                    stop_reason: StopReason::Completed,
+                    total_cycles: cycles_run,
+                    total_frames: self.frame_count,
+                });
+            }
+        }
+    }
+
+    /// Enable or disable frame collection.
+    ///
+    /// When disabled, frames are not stored in memory during execution.
+    /// Use this for streaming mode or when you don't need frame data.
+    pub fn set_collect_frames(&mut self, collect: bool) { self.collect_frames = collect; }
+
+    /// Get reference to the emulator
+    pub fn emulator(&self) -> &Nes { &self.emu }
+
+    /// Get mutable reference to the emulator
+    pub fn emulator_mut(&mut self) -> &mut Nes { &mut self.emu }
+}
+
+impl Default for ExecutionEngine {
+    fn default() -> Self { Self::new() }
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+/// Decode a savestate from bytes
+fn decode_savestate(bytes: &[u8]) -> Result<SaveState, String> {
+    bincode::serde::decode_from_slice(bytes, bincode::config::standard())
+        .map(|(state, _)| state)
+        .map_err(|e| format!("Failed to decode savestate: {}", e))
+}
+
+/// Encode a savestate to bytes
+fn encode_savestate(state: &SaveState) -> Result<Vec<u8>, String> {
+    bincode::serde::encode_to_vec(state, bincode::config::standard())
+        .map_err(|e| format!("Failed to encode savestate: {}", e))
+}
+
+// =============================================================================
+// Builder from CLI Args
+// =============================================================================
+
+use super::{CliArgs, parse_hex_u16};
+
+impl ExecutionConfig {
+    /// Build execution config from CLI arguments
+    pub fn from_cli_args(args: &CliArgs) -> Self {
+        let mut config = Self::new();
+
+        // Add cycle/frame stop conditions
+        if let Some(cycles) = args.execution.cycles {
+            config.stop_conditions.push(StopCondition::Cycles(cycles));
+        }
+        if let Some(frames) = args.execution.frames {
+            config.stop_conditions.push(StopCondition::Frames(frames));
+        }
+
+        // Add PC stop condition
+        if let Some(pc) = args.execution.until_pc {
+            config.stop_conditions.push(StopCondition::PcEquals(pc));
+        }
+
+        // Add opcode stop condition
+        if let Some(op) = args.execution.until_opcode {
+            config.stop_conditions.push(StopCondition::Opcode(op));
+        }
+
+        // Add memory condition
+        if let Some(ref mem_cond) = args.execution.until_mem
+            && let Ok(cond) = StopCondition::parse_memory_condition(mem_cond)
+        {
+            config.stop_conditions.extend(cond);
+        }
+
+        // Add HLT stop
+        if args.execution.until_hlt {
+            config.stop_on_halt = true;
+        }
+
+        // Add breakpoints
+        config.breakpoints = args.execution.breakpoint.clone();
+
+        // Add trace
+        config.trace_path = args.execution.trace.clone();
+
+        // Set verbose
+        config.verbose = args.verbose;
+
+        // If no stop conditions, default to 60 frames (1 second)
+        if config.stop_conditions.is_empty()
+            && !config.stop_on_halt
+            && config.breakpoints.is_empty()
+        {
+            config.stop_conditions.push(StopCondition::Frames(60));
+        }
+
+        config
+    }
+}
+
+impl SavestateConfig {
+    /// Build savestate config from CLI arguments
+    pub fn from_cli_args(args: &CliArgs) -> Self {
+        let mut config = Self::new();
+
+        // Load source
+        if args.savestate.state_stdin {
+            config.load_from = Some(SavestateSource::Stdin);
+        } else if let Some(ref path) = args.savestate.load_state {
+            config.load_from = Some(SavestateSource::File(path.clone()));
+        }
+
+        // Save destination
+        if args.savestate.state_stdout {
+            config.save_to = Some(SavestateDestination::Stdout);
+        } else if let Some(ref path) = args.savestate.save_state {
+            config.save_to = Some(SavestateDestination::File(path.clone()));
+        }
+
+        config
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_memory_condition_equals() {
+        let cond =
+            StopCondition::parse_memory_condition(&vec!["0x6000==0x80".to_string()]).unwrap();
+        match cond[0] {
+            StopCondition::MemoryEquals {
+                addr,
+                value,
+                and: None,
+            } => {
+                assert_eq!(addr, 0x6000);
+                assert_eq!(value, 0x80);
+            }
+            _ => panic!("Expected MemoryEquals"),
+        }
+    }
+
+    #[test]
+    fn test_parse_memory_condition_not_equals() {
+        let cond =
+            StopCondition::parse_memory_condition(&vec!["0x6000!=0x00".to_string()]).unwrap();
+        match cond[0] {
+            StopCondition::MemoryNotEquals {
+                addr,
+                value,
+                and: None,
+            } => {
+                assert_eq!(addr, 0x6000);
+                assert_eq!(value, 0x00);
+            }
+            _ => panic!("Expected MemoryNotEquals"),
+        }
+    }
+
+    #[test]
+    fn test_execution_config_builder() {
+        let config = ExecutionConfig::new()
+            .with_frames(100)
+            .with_cycles(1000000)
+            .with_pc_breakpoint(0x8000)
+            .with_verbose(true);
+
+        assert_eq!(config.stop_conditions.len(), 3);
+        assert!(config.verbose);
+    }
+
+    #[test]
+    fn test_savestate_config_builder() {
+        let path = PathBuf::from("test.sav");
+        let config = SavestateConfig::new()
+            .load_from_file(path.clone())
+            .save_to_stdout();
+
+        assert!(matches!(config.load_from, Some(SavestateSource::File(_))));
+        assert!(matches!(config.save_to, Some(SavestateDestination::Stdout)));
+    }
+}

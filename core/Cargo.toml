@@ -13,6 +13,7 @@ path = "src/bin/main.rs"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0.149" }
 bincode = { version = "2.0.1", features = ["serde"] }
 crossbeam-channel = { version = "0.5.15" }
 rfd = { version = "0.17.2" }
@@ -27,3 +28,5 @@ cpal = { version = "0.17.1" }
 directories = { version = "6.0.0" }
 toml = { version = "0.9.11" }
 chrono = { version = "0.4.43", features = ["serde", "now"] }
+image = { version = "0.25.9" }
+rayon = { version = "1.10" }

@@ -1,13 +1,15 @@
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::ops::{Deref, RangeInclusive};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp};
+use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
-use crate::emulation::mem::Memory;
+use crate::emulation::messages::RgbColor;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::{CpuState, PpuState, SaveState};
@@ -29,7 +31,7 @@ pub struct Nes {
 
 impl Nes {
     #[inline]
-    pub fn get_pixel_buffer(&self) -> Vec<u32> { self.ppu.borrow().pixel_buffer.clone() }
+    pub fn get_pixel_buffer(&self) -> Vec<RgbColor> { self.ppu.borrow().pixel_buffer.clone() }
 
     pub fn power(&mut self) {
         self.cpu.ppu = Some(self.ppu.clone());
@@ -81,7 +83,7 @@ impl Nes {
         ]
     }
 
-    pub fn set_trace_log_path(&mut self, path: Option<String>) {
+    pub fn set_trace_log_path(&mut self, path: Option<PathBuf>) {
         if path.is_none() {
             self.trace_log = None;
             return;
@@ -90,7 +92,7 @@ impl Nes {
         let path = path.unwrap();
 
         if self.trace_log.is_none() {
-            self.trace_log = Some(TraceLog::new(&path));
+            self.trace_log = Some(TraceLog::new(path.clone()));
         }
 
         if let Some(ref mut trace) = self.trace_log {
