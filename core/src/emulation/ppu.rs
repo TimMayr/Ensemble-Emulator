@@ -8,7 +8,8 @@ use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, OpenBus, Ram};
 use crate::emulation::messages::{
     EmulatorFetchable, NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, NametableData,
-    PATTERN_TABLE_SIZE, PaletteData, RgbPalette, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData,
+    PATTERN_TABLE_SIZE, PaletteData, RgbColor, RgbPalette, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
+    TileData,
 };
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::PpuState;
@@ -75,7 +76,7 @@ pub struct Ppu {
     pub fine_x_scroll: u8,
     pub even_frame: bool,
     pub reset_signal: bool,
-    pub pixel_buffer: Vec<u32>,
+    pub pixel_buffer: Vec<RgbColor>,
     pub vbl_reset_counter: Cell<u8>,
     pub vbl_clear_scheduled: Cell<Option<u8>>,
     pub scanline: u16,
@@ -133,7 +134,7 @@ impl Ppu {
             t_register: 0,
             even_frame: false,
             reset_signal: false,
-            pixel_buffer: [0u32; TOTAL_OUTPUT_HEIGHT * TOTAL_OUTPUT_WIDTH].to_vec(),
+            pixel_buffer: vec![(0, 0, 0); TOTAL_OUTPUT_HEIGHT * TOTAL_OUTPUT_WIDTH],
             vbl_reset_counter: 0.into(),
             vbl_clear_scheduled: None.into(),
             scanline: 0,
@@ -1051,7 +1052,7 @@ impl Ppu {
     pub fn reset(&mut self) { self.reset_signal = false; }
 
     #[inline]
-    pub fn get_pixel_buffer(&self) -> &Vec<u32> { &self.pixel_buffer }
+    pub fn get_pixel_buffer(&self) -> &Vec<RgbColor> { &self.pixel_buffer }
 
     pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
         self.memory.get_memory_debug(range)
@@ -1134,7 +1135,7 @@ impl Ppu {
             even_frame: state.even_frame,
             reset_signal: state.reset_signal,
             // Initialize pixel buffer fresh - it's not saved in savestate
-            pixel_buffer: vec![0u32; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT],
+            pixel_buffer: vec![(0, 0, 0); TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT],
             vbl_reset_counter: Cell::new(state.vbl_reset_counter),
             vbl_clear_scheduled: Cell::new(state.vbl_clear_scheduled),
             scanline: state.scanline,

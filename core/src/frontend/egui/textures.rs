@@ -3,15 +3,15 @@ use std::time::Instant;
 use egui::{ColorImage, Context, TextureHandle, TextureOptions};
 
 use crate::emulation::messages::{
-    NametableData, PALETTE_COUNT, PaletteData, RgbPalette, TILE_COUNT, TOTAL_OUTPUT_HEIGHT,
-    TOTAL_OUTPUT_WIDTH, TileData,
+    NametableData, PALETTE_COUNT, PaletteData, RgbColor, RgbPalette, TILE_COUNT,
+    TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData, rgb_to_argb,
 };
 use crate::emulation::ppu::TILE_SIZE;
 
 /// Texture storage and management for the emulator display
 #[derive(Eq, PartialEq, Clone)]
 pub struct EmuTextures {
-    pub current_frame: Option<Vec<u32>>,
+    pub current_frame: Option<Vec<RgbColor>>,
     pub frame_texture: Option<TextureHandle>,
     pub last_debug_request: Instant,
     pub last_frame_request: Instant,
@@ -39,7 +39,21 @@ impl Default for EmuTextures {
 }
 
 impl EmuTextures {
+    /// Convert RgbColor pixel data to egui ColorImage
+    pub fn rgb_to_color_image(data: &[RgbColor], width: usize, height: usize) -> ColorImage {
+        let mut pixels = Vec::with_capacity(width * height);
+        for &(r, g, b) in data {
+            pixels.push(egui::Color32::from_rgb(r, g, b));
+        }
+        ColorImage {
+            size: [width, height],
+            source_size: Default::default(),
+            pixels,
+        }
+    }
+
     /// Convert u32 ARGB pixel data to egui ColorImage (RGBA)
+    /// Kept for backward compatibility with tile rendering
     pub fn u32_to_color_image(data: &[u32], width: usize, height: usize) -> ColorImage {
         let mut pixels = Vec::with_capacity(width * height);
         for &pixel in data {
@@ -61,7 +75,7 @@ impl EmuTextures {
     pub fn update_emulator_texture(&mut self, ctx: &Context) {
         if let Some(ref frame) = self.current_frame {
             let image =
-                Self::u32_to_color_image(frame.as_ref(), TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT);
+                Self::rgb_to_color_image(frame.as_ref(), TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT);
 
             let texture = ctx.load_texture(
                 "emulator_output",
@@ -83,7 +97,7 @@ impl EmuTextures {
         rgb_palette_map: &RgbPalette,
         ctx: &Context,
     ) -> TextureHandle {
-        let mut data = [0u32; 64];
+        let mut data: [RgbColor; 64] = [(0, 0, 0); 64];
 
         for (i, color) in data.iter_mut().enumerate() {
             let bit = 63 - i;
@@ -95,7 +109,7 @@ impl EmuTextures {
             *color = rgb_palette_map.colors[0][palette[color_index] as usize];
         }
 
-        let image = Self::u32_to_color_image(data.as_ref(), TILE_SIZE, TILE_SIZE);
+        let image = Self::rgb_to_color_image(data.as_ref(), TILE_SIZE, TILE_SIZE);
 
         ctx.load_texture(
             format!("tile_{:16X}", tile.address),

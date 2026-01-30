@@ -1,10 +1,10 @@
 use crossbeam_channel::Sender;
 
-use crate::emulation::messages::{EmulatorFetchable, FrontendMessage};
+use crate::emulation::messages::{EmulatorFetchable, FrontendMessage, RgbColor, rgb_to_argb};
 use crate::emulation::ppu::PALETTE_RAM_START_ADDRESS;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
-use crate::frontend::egui::ui::widgets::{PainterGridConfig, color_cell};
+use crate::frontend::egui::ui::widgets::{PainterGridConfig, color_cell, color_cell_rgb};
 use crate::frontend::messages::{AsyncFrontendMessage, RelayType};
 use crate::frontend::util::{
     AsU32, FileType, FromU32, Hashable, ToBytes, spawn_palette_picker, spawn_save_dialog,
@@ -109,9 +109,10 @@ pub fn render_palettes(
         .enumerate()
     {
         let rect = grid_config.cell_rect(parent.min, i);
-        let response = color_cell(ui, rect, *color, egui::Sense::all(), ("rgb_palette", i));
+        let response = color_cell_rgb(ui, rect, *color, egui::Sense::all(), ("rgb_palette", i));
 
-        let mut picked_color = egui::Color32::from_u32(*color);
+        // Convert RgbColor to Color32 for the color picker
+        let mut picked_color = egui::Color32::from_rgb(color.0, color.1, color.2);
         egui::Popup::context_menu(&response)
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| {
@@ -122,11 +123,13 @@ pub fn render_palettes(
                 );
             });
 
-        config.view_config.palette_rgb_data.colors[0][i] = picked_color.as_u32();
+        // Convert Color32 back to RgbColor
+        let [r, g, b, _] = picked_color.to_array();
+        config.view_config.palette_rgb_data.colors[0][i] = (r, g, b);
 
         response.on_hover_ui(|ui| {
             ui.label(format!("Index: {i}"));
-            ui.label(format!("Hex: 0x{:06X}", color & 0x00FFFFFF));
+            ui.label(format!("RGB: ({}, {}, {})", color.0, color.1, color.2));
         });
     }
 

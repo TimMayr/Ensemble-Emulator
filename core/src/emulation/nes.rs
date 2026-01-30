@@ -8,6 +8,7 @@ use crate::emulation::cpu::{Cpu, MicroOp};
 use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::messages::RgbColor;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::{CpuState, PpuState, SaveState};
@@ -29,7 +30,7 @@ pub struct Nes {
 
 impl Nes {
     #[inline]
-    pub fn get_pixel_buffer(&self) -> Vec<u32> { self.ppu.borrow().pixel_buffer.clone() }
+    pub fn get_pixel_buffer(&self) -> Vec<RgbColor> { self.ppu.borrow().pixel_buffer.clone() }
 
     pub fn power(&mut self) {
         self.cpu.ppu = Some(self.ppu.clone());

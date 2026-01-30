@@ -14,6 +14,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use crate::cli::args::parse_hex_u8;
+use crate::emulation::messages::RgbColor;
 use crate::emulation::nes::{Nes, MASTER_CYCLES_PER_FRAME};
 use crate::emulation::savestate::{try_load_state, SaveState};
 
@@ -419,7 +420,7 @@ pub struct ExecutionEngine {
     pub config: ExecutionConfig,
     /// Savestate configuration
     pub savestate_config: SavestateConfig,
-    pub frames: Vec<Vec<u32>>,
+    pub frames: Vec<Vec<RgbColor>>,
     /// Track current frame count
     frame_count: u64,
 }

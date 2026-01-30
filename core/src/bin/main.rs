@@ -13,6 +13,7 @@ use nes_core::cli::{
     MemoryType, OutputWriter, SavestateConfig, StopReason, VideoFormat, VideoResolution,
     apply_memory_init, apply_memory_init_config, encode_frames, is_ffmpeg_available,
 };
+use nes_core::emulation::messages::RgbColor;
 use nes_core::emulation::nes::Nes;
 use nes_core::emulation::rom::RomFile;
 use nes_core::frontend::egui_frontend;
@@ -195,7 +196,7 @@ fn output_results(emu: &Nes, args: &CliArgs) -> Result<(), String> {
 }
 
 /// Save recorded frames to video file
-fn save_video(frames: &[Vec<u32>], args: &CliArgs) -> Result<(), String> {
+fn save_video(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String> {
     if let Some(ref video_path) = args.video.video {
         // Check if format requires FFmpeg and warn if not available
         if args.video.video_format == VideoFormat::Mp4 && !is_ffmpeg_available() {
@@ -404,7 +405,7 @@ fn apply_memory_initialization(emu: &mut Nes, args: &CliArgs) -> Result<(), Stri
 // =============================================================================
 
 /// Save screenshot to file
-fn save_screenshot(frames: &[Vec<u32>], args: &CliArgs) -> Result<(), String> {
+fn save_screenshot(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String> {
     if let Some(ref screenshot_path) = args.video.screenshot {
         if frames.is_empty() {
             eprintln!("Warning: No frames to screenshot");
@@ -413,7 +414,7 @@ fn save_screenshot(frames: &[Vec<u32>], args: &CliArgs) -> Result<(), String> {
 
         // Use the last frame for screenshot
         let frame = frames.last().unwrap();
-        
+
         // NES resolution
         const NES_WIDTH: u32 = 256;
         const NES_HEIGHT: u32 = 240;
@@ -422,16 +423,11 @@ fn save_screenshot(frames: &[Vec<u32>], args: &CliArgs) -> Result<(), String> {
             eprintln!("Saving screenshot to {}...", screenshot_path.display());
         }
 
-        // Convert ARGB to RGB for PNG
-        let mut rgb_data = Vec::with_capacity((NES_WIDTH * NES_HEIGHT * 3) as usize);
-        for &pixel in frame {
-            let r = ((pixel >> 16) & 0xFF) as u8;
-            let g = ((pixel >> 8) & 0xFF) as u8;
-            let b = (pixel & 0xFF) as u8;
-            rgb_data.push(r);
-            rgb_data.push(g);
-            rgb_data.push(b);
-        }
+        // Convert RgbColor to RGB bytes for PNG
+        let rgb_data: Vec<u8> = frame
+            .iter()
+            .flat_map(|&(r, g, b)| [r, g, b])
+            .collect();
 
         // Create PNG using image crate
         let img: image::ImageBuffer<image::Rgb<u8>, Vec<u8>> =

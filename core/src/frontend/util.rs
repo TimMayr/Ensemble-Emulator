@@ -62,13 +62,7 @@ impl ToBytes for RgbPalette {
         self.colors
             .iter()
             .flatten()
-            .flat_map(|d| {
-                let mut bytes = [0u8; 3];
-                bytes[0] = ((d >> 16) & 0xFF) as u8;
-                bytes[1] = ((d >> 8) & 0xFF) as u8;
-                bytes[2] = (d & 0xFF) as u8;
-                bytes
-            })
+            .flat_map(|&(r, g, b)| [r, g, b])
             .collect()
     }
 }

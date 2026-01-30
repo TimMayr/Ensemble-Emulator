@@ -19,6 +19,8 @@
 //! Based on: "Pseudo-bandlimited pixel art filtering in 3D – a mathematical derivation"
 //! by Hans-Kristian Arntzen (themaister)
 
+use crate::emulation::messages::RgbColor;
+
 /// Smoothstep function for smooth interpolation.
 /// Maps input from [0, 1] to [0, 1] with smooth derivatives at boundaries.
 #[inline]
@@ -56,13 +58,13 @@ fn compute_bandlimited_weight(frac: f32, scale: f32) -> f32 {
 /// Bilinear interpolation between four colors.
 #[inline]
 fn bilinear_blend(
-    c00: (u8, u8, u8),
-    c10: (u8, u8, u8),
-    c01: (u8, u8, u8),
-    c11: (u8, u8, u8),
+    c00: RgbColor,
+    c10: RgbColor,
+    c01: RgbColor,
+    c11: RgbColor,
     wx: f32,
     wy: f32,
-) -> (u8, u8, u8) {
+) -> RgbColor {
     // Interpolate horizontally first
     let r0 = c00.0 as f32 * (1.0 - wx) + c10.0 as f32 * wx;
     let g0 = c00.1 as f32 * (1.0 - wx) + c10.1 as f32 * wx;
@@ -140,9 +142,9 @@ impl PixelArtUpscaler {
 
     /// Upscale a frame using pseudo-bandlimited filtering.
     ///
-    /// Input is RGB pixel data (u8, u8, u8) tuples as a flat array.
-    /// Output is also RGB data with dimensions (dst_width, dst_height).
-    pub fn upscale_rgb(&self, src: &[(u8, u8, u8)]) -> Vec<(u8, u8, u8)> {
+    /// Input is RgbColor pixel data as a flat array.
+    /// Output is also RgbColor data with dimensions (dst_width, dst_height).
+    pub fn upscale_rgb(&self, src: &[RgbColor]) -> Vec<RgbColor> {
         let expected_size = (self.src_width * self.src_height) as usize;
         if src.len() != expected_size {
             panic!(
@@ -168,9 +170,9 @@ impl PixelArtUpscaler {
     /// Upscale a frame from u32 ARGB format.
     ///
     /// Input is ARGB pixel data (0xAARRGGBB) as a flat array.
-    /// Output is RGB data with dimensions (dst_width, dst_height).
-    pub fn upscale_argb_to_rgb(&self, src: &[u32]) -> Vec<(u8, u8, u8)> {
-        let rgb: Vec<(u8, u8, u8)> = src
+    /// Output is RgbColor data with dimensions (dst_width, dst_height).
+    pub fn upscale_argb_to_rgb(&self, src: &[u32]) -> Vec<RgbColor> {
+        let rgb: Vec<RgbColor> = src
             .iter()
             .map(|&pixel| {
                 (
@@ -192,7 +194,7 @@ impl PixelArtUpscaler {
     }
 
     /// Sample a single pixel using pseudo-bandlimited filtering.
-    fn sample_pixel(&self, src: &[(u8, u8, u8)], dst_x: u32, dst_y: u32) -> (u8, u8, u8) {
+    fn sample_pixel(&self, src: &[RgbColor], dst_x: u32, dst_y: u32) -> RgbColor {
         // Map destination coordinates to source coordinates
         let src_x_f = (dst_x as f32 + 0.5) / self.scale_x - 0.5;
         let src_y_f = (dst_y as f32 + 0.5) / self.scale_y - 0.5;
@@ -220,7 +222,7 @@ impl PixelArtUpscaler {
 
     /// Get a pixel from the source buffer with clamping.
     #[inline]
-    fn get_pixel_clamped(&self, src: &[(u8, u8, u8)], x: i32, y: i32) -> (u8, u8, u8) {
+    fn get_pixel_clamped(&self, src: &[RgbColor], x: i32, y: i32) -> RgbColor {
         let x = x.clamp(0, self.src_width as i32 - 1) as u32;
         let y = y.clamp(0, self.src_height as i32 - 1) as u32;
         src[(y * self.src_width + x) as usize]

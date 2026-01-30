@@ -43,6 +43,7 @@ use std::process::{Child, Command, Stdio};
 use image::{ImageBuffer, Rgba, RgbaImage};
 
 use super::args::VideoFormat;
+use crate::emulation::messages::RgbColor;
 use crate::frontend::util::FileType;
 
 // =============================================================================
@@ -126,9 +127,9 @@ impl From<image::ImageError> for VideoError {
 pub trait VideoEncoder: Send {
     /// Write a frame to the video.
     ///
-    /// The pixel buffer is in ARGB format (0xAARRGGBB) as a flat array
-    /// of width × height u32 values.
-    fn write_frame(&mut self, pixel_buffer: &[u32]) -> Result<(), VideoError>;
+    /// The pixel buffer is in RGB format as (R, G, B) tuples,
+    /// as a flat array of width × height values.
+    fn write_frame(&mut self, pixel_buffer: &[RgbColor]) -> Result<(), VideoError>;
 
     /// Finish encoding and flush any remaining data.
     fn finish(&mut self) -> Result<(), VideoError>;
@@ -230,7 +231,7 @@ impl PngSequenceEncoder {
 }
 
 impl VideoEncoder for PngSequenceEncoder {
-    fn write_frame(&mut self, pixel_buffer: &[u32]) -> Result<(), VideoError> {
+    fn write_frame(&mut self, pixel_buffer: &[RgbColor]) -> Result<(), VideoError> {
         let expected_size = (self.width * self.height) as usize;
         if pixel_buffer.len() != expected_size {
             let got_height = pixel_buffer.len() / self.width as usize;
@@ -240,15 +241,10 @@ impl VideoEncoder for PngSequenceEncoder {
             });
         }
 
-        // Convert ARGB u32 to RGBA image
+        // Convert RgbColor to RGBA image
         let img: RgbaImage = ImageBuffer::from_fn(self.width, self.height, |x, y| {
-            let pixel = pixel_buffer[(y * self.width + x) as usize];
-            Rgba([
-                ((pixel >> 16) & 0xFF) as u8, // R
-                ((pixel >> 8) & 0xFF) as u8,  // G
-                (pixel & 0xFF) as u8,         // B
-                ((pixel >> 24) & 0xFF) as u8, // A
-            ])
+            let (r, g, b) = pixel_buffer[(y * self.width + x) as usize];
+            Rgba([r, g, b, 255])
         });
 
         // Save the frame
@@ -311,7 +307,7 @@ impl PpmSequenceEncoder {
 }
 
 impl VideoEncoder for PpmSequenceEncoder {
-    fn write_frame(&mut self, pixel_buffer: &[u32]) -> Result<(), VideoError> {
+    fn write_frame(&mut self, pixel_buffer: &[RgbColor]) -> Result<(), VideoError> {
         let expected_size = (self.width * self.height) as usize;
         if pixel_buffer.len() != expected_size {
             let got_height = pixel_buffer.len() / self.width as usize;
@@ -331,10 +327,7 @@ impl VideoEncoder for PpmSequenceEncoder {
         writeln!(writer, "255")?;
 
         // Write RGB data
-        for pixel in pixel_buffer {
-            let r = ((pixel >> 16) & 0xFF) as u8;
-            let g = ((pixel >> 8) & 0xFF) as u8;
-            let b = (pixel & 0xFF) as u8;
+        for &(r, g, b) in pixel_buffer {
             writer.write_all(&[r, g, b])?;
         }
 
@@ -458,7 +451,7 @@ impl FfmpegMp4Encoder {
 }
 
 impl VideoEncoder for FfmpegMp4Encoder {
-    fn write_frame(&mut self, pixel_buffer: &[u32]) -> Result<(), VideoError> {
+    fn write_frame(&mut self, pixel_buffer: &[RgbColor]) -> Result<(), VideoError> {
         let expected_size = (self.width * self.height) as usize;
         if pixel_buffer.len() != expected_size {
             let got_height = pixel_buffer.len() / self.width as usize;
@@ -468,19 +461,12 @@ impl VideoEncoder for FfmpegMp4Encoder {
             });
         }
 
-        // Convert ARGB u32 to BGRA bytes for FFmpeg
-        // Input: 0xAARRGGBB
+        // Convert RgbColor to BGRA bytes for FFmpeg
+        // Input: (R, G, B)
         // Output: B, G, R, A (little-endian BGRA for FFmpeg)
         let bytes: Vec<u8> = pixel_buffer
             .iter()
-            .flat_map(|&pixel| {
-                [
-                    (pixel & 0xFF) as u8,         // B
-                    ((pixel >> 8) & 0xFF) as u8,  // G
-                    ((pixel >> 16) & 0xFF) as u8, // R
-                    ((pixel >> 24) & 0xFF) as u8, // A
-                ]
-            })
+            .flat_map(|&(r, g, b)| [b, g, r, 255u8])
             .collect();
 
         if let Some(ref mut stdin) = self.stdin
@@ -584,7 +570,7 @@ impl RawEncoder {
 }
 
 impl VideoEncoder for RawEncoder {
-    fn write_frame(&mut self, pixel_buffer: &[u32]) -> Result<(), VideoError> {
+    fn write_frame(&mut self, pixel_buffer: &[RgbColor]) -> Result<(), VideoError> {
         let expected_size = (self.width * self.height) as usize;
         if pixel_buffer.len() != expected_size {
             let got_height = pixel_buffer.len() / self.width as usize;
@@ -594,17 +580,10 @@ impl VideoEncoder for RawEncoder {
             });
         }
 
-        // Convert ARGB u32 to BGRA bytes
+        // Convert RgbColor to BGRA bytes
         let bytes: Vec<u8> = pixel_buffer
             .iter()
-            .flat_map(|&pixel| {
-                [
-                    (pixel & 0xFF) as u8,         // B
-                    ((pixel >> 8) & 0xFF) as u8,  // G
-                    ((pixel >> 16) & 0xFF) as u8, // R
-                    ((pixel >> 24) & 0xFF) as u8, // A
-                ]
-            })
+            .flat_map(|&(r, g, b)| [b, g, r, 255u8])
             .collect();
 
         self.writer.write_all(&bytes)?;
@@ -630,7 +609,7 @@ impl VideoEncoder for RawEncoder {
 ///
 /// # Arguments
 ///
-/// * `frames` - Vector of frame pixel buffers (ARGB u32)
+/// * `frames` - Vector of frame pixel buffers (RgbColor tuples)
 /// * `format` - Output format
 /// * `output_path` - Path to output file
 /// * `width` - Frame width (default: 256 for NES)
@@ -641,7 +620,7 @@ impl VideoEncoder for RawEncoder {
 ///
 /// Number of frames written, or an error.
 pub fn encode_frames(
-    frames: &[Vec<u32>],
+    frames: &[Vec<RgbColor>],
     format: VideoFormat,
     output_path: &Path,
     width: u32,
@@ -664,7 +643,7 @@ pub fn encode_frames(
 ///
 /// # Arguments
 ///
-/// * `frames` - Vector of frame pixel buffers (ARGB u32)
+/// * `frames` - Vector of frame pixel buffers (RgbColor tuples)
 /// * `format` - Output format
 /// * `output_path` - Path to output file
 /// * `src_width` - Source frame width (default: 256 for NES)
@@ -676,7 +655,7 @@ pub fn encode_frames(
 ///
 /// Number of frames written, or an error.
 pub fn encode_frames_with_upscale(
-    frames: &[Vec<u32>],
+    frames: &[Vec<RgbColor>],
     format: VideoFormat,
     output_path: &Path,
     src_width: u32,
@@ -689,7 +668,9 @@ pub fn encode_frames_with_upscale(
     let (dst_width, dst_height) = resolution.dimensions(src_width, src_height);
 
     // If native resolution, don't upscale
-    if *resolution == VideoResolution::Native || (dst_width == src_width && dst_height == src_height) {
+    if *resolution == VideoResolution::Native
+        || (dst_width == src_width && dst_height == src_height)
+    {
         return encode_frames(frames, format, output_path, src_width, src_height, fps);
     }
 
@@ -699,7 +680,7 @@ pub fn encode_frames_with_upscale(
 
     // Upscale and encode each frame
     for frame in frames {
-        let upscaled = upscaler.upscale_argb(frame);
+        let upscaled = upscaler.upscale_rgb(frame);
         encoder.write_frame(&upscaled)?;
     }
 
@@ -766,7 +747,7 @@ mod tests {
             PpmSequenceEncoder::new(Path::new("/tmp/test_invalid"), 256, 240).unwrap();
 
         // Wrong size frame
-        let bad_frame = vec![0u32; 100]; // Much too small
+        let bad_frame: Vec<RgbColor> = vec![(0, 0, 0); 100]; // Much too small
         let result = encoder.write_frame(&bad_frame);
 
         assert!(result.is_err());

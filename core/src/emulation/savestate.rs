@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::emulation::cpu::{Cpu, INTERNAL_RAM_SIZE, MicroOp};
 use crate::emulation::mem::OpenBus;
+use crate::emulation::messages::RgbColor;
 use crate::emulation::ppu::{Ppu, VRAM_SIZE};
 use crate::emulation::rom::RomFile;
 
@@ -111,7 +112,7 @@ pub struct PpuState {
     pub reset_signal: bool,
     // pixel_buffer is skipped - it's just the framebuffer, regenerated every frame
     #[serde(skip)]
-    pub pixel_buffer: Vec<u32>,
+    pub pixel_buffer: Vec<RgbColor>,
     pub dot: u16,
     pub scanline: u16,
     pub bg_next_tile_id: u8,

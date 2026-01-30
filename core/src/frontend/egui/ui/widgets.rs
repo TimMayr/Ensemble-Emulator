@@ -3,7 +3,46 @@
 //! This module contains common widget patterns that are used across
 //! multiple UI components to reduce code duplication.
 
+use crate::emulation::messages::{RgbColor, rgb_to_argb};
 use crate::frontend::util::FromU32;
+
+/// Draw a colored cell with hover highlighting using RgbColor.
+///
+/// This is a common pattern used in palette viewers, pattern tables, etc.
+/// It draws a filled rectangle and adds a white border when hovered.
+///
+/// # Arguments
+/// * `ui` - The egui UI context
+/// * `rect` - The rectangle to draw in
+/// * `color` - The fill color as RgbColor tuple
+/// * `sense` - The interaction sense (click, hover, etc.)
+/// * `id_source` - A unique ID source for this widget (e.g., index in a grid)
+///
+/// # Returns
+/// The response from the interaction
+pub fn color_cell_rgb(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    color: RgbColor,
+    sense: egui::Sense,
+    id_source: impl std::hash::Hash,
+) -> egui::Response {
+    let response = ui.interact(rect, ui.id().with(id_source), sense);
+    let painter = ui.painter();
+
+    painter.rect_filled(rect, 0.0, egui::Color32::from_rgb(color.0, color.1, color.2));
+
+    if response.hovered() {
+        painter.rect_stroke(
+            rect,
+            0.0,
+            egui::Stroke::new(3.0, egui::Color32::WHITE),
+            egui::StrokeKind::Inside,
+        );
+    }
+
+    response
+}
 
 /// Draw a colored cell with hover highlighting.
 ///
