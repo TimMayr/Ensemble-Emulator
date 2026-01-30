@@ -2,17 +2,17 @@
 
 use crossbeam_channel::Sender;
 
-use crate::emulation::messages::FrontendMessage;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::ui::draw_pattern_table;
+use crate::frontend::messages::AsyncFrontendMessage;
 
 /// Render both pattern tables side by side
 pub fn render_pattern_table(
     ui: &mut egui::Ui,
     config: &mut AppConfig,
     emu_textures: &EmuTextures,
-    to_emu: &Sender<FrontendMessage>,
+    async_sender: &Sender<AsyncFrontendMessage>,
 ) {
     if let Some(tile_textures) = &emu_textures.tile_textures
         && let Some(palettes) = &emu_textures.palette_data
@@ -65,7 +65,7 @@ pub fn render_pattern_table(
                 &tile_textures[config.view_config.debug_active_palette][..256],
                 transformed_palette,
                 &pattern_data[..256],
-                to_emu,
+                async_sender,
                 config,
             );
 
@@ -76,7 +76,7 @@ pub fn render_pattern_table(
                 &tile_textures[config.view_config.debug_active_palette][256..],
                 transformed_palette,
                 &pattern_data[256..],
-                to_emu,
+                async_sender,
                 config,
             );
         });

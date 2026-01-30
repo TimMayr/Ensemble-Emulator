@@ -3,13 +3,13 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::emulation::cpu::{Cpu, INTERNAL_RAM_SIZE, MicroOp};
+use crate::emulation::cpu::{Cpu, MicroOp, INTERNAL_RAM_SIZE};
 use crate::emulation::mem::OpenBus;
 use crate::emulation::messages::RgbColor;
 use crate::emulation::ppu::{Ppu, VRAM_SIZE};
 use crate::emulation::rom::RomFile;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CpuState {
     pub program_counter: u16,
     pub stack_pointer: u8,
@@ -91,7 +91,7 @@ impl From<&Cpu> for CpuState {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PpuState {
     pub cycle_counter: u128,
     pub vbl_reset_counter: u8,
@@ -151,7 +151,7 @@ impl From<&Ppu> for PpuState {
             // Only save nametable VRAM (2KB) - addresses 0x2000-0x27FF
             nametable_ram: ppu
                 .memory
-                .get_memory_debug(Some(0x2000..=(0x2000 + (VRAM_SIZE as u16) - 1))),
+                .get_memory_debug(Some(0x2000..=(0x2000 + (VRAM_SIZE as u16 * 2)))),
             ppu_addr_register: ppu.v_register,
             oam_addr_register: ppu.oam_addr_register,
             write_latch: ppu.write_latch.get(),
@@ -191,7 +191,7 @@ impl From<&Ppu> for PpuState {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct SaveState {
     pub cpu: CpuState,
     pub ppu: PpuState,

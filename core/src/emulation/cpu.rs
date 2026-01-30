@@ -1657,7 +1657,7 @@ impl Cpu {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum MicroOp {
     FetchOpcode(MicroOpCallback),
     FetchOperandLo(MicroOpCallback),
@@ -1694,7 +1694,7 @@ pub enum MicroOp {
     FixHiBranch(u16),
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash)]
 pub enum Target {
     A,
     X,
@@ -1714,7 +1714,7 @@ pub enum Target {
     OamWrite,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash)]
 pub enum Source {
     PBrk,
     A,
@@ -1732,7 +1732,7 @@ pub enum Source {
     DmaTemp,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash)]
 pub enum AddressSource {
     AddressLatch,
     Address(u16),
@@ -1744,7 +1744,7 @@ pub enum AddressSource {
     IrqVec,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash)]
 pub enum MicroOpCallback {
     None,
     ADC,
@@ -1807,7 +1807,7 @@ pub enum MicroOpCallback {
     ExitIrq,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum Condition {
     CarrySet,
     CarryClear,
@@ -1819,7 +1819,7 @@ pub enum Condition {
     OverflowClear,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, Hash)]
 pub enum OpType {
     ImmediateAddressing(Target, MicroOpCallback),
     AbsoluteRead(Target, MicroOpCallback),

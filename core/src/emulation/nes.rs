@@ -1,13 +1,14 @@
 use std::cell::RefCell;
+use std::fmt::Debug;
 use std::ops::{Deref, RangeInclusive};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp};
-use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::mem::Memory;
 use crate::emulation::messages::RgbColor;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
@@ -131,7 +132,7 @@ impl Nes {
         self.ppu.borrow_mut().reset();
     }
 
-    pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
+    pub fn load_rom<T: RomFileConvertible + Debug>(&mut self, rom_get: &T) {
         let rom_file = rom_get.as_rom_file();
         self.cpu.load_rom(&rom_file);
         self.ppu.borrow_mut().load_rom(&rom_file);

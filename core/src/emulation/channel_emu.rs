@@ -45,7 +45,7 @@ use crate::frontend::util;
 /// This provides a clean interface for the frontend without threading complications.
 /// The emulator runs in the same thread but is decoupled via message passing.
 pub struct ChannelEmulator {
-    nes: Nes,
+    pub nes: Nes,
     to_frontend: Sender<EmulatorMessage>,
     from_frontend: Receiver<FrontendMessage>,
     input: u8,
@@ -143,11 +143,11 @@ impl ChannelEmulator {
                     self.nes.power();
                 }
                 FrontendMessage::PowerOff => self.nes.power_off(),
-                FrontendMessage::CreateSaveState => {
+                FrontendMessage::CreateSaveState(t) => {
                     let state = self.nes.save_state();
                     let _ = self
                         .to_frontend
-                        .send(EmulatorMessage::SaveState(Box::new(state)));
+                        .send(EmulatorMessage::SaveState(Box::new(state), t));
                 }
                 FrontendMessage::LoadSaveState(s) => self.nes.load_state(*s),
             }

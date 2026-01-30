@@ -7,12 +7,13 @@
 //! - Helper functions for saving files to data and cache directories
 
 use std::collections::HashSet;
+use std::ffi::OsStr;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::{fs, thread};
 
-use crossbeam_channel::{Receiver, bounded};
+use crossbeam_channel::{bounded, Receiver};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +22,7 @@ use crate::frontend::egui::config::{
     AppConfig, AppSpeed, ConsoleConfig, DebugSpeed, SpeedConfig, UserConfig, ViewConfig,
 };
 use crate::frontend::palettes::parse_palette_from_file;
+use crate::frontend::util::append_to_filename;
 
 /// Application identifier used for directory paths
 const APP_QUALIFIER: &str = "com";
@@ -143,10 +145,14 @@ pub fn read_file_async(path: PathBuf) -> Receiver<AsyncFileResult> {
 ///
 /// Note: For operations that must complete before proceeding (like saving config
 /// on exit), use the synchronous `save_config` function instead.
-pub fn write_file_async(path: PathBuf, data: Vec<u8>) -> Receiver<AsyncFileResult> {
+pub fn write_file_async(
+    path: PathBuf,
+    data: Vec<u8>,
+    overwrite: bool,
+) -> Receiver<AsyncFileResult> {
     let (tx, rx) = bounded(1);
     thread::spawn(move || {
-        let result = write_file_sync(&path, &data);
+        let result = write_file_sync(&path, &data, overwrite);
         let _ = tx.send(result);
     });
     rx
@@ -167,7 +173,7 @@ fn read_file_sync(path: &Path) -> AsyncFileResult {
 }
 
 /// Write data to a file synchronously (internal helper)
-fn write_file_sync(path: &Path, data: &[u8]) -> AsyncFileResult {
+fn write_file_sync(path: &Path, data: &[u8], overwrite: bool) -> AsyncFileResult {
     // Ensure parent directory exists
     if let Some(parent) = path.parent()
         && !parent.exists()
@@ -176,25 +182,54 @@ fn write_file_sync(path: &Path, data: &[u8]) -> AsyncFileResult {
         return AsyncFileResult::Error(format!("Failed to create directory: {}", e));
     }
 
-    match fs::File::create(path) {
-        Ok(mut file) => match file.write_all(data) {
-            Ok(_) => AsyncFileResult::WriteSuccess,
-            Err(e) => AsyncFileResult::Error(format!("Failed to write file: {}", e)),
-        },
-        Err(e) => AsyncFileResult::Error(format!("Failed to create file: {}", e)),
+    if path.exists() && !overwrite {
+        let copy = path
+            .file_stem()
+            .map(extract)
+            .map(|s| s.parse::<u8>().unwrap_or(0))
+            .unwrap_or(0);
+
+        let offset = if copy == 0 { 0 } else { 2 };
+
+        let path = append_to_filename(path, format!("_{}", copy + 1).as_str(), offset);
+        write_file_sync(&path, data, overwrite)
+    } else {
+        match fs::File::create(path) {
+            Ok(mut file) => match file.write_all(data) {
+                Ok(_) => AsyncFileResult::WriteSuccess,
+                Err(e) => AsyncFileResult::Error(format!("Failed to write file: {}", e)),
+            },
+            Err(e) => AsyncFileResult::Error(format!("Failed to create file: {}", e)),
+        }
     }
 }
 
+fn extract(f: &OsStr) -> String {
+    f.to_string_lossy()
+        .split('_')
+        .next_back()
+        .unwrap_or("0")
+        .to_string()
+}
+
 /// Save data to the data directory asynchronously
-pub fn save_to_data_dir(filename: &str, data: Vec<u8>) -> Option<Receiver<AsyncFileResult>> {
+pub fn save_to_data_dir(
+    filename: &str,
+    data: Vec<u8>,
+    overwrite: bool,
+) -> Option<Receiver<AsyncFileResult>> {
     let path = get_data_file_path(filename)?;
-    Some(write_file_async(path, data))
+    Some(write_file_async(path, data, overwrite))
 }
 
 /// Save data to the cache directory asynchronously
-pub fn save_to_cache_dir(filename: &str, data: Vec<u8>) -> Option<Receiver<AsyncFileResult>> {
+pub fn save_to_cache_dir(
+    filename: &str,
+    data: Vec<u8>,
+    overwrite: bool,
+) -> Option<Receiver<AsyncFileResult>> {
     let path = get_cache_file_path(filename)?;
-    Some(write_file_async(path, data))
+    Some(write_file_async(path, data, overwrite))
 }
 
 /// Read data from the data directory asynchronously

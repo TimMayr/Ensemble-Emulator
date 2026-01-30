@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 
 use crate::emulation::messages::RgbPalette;
 use crate::emulation::savestate::{self, SaveState};
-use crate::frontend::messages::{AsyncFrontendMessage, RelayType, SavestateLoadContext};
+use crate::frontend::messages::{AsyncFrontendMessage, SavestateLoadContext};
 use crate::frontend::palettes::parse_palette_from_file;
 
 /// Enum to represent errors that can occur during savestate loading UI flow
@@ -136,6 +136,7 @@ pub fn save_file(previous: PathBuf, file_type: FileType) -> Option<PathBuf> {
         .save_file()
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub enum FileType {
     Rom,
     Savestate,
@@ -182,20 +183,6 @@ pub fn get_parent_dir(path: Option<&PathBuf>) -> PathBuf {
         .unwrap_or_default()
 }
 
-pub fn spawn_file_picker(
-    sender: &Sender<AsyncFrontendMessage>,
-    previous_path: Option<&PathBuf>,
-    file_type: FileType,
-    message: RelayType,
-) {
-    let sender = sender.clone();
-    let prev_dir = get_parent_dir(previous_path);
-    std::thread::spawn(move || {
-        let path = pick_file(prev_dir, file_type);
-        let _ = sender.send(AsyncFrontendMessage::EmuRelay(message, path));
-    });
-}
-
 /// Spawn a file picker for palette files that loads the palette asynchronously.
 ///
 /// This reads and parses the palette file in a background thread to avoid blocking the UI.
@@ -215,7 +202,17 @@ pub fn spawn_palette_picker(
         if let Some(path) = pick_file(prev_dir, FileType::Palette) {
             // Parse the palette file in this background thread
             let palette = parse_palette_from_file(Some(path.clone()), fallback_path);
-            let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(Box::new(palette), path));
+            let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette, Some(path)));
+        }
+    });
+}
+
+pub fn spawn_rom_picker(sender: &Sender<AsyncFrontendMessage>, previous_path: Option<&PathBuf>) {
+    let sender = sender.clone();
+    let prev_dir = get_parent_dir(previous_path);
+    std::thread::spawn(move || {
+        if let Some(path) = pick_file(prev_dir, FileType::Rom) {
+            let _ = sender.send(AsyncFrontendMessage::LoadRom(Some(path)));
         }
     });
 }
@@ -232,6 +229,11 @@ pub fn spawn_save_dialog(
     let sender = sender.cloned();
     std::thread::spawn(move || {
         if let Some(p) = save_file(prev_dir, file_type) {
+            let p = p
+                .extension()
+                .map(|_| p.clone())
+                .unwrap_or(p.with_extension(file_type.get_default_extension()));
+
             let result = match OpenOptions::new()
                 .write(true)
                 .create(true)
@@ -391,4 +393,34 @@ pub fn spawn_rom_picker_for_savestate(
             ));
         }
     });
+}
+
+pub fn rom_display_name(path: &Path, sha256: &[u8; 32]) -> String {
+    match path.file_stem().and_then(|s| s.to_str()) {
+        Some(name) if !name.is_empty() => name.to_owned(),
+        _ => format!("Unknown ROM ({})", short_hash_hex(sha256)),
+    }
+}
+pub fn short_hash_hex(hash: &[u8; 32]) -> String {
+    use std::fmt::Write;
+    let mut s = String::with_capacity(12);
+    for b in &hash[..6] {
+        write!(&mut s, "{:02x}", b).unwrap();
+    }
+    s
+}
+
+pub fn append_to_filename(path: &Path, suffix: &str, overwrite: usize) -> PathBuf {
+    let parent = path.parent().unwrap_or_else(|| Path::new(""));
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let ext = path.extension().and_then(|e| e.to_str());
+
+    let cut = stem.len().saturating_sub(overwrite);
+    let mut name = String::from(&stem[..cut]);
+    name.push_str(suffix);
+
+    match ext {
+        Some(ext) => parent.join(format!("{name}.{ext}")),
+        None => parent.join(name),
+    }
 }
