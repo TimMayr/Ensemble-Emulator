@@ -598,41 +598,35 @@ impl EguiApp {
 
                 let mut quicksave_path = None;
                 if let Ok(children) = children {
-                    for child in children {
-                        if let Ok(child) = child {
-                            let stem = child.path().file_stem()?.to_string_lossy().to_string();
+                    for child in children.flatten() {
+                        let stem = child.path().file_stem()?.to_string_lossy().to_string();
 
-                            let time_version = stem.split_once('_')?.1;
+                        let time_version = stem.split_once('_')?.1;
 
-                            let (timestamp, version) =
-                                if time_version.chars().filter(|c| *c == '_').count() > 1 {
-                                    time_version.rsplit_once('_')?
-                                } else {
-                                    (time_version, "0")
-                                };
+                        let (timestamp, version) =
+                            if time_version.chars().filter(|c| *c == '_').count() > 1 {
+                                time_version.rsplit_once('_')?
+                            } else {
+                                (time_version, "0")
+                            };
 
-                            let time = chrono::NaiveDateTime::parse_from_str(
-                                timestamp,
-                                "%Y-%m-%d_%H-%M-%S",
-                            );
+                        let time =
+                            chrono::NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d_%H-%M-%S");
 
-                            let version = version.parse::<u8>().unwrap_or(0);
+                        let version = version.parse::<u8>().unwrap_or(0);
 
-                            if let Ok(time) = time {
-                                if quicksave_path.is_none() {
-                                    quicksave_path = Some((child.path(), time, version))
+                        if let Ok(time) = time {
+                            if quicksave_path.is_none() {
+                                quicksave_path = Some((child.path(), time, version))
+                            }
+
+                            if let Some(path) = quicksave_path.clone() {
+                                if path.1 < time {
+                                    quicksave_path = Some((child.path(), time, version));
                                 }
 
-                                if let Some(path) = quicksave_path.clone() {
-                                    if path.1 < time {
-                                        quicksave_path = Some((child.path(), time, version));
-                                    }
-
-                                    if path.1 == time {
-                                        if path.2 < version {
-                                            quicksave_path = Some((child.path(), time, version));
-                                        }
-                                    }
+                                if path.1 == time && path.2 < version {
+                                    quicksave_path = Some((child.path(), time, version));
                                 }
                             }
                         }
