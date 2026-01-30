@@ -156,24 +156,24 @@ pub trait VideoEncoder: Send {
 // =============================================================================
 
 /// Create a video encoder for the specified format.
-///
-/// # Arguments
-///
-/// * `format` - The video format to use
-/// * `output_path` - Path to output file/directory
-/// * `width` - Frame width in pixels
-/// * `height` - Frame height in pixels
-/// * `fps` - Frames per second
-///
-/// # Returns
-///
-/// A boxed video encoder, or an error if the encoder cannot be created.
 pub fn create_encoder(
     format: VideoFormat,
     output_path: &Path,
     width: u32,
     height: u32,
     fps: f64,
+) -> Result<Box<dyn VideoEncoder>, VideoError> {
+    create_encoder_with_hw(format, output_path, width, height, fps, HwEncoder::Auto)
+}
+
+/// Create a video encoder for the specified format with hardware encoder option.
+pub fn create_encoder_with_hw(
+    format: VideoFormat,
+    output_path: &Path,
+    width: u32,
+    height: u32,
+    fps: f64,
+    hw_encoder: HwEncoder,
 ) -> Result<Box<dyn VideoEncoder>, VideoError> {
     match format {
         VideoFormat::Png => Ok(Box::new(PngSequenceEncoder::new(
@@ -186,11 +186,12 @@ pub fn create_encoder(
             width,
             height,
         )?)),
-        VideoFormat::Mp4 => Ok(Box::new(FfmpegMp4Encoder::new(
+        VideoFormat::Mp4 => Ok(Box::new(FfmpegMp4Encoder::new_with_hw(
             output_path,
             width,
             height,
             fps,
+            hw_encoder,
         )?)),
         VideoFormat::Raw => Ok(Box::new(RawEncoder::new(width, height)?)),
     }
@@ -355,14 +356,91 @@ impl VideoEncoder for PpmSequenceEncoder {
 }
 
 // =============================================================================
-// FFmpeg MP4 Encoder
+// FFmpeg MP4 Encoder with Hardware Encoding Support
 // =============================================================================
+
+/// Hardware video encoder options.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HwEncoder {
+    /// Automatically detect available hardware encoder
+    Auto,
+    /// NVIDIA NVENC
+    Nvenc,
+    /// AMD AMF/VCE
+    Amf,
+    /// Intel/Linux VAAPI
+    Vaapi,
+    /// Intel QuickSync Video
+    Qsv,
+    /// Software encoding (libx264)
+    Software,
+}
+
+impl HwEncoder {
+    /// Parse from string
+    pub fn parse(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "auto" => HwEncoder::Auto,
+            "nvenc" | "nvidia" => HwEncoder::Nvenc,
+            "amf" | "amd" | "vce" => HwEncoder::Amf,
+            "vaapi" | "va-api" | "linux" => HwEncoder::Vaapi,
+            "qsv" | "quicksync" | "intel" => HwEncoder::Qsv,
+            "sw" | "software" | "libx264" | "cpu" => HwEncoder::Software,
+            _ => HwEncoder::Auto,
+        }
+    }
+    
+    /// Get the FFmpeg codec name for this encoder
+    fn codec_name(&self) -> &'static str {
+        match self {
+            HwEncoder::Auto => "libx264",  // Will be overridden by detect
+            HwEncoder::Nvenc => "h264_nvenc",
+            HwEncoder::Amf => "h264_amf",
+            HwEncoder::Vaapi => "h264_vaapi",
+            HwEncoder::Qsv => "h264_qsv",
+            HwEncoder::Software => "libx264",
+        }
+    }
+    
+    /// Check if this encoder is available
+    fn is_available(&self) -> bool {
+        match self {
+            HwEncoder::Software | HwEncoder::Auto => true,
+            _ => {
+                // Try to check if the encoder exists
+                let output = Command::new("ffmpeg")
+                    .args(["-hide_banner", "-encoders"])
+                    .output();
+                    
+                if let Ok(output) = output {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    stdout.contains(self.codec_name())
+                } else {
+                    false
+                }
+            }
+        }
+    }
+}
+
+/// Detect the best available hardware encoder.
+pub fn detect_hw_encoder() -> HwEncoder {
+    // Try encoders in order of preference
+    for encoder in [HwEncoder::Nvenc, HwEncoder::Amf, HwEncoder::Vaapi, HwEncoder::Qsv] {
+        if encoder.is_available() {
+            eprintln!("Detected hardware encoder: {:?}", encoder);
+            return encoder;
+        }
+    }
+    eprintln!("No hardware encoder detected, using software (libx264)");
+    HwEncoder::Software
+}
 
 /// Encoder that pipes frames to FFmpeg for MP4 encoding.
 ///
 /// Requires FFmpeg to be installed and available in PATH.
 ///
-/// Uses H.264 encoding with yuv420p pixel format for broad compatibility.
+/// Supports hardware encoders (NVENC, AMF, VAAPI, QSV) when available.
 pub struct FfmpegMp4Encoder {
     child: Option<Child>,
     stdin: Option<BufWriter<std::process::ChildStdin>>,
@@ -373,12 +451,23 @@ pub struct FfmpegMp4Encoder {
 }
 
 impl FfmpegMp4Encoder {
-    /// Create a new FFmpeg MP4 encoder.
+    /// Create a new FFmpeg MP4 encoder with automatic hardware encoder detection.
     ///
     /// # Errors
     ///
     /// Returns `VideoError::FfmpegNotFound` if FFmpeg is not installed.
     pub fn new(output_path: &Path, width: u32, height: u32, fps: f64) -> Result<Self, VideoError> {
+        Self::new_with_hw(output_path, width, height, fps, HwEncoder::Auto)
+    }
+    
+    /// Create a new FFmpeg MP4 encoder with the specified hardware encoder.
+    pub fn new_with_hw(
+        output_path: &Path,
+        width: u32,
+        height: u32,
+        fps: f64,
+        hw_encoder: HwEncoder,
+    ) -> Result<Self, VideoError> {
         // Check if ffmpeg exists
         let ffmpeg_check = Command::new("ffmpeg").arg("-version").output();
 
@@ -389,6 +478,16 @@ impl FfmpegMp4Encoder {
             Err(e) => return Err(VideoError::IoError(e)),
             Ok(_) => {}
         }
+        
+        // Resolve the actual encoder to use
+        let encoder = match hw_encoder {
+            HwEncoder::Auto => detect_hw_encoder(),
+            other if other.is_available() => other,
+            _ => {
+                eprintln!("Requested encoder {:?} not available, falling back to software", hw_encoder);
+                HwEncoder::Software
+            }
+        };
 
         // Create output directory if needed
         if let Some(parent) = output_path.parent()
@@ -403,38 +502,97 @@ impl FfmpegMp4Encoder {
         let stderr_file = File::create(&stderr_path)?;
 
         let path = output_path.with_extension(FileType::Mp4.get_default_extension());
+        
+        // Build ffmpeg arguments based on encoder
+        let codec_name = encoder.codec_name();
+        let is_hw = !matches!(encoder, HwEncoder::Software);
+        
+        let mut args = vec![
+            "-y".to_string(),           // Overwrite output
+            "-f".to_string(),
+            "rawvideo".to_string(),     // Input format
+            "-pixel_format".to_string(),
+            "bgra".to_string(),         // Input pixel format
+            "-video_size".to_string(),
+            format!("{}x{}", width, height),  // Frame size
+            "-framerate".to_string(),
+            format!("{}", fps),         // Frame rate
+            "-i".to_string(),
+            "-".to_string(),            // Read from stdin
+        ];
+        
+        // Encoder-specific arguments
+        args.extend(["-c:v".to_string(), codec_name.to_string()]);
+        
+        if is_hw {
+            // Hardware encoder quality settings
+            match encoder {
+                HwEncoder::Nvenc => {
+                    args.extend([
+                        "-preset".to_string(),
+                        "p4".to_string(),  // Medium quality/speed
+                        "-rc".to_string(),
+                        "vbr".to_string(),
+                        "-cq".to_string(),
+                        "19".to_string(),
+                    ]);
+                }
+                HwEncoder::Amf => {
+                    args.extend([
+                        "-quality".to_string(),
+                        "balanced".to_string(),
+                        "-rc".to_string(),
+                        "vbr_latency".to_string(),
+                    ]);
+                }
+                HwEncoder::Vaapi => {
+                    args.extend([
+                        "-vaapi_device".to_string(),
+                        "/dev/dri/renderD128".to_string(),
+                        "-vf".to_string(),
+                        "format=nv12,hwupload".to_string(),
+                    ]);
+                }
+                HwEncoder::Qsv => {
+                    args.extend([
+                        "-preset".to_string(),
+                        "medium".to_string(),
+                        "-global_quality".to_string(),
+                        "25".to_string(),
+                    ]);
+                }
+                _ => {}
+            }
+        } else {
+            // Software encoder settings
+            args.extend([
+                "-preset".to_string(),
+                "fast".to_string(),
+                "-crf".to_string(),
+                "16".to_string(),
+            ]);
+        }
+        
+        // Common output arguments
+        args.extend([
+            "-vsync".to_string(),
+            "cfr".to_string(),
+            "-video_track_timescale".to_string(),
+            "39375000".to_string(),
+            "-pix_fmt".to_string(),
+            "yuv420p".to_string(),
+            "-movflags".to_string(),
+            "+faststart".to_string(),
+            "-f".to_string(),
+            "mp4".to_string(),
+            path.to_str().unwrap_or("output.mp4").to_string(),
+        ]);
+        
+        eprintln!("Using {} encoder for MP4 output", codec_name);
+        
         // Start ffmpeg process
         let mut child = Command::new("ffmpeg")
-            .args([
-                "-y", // Overwrite output
-                "-f",
-                "rawvideo", // Input format
-                "-pixel_format",
-                "bgra", // Input pixel format
-                "-video_size",
-                &format!("{}x{}", width, height), // Frame size
-                "-framerate",
-                &format!("{}", fps), // Frame rate
-                "-i",
-                "-", // Read from stdin
-                "-c:v",
-                "libx264", // H.264 codec
-                "-preset",
-                "fast", // Encoding speed
-                "-vsync",
-                "cfr",
-                "-video_track_timescale",
-                "39375000",
-                "-crf",
-                "16", // Quality (0-51, lower = better)
-                "-pix_fmt",
-                "yuv420p", // Output pixel format
-                "-movflags",
-                "+faststart", // Enable streaming
-                "-f",
-                "mp4", // Explicitly specify MP4 format (in case path has no extension)
-                path.to_str().unwrap_or("output.mp4"),
-            ])
+            .args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::from(stderr_file))
@@ -767,16 +925,6 @@ pub struct StreamingVideoEncoder {
 
 impl StreamingVideoEncoder {
     /// Create a new streaming encoder.
-    ///
-    /// # Arguments
-    ///
-    /// * `format` - Output video format
-    /// * `output_path` - Path to output file
-    /// * `src_width` - Source frame width (NES: 256)
-    /// * `src_height` - Source frame height (NES: 240)
-    /// * `resolution` - Target output resolution
-    /// * `fps` - Frame rate
-    /// * `no_gpu` - If true, disable GPU acceleration (use CPU)
     pub fn new(
         format: VideoFormat,
         output_path: &Path,
@@ -786,13 +934,24 @@ impl StreamingVideoEncoder {
         fps: f64,
         no_gpu: bool,
     ) -> Result<Self, VideoError> {
+        Self::new_with_hw(format, output_path, src_width, src_height, resolution, fps, no_gpu, HwEncoder::Auto)
+    }
+    
+    /// Create a new streaming encoder with hardware encoder option.
+    pub fn new_with_hw(
+        format: VideoFormat,
+        output_path: &Path,
+        src_width: u32,
+        src_height: u32,
+        resolution: &super::upscale::VideoResolution,
+        fps: f64,
+        no_gpu: bool,
+        hw_encoder: HwEncoder,
+    ) -> Result<Self, VideoError> {
         use super::gpu_upscale::GpuUpscaler;
         use super::upscale::{PixelArtUpscaler, VideoResolution};
 
         let (dst_width, dst_height) = resolution.dimensions(src_width, src_height);
-        
-        // Get effective source dimensions for PAR correction
-        let (effective_width, effective_height) = resolution.effective_source_dimensions(src_width, src_height);
 
         // Determine upscaling backend
         let upscale_backend = if *resolution == VideoResolution::Native
@@ -808,10 +967,7 @@ impl StreamingVideoEncoder {
             ))
         } else {
             // Try GPU first, fall back to CPU
-            match GpuUpscaler::try_new(
-                src_width, src_height, dst_width, dst_height,
-                effective_width as f32, effective_height as f32,
-            ) {
+            match GpuUpscaler::try_new(src_width, src_height, dst_width, dst_height) {
                 Some(gpu_upscaler) => {
                     eprintln!("Using GPU upscaling (wgpu compute) {}x{} -> {}x{}", 
                              src_width, src_height, dst_width, dst_height);
@@ -827,7 +983,7 @@ impl StreamingVideoEncoder {
             }
         };
 
-        let encoder = create_encoder(format, output_path, dst_width, dst_height, fps)?;
+        let encoder = create_encoder_with_hw(format, output_path, dst_width, dst_height, fps, hw_encoder)?;
 
         Ok(Self {
             encoder,

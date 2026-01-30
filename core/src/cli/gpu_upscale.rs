@@ -21,65 +21,35 @@ struct Params {
     src_height: u32,
     dst_width: u32,
     dst_height: u32,
-    // For PAR correction: effective source dimensions
-    effective_src_width: f32,
-    effective_src_height: f32,
+    scale_x: f32,
+    scale_y: f32,
 }
 
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var<storage, read> src: array<u32>;  // RGB packed as u32
 @group(0) @binding(2) var<storage, read_write> dst: array<u32>;  // BGRA output
 
-const PI: f32 = 3.14159265359;
 const PI_HALF: f32 = 1.5707963268;
-const TAYLOR_NORMALIZATION: f32 = 0.99549102425;  // 1/1.00452485553
 
-// Taylor series sin approximation (for values in [-PI, PI])
-fn taylor_sin(p: f32) -> f32 {
-    let p2 = p * p;
-    let p3 = p * p2;
-    let p5 = p2 * p3;
-    return clamp(TAYLOR_NORMALIZATION * (p - p3 / 6.0 + p5 / 120.0), -1.0, 1.0);
+// Get clamped pixel from source
+fn get_pixel(x: i32, y: i32) -> vec3<f32> {
+    let cx = clamp(x, 0, i32(params.src_width) - 1);
+    let cy = clamp(y, 0, i32(params.src_height) - 1);
+    let p = src[u32(cy) * params.src_width + u32(cx)];
+    // Unpack RGB (stored as R | G<<8 | B<<16)
+    return vec3<f32>(f32(p & 0xFFu), f32((p >> 8u) & 0xFFu), f32((p >> 16u) & 0xFFu));
 }
 
-// Sample source texture with bilinear interpolation
-fn sample_bilinear(x: f32, y: f32) -> vec3<f32> {
-    let x0 = u32(floor(x));
-    let y0 = u32(floor(y));
-    let x1 = min(x0 + 1u, params.src_width - 1u);
-    let y1 = min(y0 + 1u, params.src_height - 1u);
+// Bilinear interpolation between four pixels
+fn bilinear(x0: i32, y0: i32, fx: f32, fy: f32) -> vec3<f32> {
+    let c00 = get_pixel(x0, y0);
+    let c10 = get_pixel(x0 + 1, y0);
+    let c01 = get_pixel(x0, y0 + 1);
+    let c11 = get_pixel(x0 + 1, y0 + 1);
     
-    let fx = x - floor(x);
-    let fy = y - floor(y);
-    
-    // Clamp coordinates
-    let cx0 = min(x0, params.src_width - 1u);
-    let cy0 = min(y0, params.src_height - 1u);
-    
-    // Get four corner pixels
-    let p00 = src[cy0 * params.src_width + cx0];
-    let p10 = src[cy0 * params.src_width + x1];
-    let p01 = src[y1 * params.src_width + cx0];
-    let p11 = src[y1 * params.src_width + x1];
-    
-    // Unpack RGB
-    let c00 = vec3<f32>(f32(p00 & 0xFFu), f32((p00 >> 8u) & 0xFFu), f32((p00 >> 16u) & 0xFFu));
-    let c10 = vec3<f32>(f32(p10 & 0xFFu), f32((p10 >> 8u) & 0xFFu), f32((p10 >> 16u) & 0xFFu));
-    let c01 = vec3<f32>(f32(p01 & 0xFFu), f32((p01 >> 8u) & 0xFFu), f32((p01 >> 16u) & 0xFFu));
-    let c11 = vec3<f32>(f32(p11 & 0xFFu), f32((p11 >> 8u) & 0xFFu), f32((p11 >> 16u) & 0xFFu));
-    
-    // Bilinear interpolation
     let c0 = mix(c00, c10, fx);
     let c1 = mix(c01, c11, fx);
     return mix(c0, c1, fy);
-}
-
-// Sample source with nearest neighbor
-fn sample_nearest(x: f32, y: f32) -> vec3<f32> {
-    let ix = min(u32(x), params.src_width - 1u);
-    let iy = min(u32(y), params.src_height - 1u);
-    let p = src[iy * params.src_width + ix];
-    return vec3<f32>(f32(p & 0xFFu), f32((p >> 8u) & 0xFFu), f32((p >> 16u) & 0xFFu));
 }
 
 @compute @workgroup_size(8, 8)
@@ -91,52 +61,65 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
     
-    // Map destination pixel to source coordinates
-    // Use effective dimensions for PAR-corrected aspect ratio
-    let u = (f32(dst_x) + 0.5) / f32(params.dst_width);
-    let v = (f32(dst_y) + 0.5) / f32(params.dst_height);
+    // Map destination pixel center to source coordinates
+    let src_x = (f32(dst_x) + 0.5) / params.scale_x;
+    let src_y = (f32(dst_y) + 0.5) / params.scale_y;
     
-    let src_x = u * params.effective_src_width;
-    let src_y = v * params.effective_src_height;
+    // Compute extent (how much source space one output pixel covers)
+    let extent_x = 1.0 / params.scale_x;
+    let extent_y = 1.0 / params.scale_y;
+    let max_extent = max(extent_x, extent_y);
     
-    // Compute extent (derivative in texel space)
-    // For pure magnification, extent = src_size / dst_size
-    let extent_x = params.effective_src_width / f32(params.dst_width);
-    let extent_y = params.effective_src_height / f32(params.dst_height);
-    let extent = vec2<f32>(max(extent_x, 1.0 / 256.0), max(extent_y, 1.0 / 256.0));
-    
-    // Get base pixel and phase
-    let pixel = vec2<f32>(src_x, src_y) - 0.5;
-    let base_pixel = floor(pixel);
-    let phase = pixel - base_pixel;
+    // Get base pixel and phase (fractional position within pixel)
+    let pixel_x = src_x - 0.5;
+    let pixel_y = src_y - 0.5;
+    let base_x = floor(pixel_x);
+    let base_y = floor(pixel_y);
+    let phase_x = pixel_x - base_x;
+    let phase_y = pixel_y - base_y;
     
     var color: vec3<f32>;
     
-    // Fast mode: For magnification (extent <= 1.0), use bandlimited filter
-    let max_extent = max(extent.x, extent.y);
-    
     if (max_extent > 1.0) {
-        // Minification: just use bilinear
-        color = sample_bilinear(src_x, src_y);
+        // Minification: use bilinear filtering
+        color = bilinear(i32(base_x), i32(base_y), phase_x, phase_y);
     } else {
-        // Magnification: apply bandlimited filter
-        // Compute sinusoidal shift
-        let phase_shifted = (phase - 0.5) / min(extent, vec2<f32>(0.5, 0.5));
-        let clamped = clamp(phase_shifted, vec2<f32>(-1.0), vec2<f32>(1.0));
-        let shift = 0.5 + 0.5 * vec2<f32>(taylor_sin(PI_HALF * clamped.x), taylor_sin(PI_HALF * clamped.y));
+        // Magnification: apply bandlimited pixel filter
+        // Key formula from themaister:
+        // shift = 0.5 + 0.5 * sin(PI/2 * clamp((phase - 0.5) / min(extent, 0.5), -1, 1))
         
-        // Compute lerp factor between bandlimited and regular sampling
-        // max_extent = 1 -> l = 0, max_extent = 0.5 -> l = 1
+        let clamped_extent_x = max(min(extent_x, 0.5), 1.0 / 256.0);
+        let clamped_extent_y = max(min(extent_y, 0.5), 1.0 / 256.0);
+        
+        let normalized_x = clamp((phase_x - 0.5) / clamped_extent_x, -1.0, 1.0);
+        let normalized_y = clamp((phase_y - 0.5) / clamped_extent_y, -1.0, 1.0);
+        
+        // Sinusoidal shift - snaps to pixel centers, smooth at boundaries
+        let shift_x = 0.5 + 0.5 * sin(PI_HALF * normalized_x);
+        let shift_y = 0.5 + 0.5 * sin(PI_HALF * normalized_y);
+        
+        // Sample at shifted position
+        let sample_x = base_x + 0.5 + shift_x;
+        let sample_y = base_y + 0.5 + shift_y;
+        
+        let sx0 = i32(floor(sample_x));
+        let sy0 = i32(floor(sample_y));
+        let fx = fract(sample_x);
+        let fy = fract(sample_y);
+        
+        let bandlimited = bilinear(sx0, sy0, fx, fy);
+        
+        // Blend factor: l=1 when max_extent<=0.5, l=0 when max_extent>=1.0
         let l = clamp(2.0 - 2.0 * max_extent, 0.0, 1.0);
         
-        // Sample at shifted UV
-        let sample_pos = base_pixel + 0.5 + shift;
-        let bandlimited = sample_bilinear(sample_pos.x, sample_pos.y);
-        
-        // For high magnification, use pure bandlimited
-        // For lower magnification, blend with regular bilinear
-        let regular = sample_bilinear(src_x, src_y);
-        color = mix(regular, bandlimited, l);
+        if (l >= 1.0) {
+            color = bandlimited;
+        } else if (l <= 0.0) {
+            color = bilinear(i32(base_x), i32(base_y), phase_x, phase_y);
+        } else {
+            let regular = bilinear(i32(base_x), i32(base_y), phase_x, phase_y);
+            color = mix(regular, bandlimited, l);
+        }
     }
     
     // Pack as BGRA (for FFmpeg)
@@ -157,8 +140,8 @@ struct ShaderParams {
     src_height: u32,
     dst_width: u32,
     dst_height: u32,
-    effective_src_width: f32,
-    effective_src_height: f32,
+    scale_x: f32,
+    scale_y: f32,
     _padding: [f32; 2],  // Align to 32 bytes
 }
 
@@ -185,9 +168,9 @@ impl GpuUpscaler {
         src_height: u32,
         dst_width: u32,
         dst_height: u32,
-        effective_src_width: f32,
-        effective_src_height: f32,
     ) -> Option<Self> {
+        let scale_x = dst_width as f32 / src_width as f32;
+        let scale_y = dst_height as f32 / src_height as f32;
         // Request GPU device (blocking)
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -333,8 +316,8 @@ impl GpuUpscaler {
             src_height,
             dst_width,
             dst_height,
-            effective_src_width,
-            effective_src_height,
+            scale_x,
+            scale_y,
             _padding: [0.0; 2],
         };
         queue.write_buffer(&params_buffer, 0, bytemuck::bytes_of(&params));
@@ -423,7 +406,7 @@ mod tests {
     #[test]
     fn test_gpu_upscaler_creation() {
         // This test may fail on CI without GPU, which is expected
-        let upscaler = GpuUpscaler::try_new(256, 240, 1920, 1080, 293.0, 240.0);
+        let upscaler = GpuUpscaler::try_new(256, 240, 1920, 1080);
         // Just check that it doesn't panic - actual GPU may not be available
         println!("GPU upscaler available: {}", upscaler.is_some());
     }
