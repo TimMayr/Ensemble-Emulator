@@ -8,12 +8,10 @@
 use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
-use image::{ImageBuffer, Rgba};
 use nes_core::cli::{
     self, CliArgs, ExecutionConfig, ExecutionEngine, MemoryDump, MemoryType, OutputWriter,
-    SavestateConfig, StopReason,
+    SavestateConfig, StopReason, VideoFormat, encode_frames, is_ffmpeg_available,
 };
-use nes_core::cli::args::VideoFormat;
 use nes_core::emulation::nes::Nes;
 use nes_core::emulation::rom::RomFile;
 use nes_core::frontend::egui_frontend;
@@ -132,7 +130,7 @@ fn run_headless(args: &CliArgs) -> Result<(), String> {
 
     // Output memory dumps
     output_results(engine.emulator(), args)?;
-    save_video(engine.frames, args)?
+    save_video(&engine.frames, args)?;
 
     // Check for error stop reason
     match result.stop_reason {
@@ -187,19 +185,54 @@ fn output_results(emu: &Nes, args: &CliArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn save_video(frames: &Vec<Vec<u32>>, args: &CliArgs) -> Result<(), String> {
-    if let Some(video_path) = args.video.video {
-        match args.video.video_format {
-            VideoFormat::Raw => todo!(),
-            VideoFormat::Ppm => {}
-            VideoFormat::Png => {}
-            VideoFormat::Mp4 => {}
+/// Save recorded frames to video file
+fn save_video(frames: &[Vec<u32>], args: &CliArgs) -> Result<(), String> {
+    if let Some(ref video_path) = args.video.video {
+        // Check if format requires FFmpeg and warn if not available
+        if args.video.video_format == VideoFormat::Mp4 && !is_ffmpeg_available() {
+            return Err(
+                "MP4 export requires FFmpeg to be installed. \
+                 Use --video-format png or --video-format ppm for self-contained export."
+                    .to_string(),
+            );
+        }
+
+        if frames.is_empty() {
+            eprintln!("Warning: No frames to export");
+            return Ok(());
+        }
+
+        // NES resolution
+        const NES_WIDTH: u32 = 256;
+        const NES_HEIGHT: u32 = 240;
+
+        let fps = args.video.video_fps;
+
+        if !args.quiet {
+            eprintln!(
+                "Exporting {} frames to {} as {:?}...",
+                frames.len(),
+                video_path.display(),
+                args.video.video_format
+            );
+        }
+
+        let frames_written = encode_frames(
+            frames,
+            args.video.video_format,
+            video_path,
+            NES_WIDTH,
+            NES_HEIGHT,
+            fps,
+        )
+        .map_err(|e| e.to_string())?;
+
+        if !args.quiet {
+            eprintln!("Exported {} frames successfully", frames_written);
         }
     }
-}
 
-fn get_image(data: &Vec<u32>)-> Result<(), image::ImageError> {
-
+    Ok(())
 }
 
 // =============================================================================

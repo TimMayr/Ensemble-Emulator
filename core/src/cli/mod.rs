@@ -174,8 +174,9 @@ pub mod config;
 pub mod error;
 pub mod execution;
 pub mod output;
+pub mod video;
 
-pub use args::{parse_hex_u16, CliArgs, OutputFormat};
+pub use args::{parse_hex_u16, CliArgs, OutputFormat, VideoFormat};
 use clap::Parser;
 pub use config::ConfigFile;
 pub use error::{CliError, CliResult};
@@ -187,6 +188,7 @@ pub use output::{
     InterpretedNametable, InterpretedNametables, InterpretedOam, MemoryDump, MemoryFormatter,
     MemoryType, OamSprite, OutputWriter,
 };
+pub use video::{VideoEncoder, VideoError, create_encoder, encode_frames, is_ffmpeg_available};
 
 // =============================================================================
 // Argument Parsing
