@@ -43,6 +43,7 @@ use std::process::{Child, Command, Stdio};
 use image::{ImageBuffer, Rgba, RgbaImage};
 
 use super::args::VideoFormat;
+use crate::frontend::util::FileType;
 
 // =============================================================================
 // Error Types
@@ -395,6 +396,7 @@ impl FfmpegMp4Encoder {
             std::env::temp_dir().join(format!("nes_ffmpeg_stderr_{}.log", std::process::id()));
         let stderr_file = File::create(&stderr_path)?;
 
+        let path = output_path.with_extension(FileType::Mp4.get_default_extension());
         // Start ffmpeg process
         let mut child = Command::new("ffmpeg")
             .args([
@@ -414,14 +416,14 @@ impl FfmpegMp4Encoder {
                 "-preset",
                 "fast", // Encoding speed
                 "-crf",
-                "18", // Quality (0-51, lower = better)
+                "0", // Quality (0-51, lower = better)
                 "-pix_fmt",
                 "yuv420p", // Output pixel format
                 "-movflags",
                 "+faststart", // Enable streaming
                 "-f",
                 "mp4", // Explicitly specify MP4 format (in case path has no extension)
-                output_path.to_str().unwrap_or("output.mp4"),
+                path.to_str().unwrap_or("output.mp4"),
             ])
             .stdin(Stdio::piped())
             .stdout(Stdio::null())

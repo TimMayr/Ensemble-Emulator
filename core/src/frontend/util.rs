@@ -160,6 +160,16 @@ impl FileType {
             FileType::All => dialog.add_filter("All Files", &["*"]),
         }
     }
+
+    pub fn get_default_extension(&self) -> &str {
+        match self {
+            FileType::Rom => "nes",
+            FileType::Savestate => "sav",
+            FileType::Palette => "pal",
+            FileType::Mp4 => "mp4",
+            FileType::All => "",
+        }
+    }
 }
 
 pub trait AddFilter {

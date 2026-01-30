@@ -10,7 +10,7 @@ verbose = true
 
 [execution]
 # Run for exactly 60 frames (1 second at 60fps)
-frames = 600
+frames = 6000
 
 [memory]
 # Dump the first 256 bytes of CPU RAM
