@@ -38,7 +38,7 @@ pub fn save_screenshot(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), S
         // Convert RgbColor to RGB bytes for PNG
         let rgb_data: Vec<u8> = frame.iter().flat_map(|&(r, g, b)| [r, g, b]).collect();
 
-        // Create PNG using image crate (RGB format)
+        // Create PNG using image crate
         let img: image::ImageBuffer<image::Rgb<u8>, Vec<u8>> =
             image::ImageBuffer::from_raw(NES_WIDTH, NES_HEIGHT, rgb_data)
                 .ok_or_else(|| "Failed to create image buffer".to_string())?;
@@ -57,18 +57,10 @@ pub fn save_screenshot(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), S
 /// Save a single screenshot (used in streaming mode).
 pub fn save_single_screenshot(frame: &[RgbColor], args: &CliArgs) -> Result<(), String> {
     if let Some(ref screenshot_path) = args.video.screenshot {
-        // Convert to RGB bytes (consistent with save_screenshot)
-        let rgb_data: Vec<u8> = (0..(NES_WIDTH * NES_HEIGHT) as usize)
-            .flat_map(|i| {
-                let (r, g, b) = frame[i];
-                [r, g, b]
-            })
-            .collect();
-
-        // Create PNG using image crate (RGB format)
-        let img: image::ImageBuffer<image::Rgb<u8>, Vec<u8>> =
-            image::ImageBuffer::from_raw(NES_WIDTH, NES_HEIGHT, rgb_data)
-                .ok_or_else(|| "Failed to create image buffer".to_string())?;
+        let img: image::RgbaImage = image::ImageBuffer::from_fn(NES_WIDTH, NES_HEIGHT, |x, y| {
+            let (r, g, b) = frame[(y * NES_WIDTH + x) as usize];
+            image::Rgba([r, g, b, 255])
+        });
 
         img.save(screenshot_path)
             .map_err(|e| format!("Failed to save screenshot: {}", e))?;
