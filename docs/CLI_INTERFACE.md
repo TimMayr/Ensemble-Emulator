@@ -235,12 +235,6 @@ Arguments are organized into logical groups:
 |      | `--video`                       | Record video to file                             | PathBuf |
 |      | `--video-format`                | Video output format                              | String  |
 |      | `--video-fps`                   | Video frame rate                                 | u32     |
-|      | `--export-nametables`           | Export nametable visualization as screenshot     | PathBuf |
-|      | `--export-nametables-video`     | Export nametable visualization as video          | PathBuf |
-|      | `--export-pattern-tables`       | Export pattern table visualization as screenshot | PathBuf |
-|      | `--export-pattern-tables-video` | Export pattern table visualization as video      | PathBuf |
-|      | `--export-sprites`              | Export sprite visualization as screenshot        | PathBuf |
-|      | `--export-sprites-video`        | Export sprite visualization as video             | PathBuf |
 
 **Video Formats:**
 
@@ -259,7 +253,6 @@ Arguments are organized into logical groups:
 |      | `--until-opcode` | Run until specific opcode executes | u8       |
 |      | `--until-mem`    | Run until memory condition         | String   |
 |      | `--until-hlt`    | Run until HLT instruction          | bool     |
-|      | `--step`         | Single-step mode                   | bool     |
 |      | `--trace`        | Enable instruction trace           | PathBuf  |
 |      | `--breakpoint`   | Set breakpoint at address          | Vec<u16> |
 
@@ -561,19 +554,6 @@ nes_main -H --rom game.nes --frames 600 --video frame_%04d.ppm --video-format pp
 nes_main -H --rom game.nes --frames 600 --video video.mp4 --video-format mp4
 ```
 
-### Debug Viewer Exports
-
-```bash
-# Export pattern tables
-nes_main -H --rom game.nes --frames 100 --export-pattern-tables chr.png
-
-# Export nametables
-nes_main -H --rom game.nes --frames 100 --export-nametables nametables.png
-
-# Export sprite viewer
-nes_main -H --rom game.nes --frames 100 --export-sprites sprites.png
-```
-
 ---
 
 ## Execution Control
@@ -604,14 +584,11 @@ nes_main -H --rom game.nes --until-mem "0x6000==0x80"
 nes_main -H --rom game.nes --frames 3600 --until-pc 0x8500 --until-mem "0x6000==0x80"
 ```
 
-### Breakpoints and Single-Step
+### Breakpoints
 
 ```bash
 # Set breakpoints (execution pauses at each)
 nes_main -H --rom game.nes --breakpoint 0x8000 --breakpoint 0x8500 --trace trace.log
-
-# Single-step mode (outputs state after each instruction)
-nes_main -H --rom game.nes --step --cycles 100
 ```
 
 ### Instruction Tracing
@@ -1011,4 +988,3 @@ Implementation should proceed in phases:
 3. Memory read/write operations
 4. Stop conditions and breakpoints
 5. Video/screenshot export
-6. Debug viewer exports
