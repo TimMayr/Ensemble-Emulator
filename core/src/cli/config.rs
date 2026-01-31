@@ -134,13 +134,15 @@ pub struct VideoConfig {
 pub struct ExecutionConfig {
     pub cycles: Option<u128>,
     pub frames: Option<u64>,
-    pub until_pc: Option<String>,
     pub until_opcode: Option<String>,
     pub until_mem: Option<Vec<String>>,
     pub until_hlt: Option<bool>,
     pub trace: Option<PathBuf>,
     #[serde(default)]
     pub breakpoints: Vec<String>,
+    /// Memory watchpoints (format: "ADDR" or "ADDR:r" or "ADDR:w" or "ADDR:rw")
+    #[serde(default)]
+    pub watch_mem: Vec<String>,
     /// Alternative: stop_conditions as array of strings
     #[serde(default)]
     pub stop_conditions: Vec<String>,
@@ -306,11 +308,6 @@ impl ConfigFile {
         if cli.execution.frames.is_none() {
             cli.execution.frames = self.execution.frames;
         }
-        if cli.execution.until_pc.is_none()
-            && let Some(ref pc) = self.execution.until_pc
-        {
-            cli.execution.until_pc = parse_hex_u16_opt(pc);
-        }
         if cli.execution.until_opcode.is_none()
             && let Some(ref op) = self.execution.until_opcode
         {
@@ -332,12 +329,16 @@ impl ConfigFile {
                 }
             }
         }
+        if cli.execution.watch_mem.is_empty() {
+            cli.execution.watch_mem = self.execution.watch_mem.clone();
+        }
 
         // Parse stop_conditions into appropriate fields
         for cond in &self.execution.stop_conditions {
             if let Some(rest) = cond.strip_prefix("pc:") {
-                if cli.execution.until_pc.is_none() {
-                    cli.execution.until_pc = parse_hex_u16_opt(rest);
+                // pc: condition is now handled as a breakpoint
+                if let Some(addr) = parse_hex_u16_opt(rest) {
+                    cli.execution.breakpoint.push(addr);
                 }
             } else if let Some(rest) = cond.strip_prefix("frames:") {
                 if cli.execution.frames.is_none() {

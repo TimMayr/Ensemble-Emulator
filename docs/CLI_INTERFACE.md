@@ -245,20 +245,24 @@ Arguments are organized into logical groups:
 
 #### Execution Control
 
-| Flag | Long Form        | Description                        | Type     |
-|------|------------------|------------------------------------|----------|
-| `-c` | `--cycles`       | Run for N master cycles            | u128     |
-| `-f` | `--frames`       | Run for N frames                   | u64      |
-|      | `--until-pc`     | Run until PC reaches address       | u16      |
-|      | `--until-opcode` | Run until specific opcode executes | u8       |
-|      | `--until-mem`    | Run until memory condition         | String   |
-|      | `--until-hlt`    | Run until HLT instruction          | bool     |
-|      | `--trace`        | Enable instruction trace           | PathBuf  |
-|      | `--breakpoint`   | Set breakpoint at address          | Vec<u16> |
+| Flag | Long Form        | Description                           | Type     |
+|------|------------------|---------------------------------------|----------|
+| `-c` | `--cycles`       | Run for N master cycles               | u128     |
+| `-f` | `--frames`       | Run for N frames                      | u64      |
+|      | `--until-opcode` | Run until specific opcode executes    | u8       |
+|      | `--until-mem`    | Run until memory condition            | String   |
+|      | `--until-hlt`    | Run until HLT instruction             | bool     |
+|      | `--trace`        | Enable instruction trace              | PathBuf  |
+|      | `--breakpoint`   | Set breakpoint at PC address          | Vec<u16> |
+|      | `--watch-mem`    | Watch memory for access (read/write)  | Vec<String> |
 
 **Memory Condition Format:** `ADDR==VALUE`, `ADDR!=VALUE`, `ADDR&MASK==VALUE`
 
 - Examples: `0x6000==0x80`, `0x2002&0x80!=0x00`
+
+**Memory Watch Format:** `ADDR` or `ADDR:MODE` where MODE is `r` (read), `w` (write), or `rw` (both)
+
+- Examples: `0x2002` (any access), `0x2002:r` (reads only), `0x4016:w` (writes only)
 
 #### Output Control
 
@@ -571,8 +575,8 @@ nes_main -H --rom game.nes --frames 60
 ### Conditional Stop
 
 ```bash
-# Stop when PC reaches address
-nes_main -H --rom game.nes --until-pc 0x8500
+# Stop when PC reaches address (use --breakpoint instead of deprecated --until-pc)
+nes_main -H --rom game.nes --breakpoint 0x8500
 
 # Stop when specific opcode executes (0x02 is KIL, an illegal "halt" opcode)
 nes_main -H --rom game.nes --until-opcode 0x02  # Stop on KIL (illegal halt)
@@ -581,14 +585,32 @@ nes_main -H --rom game.nes --until-opcode 0x02  # Stop on KIL (illegal halt)
 nes_main -H --rom game.nes --until-mem "0x6000==0x80"
 
 # Combined conditions (stops on first match)
-nes_main -H --rom game.nes --frames 3600 --until-pc 0x8500 --until-mem "0x6000==0x80"
+nes_main -H --rom game.nes --frames 3600 --breakpoint 0x8500 --until-mem "0x6000==0x80"
 ```
 
 ### Breakpoints
 
 ```bash
-# Set breakpoints (execution pauses at each)
+# Set PC breakpoints (execution stops when PC reaches these addresses)
 nes_main -H --rom game.nes --breakpoint 0x8000 --breakpoint 0x8500 --trace trace.log
+```
+
+### Memory Watchpoints
+
+Stop execution when the CPU accesses a specific memory address:
+
+```bash
+# Watch for any access (read or write) to address
+nes_main -H --rom game.nes --watch-mem 0x2002 --frames 3600
+
+# Watch for reads only (e.g., PPU status register)
+nes_main -H --rom game.nes --watch-mem 0x2002:r --frames 3600
+
+# Watch for writes only (e.g., controller port)
+nes_main -H --rom game.nes --watch-mem 0x4016:w --frames 3600
+
+# Multiple watchpoints
+nes_main -H --rom game.nes --watch-mem 0x2002:r --watch-mem 0x2007:rw --frames 3600
 ```
 
 ### Instruction Tracing

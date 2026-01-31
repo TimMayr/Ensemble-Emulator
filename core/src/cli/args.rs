@@ -220,10 +220,6 @@ pub struct ExecutionArgs {
     #[arg(short, long)]
     pub frames: Option<u64>,
 
-    /// Run until PC reaches address (hex, e.g., 0x8500)
-    #[arg(long, value_parser = parse_hex_u16)]
-    pub until_pc: Option<u16>,
-
     /// Run until specific opcode executes (hex, e.g., 0x02)
     #[arg(long, value_parser = parse_hex_u8)]
     pub until_opcode: Option<u8>,
@@ -240,9 +236,15 @@ pub struct ExecutionArgs {
     #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
     pub trace: Option<PathBuf>,
 
-    /// Set breakpoint at address (can be specified multiple times)
+    /// Set breakpoint at PC address (can be specified multiple times)
     #[arg(long, value_parser = parse_hex_u16, action = clap::ArgAction::Append)]
     pub breakpoint: Vec<u16>,
+
+    /// Watch memory address for access (format: ADDR or ADDR:MODE where MODE is r/w/rw)
+    /// Stops execution when the CPU reads/writes the specified address.
+    /// Examples: 0x2002 (any access), 0x2002:r (reads only), 0x4016:w (writes only)
+    #[arg(long, action = clap::ArgAction::Append)]
+    pub watch_mem: Vec<String>,
 }
 
 /// Output control arguments

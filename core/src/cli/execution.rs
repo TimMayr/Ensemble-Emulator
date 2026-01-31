@@ -22,6 +22,32 @@ use crate::emulation::savestate::{SaveState, try_load_state};
 // Stop Conditions
 // =============================================================================
 
+/// Memory access type for watchpoints
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemoryAccessType {
+    /// Watch for reads only
+    Read,
+    /// Watch for writes only
+    Write,
+    /// Watch for both reads and writes
+    ReadWrite,
+}
+
+impl MemoryAccessType {
+    /// Parse access type from string (r, w, rw)
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s.to_lowercase().as_str() {
+            "r" | "read" => Ok(Self::Read),
+            "w" | "write" => Ok(Self::Write),
+            "rw" | "readwrite" | "both" => Ok(Self::ReadWrite),
+            _ => Err(format!(
+                "Invalid memory access type '{}'. Expected: r, w, or rw",
+                s
+            )),
+        }
+    }
+}
+
 /// Reason why execution stopped
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StopReason {
@@ -29,10 +55,16 @@ pub enum StopReason {
     CyclesReached(u128),
     /// Reached target frame count
     FramesReached(u64),
-    /// PC reached target address
+    /// PC reached target address (breakpoint)
     PcReached(u16),
     /// Memory condition was met
     MemoryCondition(u16, u8),
+    /// Memory watchpoint triggered
+    MemoryWatchpoint {
+        addr: u16,
+        access_type: MemoryAccessType,
+        was_read: bool,
+    },
     /// HLT (illegal halt) instruction executed
     Halted,
     /// User-requested stop (e.g., breakpoint)
@@ -50,7 +82,7 @@ pub enum StopCondition {
     Cycles(u128),
     /// Stop after N frames
     Frames(u64),
-    /// Stop when PC reaches address
+    /// Stop when PC reaches address (breakpoint)
     PcEquals(u16),
     /// Stop when opcode is executed
     Opcode(u8),
@@ -68,8 +100,13 @@ pub enum StopCondition {
     },
     /// Stop on HLT instruction
     OnHalt,
-    /// Breakpoint at address
+    /// Breakpoint at address (alias for PcEquals, kept for backward compatibility)
     Breakpoint(u16),
+    /// Watch memory address for access
+    MemoryWatch {
+        addr: u16,
+        access_type: MemoryAccessType,
+    },
 }
 
 impl StopCondition {
@@ -147,11 +184,30 @@ impl StopCondition {
         }
     }
 
+    /// Parse a memory watch string like "0x2002" or "0x2002:r" or "0x4016:w"
+    pub fn parse_memory_watch(s: &str) -> Result<Self, String> {
+        let (addr_str, access_type) = if let Some((addr_part, mode_part)) = s.split_once(':') {
+            (addr_part, MemoryAccessType::parse(mode_part)?)
+        } else {
+            (s, MemoryAccessType::ReadWrite) // Default to both reads and writes
+        };
+
+        let addr = parse_hex_u16(addr_str.trim())?;
+        Ok(StopCondition::MemoryWatch { addr, access_type })
+    }
+
+    /// Parse multiple memory watch conditions
+    pub fn parse_memory_watches(watches: &[String]) -> Result<Vec<Self>, String> {
+        watches.iter().map(|s| Self::parse_memory_watch(s)).collect()
+    }
+
     pub fn check(&self, emu: &Nes, cycles: u128, frames: u64) -> bool {
         match self {
             StopCondition::Cycles(target) => cycles >= *target,
             StopCondition::Frames(target) => frames >= *target,
-            StopCondition::PcEquals(addr) => emu.cpu.program_counter == *addr,
+            StopCondition::PcEquals(addr) | StopCondition::Breakpoint(addr) => {
+                emu.cpu.program_counter == *addr
+            }
             StopCondition::Opcode(op) => {
                 if let Some(current) = emu.cpu.current_opcode
                     && current.opcode == *op
@@ -198,7 +254,23 @@ impl StopCondition {
                 }
             }
             StopCondition::OnHalt => emu.cpu.is_halted,
-            StopCondition::Breakpoint(addr) => emu.cpu.program_counter == *addr,
+            StopCondition::MemoryWatch { addr, access_type } => {
+                // Check if CPU accessed this address
+                if let Some(last_access) = emu.cpu.last_memory_access {
+                    let (access_addr, was_read) = last_access;
+                    if access_addr == *addr {
+                        match access_type {
+                            MemoryAccessType::Read => was_read,
+                            MemoryAccessType::Write => !was_read,
+                            MemoryAccessType::ReadWrite => true,
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
         }
     }
 
@@ -206,7 +278,9 @@ impl StopCondition {
         match self {
             StopCondition::Cycles(_) => StopReason::CyclesReached(cycles),
             StopCondition::Frames(_) => StopReason::FramesReached(frames),
-            StopCondition::PcEquals(addr) => StopReason::PcReached(*addr),
+            StopCondition::PcEquals(addr) | StopCondition::Breakpoint(addr) => {
+                StopReason::PcReached(*addr)
+            }
             StopCondition::Opcode(_) => StopReason::PcReached(emu.cpu.program_counter),
             StopCondition::MemoryEquals {
                 addr, ..
@@ -222,7 +296,18 @@ impl StopCondition {
                 StopReason::MemoryCondition(*addr, mem_val)
             }
             StopCondition::OnHalt => StopReason::Halted,
-            StopCondition::Breakpoint(addr) => StopReason::Breakpoint(*addr),
+            StopCondition::MemoryWatch { addr, access_type } => {
+                let was_read = emu
+                    .cpu
+                    .last_memory_access
+                    .map(|(_, was_read)| was_read)
+                    .unwrap_or(true);
+                StopReason::MemoryWatchpoint {
+                    addr: *addr,
+                    access_type: *access_type,
+                    was_read,
+                }
+            }
         }
     }
 }
@@ -241,8 +326,6 @@ pub struct ExecutionConfig {
     pub stop_conditions: Vec<StopCondition>,
     /// Whether to stop on any HLT instruction
     pub stop_on_halt: bool,
-    /// Breakpoint addresses
-    pub breakpoints: Vec<u16>,
     /// Path to trace log file (if any)
     pub trace_path: Option<PathBuf>,
     /// Verbose output
@@ -277,9 +360,16 @@ impl ExecutionConfig {
         self
     }
 
-    /// Add a breakpoint
+    /// Add a breakpoint (alias for with_pc_breakpoint)
     pub fn with_breakpoint(mut self, addr: u16) -> Self {
-        self.breakpoints.push(addr);
+        self.stop_conditions.push(StopCondition::PcEquals(addr));
+        self
+    }
+
+    /// Add a memory watchpoint
+    pub fn with_memory_watch(mut self, addr: u16, access_type: MemoryAccessType) -> Self {
+        self.stop_conditions
+            .push(StopCondition::MemoryWatch { addr, access_type });
         self
     }
 
@@ -715,11 +805,6 @@ impl ExecutionConfig {
             config.stop_conditions.push(StopCondition::Frames(frames));
         }
 
-        // Add PC stop condition
-        if let Some(pc) = args.execution.until_pc {
-            config.stop_conditions.push(StopCondition::PcEquals(pc));
-        }
-
         // Add opcode stop condition
         if let Some(op) = args.execution.until_opcode {
             config.stop_conditions.push(StopCondition::Opcode(op));
@@ -732,13 +817,22 @@ impl ExecutionConfig {
             config.stop_conditions.extend(cond);
         }
 
+        // Add memory watchpoints
+        if !args.execution.watch_mem.is_empty() {
+            if let Ok(watches) = StopCondition::parse_memory_watches(&args.execution.watch_mem) {
+                config.stop_conditions.extend(watches);
+            }
+        }
+
         // Add HLT stop
         if args.execution.until_hlt {
             config.stop_on_halt = true;
         }
 
-        // Add breakpoints
-        config.breakpoints = args.execution.breakpoint.clone();
+        // Add breakpoints (these are now the only way to stop at a PC address)
+        for bp in &args.execution.breakpoint {
+            config.stop_conditions.push(StopCondition::PcEquals(*bp));
+        }
 
         // Add trace
         config.trace_path = args.execution.trace.clone();
@@ -747,10 +841,7 @@ impl ExecutionConfig {
         config.verbose = args.verbose;
 
         // If no stop conditions, default to 60 frames (1 second)
-        if config.stop_conditions.is_empty()
-            && !config.stop_on_halt
-            && config.breakpoints.is_empty()
-        {
+        if config.stop_conditions.is_empty() && !config.stop_on_halt {
             config.stop_conditions.push(StopCondition::Frames(60));
         }
 

@@ -173,6 +173,7 @@ pub mod args;
 pub mod config;
 pub mod error;
 pub mod execution;
+pub mod headless;
 pub mod memory_init;
 pub mod output;
 pub mod video;
@@ -182,9 +183,10 @@ use clap::Parser;
 pub use config::ConfigFile;
 pub use error::{CliError, CliResult};
 pub use execution::{
-    ExecutionConfig, ExecutionEngine, ExecutionResult, SavestateConfig, SavestateDestination,
-    SavestateSource, StopCondition, StopReason,
+    ExecutionConfig, ExecutionEngine, ExecutionResult, MemoryAccessType, SavestateConfig,
+    SavestateDestination, SavestateSource, StopCondition, StopReason,
 };
+pub use headless::run_headless;
 pub use memory_init::{MemoryInit, MemoryInitConfig, apply_memory_init, apply_memory_init_config};
 pub use output::{
     InterpretedNametable, InterpretedNametables, InterpretedOam, MemoryDump, MemoryFormatter,
