@@ -173,8 +173,11 @@ pub mod args;
 pub mod config;
 pub mod error;
 pub mod execution;
+pub mod headless;
+pub mod memory_dumps;
 pub mod memory_init;
 pub mod output;
+pub mod screenshot;
 pub mod video;
 
 pub use args::{CliArgs, OutputFormat, VideoFormat, parse_hex_u16};
@@ -185,11 +188,16 @@ pub use execution::{
     ExecutionConfig, ExecutionEngine, ExecutionResult, SavestateConfig, SavestateDestination,
     SavestateSource, StopCondition, StopReason,
 };
+pub use headless::run_headless;
+pub use memory_dumps::{
+    create_cpu_dump, create_nametables_dump, create_oam_dump, create_palette_dump, create_ppu_dump,
+};
 pub use memory_init::{MemoryInit, MemoryInitConfig, apply_memory_init, apply_memory_init_config};
 pub use output::{
     InterpretedNametable, InterpretedNametables, InterpretedOam, MemoryDump, MemoryFormatter,
     MemoryType, OamSprite, OutputWriter,
 };
+pub use screenshot::{save_screenshot, save_single_screenshot};
 pub use video::{
     StreamingVideoEncoder, VideoEncoder, VideoError, VideoResolution, create_encoder,
     encode_frames, is_ffmpeg_available,
