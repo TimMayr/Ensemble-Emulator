@@ -457,15 +457,8 @@ pub enum SavestateDestination {
     Stdout,
 }
 
-/// Format for savestate encoding
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum SavestateFormat {
-    /// Binary format (smaller, faster)
-    #[default]
-    Binary,
-    /// JSON format (human-readable, editable)
-    Json,
-}
+// Re-export SavestateFormat from args for use in this module
+pub use super::args::SavestateFormat;
 
 /// Configuration for savestate operations
 #[derive(Debug, Clone, Default)]
@@ -791,18 +784,21 @@ impl Default for ExecutionEngine {
 // Helper Functions
 // =============================================================================
 
-/// Decode a savestate from bytes (auto-detects format)
+/// Decode a savestate from bytes (auto-detects format).
+///
+/// Detection strategy: Try JSON first, then binary as fallback.
+/// This is more robust than checking for `{` which could fail with
+/// whitespace-prefixed JSON or misidentify binary data.
 fn decode_savestate(bytes: &[u8]) -> Result<SaveState, String> {
-    // Try JSON first (if it starts with '{')
-    if bytes.first() == Some(&b'{') {
-        return serde_json::from_slice(bytes)
-            .map_err(|e| format!("Failed to decode JSON savestate: {}", e));
+    // Try JSON first (handles both compact and pretty-printed JSON)
+    if let Ok(state) = serde_json::from_slice::<SaveState>(bytes) {
+        return Ok(state);
     }
 
-    // Otherwise try binary
+    // Fall back to binary format
     bincode::serde::decode_from_slice(bytes, bincode::config::standard())
         .map(|(state, _)| state)
-        .map_err(|e| format!("Failed to decode binary savestate: {}", e))
+        .map_err(|e| format!("Failed to decode savestate (tried JSON and binary): {}", e))
 }
 
 /// Encode a savestate to bytes in the specified format
@@ -899,11 +895,8 @@ impl SavestateConfig {
             config.save_to = Some(SavestateDestination::File(path.clone()));
         }
 
-        // Set format from CLI args
-        config.format = match args.savestate.state_format {
-            crate::cli::args::SavestateFormat::Binary => SavestateFormat::Binary,
-            crate::cli::args::SavestateFormat::Json => SavestateFormat::Json,
-        };
+        // Set format directly from CLI args (same type via re-export)
+        config.format = args.savestate.state_format;
 
         config
     }

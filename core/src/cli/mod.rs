@@ -184,8 +184,7 @@ pub use config::ConfigFile;
 pub use error::{CliError, CliResult};
 pub use execution::{
     ExecutionConfig, ExecutionEngine, ExecutionResult, MemoryAccessType, SavestateConfig,
-    SavestateDestination, SavestateFormat as ExecutionSavestateFormat, SavestateSource,
-    StopCondition, StopReason,
+    SavestateDestination, SavestateSource, StopCondition, StopReason,
 };
 pub use headless::run_headless;
 pub use memory_init::{MemoryInit, MemoryInitConfig, apply_memory_init, apply_memory_init_config};
