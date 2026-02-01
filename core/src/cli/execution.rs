@@ -457,6 +457,16 @@ pub enum SavestateDestination {
     Stdout,
 }
 
+/// Format for savestate encoding
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SavestateFormat {
+    /// Binary format (smaller, faster)
+    #[default]
+    Binary,
+    /// JSON format (human-readable, editable)
+    Json,
+}
+
 /// Configuration for savestate operations
 #[derive(Debug, Clone, Default)]
 pub struct SavestateConfig {
@@ -464,6 +474,8 @@ pub struct SavestateConfig {
     pub load_from: Option<SavestateSource>,
     /// Destination to save savestate to (if any)
     pub save_to: Option<SavestateDestination>,
+    /// Format for saving savestates
+    pub format: SavestateFormat,
 }
 
 impl SavestateConfig {
@@ -491,6 +503,12 @@ impl SavestateConfig {
     /// Set save destination to stdout
     pub fn save_to_stdout(mut self) -> Self {
         self.save_to = Some(SavestateDestination::Stdout);
+        self
+    }
+
+    /// Set savestate format
+    pub fn with_format(mut self, format: SavestateFormat) -> Self {
+        self.format = format;
         self
     }
 }
@@ -603,7 +621,7 @@ impl ExecutionEngine {
     pub fn save_savestate(&self) -> Result<(), String> {
         if let Some(ref dest) = self.savestate_config.save_to {
             let state = self.emu.save_state();
-            let encoded = encode_savestate(&state)?;
+            let encoded = encode_savestate(&state, self.savestate_config.format)?;
 
             match dest {
                 SavestateDestination::File(path) => {
@@ -773,17 +791,30 @@ impl Default for ExecutionEngine {
 // Helper Functions
 // =============================================================================
 
-/// Decode a savestate from bytes
+/// Decode a savestate from bytes (auto-detects format)
 fn decode_savestate(bytes: &[u8]) -> Result<SaveState, String> {
+    // Try JSON first (if it starts with '{')
+    if bytes.first() == Some(&b'{') {
+        return serde_json::from_slice(bytes)
+            .map_err(|e| format!("Failed to decode JSON savestate: {}", e));
+    }
+
+    // Otherwise try binary
     bincode::serde::decode_from_slice(bytes, bincode::config::standard())
         .map(|(state, _)| state)
-        .map_err(|e| format!("Failed to decode savestate: {}", e))
+        .map_err(|e| format!("Failed to decode binary savestate: {}", e))
 }
 
-/// Encode a savestate to bytes
-fn encode_savestate(state: &SaveState) -> Result<Vec<u8>, String> {
-    bincode::serde::encode_to_vec(state, bincode::config::standard())
-        .map_err(|e| format!("Failed to encode savestate: {}", e))
+/// Encode a savestate to bytes in the specified format
+fn encode_savestate(state: &SaveState, format: SavestateFormat) -> Result<Vec<u8>, String> {
+    match format {
+        SavestateFormat::Binary => {
+            bincode::serde::encode_to_vec(state, bincode::config::standard())
+                .map_err(|e| format!("Failed to encode binary savestate: {}", e))
+        }
+        SavestateFormat::Json => serde_json::to_vec_pretty(state)
+            .map_err(|e| format!("Failed to encode JSON savestate: {}", e)),
+    }
 }
 
 // =============================================================================
@@ -867,6 +898,12 @@ impl SavestateConfig {
         } else if let Some(ref path) = args.savestate.save_state {
             config.save_to = Some(SavestateDestination::File(path.clone()));
         }
+
+        // Set format from CLI args
+        config.format = match args.savestate.state_format {
+            crate::cli::args::SavestateFormat::Binary => SavestateFormat::Binary,
+            crate::cli::args::SavestateFormat::Json => SavestateFormat::Json,
+        };
 
         config
     }

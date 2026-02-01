@@ -90,6 +90,20 @@ pub struct SavestateArgs {
     /// When to save state (exit, stop, cycle:N, pc:ADDR, frame:N)
     #[arg(long)]
     pub save_state_on: Option<String>,
+
+    /// Savestate format for saving (binary or json)
+    #[arg(long, default_value = "binary")]
+    pub state_format: SavestateFormat,
+}
+
+/// Savestate format options
+#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq, Eq)]
+pub enum SavestateFormat {
+    /// Binary format (smaller, faster, default)
+    #[default]
+    Binary,
+    /// JSON format (human-readable, editable)
+    Json,
 }
 
 /// Memory operation arguments
