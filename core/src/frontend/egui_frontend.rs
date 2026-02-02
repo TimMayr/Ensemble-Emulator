@@ -621,7 +621,7 @@ impl EguiApp {
 
                 if let Some(path) = path {
                     let _ = write_file_async(path, savestate.to_bytes(None), false);
-                    
+
                     // Clean up old autosaves asynchronously to avoid blocking the UI
                     Self::cleanup_old_autosaves_async(display_name);
                 }
@@ -629,20 +629,18 @@ impl EguiApp {
         }
     }
 
-    /// Remove oldest autosaves if there are more than MAX_AUTOSAVES_PER_GAME.
+    /// Remove the oldest autosaves if there are more than MAX_AUTOSAVES_PER_GAME.
     /// Runs asynchronously in a background thread to avoid blocking the UI.
     fn cleanup_old_autosaves_async(display_name: String) {
         std::thread::spawn(move || {
             if let Some(data_dir) = get_data_dir() {
                 let autosaves_dir = data_dir.join("saves").join(&display_name).join("autosaves");
-                
+
                 if let Ok(entries) = std::fs::read_dir(&autosaves_dir) {
                     // Collect all autosave files with their modification times
                     let mut autosaves: Vec<(PathBuf, std::time::SystemTime)> = entries
                         .filter_map(|entry| entry.ok())
-                        .filter(|entry| {
-                            entry.path().extension().is_some_and(|ext| ext == "sav")
-                        })
+                        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "sav"))
                         .filter_map(|entry| {
                             let path = entry.path();
                             let modified = entry.metadata().ok()?.modified().ok()?;
@@ -655,7 +653,7 @@ impl EguiApp {
                     if autosaves.len() >= MAX_AUTOSAVES_PER_GAME {
                         // Sort by modification time (oldest first)
                         autosaves.sort_by_key(|a| a.1);
-                        
+
                         // Delete enough files to get back under the limit
                         let to_delete = autosaves.len() - MAX_AUTOSAVES_PER_GAME + 1;
                         for (path, _) in autosaves.into_iter().take(to_delete) {
@@ -907,7 +905,7 @@ impl EguiApp {
     /// Check if window focus was lost and trigger autosave if needed
     fn check_focus_autosave(&mut self, ctx: &Context) {
         let is_focused = ctx.input(|i| i.focused);
-        
+
         // Only autosave when focus is lost (transition from focused to unfocused)
         // This also resets the periodic timer since we just saved
         if self.was_focused
@@ -920,7 +918,7 @@ impl EguiApp {
             let savestate = self.channel_emu.nes.save_state();
             self.create_auto_save(Box::new(savestate));
         }
-        
+
         self.was_focused = is_focused;
     }
 }

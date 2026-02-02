@@ -35,7 +35,6 @@ use std::sync::OnceLock;
 /// ```
 use crossbeam_channel::{Receiver, Sender};
 
-
 use crate::emulation::messages::{
     ControllerEvent, EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, SaveType,
 };
@@ -153,10 +152,12 @@ impl ChannelEmulator {
                 }
                 FrontendMessage::PowerOff => self.nes.power_off(),
                 FrontendMessage::CreateSaveState(t) => {
-                    let state = self.nes.save_state();
-                    let _ = self
-                        .to_frontend
-                        .send(EmulatorMessage::SaveState(Box::new(state), t));
+                    if self.nes.rom_file.is_some() {
+                        let state = self.nes.save_state();
+                        let _ = self
+                            .to_frontend
+                            .send(EmulatorMessage::SaveState(Box::new(state), t));
+                    }
                 }
                 FrontendMessage::LoadSaveState(s) => self.nes.load_state(*s),
             }
