@@ -10,7 +10,8 @@ use crate::emulation::messages::EmulatorFetchable;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::ui::{
-    render_emulator_output, render_nametable, render_options, render_palettes, render_pattern_table,
+    render_emulator_output, render_keybindings, render_nametable, render_options, render_palettes,
+    render_pattern_table,
 };
 use crate::frontend::messages::AsyncFrontendMessage;
 
@@ -26,6 +27,8 @@ pub enum Pane {
     /// Nametables viewer (all 4 nametables in a grid) - closeable debug viewer
     Nametables,
     Palettes,
+    /// Keybindings configuration - closeable, can be reopened via menu
+    Keybindings,
 }
 
 impl Pane {
@@ -33,7 +36,11 @@ impl Pane {
     pub fn is_closable(&self) -> bool {
         match self {
             Pane::EmulatorOutput => false,
-            Pane::Options | Pane::PatternTables | Pane::Nametables | Pane::Palettes => true,
+            Pane::Options
+            | Pane::PatternTables
+            | Pane::Nametables
+            | Pane::Palettes
+            | Pane::Keybindings => true,
         }
     }
 
@@ -45,6 +52,7 @@ impl Pane {
             Pane::PatternTables => "Pattern Tables",
             Pane::Nametables => "Nametables",
             Pane::Palettes => "Palettes",
+            Pane::Keybindings => "Keybindings",
         }
     }
 }
@@ -87,6 +95,9 @@ impl Behavior<Pane> for TreeBehavior<'_> {
             }
             Pane::Palettes => {
                 render_palettes(ui, self.config, self.emu_textures, self.async_sender)
+            }
+            Pane::Keybindings => {
+                render_keybindings(ui, self.config);
             }
         }
         UiResponse::None

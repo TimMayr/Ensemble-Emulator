@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use crate::emulation::messages::{EmulatorFetchable, RgbPalette};
 use crate::emulation::rom::RomFile;
+use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::messages::SavestateLoadContext;
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
@@ -27,6 +28,7 @@ pub struct AppConfig {
     pub user_config: UserConfig,
     pub console_config: ConsoleConfig,
     pub pending_dialogs: PendingDialogs,
+    pub keybindings: KeybindingsConfig,
 }
 
 /// Pending dialog states for multi-step operations

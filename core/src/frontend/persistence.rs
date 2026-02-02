@@ -21,6 +21,7 @@ use crate::emulation::messages::EmulatorFetchable;
 use crate::frontend::egui::config::{
     AppConfig, AppSpeed, ConsoleConfig, DebugSpeed, SpeedConfig, UserConfig, ViewConfig,
 };
+use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::palettes::parse_palette_from_file;
 use crate::frontend::util::append_to_filename;
 
@@ -269,6 +270,8 @@ pub struct PersistentConfig {
     pub view_config: PersistentViewConfig,
     pub speed_config: PersistentSpeedConfig,
     pub console_config: PersistentConsoleConfig,
+    #[serde(default)]
+    pub keybindings: KeybindingsConfig,
 }
 
 impl From<&AppConfig> for PersistentConfig {
@@ -278,6 +281,7 @@ impl From<&AppConfig> for PersistentConfig {
             view_config: (&value.view_config).into(),
             speed_config: (&value.speed_config).into(),
             console_config: (&value.console_config).into(),
+            keybindings: value.keybindings.clone(),
         };
 
         this.view_config.palette_rgb_data = this.user_config.previous_palette_path.clone();
@@ -293,6 +297,7 @@ impl From<&PersistentConfig> for AppConfig {
             user_config: (&value.user_config).into(),
             console_config: (&value.console_config).into(),
             pending_dialogs: Default::default(),
+            keybindings: value.keybindings.clone(),
         };
 
         this.view_config.palette_rgb_data =
