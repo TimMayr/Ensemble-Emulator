@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::emulation::cpu::{Cpu, INTERNAL_RAM_SIZE, MicroOp};
+use crate::emulation::cpu::{Cpu, MicroOp, INTERNAL_RAM_SIZE};
 use crate::emulation::mem::OpenBus;
 use crate::emulation::messages::RgbColor;
 use crate::emulation::ppu::{Ppu, VRAM_SIZE};
@@ -206,7 +206,13 @@ pub struct SaveState {
 /// Try to load a savestate from a file path, returning None on error
 pub fn try_load_state(path: &PathBuf) -> Option<SaveState> {
     let encoded = std::fs::read(path).ok()?;
-    bincode::serde::decode_from_slice(&encoded, bincode::config::standard())
-        .ok()
-        .map(|(state, _)| state)
+
+    // Try JSON first (handles both compact and pretty-printed JSON)
+    if let Ok(state) = serde_json::from_slice::<SaveState>(&encoded[..]) {
+        Some(state)
+    } else {
+        bincode::serde::decode_from_slice(&encoded, bincode::config::standard())
+            .ok()
+            .map(|(state, _)| state)
+    }
 }
