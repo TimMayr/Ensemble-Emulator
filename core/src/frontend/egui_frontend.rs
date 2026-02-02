@@ -563,7 +563,26 @@ impl EguiApp {
                         }
                     }
                     SaveType::Autosave => {
-                        println!("creating auto save")
+                       if let Some(rom) = &self.config.user_config.loaded_rom {
+                            let rom_hash = &rom.data_checksum;
+                            let prev_path = &self.config.user_config.previous_rom_path;
+                            if let Some(prev_path) = prev_path {
+                                let display_name = util::rom_display_name(prev_path, rom_hash);
+
+                                let path = get_data_file_path(
+                                    format!(
+                                        "saves/{}/autosaves/autosave_{}.sav",
+                                        display_name,
+                                        chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
+                                    )
+                                    .as_str(),
+                                );
+
+                                if let Some(path) = path {
+                                    let _ = write_file_async(path, s.to_bytes(None), false);
+                                }
+                            }
+                        }
                     }
                 },
                 EmulatorMessage::RomLoaded(rom) => {
