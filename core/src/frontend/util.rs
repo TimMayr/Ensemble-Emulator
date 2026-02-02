@@ -69,13 +69,11 @@ impl ToBytes for RgbPalette {
 
 impl ToBytes for SaveState {
     fn to_bytes(&self, format: Option<String>) -> Vec<u8> {
-        if format.is_some() {
-            match format.unwrap().as_str() {
+        if let Some(format) = format {
+            match format.as_str() {
                 "json" => serde_json::to_vec_pretty(self).expect("Failed to serialize SaveState"),
-                "binary" | "" | "bin" | _ => {
-                    bincode::serde::encode_to_vec(self, bincode::config::standard())
-                        .expect("Failed to serialize SaveState")
-                }
+                _ => bincode::serde::encode_to_vec(self, bincode::config::standard())
+                    .expect("Failed to serialize SaveState"),
             }
         } else {
             bincode::serde::encode_to_vec(self, bincode::config::standard())
@@ -248,11 +246,9 @@ pub fn spawn_save_dialog(
                 .map(|_| p.clone())
                 .unwrap_or(p.with_extension(file_type.get_default_extension()));
 
-            let format = if let Some(format) = p.extension() {
-                Some(format.to_string_lossy().to_string())
-            } else {
-                None
-            };
+            let format = p
+                .extension()
+                .map(|format| format.to_string_lossy().to_string());
 
             let result = match OpenOptions::new()
                 .write(true)

@@ -859,10 +859,10 @@ impl ExecutionConfig {
         }
 
         // Add memory watchpoints
-        if !args.execution.watch_mem.is_empty() {
-            if let Ok(watches) = StopCondition::parse_memory_watches(&args.execution.watch_mem) {
-                config.stop_conditions.extend(watches);
-            }
+        if !args.execution.watch_mem.is_empty()
+            && let Ok(watches) = StopCondition::parse_memory_watches(&args.execution.watch_mem)
+        {
+            config.stop_conditions.extend(watches);
         }
 
         // Add HLT stop

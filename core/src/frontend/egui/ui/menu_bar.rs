@@ -20,10 +20,9 @@ pub fn add_menu_bar(
                 }
 
                 ui.menu_button("Savestates", |ui| {
-                    if config.user_config.loaded_rom.is_some() {
-                        if ui.button("Save State").clicked() {
-                            let _ = async_sender.send(AsyncFrontendMessage::CreateSavestate);
-                        }
+                    if config.user_config.loaded_rom.is_some() && ui.button("Save State").clicked()
+                    {
+                        let _ = async_sender.send(AsyncFrontendMessage::CreateSavestate);
                     }
 
                     if ui.button("Load State").clicked() {

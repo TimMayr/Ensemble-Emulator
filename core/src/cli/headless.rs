@@ -301,6 +301,7 @@ fn run_with_streaming_video(
 }
 
 /// Print video export information
+#[allow(clippy::too_many_arguments)]
 fn print_video_info(
     video_path: &Path,
     format: &VideoFormat,

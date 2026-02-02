@@ -209,7 +209,7 @@ impl ConfigFile {
             cli.savestate.save_state_on = self.savestate.save_on.clone();
         }
         if cli.savestate.state_format == SavestateFormat::Binary {
-            cli.savestate.state_format = self.savestate.format.clone();
+            cli.savestate.state_format = self.savestate.format;
         }
 
         // Memory options
