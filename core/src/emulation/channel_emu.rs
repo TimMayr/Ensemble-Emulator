@@ -35,8 +35,9 @@ use std::sync::OnceLock;
 /// ```
 use crossbeam_channel::{Receiver, Sender};
 
+
 use crate::emulation::messages::{
-    ControllerEvent, EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData,
+    ControllerEvent, EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, SaveType,
 };
 use crate::emulation::nes::{ExecutionFinishedType, Nes};
 use crate::frontend::util;
@@ -99,6 +100,11 @@ impl ChannelEmulator {
         while let Ok(msg) = self.from_frontend.try_recv() {
             match msg {
                 FrontendMessage::Quit => {
+                    let state = self.nes.save_state();
+                    let _ = self.to_frontend.send(EmulatorMessage::SaveState(
+                        Box::new(state),
+                        SaveType::Autosave,
+                    ));
                     let _ = self.to_frontend.send(EmulatorMessage::Stopped);
                     return Err("Quit requested".to_string());
                 }

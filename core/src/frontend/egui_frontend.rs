@@ -17,16 +17,18 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
+
 use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, ViewportCommand, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
 use crate::emulation::messages::{
     EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette, SaveType,
-    TILE_COUNT, TileData,
+    TileData, TILE_COUNT,
 };
 use crate::emulation::nes::Nes;
 use crate::emulation::savestate;
+use crate::emulation::savestate::SaveState;
 use crate::frontend::egui::config::{
     AppConfig, AppSpeed, ChecksumMismatchDialogState, ErrorDialogState, MatchingRomDialogState,
     RomSelectionDialogState,
@@ -35,7 +37,7 @@ use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
-    Pane, TreeBehavior, compute_required_fetches_from_tree, create_tree,
+    compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
 };
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
 use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent, SavestateLoadContext};
@@ -225,7 +227,7 @@ impl EguiApp {
                 }
                 AsyncFrontendMessage::UseMatchingRom(context, rom_path) => {
                     // User chose to use the matching ROM - load the savestate
-                    self.load_savestate_with_rom(&context, &rom_path);
+                    self.load_savestate_with_rom(&context, &rom_path, SaveType::Manual);
                 }
                 AsyncFrontendMessage::ManuallySelectRom(context) => {
                     // User chose to manually select a ROM
@@ -241,7 +243,7 @@ impl EguiApp {
                         Some(checksum) => {
                             if checksum == context.savestate.rom_file.data_checksum {
                                 // Checksum matches, load the savestate
-                                self.load_savestate_with_rom(&context, &rom_path);
+                                self.load_savestate_with_rom(&context, &rom_path, SaveType::Manual);
                             } else {
                                 // Checksum mismatch, show warning dialog
                                 self.config.pending_dialogs.checksum_mismatch_dialog =
@@ -272,7 +274,7 @@ impl EguiApp {
                 }
                 AsyncFrontendMessage::LoadSavestateAnyway(context, rom_path) => {
                     // User chose to load anyway despite checksum mismatch
-                    self.load_savestate_with_rom(&context, &rom_path);
+                    self.load_savestate_with_rom(&context, &rom_path, SaveType::Manual);
                 }
                 AsyncFrontendMessage::SelectAnotherRom(context) => {
                     // User chose to select a different ROM after checksum mismatch
@@ -341,7 +343,7 @@ impl EguiApp {
                         };
 
                         if let Some(rom_path) = self.config.user_config.previous_rom_path.clone() {
-                            self.load_savestate_with_rom(&context, &rom_path)
+                            self.load_savestate_with_rom(&context, &rom_path, SaveType::Quicksave)
                         }
                     }
                 }
@@ -445,10 +447,18 @@ impl EguiApp {
     }
 
     /// Load a savestate after ROM has been verified/selected
-    fn load_savestate_with_rom(&mut self, context: &SavestateLoadContext, rom_path: &Path) {
-        let _ = self
-            .to_emulator
-            .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
+    fn load_savestate_with_rom(
+        &mut self,
+        context: &SavestateLoadContext,
+        rom_path: &Path,
+        save_type: SaveType,
+    ) {
+        if save_type == SaveType::Quicksave || self.config.user_config.loaded_rom.is_some() {
+            let _ = self
+                .to_emulator
+                .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
+        }
+
         // First power off, load ROM, power on
         let _ = self.to_emulator.send(FrontendMessage::PowerOff);
         self.load_rom(rom_path.to_path_buf());
@@ -562,31 +572,33 @@ impl EguiApp {
                             }
                         }
                     }
-                    SaveType::Autosave => {
-                       if let Some(rom) = &self.config.user_config.loaded_rom {
-                            let rom_hash = &rom.data_checksum;
-                            let prev_path = &self.config.user_config.previous_rom_path;
-                            if let Some(prev_path) = prev_path {
-                                let display_name = util::rom_display_name(prev_path, rom_hash);
-
-                                let path = get_data_file_path(
-                                    format!(
-                                        "saves/{}/autosaves/autosave_{}.sav",
-                                        display_name,
-                                        chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
-                                    )
-                                    .as_str(),
-                                );
-
-                                if let Some(path) = path {
-                                    let _ = write_file_async(path, s.to_bytes(None), false);
-                                }
-                            }
-                        }
-                    }
+                    SaveType::Autosave => self.create_auto_save(s),
                 },
                 EmulatorMessage::RomLoaded(rom) => {
                     self.config.user_config.loaded_rom = rom;
+                }
+            }
+        }
+    }
+
+    fn create_auto_save(&self, savestate: Box<SaveState>) {
+        if let Some(rom) = &self.config.user_config.loaded_rom {
+            let rom_hash = &rom.data_checksum;
+            let prev_path = &self.config.user_config.previous_rom_path;
+            if let Some(prev_path) = prev_path {
+                let display_name = util::rom_display_name(prev_path, rom_hash);
+
+                let path = get_data_file_path(
+                    format!(
+                        "saves/{}/autosaves/autosave_{}.sav",
+                        display_name,
+                        chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
+                    )
+                    .as_str(),
+                );
+
+                if let Some(path) = path {
+                    let _ = write_file_async(path, savestate.to_bytes(None), false);
                 }
             }
         }
@@ -656,13 +668,13 @@ impl EguiApp {
 
     /// Check if the pattern tables pane is visible
     fn is_pattern_tables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{Pane, find_pane};
+        use crate::frontend::egui::tiles::{find_pane, Pane};
         find_pane(&self.tree.tiles, &Pane::PatternTables).is_some()
     }
 
     /// Check if the nametables pane is visible
     fn is_nametables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{Pane, find_pane};
+        use crate::frontend::egui::tiles::{find_pane, Pane};
         find_pane(&self.tree.tiles, &Pane::Nametables).is_some()
     }
 
@@ -879,6 +891,9 @@ impl eframe::App for EguiApp {
         if let Err(e) = crate::frontend::persistence::save_config(&persistent_config) {
             eprintln!("Failed to save configuration: {}", e);
         }
+
+        let savestate = self.channel_emu.nes.save_state();
+        self.create_auto_save(Box::new(savestate));
 
         let _ = self.to_emulator.send(FrontendMessage::Quit);
     }
