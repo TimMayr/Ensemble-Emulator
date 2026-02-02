@@ -50,6 +50,12 @@ use crate::frontend::util::{FileType, SavestateLoadError, ToBytes};
 /// Key used for storing egui_tiles tree state in egui's persistence
 const EGUI_TILES_TREE_KEY: &str = "emulator_tiles_tree";
 
+/// Interval between periodic autosaves (5 minutes)
+const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(5 * 60);
+
+/// Maximum number of autosaves to keep per game
+const MAX_AUTOSAVES_PER_GAME: usize = 1024;
+
 /// Shared deque for frontend events that can be pushed from UI components
 pub type FrontendEventQueue = Rc<RefCell<VecDeque<FrontendEvent>>>;
 
@@ -72,6 +78,10 @@ pub struct EguiApp {
     pattern_tables_was_visible: bool,
     /// Track if nametables was visible last frame to detect when it becomes visible
     nametables_was_visible: bool,
+    /// Time of last periodic autosave
+    last_autosave: Instant,
+    /// Track if window was focused last frame to detect focus loss
+    was_focused: bool,
 }
 
 const UNCAPPED_EMU_TIME: u64 = 70;
@@ -118,6 +128,8 @@ impl EguiApp {
             tree,
             pattern_tables_was_visible: false,
             nametables_was_visible: false,
+            last_autosave: Instant::now(),
+            was_focused: true,
         }
     }
 
@@ -609,6 +621,43 @@ impl EguiApp {
 
                 if let Some(path) = path {
                     let _ = write_file_async(path, savestate.to_bytes(None), false);
+                    
+                    // Clean up old autosaves to enforce buffer limit
+                    self.cleanup_old_autosaves(&display_name);
+                }
+            }
+        }
+    }
+
+    /// Remove oldest autosaves if there are more than MAX_AUTOSAVES_PER_GAME
+    fn cleanup_old_autosaves(&self, display_name: &str) {
+        if let Some(data_dir) = get_data_dir() {
+            let autosaves_dir = data_dir.join("saves").join(display_name).join("autosaves");
+            
+            if let Ok(entries) = std::fs::read_dir(&autosaves_dir) {
+                // Collect all autosave files with their modification times
+                let mut autosaves: Vec<(PathBuf, std::time::SystemTime)> = entries
+                    .filter_map(|entry| entry.ok())
+                    .filter(|entry| {
+                        entry.path().extension().is_some_and(|ext| ext == "sav")
+                    })
+                    .filter_map(|entry| {
+                        let path = entry.path();
+                        let modified = entry.metadata().ok()?.modified().ok()?;
+                        Some((path, modified))
+                    })
+                    .collect();
+
+                // If we have more than the limit, delete the oldest
+                if autosaves.len() > MAX_AUTOSAVES_PER_GAME {
+                    // Sort by modification time (oldest first)
+                    autosaves.sort_by_key(|a| a.1);
+                    
+                    // Delete the oldest files until we're at the limit
+                    let to_delete = autosaves.len() - MAX_AUTOSAVES_PER_GAME;
+                    for (path, _) in autosaves.into_iter().take(to_delete) {
+                        let _ = std::fs::remove_file(path);
+                    }
                 }
             }
         }
@@ -836,6 +885,37 @@ impl EguiApp {
             &self.async_sender,
         );
     }
+
+    /// Check if a periodic autosave should be triggered based on elapsed time
+    fn check_periodic_autosave(&mut self) {
+        // Only autosave if a ROM is loaded and console is powered
+        if self.config.user_config.loaded_rom.is_some()
+            && self.config.console_config.is_powered
+            && self.last_autosave.elapsed() >= AUTOSAVE_INTERVAL
+        {
+            let savestate = self.channel_emu.nes.save_state();
+            self.create_auto_save(Box::new(savestate));
+            self.last_autosave = Instant::now();
+        }
+    }
+
+    /// Check if window focus was lost and trigger autosave if needed
+    fn check_focus_autosave(&mut self, ctx: &Context) {
+        let is_focused = ctx.input(|i| i.focused);
+        
+        // Only autosave when focus is lost (transition from focused to unfocused)
+        if self.was_focused
+            && !is_focused
+            && self.config.user_config.loaded_rom.is_some()
+            && self.config.console_config.is_powered
+        {
+            let savestate = self.channel_emu.nes.save_state();
+            self.create_auto_save(Box::new(savestate));
+            self.last_autosave = Instant::now();
+        }
+        
+        self.was_focused = is_focused;
+    }
 }
 
 impl eframe::App for EguiApp {
@@ -865,6 +945,12 @@ impl eframe::App for EguiApp {
         // Update required debug fetches based on visible panes
         self.config.view_config.required_debug_fetches =
             compute_required_fetches_from_tree(&self.tree);
+
+        // Check for periodic autosave (every 5 minutes)
+        self.check_periodic_autosave();
+
+        // Check for focus loss autosave (when window loses focus)
+        self.check_focus_autosave(ctx);
 
         add_menu_bar(ctx, &self.config, &self.async_sender, &mut self.tree);
 
