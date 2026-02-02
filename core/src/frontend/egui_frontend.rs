@@ -622,45 +622,49 @@ impl EguiApp {
                 if let Some(path) = path {
                     let _ = write_file_async(path, savestate.to_bytes(None), false);
                     
-                    // Clean up old autosaves to enforce buffer limit
-                    self.cleanup_old_autosaves(&display_name);
+                    // Clean up old autosaves asynchronously to avoid blocking the UI
+                    Self::cleanup_old_autosaves_async(display_name);
                 }
             }
         }
     }
 
-    /// Remove oldest autosaves if there are more than MAX_AUTOSAVES_PER_GAME
-    fn cleanup_old_autosaves(&self, display_name: &str) {
-        if let Some(data_dir) = get_data_dir() {
-            let autosaves_dir = data_dir.join("saves").join(display_name).join("autosaves");
-            
-            if let Ok(entries) = std::fs::read_dir(&autosaves_dir) {
-                // Collect all autosave files with their modification times
-                let mut autosaves: Vec<(PathBuf, std::time::SystemTime)> = entries
-                    .filter_map(|entry| entry.ok())
-                    .filter(|entry| {
-                        entry.path().extension().is_some_and(|ext| ext == "sav")
-                    })
-                    .filter_map(|entry| {
-                        let path = entry.path();
-                        let modified = entry.metadata().ok()?.modified().ok()?;
-                        Some((path, modified))
-                    })
-                    .collect();
+    /// Remove oldest autosaves if there are more than MAX_AUTOSAVES_PER_GAME.
+    /// Runs asynchronously in a background thread to avoid blocking the UI.
+    fn cleanup_old_autosaves_async(display_name: String) {
+        std::thread::spawn(move || {
+            if let Some(data_dir) = get_data_dir() {
+                let autosaves_dir = data_dir.join("saves").join(&display_name).join("autosaves");
+                
+                if let Ok(entries) = std::fs::read_dir(&autosaves_dir) {
+                    // Collect all autosave files with their modification times
+                    let mut autosaves: Vec<(PathBuf, std::time::SystemTime)> = entries
+                        .filter_map(|entry| entry.ok())
+                        .filter(|entry| {
+                            entry.path().extension().is_some_and(|ext| ext == "sav")
+                        })
+                        .filter_map(|entry| {
+                            let path = entry.path();
+                            let modified = entry.metadata().ok()?.modified().ok()?;
+                            Some((path, modified))
+                        })
+                        .collect();
 
-                // If we have more than the limit, delete the oldest
-                if autosaves.len() > MAX_AUTOSAVES_PER_GAME {
-                    // Sort by modification time (oldest first)
-                    autosaves.sort_by_key(|a| a.1);
-                    
-                    // Delete the oldest files until we're at the limit
-                    let to_delete = autosaves.len() - MAX_AUTOSAVES_PER_GAME;
-                    for (path, _) in autosaves.into_iter().take(to_delete) {
-                        let _ = std::fs::remove_file(path);
+                    // If we have at least the limit, delete oldest to make room
+                    // (use >= to maintain exactly MAX_AUTOSAVES_PER_GAME after the new save)
+                    if autosaves.len() >= MAX_AUTOSAVES_PER_GAME {
+                        // Sort by modification time (oldest first)
+                        autosaves.sort_by_key(|a| a.1);
+                        
+                        // Delete enough files to get back under the limit
+                        let to_delete = autosaves.len() - MAX_AUTOSAVES_PER_GAME + 1;
+                        for (path, _) in autosaves.into_iter().take(to_delete) {
+                            let _ = std::fs::remove_file(path);
+                        }
                     }
                 }
             }
-        }
+        });
     }
 
     fn get_current_quicksave_path(&self) -> Option<PathBuf> {
@@ -893,9 +897,10 @@ impl EguiApp {
             && self.config.console_config.is_powered
             && self.last_autosave.elapsed() >= AUTOSAVE_INTERVAL
         {
+            // Update timestamp first to prevent overlapping save operations
+            self.last_autosave = Instant::now();
             let savestate = self.channel_emu.nes.save_state();
             self.create_auto_save(Box::new(savestate));
-            self.last_autosave = Instant::now();
         }
     }
 
@@ -904,14 +909,16 @@ impl EguiApp {
         let is_focused = ctx.input(|i| i.focused);
         
         // Only autosave when focus is lost (transition from focused to unfocused)
+        // This also resets the periodic timer since we just saved
         if self.was_focused
             && !is_focused
             && self.config.user_config.loaded_rom.is_some()
             && self.config.console_config.is_powered
         {
+            // Update timestamp first to prevent overlapping save operations
+            self.last_autosave = Instant::now();
             let savestate = self.channel_emu.nes.save_state();
             self.create_auto_save(Box::new(savestate));
-            self.last_autosave = Instant::now();
         }
         
         self.was_focused = is_focused;
