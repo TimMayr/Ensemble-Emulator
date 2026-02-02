@@ -155,6 +155,12 @@ pub struct ExecutionConfig {
 pub struct OutputConfig {
     pub path: Option<PathBuf>,
     pub format: Option<String>,
+    /// Shorthand for format = "json"
+    pub json: Option<bool>,
+    /// Shorthand for format = "toml"
+    pub toml: Option<bool>,
+    /// Shorthand for format = "binary"
+    pub binary: Option<bool>,
 }
 
 impl ConfigFile {
@@ -359,6 +365,16 @@ impl ConfigFile {
         // Output options
         if cli.output.output.is_none() {
             cli.output.output = self.output.path.clone();
+        }
+        // Handle shorthand flags from config
+        if !cli.output.json && self.output.json.unwrap_or(false) {
+            cli.output.json = true;
+        }
+        if !cli.output.toml && self.output.toml.unwrap_or(false) {
+            cli.output.toml = true;
+        }
+        if !cli.output.binary && self.output.binary.unwrap_or(false) {
+            cli.output.binary = true;
         }
         if let Some(ref fmt) = self.output.format {
             // Only override if CLI is at default and no shorthand flags
