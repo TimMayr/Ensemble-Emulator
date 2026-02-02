@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use crate::emulation::messages::{EmulatorFetchable, RgbPalette};
+use crate::emulation::rom::RomFile;
 use crate::frontend::messages::SavestateLoadContext;
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
@@ -74,6 +75,7 @@ pub struct UserConfig {
     pub previous_rom_path: Option<PathBuf>,
     pub previous_savestate_path: Option<PathBuf>,
     pub pattern_edit_color: u8,
+    pub loaded_rom: Option<RomFile>
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

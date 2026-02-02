@@ -138,6 +138,7 @@ impl ChannelEmulator {
                 FrontendMessage::WriteCpu(address, data) => self.nes.cpu.memory.init(address, data),
                 FrontendMessage::LoadRom(path) => {
                     self.nes.load_rom(&path);
+                    let _ = self.to_frontend.send(EmulatorMessage::RomLoaded(self.nes.rom_file.clone()));
                 }
                 FrontendMessage::Power => {
                     self.nes.power();

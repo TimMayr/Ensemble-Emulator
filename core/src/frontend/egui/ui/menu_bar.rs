@@ -2,7 +2,7 @@ use crossbeam_channel::Sender;
 use egui::Context;
 
 use crate::frontend::egui::config::AppConfig;
-use crate::frontend::egui::tiles::{Pane, add_pane_if_missing};
+use crate::frontend::egui::tiles::{add_pane_if_missing, Pane};
 use crate::frontend::messages::AsyncFrontendMessage;
 use crate::frontend::util::{spawn_rom_picker, spawn_savestate_picker};
 
@@ -18,20 +18,23 @@ pub fn add_menu_bar(
                 if ui.button("Load Rom").clicked() {
                     spawn_rom_picker(async_sender, config.user_config.previous_rom_path.as_ref());
                 }
-                ui.menu_button("Savestates", |ui| {
-                    if ui.button("Save State").clicked() {
-                        let _ = async_sender.send(AsyncFrontendMessage::CreateSavestate);
-                    }
 
-                    if ui.button("Load State").clicked() {
-                        // Use the new multistep savestate loading flow
-                        spawn_savestate_picker(
-                            async_sender,
-                            config.user_config.previous_savestate_path.as_ref(),
-                            config.user_config.previous_rom_path.clone(),
-                        );
-                    }
-                })
+                if config.user_config.loaded_rom.is_some() {
+                    ui.menu_button("Savestates", |ui| {
+                        if ui.button("Save State").clicked() {
+                            let _ = async_sender.send(AsyncFrontendMessage::CreateSavestate);
+                        }
+
+                        if ui.button("Load State").clicked() {
+                            // Use the new multistep savestate loading flow
+                            spawn_savestate_picker(
+                                async_sender,
+                                config.user_config.previous_savestate_path.as_ref(),
+                                config.user_config.previous_rom_path.clone(),
+                            );
+                        }
+                    });
+                }
             });
             ui.menu_button("Console", |ui| {
                 if ui.button("Reset").clicked() {

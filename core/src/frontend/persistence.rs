@@ -396,6 +396,7 @@ impl From<&PersistentUserConfig> for UserConfig {
             previous_rom_path: config.previous_rom_path.clone(),
             previous_savestate_path: config.previous_savestate_path.clone(),
             pattern_edit_color: config.pattern_edit_color,
+            loaded_rom: None,
         }
     }
 }

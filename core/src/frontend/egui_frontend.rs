@@ -17,13 +17,14 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
+
 use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, ViewportCommand, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
 use crate::emulation::messages::{
     EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette, SaveType,
-    TILE_COUNT, TileData,
+    TileData, TILE_COUNT,
 };
 use crate::emulation::nes::Nes;
 use crate::emulation::savestate;
@@ -35,7 +36,7 @@ use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
-    Pane, TreeBehavior, compute_required_fetches_from_tree, create_tree,
+    compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
 };
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
 use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent, SavestateLoadContext};
@@ -551,7 +552,7 @@ impl EguiApp {
                         s.to_bytes(),
                     ),
                     SaveType::Quicksave => {
-                        if let Some(rom) = &self.channel_emu.nes.rom_file {
+                        if let Some(rom) = &self.config.user_config.loaded_rom {
                             let rom_hash = &rom.data_checksum;
                             let prev_path = &self.config.user_config.previous_rom_path;
                             if let Some(prev_path) = prev_path {
@@ -574,6 +575,9 @@ impl EguiApp {
                     }
                     SaveType::Autosave => {}
                 },
+                EmulatorMessage::RomLoaded(rom) => {
+                    self.config.user_config.loaded_rom = rom;
+                }
             }
         }
     }
@@ -581,7 +585,7 @@ impl EguiApp {
     fn get_current_quicksave_path(&self) -> Option<PathBuf> {
         let data_dir = get_data_dir();
 
-        if let Some(rom) = &self.channel_emu.nes.rom_file
+        if let Some(rom) = &self.config.user_config.loaded_rom
             && let Some(prev_path) = &self.config.user_config.previous_rom_path
             && let Some(data_dir) = data_dir
             && data_dir.exists()
@@ -642,13 +646,13 @@ impl EguiApp {
 
     /// Check if the pattern tables pane is visible
     fn is_pattern_tables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{Pane, find_pane};
+        use crate::frontend::egui::tiles::{find_pane, Pane};
         find_pane(&self.tree.tiles, &Pane::PatternTables).is_some()
     }
 
     /// Check if the nametables pane is visible
     fn is_nametables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{Pane, find_pane};
+        use crate::frontend::egui::tiles::{find_pane, Pane};
         find_pane(&self.tree.tiles, &Pane::Nametables).is_some()
     }
 
