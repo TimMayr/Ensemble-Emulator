@@ -17,14 +17,13 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-
 use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, ViewportCommand, Visuals};
 
 use crate::emulation::channel_emu::ChannelEmulator;
 use crate::emulation::messages::{
     EmulatorFetchable, EmulatorMessage, FrontendMessage, PaletteData, RgbPalette, SaveType,
-    TileData, TILE_COUNT,
+    TILE_COUNT, TileData,
 };
 use crate::emulation::nes::Nes;
 use crate::emulation::savestate;
@@ -37,7 +36,7 @@ use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
-    compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
+    Pane, TreeBehavior, compute_required_fetches_from_tree, create_tree,
 };
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
 use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent, SavestateLoadContext};
@@ -227,7 +226,7 @@ impl EguiApp {
                 }
                 AsyncFrontendMessage::UseMatchingRom(context, rom_path) => {
                     // User chose to use the matching ROM - load the savestate
-                    self.load_savestate_with_rom(&context, &rom_path, SaveType::Manual);
+                    self.load_savestate_with_rom(&context, &rom_path);
                 }
                 AsyncFrontendMessage::ManuallySelectRom(context) => {
                     // User chose to manually select a ROM
@@ -243,7 +242,7 @@ impl EguiApp {
                         Some(checksum) => {
                             if checksum == context.savestate.rom_file.data_checksum {
                                 // Checksum matches, load the savestate
-                                self.load_savestate_with_rom(&context, &rom_path, SaveType::Manual);
+                                self.load_savestate_with_rom(&context, &rom_path);
                             } else {
                                 // Checksum mismatch, show warning dialog
                                 self.config.pending_dialogs.checksum_mismatch_dialog =
@@ -274,7 +273,7 @@ impl EguiApp {
                 }
                 AsyncFrontendMessage::LoadSavestateAnyway(context, rom_path) => {
                     // User chose to load anyway despite checksum mismatch
-                    self.load_savestate_with_rom(&context, &rom_path, SaveType::Manual);
+                    self.load_savestate_with_rom(&context, &rom_path);
                 }
                 AsyncFrontendMessage::SelectAnotherRom(context) => {
                     // User chose to select a different ROM after checksum mismatch
@@ -343,7 +342,7 @@ impl EguiApp {
                         };
 
                         if let Some(rom_path) = self.config.user_config.previous_rom_path.clone() {
-                            self.load_savestate_with_rom(&context, &rom_path, SaveType::Quicksave)
+                            self.load_savestate_with_rom(&context, &rom_path)
                         }
                     }
                 }
@@ -354,6 +353,9 @@ impl EguiApp {
                 }
                 AsyncFrontendMessage::LoadRom(path) => {
                     if let Some(path) = path {
+                        let _ = self
+                            .to_emulator
+                            .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
                         let _ = self.to_emulator.send(FrontendMessage::PowerOff);
                         self.load_rom(path);
                         let _ = self.to_emulator.send(FrontendMessage::Power);
@@ -363,14 +365,23 @@ impl EguiApp {
 
                 // Consolidated emulator operations
                 AsyncFrontendMessage::PowerOn => {
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
                     let _ = self.to_emulator.send(FrontendMessage::Power);
                     self.config.console_config.is_powered = true;
                 }
                 AsyncFrontendMessage::PowerOff => {
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
                     let _ = self.to_emulator.send(FrontendMessage::PowerOff);
                     self.config.console_config.is_powered = false;
                 }
                 AsyncFrontendMessage::Reset => {
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
                     let _ = self.to_emulator.send(FrontendMessage::Reset);
                 }
                 AsyncFrontendMessage::CreateSavestate => {
@@ -432,6 +443,10 @@ impl EguiApp {
     fn load_rom(&mut self, rom_path: PathBuf) {
         let _ = self
             .to_emulator
+            .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
+
+        let _ = self
+            .to_emulator
             .send(FrontendMessage::LoadRom(rom_path.clone()));
 
         self.config.user_config.previous_rom_path = Some(rom_path.clone());
@@ -447,13 +462,8 @@ impl EguiApp {
     }
 
     /// Load a savestate after ROM has been verified/selected
-    fn load_savestate_with_rom(
-        &mut self,
-        context: &SavestateLoadContext,
-        rom_path: &Path,
-        save_type: SaveType,
-    ) {
-        if save_type == SaveType::Quicksave || self.config.user_config.loaded_rom.is_some() {
+    fn load_savestate_with_rom(&mut self, context: &SavestateLoadContext, rom_path: &Path) {
+        if self.config.user_config.loaded_rom.is_some() {
             let _ = self
                 .to_emulator
                 .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
@@ -668,13 +678,13 @@ impl EguiApp {
 
     /// Check if the pattern tables pane is visible
     fn is_pattern_tables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{find_pane, Pane};
+        use crate::frontend::egui::tiles::{Pane, find_pane};
         find_pane(&self.tree.tiles, &Pane::PatternTables).is_some()
     }
 
     /// Check if the nametables pane is visible
     fn is_nametables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{find_pane, Pane};
+        use crate::frontend::egui::tiles::{Pane, find_pane};
         find_pane(&self.tree.tiles, &Pane::Nametables).is_some()
     }
 

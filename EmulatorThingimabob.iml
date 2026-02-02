@@ -14,6 +14,9 @@
       <excludeFolder url="file://$MODULE_DIR$/godot_frontend/.godot" />
       <excludeFolder url="file://$MODULE_DIR$/log" />
       <excludeFolder url="file://$MODULE_DIR$/out" />
+      <excludeFolder url="file://$MODULE_DIR$/pally/.venv/bin" />
+      <excludeFolder url="file://$MODULE_DIR$/pally/.venv/lib" />
+      <excludeFolder url="file://$MODULE_DIR$/pally/.venv/share" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
