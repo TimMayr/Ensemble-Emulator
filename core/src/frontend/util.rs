@@ -306,7 +306,7 @@ pub fn color_radio<Value: PartialEq>(
 }
 
 /// Compute SHA256 checksum for a file
-pub fn compute_file_checksum(path: &PathBuf) -> Option<[u8; 32]> {
+pub fn compute_file_checksum(path: &Path) -> Option<[u8; 32]> {
     let mut file = File::open(path).ok()?;
     let mut data = Vec::new();
     file.read_to_end(&mut data).ok()?;

@@ -197,7 +197,7 @@ impl EguiApp {
         context: &SavestateLoadContext,
         rom_path: &Path,
     ) {
-        match util::compute_file_checksum(&rom_path.to_path_buf()) {
+        match util::compute_file_checksum(rom_path) {
             Some(checksum) => {
                 if checksum == context.savestate.rom_file.data_checksum {
                     self.load_savestate_with_rom(context, rom_path);
