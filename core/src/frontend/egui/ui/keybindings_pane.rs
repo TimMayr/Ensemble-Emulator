@@ -1,8 +1,7 @@
 //! Keybindings pane rendering
 
-use egui_keybind::Keybind;
-
 use crate::frontend::egui::config::AppConfig;
+use crate::frontend::egui::keybindings::Hotkey;
 
 /// Render the keybindings panel
 pub fn render_keybindings(ui: &mut egui::Ui, config: &mut AppConfig) {
@@ -26,48 +25,48 @@ fn render_controller_keybindings(ui: &mut egui::Ui, config: &mut AppConfig) {
             .striped(true)
             .show(ui, |ui| {
                 ui.label("Up");
-                ui.add(Keybind::new(&mut config.keybindings.controller.up.0, "kb_up"));
+                ui.add(Hotkey::with_id(&mut config.keybindings.controller.up, "kb_up"));
                 ui.end_row();
 
                 ui.label("Down");
-                ui.add(Keybind::new(
-                    &mut config.keybindings.controller.down.0,
+                ui.add(Hotkey::with_id(
+                    &mut config.keybindings.controller.down,
                     "kb_down",
                 ));
                 ui.end_row();
 
                 ui.label("Left");
-                ui.add(Keybind::new(
-                    &mut config.keybindings.controller.left.0,
+                ui.add(Hotkey::with_id(
+                    &mut config.keybindings.controller.left,
                     "kb_left",
                 ));
                 ui.end_row();
 
                 ui.label("Right");
-                ui.add(Keybind::new(
-                    &mut config.keybindings.controller.right.0,
+                ui.add(Hotkey::with_id(
+                    &mut config.keybindings.controller.right,
                     "kb_right",
                 ));
                 ui.end_row();
 
                 ui.label("A Button");
-                ui.add(Keybind::new(&mut config.keybindings.controller.a.0, "kb_a"));
+                ui.add(Hotkey::with_id(&mut config.keybindings.controller.a, "kb_a"));
                 ui.end_row();
 
                 ui.label("B Button");
-                ui.add(Keybind::new(&mut config.keybindings.controller.b.0, "kb_b"));
+                ui.add(Hotkey::with_id(&mut config.keybindings.controller.b, "kb_b"));
                 ui.end_row();
 
                 ui.label("Start");
-                ui.add(Keybind::new(
-                    &mut config.keybindings.controller.start.0,
+                ui.add(Hotkey::with_id(
+                    &mut config.keybindings.controller.start,
                     "kb_start",
                 ));
                 ui.end_row();
 
                 ui.label("Select");
-                ui.add(Keybind::new(
-                    &mut config.keybindings.controller.select.0,
+                ui.add(Hotkey::with_id(
+                    &mut config.keybindings.controller.select,
                     "kb_select",
                 ));
                 ui.end_row();
@@ -84,29 +83,29 @@ fn render_emulation_keybindings(ui: &mut egui::Ui, config: &mut AppConfig) {
             .striped(true)
             .show(ui, |ui| {
                 ui.label("Pause/Resume");
-                ui.add(Keybind::new(
-                    &mut config.keybindings.emulation.pause.0,
+                ui.add(Hotkey::with_id(
+                    &mut config.keybindings.emulation.pause,
                     "kb_pause",
                 ));
                 ui.end_row();
 
                 ui.label("Reset");
-                ui.add(Keybind::new(
-                    &mut config.keybindings.emulation.reset.0,
+                ui.add(Hotkey::with_id(
+                    &mut config.keybindings.emulation.reset,
                     "kb_reset",
                 ));
                 ui.end_row();
 
                 ui.label("Quicksave");
-                ui.add(Keybind::new(
-                    &mut config.keybindings.emulation.quicksave.0,
+                ui.add(Hotkey::with_id(
+                    &mut config.keybindings.emulation.quicksave,
                     "kb_quicksave",
                 ));
                 ui.end_row();
 
                 ui.label("Quickload");
-                ui.add(Keybind::new(
-                    &mut config.keybindings.emulation.quickload.0,
+                ui.add(Hotkey::with_id(
+                    &mut config.keybindings.emulation.quickload,
                     "kb_quickload",
                 ));
                 ui.end_row();
@@ -123,8 +122,8 @@ fn render_debug_keybindings(ui: &mut egui::Ui, config: &mut AppConfig) {
             .striped(true)
             .show(ui, |ui| {
                 ui.label("Cycle Palette");
-                ui.add(Keybind::new(
-                    &mut config.keybindings.debug.cycle_palette.0,
+                ui.add(Hotkey::with_id(
+                    &mut config.keybindings.debug.cycle_palette,
                     "kb_cycle_palette",
                 ));
                 ui.end_row();

@@ -4,204 +4,400 @@
 //! - NES controller inputs (Up, Down, Left, Right, A, B, Start, Select)
 //! - Emulation controls (Pause, Reset, Quicksave, Quickload)
 //! - Debug controls (Cycle palette)
+//!
+//! This module includes a port of the egui_hotkey crate's functionality
+//! updated to work with egui 0.33.
 
-use egui::{Key, KeyboardShortcut, Modifiers};
+use egui::{
+    Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget, vec2,
+};
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::hash::Hash;
+use std::ops::Deref;
 
-/// A wrapper around `Option<KeyboardShortcut>` that provides custom serialization.
-///
-/// This is needed because `KeyboardShortcut` doesn't implement Serialize/Deserialize
-/// directly in a TOML-friendly format.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Keybind(pub Option<KeyboardShortcut>);
+// ============================================================================
+// Binding types (ported from egui_hotkey)
+// ============================================================================
 
-impl Default for Keybind {
+/// Variant for binding. This can be either [`egui::PointerButton`] or [`egui::Key`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BindVariant {
+    Mouse(PointerButton),
+    Keyboard(Key),
+}
+
+impl BindVariant {
+    /// Returns true if the variant was pressed.
+    pub fn pressed(&self, input_state: impl Deref<Target = InputState>) -> bool {
+        match self {
+            BindVariant::Mouse(mb) => input_state.events.iter().any(|e| {
+                matches!(e, Event::PointerButton {
+                    button,
+                    pressed: true,
+                    ..
+                } if mb == button)
+            }),
+            BindVariant::Keyboard(kb) => input_state.key_pressed(*kb),
+        }
+    }
+
+    /// Returns true if the variant is down.
+    pub fn down(&self, input_state: impl Deref<Target = InputState>) -> bool {
+        match self {
+            BindVariant::Mouse(mb) => input_state.pointer.button_down(*mb),
+            BindVariant::Keyboard(kb) => input_state.key_down(*kb),
+        }
+    }
+}
+
+impl From<PointerButton> for BindVariant {
+    fn from(pb: PointerButton) -> Self {
+        Self::Mouse(pb)
+    }
+}
+
+impl From<Key> for BindVariant {
+    fn from(key: Key) -> Self {
+        Self::Keyboard(key)
+    }
+}
+
+impl Display for BindVariant {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self {
+            BindVariant::Mouse(pb) => f.write_str(match pb {
+                PointerButton::Primary => "M1",
+                PointerButton::Secondary => "M2",
+                PointerButton::Middle => "M3",
+                PointerButton::Extra1 => "M4",
+                PointerButton::Extra2 => "M5",
+            }),
+            BindVariant::Keyboard(kb) => write!(f, "{}", kb.name()),
+        }
+    }
+}
+
+/// Binding to a variant that also stores the [`egui::Modifiers`].
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Binding {
+    pub variant: BindVariant,
+    pub modifiers: Modifiers,
+}
+
+impl Default for Binding {
     fn default() -> Self {
-        Self(None)
-    }
-}
-
-impl Keybind {
-    /// Create a new keybind from a key without modifiers.
-    pub const fn key(key: Key) -> Self {
-        Self(Some(KeyboardShortcut {
+        Self {
+            variant: BindVariant::Keyboard(Key::Space),
             modifiers: Modifiers::NONE,
-            logical_key: key,
-        }))
+        }
+    }
+}
+
+impl Binding {
+    /// Create a new binding with just a key.
+    pub const fn key(key: Key) -> Self {
+        Self {
+            variant: BindVariant::Keyboard(key),
+            modifiers: Modifiers::NONE,
+        }
     }
 
-    /// Create a new keybind from a key with modifiers.
-    pub const fn with_modifiers(modifiers: Modifiers, key: Key) -> Self {
-        Self(Some(KeyboardShortcut {
+    /// Create a new binding with a key and modifiers.
+    pub const fn with_modifiers(key: Key, modifiers: Modifiers) -> Self {
+        Self {
+            variant: BindVariant::Keyboard(key),
             modifiers,
-            logical_key: key,
-        }))
+        }
     }
 
-    /// Create an unbound keybind.
-    pub const fn none() -> Self {
-        Self(None)
+    /// Format as a short string for display.
+    pub fn into_short(self) -> String {
+        let mut items = Vec::new();
+        if self.modifiers.ctrl {
+            items.push("^");
+        }
+        if self.modifiers.alt {
+            items.push("⌥");
+        }
+        if self.modifiers.shift {
+            items.push("⇧");
+        }
+        if self.modifiers.command {
+            items.push("⌘");
+        }
+
+        let merged = items.join("");
+        if merged.is_empty() {
+            self.variant.to_string()
+        } else {
+            format!("{merged}{}", self.variant)
+        }
+    }
+
+    /// Format as a long string for tooltip display.
+    pub fn into_long(self) -> String {
+        let mut items = Vec::new();
+        if self.modifiers.ctrl {
+            items.push("Ctrl");
+        }
+        if self.modifiers.alt {
+            items.push("Alt");
+        }
+        if self.modifiers.shift {
+            items.push("Shift");
+        }
+        if self.modifiers.command {
+            items.push("Cmd");
+        }
+
+        let merged = items.join(" + ");
+        if merged.is_empty() {
+            self.variant.to_string()
+        } else {
+            format!("{merged} + {}", self.variant)
+        }
+    }
+
+    /// Returns true if the variant was pressed and input modifiers are matching.
+    pub fn pressed(&self, input_state: impl Deref<Target = InputState>) -> bool {
+        input_state.modifiers.matches_logically(self.modifiers) && self.variant.pressed(input_state)
+    }
+
+    /// Returns true if the variant is down and input modifiers are matching.
+    pub fn down(&self, input_state: impl Deref<Target = InputState>) -> bool {
+        input_state.modifiers.matches_logically(self.modifiers) && self.variant.down(input_state)
     }
 }
 
-impl Serialize for Keybind {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match &self.0 {
-            Some(shortcut) => {
-                let formatted = shortcut.format(&egui::ModifierNames::NAMES, false);
-                serializer.serialize_str(&formatted)
+// ============================================================================
+// HotkeyBinding trait (ported from egui_hotkey)
+// ============================================================================
+
+/// This Trait defines types that can be used as hotkey's target.
+pub trait HotkeyBinding {
+    const ACCEPT_MOUSE: bool;
+    const ACCEPT_KEYBOARD: bool;
+
+    fn new(variant: BindVariant, modifiers: Modifiers) -> Self;
+    fn get(&self) -> Option<Binding>;
+    fn set(&mut self, variant: BindVariant, modifiers: Modifiers);
+    fn clear(&mut self);
+}
+
+impl HotkeyBinding for Binding {
+    const ACCEPT_MOUSE: bool = true;
+    const ACCEPT_KEYBOARD: bool = true;
+
+    fn get(&self) -> Option<Binding> {
+        Some(*self)
+    }
+
+    fn set(&mut self, variant: BindVariant, modifiers: Modifiers) {
+        self.variant = variant;
+        self.modifiers = modifiers;
+    }
+
+    fn clear(&mut self) {
+        panic!("Binding cannot be cleared directly. Use Option<Binding> wrapper type if clearing is needed, as Binding always requires a value.");
+    }
+
+    fn new(variant: BindVariant, modifiers: Modifiers) -> Self {
+        Binding { variant, modifiers }
+    }
+}
+
+impl<B> HotkeyBinding for Option<B>
+where
+    B: HotkeyBinding,
+{
+    const ACCEPT_MOUSE: bool = B::ACCEPT_MOUSE;
+    const ACCEPT_KEYBOARD: bool = B::ACCEPT_KEYBOARD;
+
+    fn get(&self) -> Option<Binding> {
+        self.as_ref()?.get()
+    }
+
+    fn set(&mut self, variant: BindVariant, modifiers: Modifiers) {
+        if let Some(this) = self {
+            this.set(variant, modifiers);
+        } else {
+            *self = Self::new(variant, modifiers);
+        }
+    }
+
+    fn clear(&mut self) {
+        *self = None;
+    }
+
+    fn new(variant: BindVariant, modifiers: Modifiers) -> Self {
+        Some(B::new(variant, modifiers))
+    }
+}
+
+// ============================================================================
+// Hotkey widget (ported from egui_hotkey, updated for egui 0.33)
+// ============================================================================
+
+/// The hotkey widget.
+pub struct Hotkey<'a, B>
+where
+    B: HotkeyBinding,
+{
+    binding: &'a mut B,
+    id: Id,
+    tooltip: Option<bool>,
+}
+
+impl<'a, B> Hotkey<'a, B>
+where
+    B: HotkeyBinding,
+{
+    /// Changes the default id for this widget.
+    pub fn with_id(binding: &'a mut B, id_source: impl Hash) -> Self {
+        Self {
+            binding,
+            id: Id::new(id_source),
+            tooltip: None,
+        }
+    }
+}
+
+impl<B> Widget for Hotkey<'_, B>
+where
+    B: HotkeyBinding,
+{
+    fn ui(self, ui: &mut Ui) -> Response {
+        let size = ui.spacing().interact_size;
+        let (rect, mut response) = ui.allocate_exact_size(size * vec2(1.5, 1.), Sense::click());
+
+        let mut expecting = get_expecting(ui, self.id);
+
+        if response.clicked() {
+            expecting = !expecting;
+        }
+
+        if expecting {
+            if response.clicked_elsewhere() {
+                expecting = false;
+            } else {
+                let escape_pressed = ui.input(|i| i.key_pressed(Key::Escape));
+                if escape_pressed {
+                    self.binding.clear();
+                    expecting = false;
+                } else {
+                    let keyboard = ui.input(|i| {
+                        i.events.iter().find_map(|e| match e {
+                            Event::Key {
+                                key,
+                                pressed: true,
+                                modifiers,
+                                ..
+                            } => Some((BindVariant::Keyboard(*key), Some(*modifiers))),
+                            _ => None,
+                        })
+                    });
+                    let keyboard = if B::ACCEPT_KEYBOARD { keyboard } else { None };
+
+                    let mouse = ui.input(|i| {
+                        i.events.iter().find_map(|e| match e {
+                            Event::PointerButton {
+                                button,
+                                pressed: true,
+                                modifiers,
+                                ..
+                            } if *button != PointerButton::Primary
+                                && *button != PointerButton::Secondary =>
+                            {
+                                Some((BindVariant::Mouse(*button), Some(*modifiers)))
+                            }
+                            _ => None,
+                        })
+                    });
+                    let mouse = if B::ACCEPT_MOUSE { mouse } else { None };
+
+                    if let Some((key, mods)) = keyboard.or(mouse) {
+                        self.binding.set(key, mods.unwrap_or(Modifiers::NONE));
+                        response.mark_changed();
+                        expecting = false;
+                    }
+                }
             }
-            None => serializer.serialize_str("None"),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for Keybind {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        if s == "None" || s.is_empty() {
-            return Ok(Keybind(None));
-        }
-
-        // Parse the formatted string back into a KeyboardShortcut
-        // Format is like "Ctrl+Shift+A" or just "A"
-        let mut modifiers = Modifiers::NONE;
-        let parts: Vec<&str> = s.split('+').collect();
-
-        let key_name = parts.last().unwrap_or(&"");
-        for part in &parts[..parts.len().saturating_sub(1)] {
-            match *part {
-                "Ctrl" | "⌘" => modifiers |= Modifiers::CTRL,
-                "Shift" | "⇧" => modifiers |= Modifiers::SHIFT,
-                "Alt" | "⌥" => modifiers |= Modifiers::ALT,
-                "Cmd" | "Meta" => modifiers |= Modifiers::COMMAND,
-                _ => {}
+        } else if let Some(bind) = self.binding.get() {
+            if self.tooltip.unwrap_or(true) {
+                response = response.on_hover_text(bind.into_long());
             }
         }
 
-        let key = parse_key_name(key_name);
-        match key {
-            Some(k) => Ok(Keybind(Some(KeyboardShortcut {
-                modifiers,
-                logical_key: k,
-            }))),
-            None => Ok(Keybind(None)),
+        if ui.is_rect_visible(rect) {
+            let visuals = ui.style().interact_selectable(&response, expecting);
+            ui.painter()
+                .rect_filled(rect, visuals.corner_radius, visuals.bg_fill);
+
+            let binding = self.binding.get();
+
+            let text = binding
+                .map(|hk| hk.into_short())
+                .unwrap_or_else(|| "None".into());
+
+            ui.painter().text(
+                rect.center() + vec2(0., 1.),
+                egui::Align2::CENTER_CENTER,
+                text,
+                egui::FontId::default(),
+                visuals.text_color(),
+            );
         }
+
+        set_expecting(ui, self.id, expecting);
+        response
     }
 }
 
-/// Parse a key name string to an egui Key.
-fn parse_key_name(name: &str) -> Option<Key> {
-    // Match against common key names
-    match name.trim() {
-        "A" => Some(Key::A),
-        "B" => Some(Key::B),
-        "C" => Some(Key::C),
-        "D" => Some(Key::D),
-        "E" => Some(Key::E),
-        "F" => Some(Key::F),
-        "G" => Some(Key::G),
-        "H" => Some(Key::H),
-        "I" => Some(Key::I),
-        "J" => Some(Key::J),
-        "K" => Some(Key::K),
-        "L" => Some(Key::L),
-        "M" => Some(Key::M),
-        "N" => Some(Key::N),
-        "O" => Some(Key::O),
-        "P" => Some(Key::P),
-        "Q" => Some(Key::Q),
-        "R" => Some(Key::R),
-        "S" => Some(Key::S),
-        "T" => Some(Key::T),
-        "U" => Some(Key::U),
-        "V" => Some(Key::V),
-        "W" => Some(Key::W),
-        "X" => Some(Key::X),
-        "Y" => Some(Key::Y),
-        "Z" => Some(Key::Z),
-        "0" => Some(Key::Num0),
-        "1" => Some(Key::Num1),
-        "2" => Some(Key::Num2),
-        "3" => Some(Key::Num3),
-        "4" => Some(Key::Num4),
-        "5" => Some(Key::Num5),
-        "6" => Some(Key::Num6),
-        "7" => Some(Key::Num7),
-        "8" => Some(Key::Num8),
-        "9" => Some(Key::Num9),
-        "Space" => Some(Key::Space),
-        "Tab" => Some(Key::Tab),
-        "Enter" => Some(Key::Enter),
-        "Escape" => Some(Key::Escape),
-        "Backspace" => Some(Key::Backspace),
-        "Delete" => Some(Key::Delete),
-        "Insert" => Some(Key::Insert),
-        "Home" => Some(Key::Home),
-        "End" => Some(Key::End),
-        "PageUp" => Some(Key::PageUp),
-        "PageDown" => Some(Key::PageDown),
-        "ArrowLeft" | "Left" | "←" => Some(Key::ArrowLeft),
-        "ArrowRight" | "Right" | "→" => Some(Key::ArrowRight),
-        "ArrowUp" | "Up" | "↑" => Some(Key::ArrowUp),
-        "ArrowDown" | "Down" | "↓" => Some(Key::ArrowDown),
-        "F1" => Some(Key::F1),
-        "F2" => Some(Key::F2),
-        "F3" => Some(Key::F3),
-        "F4" => Some(Key::F4),
-        "F5" => Some(Key::F5),
-        "F6" => Some(Key::F6),
-        "F7" => Some(Key::F7),
-        "F8" => Some(Key::F8),
-        "F9" => Some(Key::F9),
-        "F10" => Some(Key::F10),
-        "F11" => Some(Key::F11),
-        "F12" => Some(Key::F12),
-        "-" | "Minus" => Some(Key::Minus),
-        "=" | "Equals" => Some(Key::Equals),
-        "[" | "OpenBracket" => Some(Key::OpenBracket),
-        "]" | "CloseBracket" => Some(Key::CloseBracket),
-        ";" | "Semicolon" => Some(Key::Semicolon),
-        "'" | "Quote" => Some(Key::Quote),
-        "`" | "Backtick" => Some(Key::Backtick),
-        "\\" | "Backslash" => Some(Key::Backslash),
-        "," | "Comma" => Some(Key::Comma),
-        "." | "Period" => Some(Key::Period),
-        "/" | "Slash" => Some(Key::Slash),
-        _ => None,
-    }
+fn get_expecting(ui: &Ui, id: Id) -> bool {
+    ui.ctx().memory_mut(|memory| {
+        *memory
+            .data
+            .get_temp_mut_or_default::<bool>(ui.make_persistent_id(id))
+    })
 }
+
+fn set_expecting(ui: &Ui, id: Id, new: bool) {
+    ui.ctx().memory_mut(|memory| {
+        *memory
+            .data
+            .get_temp_mut_or_default::<bool>(ui.make_persistent_id(id)) = new;
+    });
+}
+
+// ============================================================================
+// Keybindings configuration
+// ============================================================================
 
 /// Keybindings for NES controller (Player 1)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ControllerKeybindings {
-    pub up: Keybind,
-    pub down: Keybind,
-    pub left: Keybind,
-    pub right: Keybind,
-    pub a: Keybind,
-    pub b: Keybind,
-    pub start: Keybind,
-    pub select: Keybind,
+    pub up: Option<Binding>,
+    pub down: Option<Binding>,
+    pub left: Option<Binding>,
+    pub right: Option<Binding>,
+    pub a: Option<Binding>,
+    pub b: Option<Binding>,
+    pub start: Option<Binding>,
+    pub select: Option<Binding>,
 }
 
 impl Default for ControllerKeybindings {
     fn default() -> Self {
         Self {
-            up: Keybind::key(Key::ArrowUp),
-            down: Keybind::key(Key::ArrowDown),
-            left: Keybind::key(Key::ArrowLeft),
-            right: Keybind::key(Key::ArrowRight),
-            a: Keybind::key(Key::Space),
-            b: Keybind::with_modifiers(Modifiers::SHIFT, Key::Space),
-            start: Keybind::key(Key::S),
-            select: Keybind::key(Key::Tab),
+            up: Some(Binding::key(Key::ArrowUp)),
+            down: Some(Binding::key(Key::ArrowDown)),
+            left: Some(Binding::key(Key::ArrowLeft)),
+            right: Some(Binding::key(Key::ArrowRight)),
+            a: Some(Binding::key(Key::Space)),
+            b: Some(Binding::with_modifiers(Key::Space, Modifiers::SHIFT)),
+            start: Some(Binding::key(Key::S)),
+            select: Some(Binding::key(Key::Tab)),
         }
     }
 }
@@ -209,19 +405,19 @@ impl Default for ControllerKeybindings {
 /// Keybindings for emulation controls
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EmulationKeybindings {
-    pub pause: Keybind,
-    pub reset: Keybind,
-    pub quicksave: Keybind,
-    pub quickload: Keybind,
+    pub pause: Option<Binding>,
+    pub reset: Option<Binding>,
+    pub quicksave: Option<Binding>,
+    pub quickload: Option<Binding>,
 }
 
 impl Default for EmulationKeybindings {
     fn default() -> Self {
         Self {
-            pause: Keybind::key(Key::Period),
-            reset: Keybind::key(Key::R),
-            quicksave: Keybind::key(Key::F5),
-            quickload: Keybind::key(Key::F8),
+            pause: Some(Binding::key(Key::Period)),
+            reset: Some(Binding::key(Key::R)),
+            quicksave: Some(Binding::key(Key::F5)),
+            quickload: Some(Binding::key(Key::F8)),
         }
     }
 }
@@ -229,13 +425,13 @@ impl Default for EmulationKeybindings {
 /// Keybindings for debug controls
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DebugKeybindings {
-    pub cycle_palette: Keybind,
+    pub cycle_palette: Option<Binding>,
 }
 
 impl Default for DebugKeybindings {
     fn default() -> Self {
         Self {
-            cycle_palette: Keybind::key(Key::N),
+            cycle_palette: Some(Binding::key(Key::N)),
         }
     }
 }

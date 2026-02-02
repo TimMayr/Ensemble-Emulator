@@ -20,7 +20,6 @@ rfd = { version = "0.17.2" }
 eframe = { version = "0.33.3", features = ["persistence", "accesskit", "serde"] }
 egui = { version = "0.33.3", features = ["accesskit", "persistence", "rayon"] }
 egui_tiles = { version = "0.14.1", features = ["serde"] }
-egui-keybind = { version = "0.8.0", features = ["serde"] }
 egui_double_slider = { version = "1.0.0" }
 clap = { version = "4.5.54", features = ["derive", "cargo", "env", "string", "unicode", "wrap_help"] }
 sha2 = { version = "0.11.0-rc.4" }
