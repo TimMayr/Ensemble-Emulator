@@ -7,7 +7,7 @@
 
 use std::process::ExitCode;
 
-use nes_core::cli::{self, run_headless, CliArgs};
+use nes_core::cli::{self, CliArgs, run_headless};
 use nes_core::frontend::egui_frontend;
 
 // =============================================================================

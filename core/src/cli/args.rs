@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-use clap::{value_parser, Args, Parser, ValueEnum};
+use clap::{Args, Parser, ValueEnum, value_parser};
 use serde::Deserialize;
 
 use crate::cli::config::DEFAULT_VIDEO_FPS;

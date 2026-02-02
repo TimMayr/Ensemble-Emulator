@@ -10,8 +10,8 @@ use std::str::FromStr;
 
 use serde::Deserialize;
 
-use crate::cli::args::{BuiltinPalette, CliArgs, OutputFormat, VideoFormat};
 use crate::cli::SavestateFormat;
+use crate::cli::args::{BuiltinPalette, CliArgs, OutputFormat, VideoFormat};
 
 /// Default video FPS value
 pub const DEFAULT_VIDEO_FPS: f64 = 39375000.0 / 655171.0;

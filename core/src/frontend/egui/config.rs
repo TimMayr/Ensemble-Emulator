@@ -75,7 +75,7 @@ pub struct UserConfig {
     pub previous_rom_path: Option<PathBuf>,
     pub previous_savestate_path: Option<PathBuf>,
     pub pattern_edit_color: u8,
-    pub loaded_rom: Option<RomFile>
+    pub loaded_rom: Option<RomFile>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

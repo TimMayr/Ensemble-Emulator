@@ -11,9 +11,9 @@ use std::path::Path;
 use std::time::Instant;
 
 use crate::cli::{
-    apply_memory_init, apply_memory_init_config, is_ffmpeg_available, CliArgs, ExecutionConfig,
-    ExecutionEngine, ExecutionResult, MemoryDump, MemoryInit, MemoryInitConfig, MemoryType,
-    OutputWriter, SavestateConfig, StopReason, StreamingVideoEncoder, VideoFormat, VideoResolution,
+    CliArgs, ExecutionConfig, ExecutionEngine, ExecutionResult, MemoryDump, MemoryInit,
+    MemoryInitConfig, MemoryType, OutputWriter, SavestateConfig, StopReason, StreamingVideoEncoder,
+    VideoFormat, VideoResolution, apply_memory_init, apply_memory_init_config, is_ffmpeg_available,
 };
 use crate::emulation::messages::RgbColor;
 use crate::emulation::nes::Nes;
@@ -357,11 +357,10 @@ fn print_video_info(
 /// Save a single screenshot (used in streaming mode)
 fn save_single_screenshot(frame: &[RgbColor], args: &CliArgs) -> Result<(), String> {
     if let Some(ref screenshot_path) = args.video.screenshot {
-        let img: image::RgbaImage =
-            image::ImageBuffer::from_fn(NES_WIDTH, NES_HEIGHT, |x, y| {
-                let (r, g, b) = frame[(y * NES_WIDTH + x) as usize];
-                image::Rgba([r, g, b, 255])
-            });
+        let img: image::RgbaImage = image::ImageBuffer::from_fn(NES_WIDTH, NES_HEIGHT, |x, y| {
+            let (r, g, b) = frame[(y * NES_WIDTH + x) as usize];
+            image::Rgba([r, g, b, 255])
+        });
 
         img.save(screenshot_path)
             .map_err(|e| format!("Failed to save screenshot: {}", e))?;

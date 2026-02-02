@@ -384,9 +384,7 @@ impl MemoryDump {
 
     /// Create palette RAM memory dump.
     /// Palette RAM is 32 bytes at PPU addresses $3F00-$3F1F.
-    pub fn palette_ram(data: Vec<u8>) -> Self {
-        Self::new(MemoryType::PaletteRam, 0x3F00, data)
-    }
+    pub fn palette_ram(data: Vec<u8>) -> Self { Self::new(MemoryType::PaletteRam, 0x3F00, data) }
 }
 
 // =============================================================================

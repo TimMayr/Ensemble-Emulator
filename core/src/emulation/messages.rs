@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+
 use crate::emulation::rom::RomFile;
 use crate::emulation::savestate::SaveState;
 use crate::frontend::palettes::parse_palette_from_file;
@@ -104,7 +105,7 @@ pub enum EmulatorMessage {
     Stopped,
     DebugData(EmulatorFetchable),
     SaveState(Box<SaveState>, SaveType),
-    RomLoaded(Option<RomFile>)
+    RomLoaded(Option<RomFile>),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]

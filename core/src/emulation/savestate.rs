@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::emulation::cpu::{Cpu, MicroOp, INTERNAL_RAM_SIZE};
+use crate::emulation::cpu::{Cpu, INTERNAL_RAM_SIZE, MicroOp};
 use crate::emulation::mem::OpenBus;
 use crate::emulation::messages::RgbColor;
 use crate::emulation::ppu::{Ppu, VRAM_SIZE};

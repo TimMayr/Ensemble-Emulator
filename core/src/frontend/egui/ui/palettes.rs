@@ -6,7 +6,7 @@ use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::ui::widgets::{PainterGridConfig, color_cell_rgb};
 use crate::frontend::messages::AsyncFrontendMessage;
 use crate::frontend::palettes::parse_palette_from_file;
-use crate::frontend::util::{FileType, Hashable, ToBytes, spawn_palette_picker, spawn_save_dialog};
+use crate::frontend::util::{FileType, Hashable, spawn_palette_picker, spawn_save_dialog};
 
 pub fn render_palettes(
     ui: &mut egui::Ui,
@@ -84,7 +84,7 @@ pub fn render_palettes(
                     Some(async_sender),
                     config.user_config.previous_palette_path.as_ref(),
                     FileType::Palette,
-                    Box::new(config.view_config.palette_rgb_data)
+                    Box::new(config.view_config.palette_rgb_data),
                 );
             }
 

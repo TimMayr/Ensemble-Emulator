@@ -193,12 +193,18 @@ impl StopCondition {
         };
 
         let addr = parse_hex_u16(addr_str.trim())?;
-        Ok(StopCondition::MemoryWatch { addr, access_type })
+        Ok(StopCondition::MemoryWatch {
+            addr,
+            access_type,
+        })
     }
 
     /// Parse multiple memory watch conditions
     pub fn parse_memory_watches(watches: &[String]) -> Result<Vec<Self>, String> {
-        watches.iter().map(|s| Self::parse_memory_watch(s)).collect()
+        watches
+            .iter()
+            .map(|s| Self::parse_memory_watch(s))
+            .collect()
     }
 
     pub fn check(&self, emu: &Nes, cycles: u128, frames: u64) -> bool {
@@ -254,7 +260,10 @@ impl StopCondition {
                 }
             }
             StopCondition::OnHalt => emu.cpu.is_halted,
-            StopCondition::MemoryWatch { addr, access_type } => {
+            StopCondition::MemoryWatch {
+                addr,
+                access_type,
+            } => {
                 // Check if CPU accessed this address
                 if let Some(last_access) = emu.cpu.last_memory_access {
                     let (access_addr, was_read) = last_access;
@@ -296,7 +305,10 @@ impl StopCondition {
                 StopReason::MemoryCondition(*addr, mem_val)
             }
             StopCondition::OnHalt => StopReason::Halted,
-            StopCondition::MemoryWatch { addr, access_type } => {
+            StopCondition::MemoryWatch {
+                addr,
+                access_type,
+            } => {
                 let was_read = emu
                     .cpu
                     .last_memory_access
@@ -368,8 +380,10 @@ impl ExecutionConfig {
 
     /// Add a memory watchpoint
     pub fn with_memory_watch(mut self, addr: u16, access_type: MemoryAccessType) -> Self {
-        self.stop_conditions
-            .push(StopCondition::MemoryWatch { addr, access_type });
+        self.stop_conditions.push(StopCondition::MemoryWatch {
+            addr,
+            access_type,
+        });
         self
     }
 
