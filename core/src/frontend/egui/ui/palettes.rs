@@ -84,7 +84,7 @@ pub fn render_palettes(
                     Some(async_sender),
                     config.user_config.previous_palette_path.as_ref(),
                     FileType::Palette,
-                    config.view_config.palette_rgb_data.to_bytes(),
+                    Box::new(config.view_config.palette_rgb_data)
                 );
             }
 

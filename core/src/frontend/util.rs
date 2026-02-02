@@ -54,11 +54,11 @@ pub trait Hashable {
 }
 
 pub trait ToBytes {
-    fn to_bytes(&self) -> Vec<u8>;
+    fn to_bytes(&self, format: Option<String>) -> Vec<u8>;
 }
 
 impl ToBytes for RgbPalette {
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self, _: Option<String>) -> Vec<u8> {
         self.colors
             .iter()
             .flatten()
@@ -68,9 +68,19 @@ impl ToBytes for RgbPalette {
 }
 
 impl ToBytes for SaveState {
-    fn to_bytes(&self) -> Vec<u8> {
-        bincode::serde::encode_to_vec(self, bincode::config::standard())
-            .expect("Failed to serialize SaveState")
+    fn to_bytes(&self, format: Option<String>) -> Vec<u8> {
+        if format.is_some() {
+            match format.unwrap().as_str() {
+                "json" => serde_json::to_vec_pretty(self).expect("Failed to serialize SaveState"),
+                "binary" | "" | "bin" | _ => {
+                    bincode::serde::encode_to_vec(self, bincode::config::standard())
+                        .expect("Failed to serialize SaveState")
+                }
+            }
+        } else {
+            bincode::serde::encode_to_vec(self, bincode::config::standard())
+                .expect("Failed to serialize SaveState")
+        }
     }
 }
 
@@ -79,7 +89,7 @@ impl Hashable for RgbPalette {
     /// Uses FNV-1a algorithm which is fast and has good distribution.
     #[inline]
     fn hash(&self) -> u64 {
-        let bytes = self.to_bytes();
+        let bytes = self.to_bytes(None);
         compute_hash(&bytes[..])
     }
 }
@@ -148,10 +158,14 @@ pub enum FileType {
 impl FileType {
     pub fn add_filters(&self, dialog: FileDialog) -> FileDialog {
         match self {
-            FileType::Rom => dialog.add_filter("NES ROM File", &["nes"]),
-            FileType::Savestate => dialog.add_filter("Savestate", &["sav"]),
-            FileType::Palette => dialog.add_filter("NES Palette File", &["pal"]),
-            FileType::Mp4 => dialog.add_filter("Mp4 Video", &["mp4"]),
+            FileType::Rom => dialog.add_filter("NES ROM File", &[self.get_default_extension()]),
+            FileType::Savestate => {
+                dialog.add_filter("Savestate", &[self.get_default_extension(), "json"])
+            }
+            FileType::Palette => {
+                dialog.add_filter("NES Palette File", &[self.get_default_extension()])
+            }
+            FileType::Mp4 => dialog.add_filter("Mp4 Video", &[self.get_default_extension()]),
             FileType::All => dialog.add_filter("All Files", &["*"]),
         }
     }
@@ -223,7 +237,7 @@ pub fn spawn_save_dialog(
     sender: Option<&Sender<AsyncFrontendMessage>>,
     previous_path: Option<&PathBuf>,
     file_type: FileType,
-    data: Vec<u8>,
+    data: Box<dyn ToBytes + Send>,
 ) {
     let prev_dir = get_parent_dir(previous_path);
     let sender = sender.cloned();
@@ -234,13 +248,19 @@ pub fn spawn_save_dialog(
                 .map(|_| p.clone())
                 .unwrap_or(p.with_extension(file_type.get_default_extension()));
 
+            let format = if let Some(format) = p.extension() {
+                Some(format.to_string_lossy().to_string())
+            } else {
+                None
+            };
+
             let result = match OpenOptions::new()
                 .write(true)
                 .create(true)
                 .truncate(true)
                 .open(&p)
             {
-                Ok(mut file) => match file.write_all(&data) {
+                Ok(mut file) => match file.write_all(&data.to_bytes(format)) {
                     Ok(_) => None,
                     Err(e) => Some(format!("Failed to write file: {}", e)),
                 },

@@ -226,7 +226,7 @@ impl EguiApp {
                 }
                 AsyncFrontendMessage::UseMatchingRom(context, rom_path) => {
                     // User chose to use the matching ROM - load the savestate
-                    self.load_savestate_with_rom(ctx, &context, &rom_path);
+                    self.load_savestate_with_rom(&context, &rom_path);
                 }
                 AsyncFrontendMessage::ManuallySelectRom(context) => {
                     // User chose to manually select a ROM
@@ -242,7 +242,7 @@ impl EguiApp {
                         Some(checksum) => {
                             if checksum == context.savestate.rom_file.data_checksum {
                                 // Checksum matches, load the savestate
-                                self.load_savestate_with_rom(ctx, &context, &rom_path);
+                                self.load_savestate_with_rom(&context, &rom_path);
                             } else {
                                 // Checksum mismatch, show warning dialog
                                 self.config.pending_dialogs.checksum_mismatch_dialog =
@@ -273,7 +273,7 @@ impl EguiApp {
                 }
                 AsyncFrontendMessage::LoadSavestateAnyway(context, rom_path) => {
                     // User chose to load anyway despite checksum mismatch
-                    self.load_savestate_with_rom(ctx, &context, &rom_path);
+                    self.load_savestate_with_rom(&context, &rom_path);
                 }
                 AsyncFrontendMessage::SelectAnotherRom(context) => {
                     // User chose to select a different ROM after checksum mismatch
@@ -342,7 +342,7 @@ impl EguiApp {
                         };
 
                         if let Some(rom_path) = self.config.user_config.previous_rom_path.clone() {
-                            self.load_savestate_with_rom(ctx, &context, &rom_path)
+                            self.load_savestate_with_rom(&context, &rom_path)
                         }
                     }
                 }
@@ -354,7 +354,7 @@ impl EguiApp {
                 AsyncFrontendMessage::LoadRom(path) => {
                     if let Some(path) = path {
                         let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-                        self.load_rom(ctx, path);
+                        self.load_rom(path);
                         let _ = self.to_emulator.send(FrontendMessage::Power);
                         self.config.console_config.is_powered = true;
                     }
@@ -432,19 +432,13 @@ impl EguiApp {
         ctx.send_viewport_cmd(ViewportCommand::Title(title));
     }
 
-    fn load_rom(&mut self, ctx: &Context, rom_path: PathBuf) {
+    fn load_rom(&mut self, rom_path: PathBuf) {
         let _ = self
             .to_emulator
             .send(FrontendMessage::LoadRom(rom_path.clone()));
 
         self.config.user_config.previous_rom_path = Some(rom_path.clone());
-        EguiApp::set_window_tile(
-            ctx,
-            rom_path
-                .file_stem()
-                .map(|f| format!("Tensordance - {}", f.to_string_lossy()))
-                .unwrap_or("Tensordance".to_string()),
-        );
+
         self.event_queue
             .borrow_mut()
             .push_back(FrontendEvent::ChangeWindowTitle(
@@ -456,15 +450,13 @@ impl EguiApp {
     }
 
     /// Load a savestate after ROM has been verified/selected
-    fn load_savestate_with_rom(
-        &mut self,
-        ctx: &Context,
-        context: &SavestateLoadContext,
-        rom_path: &Path,
-    ) {
+    fn load_savestate_with_rom(&mut self, context: &SavestateLoadContext, rom_path: &Path) {
+        let _ = self
+            .to_emulator
+            .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
         // First power off, load ROM, power on
         let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-        self.load_rom(ctx, rom_path.to_path_buf());
+        self.load_rom(rom_path.to_path_buf());
         let _ = self.to_emulator.send(FrontendMessage::Power);
 
         // Then load the savestate
@@ -545,12 +537,14 @@ impl EguiApp {
                     ctx.send_viewport_cmd(ViewportCommand::Close);
                 }
                 EmulatorMessage::SaveState(s, t) => match t {
-                    SaveType::Manual => util::spawn_save_dialog(
-                        Some(&self.async_sender),
-                        self.config.user_config.previous_savestate_path.as_ref(),
-                        FileType::Savestate,
-                        s.to_bytes(),
-                    ),
+                    SaveType::Manual => {
+                        util::spawn_save_dialog(
+                            Some(&self.async_sender),
+                            self.config.user_config.previous_savestate_path.as_ref(),
+                            FileType::Savestate,
+                            s,
+                        );
+                    },
                     SaveType::Quicksave => {
                         if let Some(rom) = &self.config.user_config.loaded_rom {
                             let rom_hash = &rom.data_checksum;
@@ -568,12 +562,14 @@ impl EguiApp {
                                 );
 
                                 if let Some(path) = path {
-                                    let _ = write_file_async(path, s.to_bytes(), false);
+                                    let _ = write_file_async(path, s.to_bytes(None), false);
                                 }
                             }
                         }
                     }
-                    SaveType::Autosave => {}
+                    SaveType::Autosave => {
+                        println!("creating auto save")
+                    }
                 },
                 EmulatorMessage::RomLoaded(rom) => {
                     self.config.user_config.loaded_rom = rom;
