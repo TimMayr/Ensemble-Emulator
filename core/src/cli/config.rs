@@ -11,6 +11,7 @@ use std::str::FromStr;
 use serde::Deserialize;
 
 use crate::cli::args::{BuiltinPalette, CliArgs, OutputFormat, VideoFormat};
+use crate::cli::SavestateFormat;
 
 /// Default video FPS value
 pub const DEFAULT_VIDEO_FPS: f64 = 39375000.0 / 655171.0;
@@ -79,6 +80,7 @@ pub struct SavestateConfig {
     pub state_stdin: Option<bool>,
     pub state_stdout: Option<bool>,
     pub save_on: Option<String>,
+    pub format: SavestateFormat,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -199,6 +201,9 @@ impl ConfigFile {
         }
         if cli.savestate.save_state_on.is_none() {
             cli.savestate.save_state_on = self.savestate.save_on.clone();
+        }
+        if cli.savestate.state_format == SavestateFormat::Binary {
+            cli.savestate.state_format = self.savestate.format.clone();
         }
 
         // Memory options

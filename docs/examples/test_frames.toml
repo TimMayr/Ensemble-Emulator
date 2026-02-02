@@ -23,3 +23,8 @@ format = "hex"
 video_path = "./out/export"
 video_scale = "1080p"
 video_format = "mp4"
+
+[savestate]
+format = "Json"
+save = "state.sav"
+save_on = "exit"

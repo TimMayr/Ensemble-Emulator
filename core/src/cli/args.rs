@@ -5,7 +5,8 @@
 
 use std::path::PathBuf;
 
-use clap::{Args, Parser, ValueEnum, value_parser};
+use clap::{value_parser, Args, Parser, ValueEnum};
+use serde::{Deserialize, Serialize};
 
 use crate::cli::config::DEFAULT_VIDEO_FPS;
 
@@ -97,7 +98,7 @@ pub struct SavestateArgs {
 }
 
 /// Savestate format options
-#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq, Eq, Deserialize)]
 pub enum SavestateFormat {
     /// Binary format (smaller, faster, default)
     #[default]
@@ -245,7 +246,7 @@ pub struct ExecutionArgs {
     /// Run until HLT (illegal halt) instruction
     #[arg(long, default_value_t = false)]
     pub until_hlt: bool,
-    
+
     /// Enable instruction trace to file
     #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
     pub trace: Option<PathBuf>,
