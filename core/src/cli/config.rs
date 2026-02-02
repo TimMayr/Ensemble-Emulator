@@ -11,6 +11,7 @@ use std::str::FromStr;
 use serde::Deserialize;
 
 use crate::cli::args::{BuiltinPalette, CliArgs, OutputFormat, VideoFormat};
+use crate::cli::SavestateFormat;
 
 /// Default video FPS value
 pub const DEFAULT_VIDEO_FPS: f64 = 39375000.0 / 655171.0;
@@ -79,6 +80,7 @@ pub struct SavestateConfig {
     pub state_stdin: Option<bool>,
     pub state_stdout: Option<bool>,
     pub save_on: Option<String>,
+    pub format: SavestateFormat,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -88,6 +90,7 @@ pub struct MemoryConfig {
     pub read_ppu: Option<String>,
     pub dump_oam: Option<bool>,
     pub dump_nametables: Option<bool>,
+    pub dump_palette: Option<bool>,
     pub init_file: Option<PathBuf>,
 
     /// CPU memory initialization: address -> values
@@ -126,12 +129,6 @@ pub struct VideoConfig {
     pub video_format: Option<String>,
     pub video_fps: Option<f64>,
     pub video_scale: Option<String>,
-    pub export_nametables: Option<PathBuf>,
-    pub export_nametables_video: Option<PathBuf>,
-    pub export_pattern_tables: Option<PathBuf>,
-    pub export_pattern_tables_video: Option<PathBuf>,
-    pub export_sprites: Option<PathBuf>,
-    pub export_sprites_video: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -139,14 +136,15 @@ pub struct VideoConfig {
 pub struct ExecutionConfig {
     pub cycles: Option<u128>,
     pub frames: Option<u64>,
-    pub until_pc: Option<String>,
     pub until_opcode: Option<String>,
     pub until_mem: Option<Vec<String>>,
     pub until_hlt: Option<bool>,
-    pub step: Option<bool>,
     pub trace: Option<PathBuf>,
     #[serde(default)]
     pub breakpoints: Vec<String>,
+    /// Memory watchpoints (format: "ADDR" or "ADDR:r" or "ADDR:w" or "ADDR:rw")
+    #[serde(default)]
+    pub watch_mem: Vec<String>,
     /// Alternative: stop_conditions as array of strings
     #[serde(default)]
     pub stop_conditions: Vec<String>,
@@ -157,6 +155,12 @@ pub struct ExecutionConfig {
 pub struct OutputConfig {
     pub path: Option<PathBuf>,
     pub format: Option<String>,
+    /// Shorthand for format = "json"
+    pub json: Option<bool>,
+    /// Shorthand for format = "toml"
+    pub toml: Option<bool>,
+    /// Shorthand for format = "binary"
+    pub binary: Option<bool>,
 }
 
 impl ConfigFile {
@@ -204,6 +208,9 @@ impl ConfigFile {
         if cli.savestate.save_state_on.is_none() {
             cli.savestate.save_state_on = self.savestate.save_on.clone();
         }
+        if cli.savestate.state_format == SavestateFormat::Binary {
+            cli.savestate.state_format = self.savestate.format.clone();
+        }
 
         // Memory options
         if cli.memory.read_cpu.is_none() {
@@ -217,6 +224,9 @@ impl ConfigFile {
         }
         if !cli.memory.dump_nametables {
             cli.memory.dump_nametables = self.memory.dump_nametables.unwrap_or(false);
+        }
+        if !cli.memory.dump_palette {
+            cli.memory.dump_palette = self.memory.dump_palette.unwrap_or(false);
         }
         if cli.memory.init_file.is_none() {
             cli.memory.init_file = self.memory.init_file.clone();
@@ -301,24 +311,6 @@ impl ConfigFile {
         {
             cli.video.video_fps = fps;
         }
-        if cli.video.export_nametables.is_none() {
-            cli.video.export_nametables = self.video.export_nametables.clone();
-        }
-        if cli.video.export_nametables_video.is_none() {
-            cli.video.export_nametables_video = self.video.export_nametables_video.clone();
-        }
-        if cli.video.export_pattern_tables.is_none() {
-            cli.video.export_pattern_tables = self.video.export_pattern_tables.clone();
-        }
-        if cli.video.export_pattern_tables_video.is_none() {
-            cli.video.export_pattern_tables_video = self.video.export_pattern_tables_video.clone();
-        }
-        if cli.video.export_sprites.is_none() {
-            cli.video.export_sprites = self.video.export_sprites.clone();
-        }
-        if cli.video.export_sprites_video.is_none() {
-            cli.video.export_sprites_video = self.video.export_sprites_video.clone();
-        }
 
         // Execution options
         if cli.execution.cycles.is_none() {
@@ -326,11 +318,6 @@ impl ConfigFile {
         }
         if cli.execution.frames.is_none() {
             cli.execution.frames = self.execution.frames;
-        }
-        if cli.execution.until_pc.is_none()
-            && let Some(ref pc) = self.execution.until_pc
-        {
-            cli.execution.until_pc = parse_hex_u16_opt(pc);
         }
         if cli.execution.until_opcode.is_none()
             && let Some(ref op) = self.execution.until_opcode
@@ -343,9 +330,6 @@ impl ConfigFile {
         if !cli.execution.until_hlt {
             cli.execution.until_hlt = self.execution.until_hlt.unwrap_or(false);
         }
-        if !cli.execution.step {
-            cli.execution.step = self.execution.step.unwrap_or(false);
-        }
         if cli.execution.trace.is_none() {
             cli.execution.trace = self.execution.trace.clone();
         }
@@ -356,12 +340,16 @@ impl ConfigFile {
                 }
             }
         }
+        if cli.execution.watch_mem.is_empty() {
+            cli.execution.watch_mem = self.execution.watch_mem.clone();
+        }
 
         // Parse stop_conditions into appropriate fields
         for cond in &self.execution.stop_conditions {
             if let Some(rest) = cond.strip_prefix("pc:") {
-                if cli.execution.until_pc.is_none() {
-                    cli.execution.until_pc = parse_hex_u16_opt(rest);
+                // pc: condition is now handled as a breakpoint
+                if let Some(addr) = parse_hex_u16_opt(rest) {
+                    cli.execution.breakpoint.push(addr);
                 }
             } else if let Some(rest) = cond.strip_prefix("frames:") {
                 if cli.execution.frames.is_none() {
@@ -377,6 +365,17 @@ impl ConfigFile {
         // Output options
         if cli.output.output.is_none() {
             cli.output.output = self.output.path.clone();
+        }
+        // Handle shorthand flags from config (precedence: json > toml > binary > format)
+        // This matches the CLI behavior in OutputArgs::effective_format()
+        if !cli.output.json && self.output.json.unwrap_or(false) {
+            cli.output.json = true;
+        }
+        if !cli.output.toml && self.output.toml.unwrap_or(false) {
+            cli.output.toml = true;
+        }
+        if !cli.output.binary && self.output.binary.unwrap_or(false) {
+            cli.output.binary = true;
         }
         if let Some(ref fmt) = self.output.format {
             // Only override if CLI is at default and no shorthand flags

@@ -10,7 +10,7 @@ verbose = true
 
 [execution]
 # Run for exactly 60 frames (1 second at 60fps)
-frames = 6000
+frames = 3000
 
 [memory]
 # Dump the first 256 bytes of CPU RAM
@@ -23,3 +23,8 @@ format = "hex"
 video_path = "./out/export"
 video_scale = "1080p"
 video_format = "mp4"
+
+[savestate]
+format = "Json"
+save = "state.sav"
+save_on = "exit"

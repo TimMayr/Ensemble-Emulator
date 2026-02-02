@@ -315,6 +315,8 @@ pub enum MemoryType {
     Oam,
     /// Nametables
     Nametables,
+    /// Palette RAM
+    PaletteRam,
 }
 
 impl MemoryType {
@@ -325,6 +327,7 @@ impl MemoryType {
             MemoryType::Ppu => "ppu",
             MemoryType::Oam => "oam",
             MemoryType::Nametables => "nametables",
+            MemoryType::PaletteRam => "palette_ram",
         }
     }
 }
@@ -377,6 +380,12 @@ impl MemoryDump {
         let mut dump = Self::new(MemoryType::Nametables, 0x2000, data);
         dump.interpreted_nametables = Some(interpreted);
         dump
+    }
+
+    /// Create palette RAM memory dump.
+    /// Palette RAM is 32 bytes at PPU addresses $3F00-$3F1F.
+    pub fn palette_ram(data: Vec<u8>) -> Self {
+        Self::new(MemoryType::PaletteRam, 0x3F00, data)
     }
 }
 

@@ -5,7 +5,8 @@
 
 use std::path::PathBuf;
 
-use clap::{Args, Parser, ValueEnum, value_parser};
+use clap::{value_parser, Args, Parser, ValueEnum};
+use serde::Deserialize;
 
 use crate::cli::config::DEFAULT_VIDEO_FPS;
 
@@ -90,6 +91,20 @@ pub struct SavestateArgs {
     /// When to save state (exit, stop, cycle:N, pc:ADDR, frame:N)
     #[arg(long)]
     pub save_state_on: Option<String>,
+
+    /// Savestate format for saving (binary or json)
+    #[arg(long, default_value = "binary")]
+    pub state_format: SavestateFormat,
+}
+
+/// Savestate format options
+#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq, Eq, Deserialize)]
+pub enum SavestateFormat {
+    /// Binary format (smaller, faster, default)
+    #[default]
+    Binary,
+    /// JSON format (human-readable, editable)
+    Json,
 }
 
 /// Memory operation arguments
@@ -110,6 +125,10 @@ pub struct MemoryArgs {
     /// Dump nametables
     #[arg(long, default_value_t = false)]
     pub dump_nametables: bool,
+
+    /// Dump palette RAM (32 bytes at $3F00-$3F1F)
+    #[arg(long, default_value_t = false)]
+    pub dump_palette: bool,
 
     /// Initialize CPU memory (ADDR=VALUE or ADDR=V1,V2,...)
     #[arg(long, action = clap::ArgAction::Append)]
@@ -189,30 +208,6 @@ pub struct VideoArgs {
     /// Video output resolution (native, 2x, 3x, 4x, 720p, 1080p, 4k, or WIDTHxHEIGHT)
     #[arg(long)]
     pub video_scale: Option<String>,
-
-    /// Export nametable visualization as screenshot
-    #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
-    pub export_nametables: Option<PathBuf>,
-
-    /// Export nametable visualization as video
-    #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
-    pub export_nametables_video: Option<PathBuf>,
-
-    /// Export pattern table visualization as screenshot
-    #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
-    pub export_pattern_tables: Option<PathBuf>,
-
-    /// Export pattern table visualization as video
-    #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
-    pub export_pattern_tables_video: Option<PathBuf>,
-
-    /// Export sprite visualization as screenshot
-    #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
-    pub export_sprites: Option<PathBuf>,
-
-    /// Export sprite visualization as video
-    #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
-    pub export_sprites_video: Option<PathBuf>,
 }
 
 /// Video format options
@@ -240,10 +235,6 @@ pub struct ExecutionArgs {
     #[arg(short, long)]
     pub frames: Option<u64>,
 
-    /// Run until PC reaches address (hex, e.g., 0x8500)
-    #[arg(long, value_parser = parse_hex_u16)]
-    pub until_pc: Option<u16>,
-
     /// Run until specific opcode executes (hex, e.g., 0x02)
     #[arg(long, value_parser = parse_hex_u8)]
     pub until_opcode: Option<u8>,
@@ -256,17 +247,19 @@ pub struct ExecutionArgs {
     #[arg(long, default_value_t = false)]
     pub until_hlt: bool,
 
-    /// Single-step mode
-    #[arg(long, default_value_t = false)]
-    pub step: bool,
-
     /// Enable instruction trace to file
     #[arg(long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath)]
     pub trace: Option<PathBuf>,
 
-    /// Set breakpoint at address (can be specified multiple times)
+    /// Set breakpoint at PC address (can be specified multiple times)
     #[arg(long, value_parser = parse_hex_u16, action = clap::ArgAction::Append)]
     pub breakpoint: Vec<u16>,
+
+    /// Watch memory address for access (format: ADDR or ADDR:MODE where MODE is r/w/rw)
+    /// Stops execution when the CPU reads/writes the specified address.
+    /// Examples: 0x2002 (any access), 0x2002:r (reads only), 0x4016:w (writes only)
+    #[arg(long, action = clap::ArgAction::Append)]
+    pub watch_mem: Vec<String>,
 }
 
 /// Output control arguments

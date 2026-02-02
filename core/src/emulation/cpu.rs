@@ -70,6 +70,8 @@ pub struct Cpu {
     pub dma_triggered: bool,
     pub dma_page: u8,
     pub dma_temp: u8,
+    /// Last memory access for watchpoint debugging (address, was_read)
+    pub last_memory_access: Option<(u16, bool)>,
 }
 
 impl Default for Cpu {
@@ -109,6 +111,7 @@ impl Default for Cpu {
             dma_triggered: false,
             dma_page: 0,
             dma_temp: 0,
+            last_memory_access: None,
         }
     }
 }
@@ -123,12 +126,14 @@ impl Cpu {
     #[inline(always)]
     pub fn mem_read(&mut self, addr: u16) -> u8 {
         self.cpu_read_cycle = true;
+        self.last_memory_access = Some((addr, true));
         self.memory.mem_read(addr)
     }
 
     #[inline(always)]
     pub fn mem_write(&mut self, addr: u16, data: u8) {
         self.cpu_read_cycle = false;
+        self.last_memory_access = Some((addr, false));
 
         if addr == DMA_ADDRESS {
             self.dma_triggered = true;
@@ -1902,6 +1907,7 @@ impl Cpu {
             dma_triggered: state.dma_triggered,
             dma_page: state.dma_page,
             dma_temp: state.dma_temp,
+            last_memory_access: None,
         };
 
         // Load ROM first to set up memory mapping

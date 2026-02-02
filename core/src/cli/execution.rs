@@ -22,6 +22,32 @@ use crate::emulation::savestate::{SaveState, try_load_state};
 // Stop Conditions
 // =============================================================================
 
+/// Memory access type for watchpoints
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemoryAccessType {
+    /// Watch for reads only
+    Read,
+    /// Watch for writes only
+    Write,
+    /// Watch for both reads and writes
+    ReadWrite,
+}
+
+impl MemoryAccessType {
+    /// Parse access type from string (r, w, rw)
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s.to_lowercase().as_str() {
+            "r" | "read" => Ok(Self::Read),
+            "w" | "write" => Ok(Self::Write),
+            "rw" | "readwrite" | "both" => Ok(Self::ReadWrite),
+            _ => Err(format!(
+                "Invalid memory access type '{}'. Expected: r, w, or rw",
+                s
+            )),
+        }
+    }
+}
+
 /// Reason why execution stopped
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StopReason {
@@ -29,10 +55,16 @@ pub enum StopReason {
     CyclesReached(u128),
     /// Reached target frame count
     FramesReached(u64),
-    /// PC reached target address
+    /// PC reached target address (breakpoint)
     PcReached(u16),
     /// Memory condition was met
     MemoryCondition(u16, u8),
+    /// Memory watchpoint triggered
+    MemoryWatchpoint {
+        addr: u16,
+        access_type: MemoryAccessType,
+        was_read: bool,
+    },
     /// HLT (illegal halt) instruction executed
     Halted,
     /// User-requested stop (e.g., breakpoint)
@@ -50,7 +82,7 @@ pub enum StopCondition {
     Cycles(u128),
     /// Stop after N frames
     Frames(u64),
-    /// Stop when PC reaches address
+    /// Stop when PC reaches address (breakpoint)
     PcEquals(u16),
     /// Stop when opcode is executed
     Opcode(u8),
@@ -68,8 +100,13 @@ pub enum StopCondition {
     },
     /// Stop on HLT instruction
     OnHalt,
-    /// Breakpoint at address
+    /// Breakpoint at address (alias for PcEquals, kept for backward compatibility)
     Breakpoint(u16),
+    /// Watch memory address for access
+    MemoryWatch {
+        addr: u16,
+        access_type: MemoryAccessType,
+    },
 }
 
 impl StopCondition {
@@ -147,11 +184,30 @@ impl StopCondition {
         }
     }
 
+    /// Parse a memory watch string like "0x2002" or "0x2002:r" or "0x4016:w"
+    pub fn parse_memory_watch(s: &str) -> Result<Self, String> {
+        let (addr_str, access_type) = if let Some((addr_part, mode_part)) = s.split_once(':') {
+            (addr_part, MemoryAccessType::parse(mode_part)?)
+        } else {
+            (s, MemoryAccessType::ReadWrite) // Default to both reads and writes
+        };
+
+        let addr = parse_hex_u16(addr_str.trim())?;
+        Ok(StopCondition::MemoryWatch { addr, access_type })
+    }
+
+    /// Parse multiple memory watch conditions
+    pub fn parse_memory_watches(watches: &[String]) -> Result<Vec<Self>, String> {
+        watches.iter().map(|s| Self::parse_memory_watch(s)).collect()
+    }
+
     pub fn check(&self, emu: &Nes, cycles: u128, frames: u64) -> bool {
         match self {
             StopCondition::Cycles(target) => cycles >= *target,
             StopCondition::Frames(target) => frames >= *target,
-            StopCondition::PcEquals(addr) => emu.cpu.program_counter == *addr,
+            StopCondition::PcEquals(addr) | StopCondition::Breakpoint(addr) => {
+                emu.cpu.program_counter == *addr
+            }
             StopCondition::Opcode(op) => {
                 if let Some(current) = emu.cpu.current_opcode
                     && current.opcode == *op
@@ -198,7 +254,23 @@ impl StopCondition {
                 }
             }
             StopCondition::OnHalt => emu.cpu.is_halted,
-            StopCondition::Breakpoint(addr) => emu.cpu.program_counter == *addr,
+            StopCondition::MemoryWatch { addr, access_type } => {
+                // Check if CPU accessed this address
+                if let Some(last_access) = emu.cpu.last_memory_access {
+                    let (access_addr, was_read) = last_access;
+                    if access_addr == *addr {
+                        match access_type {
+                            MemoryAccessType::Read => was_read,
+                            MemoryAccessType::Write => !was_read,
+                            MemoryAccessType::ReadWrite => true,
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
         }
     }
 
@@ -206,7 +278,9 @@ impl StopCondition {
         match self {
             StopCondition::Cycles(_) => StopReason::CyclesReached(cycles),
             StopCondition::Frames(_) => StopReason::FramesReached(frames),
-            StopCondition::PcEquals(addr) => StopReason::PcReached(*addr),
+            StopCondition::PcEquals(addr) | StopCondition::Breakpoint(addr) => {
+                StopReason::PcReached(*addr)
+            }
             StopCondition::Opcode(_) => StopReason::PcReached(emu.cpu.program_counter),
             StopCondition::MemoryEquals {
                 addr, ..
@@ -222,7 +296,18 @@ impl StopCondition {
                 StopReason::MemoryCondition(*addr, mem_val)
             }
             StopCondition::OnHalt => StopReason::Halted,
-            StopCondition::Breakpoint(addr) => StopReason::Breakpoint(*addr),
+            StopCondition::MemoryWatch { addr, access_type } => {
+                let was_read = emu
+                    .cpu
+                    .last_memory_access
+                    .map(|(_, was_read)| was_read)
+                    .unwrap_or(true);
+                StopReason::MemoryWatchpoint {
+                    addr: *addr,
+                    access_type: *access_type,
+                    was_read,
+                }
+            }
         }
     }
 }
@@ -241,8 +326,6 @@ pub struct ExecutionConfig {
     pub stop_conditions: Vec<StopCondition>,
     /// Whether to stop on any HLT instruction
     pub stop_on_halt: bool,
-    /// Breakpoint addresses
-    pub breakpoints: Vec<u16>,
     /// Path to trace log file (if any)
     pub trace_path: Option<PathBuf>,
     /// Verbose output
@@ -277,9 +360,16 @@ impl ExecutionConfig {
         self
     }
 
-    /// Add a breakpoint
+    /// Add a breakpoint (alias for with_pc_breakpoint)
     pub fn with_breakpoint(mut self, addr: u16) -> Self {
-        self.breakpoints.push(addr);
+        self.stop_conditions.push(StopCondition::PcEquals(addr));
+        self
+    }
+
+    /// Add a memory watchpoint
+    pub fn with_memory_watch(mut self, addr: u16, access_type: MemoryAccessType) -> Self {
+        self.stop_conditions
+            .push(StopCondition::MemoryWatch { addr, access_type });
         self
     }
 
@@ -367,6 +457,9 @@ pub enum SavestateDestination {
     Stdout,
 }
 
+// Re-export SavestateFormat from args for use in this module
+pub use super::args::SavestateFormat;
+
 /// Configuration for savestate operations
 #[derive(Debug, Clone, Default)]
 pub struct SavestateConfig {
@@ -374,6 +467,8 @@ pub struct SavestateConfig {
     pub load_from: Option<SavestateSource>,
     /// Destination to save savestate to (if any)
     pub save_to: Option<SavestateDestination>,
+    /// Format for saving savestates
+    pub format: SavestateFormat,
 }
 
 impl SavestateConfig {
@@ -401,6 +496,12 @@ impl SavestateConfig {
     /// Set save destination to stdout
     pub fn save_to_stdout(mut self) -> Self {
         self.save_to = Some(SavestateDestination::Stdout);
+        self
+    }
+
+    /// Set savestate format
+    pub fn with_format(mut self, format: SavestateFormat) -> Self {
+        self.format = format;
         self
     }
 }
@@ -513,7 +614,7 @@ impl ExecutionEngine {
     pub fn save_savestate(&self) -> Result<(), String> {
         if let Some(ref dest) = self.savestate_config.save_to {
             let state = self.emu.save_state();
-            let encoded = encode_savestate(&state)?;
+            let encoded = encode_savestate(&state, self.savestate_config.format)?;
 
             match dest {
                 SavestateDestination::File(path) => {
@@ -683,17 +784,33 @@ impl Default for ExecutionEngine {
 // Helper Functions
 // =============================================================================
 
-/// Decode a savestate from bytes
+/// Decode a savestate from bytes (auto-detects format).
+///
+/// Detection strategy: Try JSON first, then binary as fallback.
+/// This is more robust than checking for `{` which could fail with
+/// whitespace-prefixed JSON or misidentify binary data.
 fn decode_savestate(bytes: &[u8]) -> Result<SaveState, String> {
+    // Try JSON first (handles both compact and pretty-printed JSON)
+    if let Ok(state) = serde_json::from_slice::<SaveState>(bytes) {
+        return Ok(state);
+    }
+
+    // Fall back to binary format
     bincode::serde::decode_from_slice(bytes, bincode::config::standard())
         .map(|(state, _)| state)
-        .map_err(|e| format!("Failed to decode savestate: {}", e))
+        .map_err(|e| format!("Failed to decode savestate (tried JSON and binary): {}", e))
 }
 
-/// Encode a savestate to bytes
-fn encode_savestate(state: &SaveState) -> Result<Vec<u8>, String> {
-    bincode::serde::encode_to_vec(state, bincode::config::standard())
-        .map_err(|e| format!("Failed to encode savestate: {}", e))
+/// Encode a savestate to bytes in the specified format
+fn encode_savestate(state: &SaveState, format: SavestateFormat) -> Result<Vec<u8>, String> {
+    match format {
+        SavestateFormat::Binary => {
+            bincode::serde::encode_to_vec(state, bincode::config::standard())
+                .map_err(|e| format!("Failed to encode binary savestate: {}", e))
+        }
+        SavestateFormat::Json => serde_json::to_vec_pretty(state)
+            .map_err(|e| format!("Failed to encode JSON savestate: {}", e)),
+    }
 }
 
 // =============================================================================
@@ -715,11 +832,6 @@ impl ExecutionConfig {
             config.stop_conditions.push(StopCondition::Frames(frames));
         }
 
-        // Add PC stop condition
-        if let Some(pc) = args.execution.until_pc {
-            config.stop_conditions.push(StopCondition::PcEquals(pc));
-        }
-
         // Add opcode stop condition
         if let Some(op) = args.execution.until_opcode {
             config.stop_conditions.push(StopCondition::Opcode(op));
@@ -732,13 +844,22 @@ impl ExecutionConfig {
             config.stop_conditions.extend(cond);
         }
 
+        // Add memory watchpoints
+        if !args.execution.watch_mem.is_empty() {
+            if let Ok(watches) = StopCondition::parse_memory_watches(&args.execution.watch_mem) {
+                config.stop_conditions.extend(watches);
+            }
+        }
+
         // Add HLT stop
         if args.execution.until_hlt {
             config.stop_on_halt = true;
         }
 
-        // Add breakpoints
-        config.breakpoints = args.execution.breakpoint.clone();
+        // Add breakpoints (these are now the only way to stop at a PC address)
+        for bp in &args.execution.breakpoint {
+            config.stop_conditions.push(StopCondition::PcEquals(*bp));
+        }
 
         // Add trace
         config.trace_path = args.execution.trace.clone();
@@ -747,10 +868,7 @@ impl ExecutionConfig {
         config.verbose = args.verbose;
 
         // If no stop conditions, default to 60 frames (1 second)
-        if config.stop_conditions.is_empty()
-            && !config.stop_on_halt
-            && config.breakpoints.is_empty()
-        {
+        if config.stop_conditions.is_empty() && !config.stop_on_halt {
             config.stop_conditions.push(StopCondition::Frames(60));
         }
 
@@ -776,6 +894,9 @@ impl SavestateConfig {
         } else if let Some(ref path) = args.savestate.save_state {
             config.save_to = Some(SavestateDestination::File(path.clone()));
         }
+
+        // Set format directly from CLI args (same type via re-export)
+        config.format = args.savestate.state_format;
 
         config
     }
