@@ -8,8 +8,6 @@ use std::path::PathBuf;
 use clap::{Args, Parser, ValueEnum, value_parser};
 use serde::Deserialize;
 
-use crate::cli::config::DEFAULT_VIDEO_FPS;
-
 /// NES Emulator CLI - A cycle-accurate NES emulator with comprehensive CLI support
 #[derive(Parser, Debug, Clone, Default)]
 #[command(name = "nes_main")]
@@ -201,13 +199,31 @@ pub struct VideoArgs {
     #[arg(long, default_value = "raw")]
     pub video_format: VideoFormat,
 
-    /// Video frame rate
-    #[arg(long, default_value_t = DEFAULT_VIDEO_FPS)]
-    pub video_fps: f64,
+    /// Video frame rate multiplier or fixed value (1x, 2x, 3x, or a number like 60.0).
+    /// Multipliers sample the framebuffer more frequently, inserting half-finished frames.
+    /// Default is 1x (native PPU output rate).
+    #[arg(long, default_value = "1x")]
+    pub video_fps: String,
+
+    /// Video export mode: accurate or smooth.
+    /// - accurate: Encode at exact NES framerate (60.0988 fps or its multiple)
+    /// - smooth: Encode at exactly 60 fps (or its multiple), accepting slight timing drift
+    #[arg(long, default_value = "accurate")]
+    pub video_mode: VideoExportMode,
 
     /// Video output resolution (native, 2x, 3x, 4x, 720p, 1080p, 4k, or WIDTHxHEIGHT)
     #[arg(long)]
     pub video_scale: Option<String>,
+}
+
+/// Video export mode options
+#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq, Eq)]
+pub enum VideoExportMode {
+    /// Accurate mode: encode at exact NES framerate (60.0988 fps or its multiple)
+    #[default]
+    Accurate,
+    /// Smooth mode: encode at exactly 60 fps (or its multiple), accepting slight timing drift
+    Smooth,
 }
 
 /// Video format options
@@ -328,6 +344,21 @@ impl std::str::FromStr for VideoFormat {
             "mp4" => Ok(VideoFormat::Mp4),
             _ => Err(format!(
                 "Unknown video format: '{}'. Valid options: raw, ppm, png, mp4",
+                s
+            )),
+        }
+    }
+}
+
+impl std::str::FromStr for VideoExportMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "accurate" => Ok(VideoExportMode::Accurate),
+            "smooth" => Ok(VideoExportMode::Smooth),
+            _ => Err(format!(
+                "Unknown video export mode: '{}'. Valid options: accurate, smooth",
                 s
             )),
         }

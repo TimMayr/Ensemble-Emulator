@@ -178,7 +178,7 @@ pub mod memory_init;
 pub mod output;
 pub mod video;
 
-pub use args::{CliArgs, OutputFormat, SavestateFormat, VideoFormat, parse_hex_u16};
+pub use args::{CliArgs, OutputFormat, SavestateFormat, VideoExportMode, VideoFormat, parse_hex_u16};
 use clap::Parser;
 pub use config::ConfigFile;
 pub use error::{CliError, CliResult};
@@ -193,7 +193,7 @@ pub use output::{
     MemoryType, OamSprite, OutputWriter,
 };
 pub use video::{
-    StreamingVideoEncoder, VideoEncoder, VideoError, VideoResolution, create_encoder,
+    FpsConfig, StreamingVideoEncoder, VideoEncoder, VideoError, VideoResolution, create_encoder,
     encode_frames, is_ffmpeg_available,
 };
 
