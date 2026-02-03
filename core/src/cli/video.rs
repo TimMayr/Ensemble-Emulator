@@ -846,11 +846,17 @@ impl VideoEncoder for RawEncoder {
 /// Known framerates (like NES NTSC 60.0988 FPS) are converted to their
 /// exact rational form. Other values use a high-precision approximation.
 fn fps_to_rational(fps: f64) -> String {
+    // Tolerance values:
+    // - NES NTSC: 0.01 because the irrational framerate may have rounding errors
+    // - Smooth/standard: 0.001 for clean integer framerates
+    const NES_TOLERANCE: f64 = 0.01;
+    const STANDARD_TOLERANCE: f64 = 0.001;
+
     // Check for NES NTSC framerate and its multiples (within tolerance)
     // NES NTSC framerate: 39375000 / 655171 ≈ 60.098814
     for multiplier in 1..=10 {
         let target = NES_NTSC_FPS * multiplier as f64;
-        if (fps - target).abs() < 0.01 {
+        if (fps - target).abs() < NES_TOLERANCE {
             let numerator = NES_NTSC_FPS_NUM * multiplier as u64;
             return format!("{}/{}", numerator, NES_NTSC_FPS_DEN);
         }
@@ -859,25 +865,25 @@ fn fps_to_rational(fps: f64) -> String {
     // Check for smooth framerate multiples (60, 120, 180, etc.)
     for multiplier in 1..=10 {
         let target = SMOOTH_FPS * multiplier as f64;
-        if (fps - target).abs() < 0.0001 {
+        if (fps - target).abs() < STANDARD_TOLERANCE {
             return format!("{}/1", 60 * multiplier);
         }
     }
 
     // Check for other common standard framerates
-    if (fps - 30.0).abs() < 0.0001 {
+    if (fps - 30.0).abs() < STANDARD_TOLERANCE {
         return "30/1".to_string();
     }
-    if (fps - 24.0).abs() < 0.0001 {
+    if (fps - 24.0).abs() < STANDARD_TOLERANCE {
         return "24/1".to_string();
     }
-    if (fps - 59.94).abs() < 0.01 {
+    if (fps - 59.94).abs() < NES_TOLERANCE {
         return "60000/1001".to_string(); // NTSC video standard
     }
-    if (fps - 29.97).abs() < 0.01 {
+    if (fps - 29.97).abs() < NES_TOLERANCE {
         return "30000/1001".to_string(); // NTSC video standard
     }
-    if (fps - 23.976).abs() < 0.01 {
+    if (fps - 23.976).abs() < NES_TOLERANCE {
         return "24000/1001".to_string(); // Film standard
     }
 
@@ -936,10 +942,15 @@ pub struct StreamingVideoEncoder {
 }
 
 impl StreamingVideoEncoder {
-    /// Create a new streaming encoder.
+    /// Create a new streaming encoder with a simple f64 FPS value.
+    ///
+    /// **Note:** This is a legacy constructor for backward compatibility.
+    /// The `fps` parameter is currently ignored as we default to 1x multiplier
+    /// in accurate mode. Use [`with_fps_config`] for full control over FPS settings.
     ///
     /// If the resolution specifies scaling, FFmpeg will handle it natively
     /// using nearest-neighbor interpolation.
+    #[deprecated(since = "0.2.0", note = "Use with_fps_config for full FPS control")]
     pub fn new(
         format: VideoFormat,
         output_path: &Path,
@@ -948,7 +959,8 @@ impl StreamingVideoEncoder {
         resolution: &VideoResolution,
         _fps: f64,
     ) -> Result<Self, VideoError> {
-        // Create a default FpsConfig from the f64 fps value
+        // The fps parameter is ignored - we use default FpsConfig for backward compatibility.
+        // New code should use with_fps_config() instead.
         let fps_config = FpsConfig {
             multiplier: 1,
             mode: VideoExportMode::Accurate,
