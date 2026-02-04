@@ -325,19 +325,30 @@ fn print_video_info(
         fps_config.multiplier
     );
 
+    // Add note about mid-frame capture for multipliers > 1
+    let capture_note = if fps_config.multiplier > 1 {
+        format!(
+            " ({} captures per PPU frame)",
+            fps_config.multiplier
+        )
+    } else {
+        String::new()
+    };
+
     if *resolution == VideoResolution::Native {
         eprintln!(
-            "Exporting to {} as {:?} ({}x{}, {}){}...",
+            "Exporting to {} as {:?} ({}x{}, {}{}){}...",
             video_path.display(),
             format,
             src_width,
             src_height,
             fps_str,
+            capture_note,
             mode_str
         );
     } else if matches!(format, VideoFormat::Mp4) {
         eprintln!(
-            "Exporting to {} as {:?} ({}x{} → {}x{} via FFmpeg nearest-neighbor, {}){}...",
+            "Exporting to {} as {:?} ({}x{} → {}x{} via FFmpeg nearest-neighbor, {}{}){}...",
             video_path.display(),
             format,
             src_width,
@@ -345,6 +356,7 @@ fn print_video_info(
             dst_width,
             dst_height,
             fps_str,
+            capture_note,
             mode_str
         );
     } else {
@@ -354,12 +366,13 @@ fn print_video_info(
             ""
         };
         eprintln!(
-            "Exporting to {} as {:?} ({}x{}, {}){}...",
+            "Exporting to {} as {:?} ({}x{}, {}{}){}...",
             video_path.display(),
             format,
             src_width,
             src_height,
             fps_str,
+            capture_note,
             scale_note
         );
     }
