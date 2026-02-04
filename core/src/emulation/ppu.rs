@@ -424,14 +424,13 @@ impl Ppu {
         let increment = if skip_cycle { 2 } else { 1 };
         self.dot += increment;
 
-        // Handle wrap-around: dots 0-340 (341 total), scanlines 0-261 (262 total)
         let mut is_frame_end = false;
         if self.dot > DOTS_PER_SCANLINE {
-            self.dot -= DOTS_IN_SCANLINE; // 341 -> 0, 342 -> 1
+            self.dot -= DOTS_IN_SCANLINE;
             self.scanline += 1;
             if self.scanline > PRE_RENDER_SCANLINE {
                 self.scanline = 0;
-                is_frame_end = true; // Frame ends when we wrap to scanline 0
+                is_frame_end = true;
             }
         }
 

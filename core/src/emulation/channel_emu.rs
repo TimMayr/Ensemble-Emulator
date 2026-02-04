@@ -171,7 +171,8 @@ impl ChannelEmulator {
             Ok(
                 ExecutionFinishedType::CycleCompleted
                 | ExecutionFinishedType::ReachedLastCycle
-                | ExecutionFinishedType::ReachedHlt,
+                | ExecutionFinishedType::ReachedHlt
+                | ExecutionFinishedType::FrameDone
             ) => {
                 // Frame completed, send it to frontend
                 let frame = self.nes.get_pixel_buffer();
