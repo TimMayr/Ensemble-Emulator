@@ -7,6 +7,7 @@
 /// - `egui::config`: Configuration types
 /// - `egui::fps_counter`: FPS tracking
 /// - `egui::input`: Input handling
+/// - `egui::message_handlers`: Async and emulator message processing
 /// - `egui::textures`: Texture management
 /// - `egui::tiles`: Tile tree behavior and pane management
 /// - `egui::ui`: UI rendering components
@@ -26,14 +27,12 @@ use crate::emulation::messages::{
     TILE_COUNT, TileData,
 };
 use crate::emulation::nes::Nes;
-use crate::emulation::savestate;
 use crate::emulation::savestate::SaveState;
-use crate::frontend::egui::config::{
-    AppConfig, AppSpeed, ChecksumMismatchDialogState, ErrorDialogState, MatchingRomDialogState,
-    RomSelectionDialogState,
-};
+use crate::frontend::egui::config::AppConfig;
+use crate::frontend::egui::config::AppSpeed;
 use crate::frontend::egui::fps_counter::FpsCounter;
 use crate::frontend::egui::input::handle_keyboard_input;
+use crate::frontend::egui::message_handlers::{AsyncMessageHandler, EmulatorMessageHandler};
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
     Pane, TreeBehavior, compute_required_fetches_from_tree, create_tree,
@@ -45,33 +44,43 @@ use crate::frontend::persistence::{
     get_data_dir, get_data_file_path, get_egui_storage_path, load_config, write_file_async,
 };
 use crate::frontend::util;
-use crate::frontend::util::{FileType, SavestateLoadError, ToBytes};
+use crate::frontend::util::ToBytes;
 
 /// Key used for storing egui_tiles tree state in egui's persistence
 const EGUI_TILES_TREE_KEY: &str = "emulator_tiles_tree";
+
+/// Interval between periodic autosaves (5 minutes)
+const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(5 * 60);
+
+/// Maximum number of autosaves to keep per game
+const MAX_AUTOSAVES_PER_GAME: usize = 1024;
 
 /// Shared deque for frontend events that can be pushed from UI components
 pub type FrontendEventQueue = Rc<RefCell<VecDeque<FrontendEvent>>>;
 
 /// Main egui application state
 pub struct EguiApp {
-    channel_emu: ChannelEmulator,
-    to_emulator: Sender<FrontendMessage>,
-    from_emulator: Receiver<EmulatorMessage>,
-    from_async: Receiver<AsyncFrontendMessage>,
-    async_sender: Sender<AsyncFrontendMessage>,
+    pub(crate) channel_emu: ChannelEmulator,
+    pub(crate) to_emulator: Sender<FrontendMessage>,
+    pub(crate) from_emulator: Receiver<EmulatorMessage>,
+    pub(crate) from_async: Receiver<AsyncFrontendMessage>,
+    pub(crate) async_sender: Sender<AsyncFrontendMessage>,
     /// Queue for visual/frontend-only events processed on each update
-    event_queue: FrontendEventQueue,
-    emu_textures: EmuTextures,
-    fps_counter: FpsCounter,
+    pub(crate) event_queue: FrontendEventQueue,
+    pub(crate) emu_textures: EmuTextures,
+    pub(crate) fps_counter: FpsCounter,
     accumulator: Duration,
-    config: AppConfig,
+    pub(crate) config: AppConfig,
     /// The tile tree for docking behavior
     tree: egui_tiles::Tree<Pane>,
     /// Track if pattern tables was visible last frame to detect when it becomes visible
     pattern_tables_was_visible: bool,
     /// Track if nametables was visible last frame to detect when it becomes visible
     nametables_was_visible: bool,
+    /// Time of last periodic autosave
+    last_autosave: Instant,
+    /// Track if window was focused last frame to detect focus loss
+    was_focused: bool,
 }
 
 const UNCAPPED_EMU_TIME: u64 = 70;
@@ -118,6 +127,8 @@ impl EguiApp {
             tree,
             pattern_tables_was_visible: false,
             nametables_was_visible: false,
+            last_autosave: Instant::now(),
+            was_focused: true,
         }
     }
 
@@ -129,7 +140,7 @@ impl EguiApp {
             .app_speed
             .get_fps(&self.config.speed_config);
 
-        if speed == 0 {
+        if speed == 0.0 {
             return Duration::from_secs(5);
         }
 
@@ -144,7 +155,7 @@ impl EguiApp {
             .debug_speed
             .get_fps(&self.config.speed_config);
 
-        if fps == 0 {
+        if fps == 0.0 {
             return Duration::from_secs(5);
         }
 
@@ -154,8 +165,9 @@ impl EguiApp {
     /// Process messages received from various sources
     fn process_messages(&mut self, ctx: &Context) {
         self.process_frontend_events(ctx);
-        self.process_async_messages(ctx);
-        self.process_emulator_messages(ctx);
+        // Delegate to trait implementations in message_handlers module
+        self.handle_async_messages(ctx);
+        self.handle_emulator_messages(ctx);
     }
 
     /// Process visual/frontend-only events from the deque
@@ -181,266 +193,7 @@ impl EguiApp {
         }
     }
 
-    /// Process messages from async operations (file dialogs, etc.)
-    fn process_async_messages(&mut self, ctx: &Context) {
-        while let Ok(msg) = self.from_async.try_recv() {
-            match msg {
-                AsyncFrontendMessage::PaletteLoaded(palette, path) => {
-                    // Palette was loaded asynchronously - apply it
-                    self.config.view_config.palette_rgb_data = palette;
-                    self.config.user_config.previous_palette_path = path;
-                    let _ = self
-                        .to_emulator
-                        .send(FrontendMessage::SetPalette(Box::new(palette)));
-                    // Only update tile textures if a tile viewer is visible
-                    if self.is_tile_viewer_visible() {
-                        self.emu_textures.update_tile_textures(
-                            ctx,
-                            &self.config.view_config.palette_rgb_data,
-                            None,
-                            None,
-                        );
-                    }
-                }
-                AsyncFrontendMessage::FileSaveCompleted(error) => {
-                    // Handle save completion - log any errors
-                    if let Some(e) = error {
-                        eprintln!("File save error: {}", e);
-                    }
-                }
-                AsyncFrontendMessage::SavestateLoaded(context) => {
-                    // Savestate loaded, now need to select ROM
-                    // Show dialog to select ROM with the expected filename displayed
-                    self.config.pending_dialogs.rom_selection_dialog =
-                        Some(RomSelectionDialogState {
-                            context,
-                        });
-                }
-                AsyncFrontendMessage::ShowMatchingRomDialog(context, matching_rom_path) => {
-                    // Found a matching ROM in the directory
-                    self.config.pending_dialogs.matching_rom_dialog =
-                        Some(MatchingRomDialogState {
-                            context,
-                            matching_rom_path,
-                        });
-                }
-                AsyncFrontendMessage::UseMatchingRom(context, rom_path) => {
-                    // User chose to use the matching ROM - load the savestate
-                    self.load_savestate_with_rom(&context, &rom_path);
-                }
-                AsyncFrontendMessage::ManuallySelectRom(context) => {
-                    // User chose to manually select a ROM
-                    util::spawn_rom_picker_for_savestate(
-                        &self.async_sender,
-                        context,
-                        self.config.user_config.previous_rom_path.as_ref(),
-                    );
-                }
-                AsyncFrontendMessage::RomSelectedForSavestate(context, rom_path) => {
-                    // User selected a ROM file, now verify checksum
-                    match util::compute_file_checksum(&rom_path) {
-                        Some(checksum) => {
-                            if checksum == context.savestate.rom_file.data_checksum {
-                                // Checksum matches, load the savestate
-                                self.load_savestate_with_rom(&context, &rom_path);
-                            } else {
-                                // Checksum mismatch, show warning dialog
-                                self.config.pending_dialogs.checksum_mismatch_dialog =
-                                    Some(ChecksumMismatchDialogState {
-                                        context,
-                                        selected_rom_path: rom_path,
-                                    });
-                            }
-                        }
-                        None => {
-                            // Failed to compute checksum - show error dialog
-                            self.config.pending_dialogs.error_dialog = Some(ErrorDialogState {
-                                title: "Error Reading ROM".to_string(),
-                                message:
-                                    "Failed to read or compute checksum for the selected ROM file."
-                                        .to_string(),
-                            });
-                        }
-                    }
-                }
-                AsyncFrontendMessage::ShowChecksumMismatchDialog(context, rom_path) => {
-                    // Show checksum mismatch warning dialog
-                    self.config.pending_dialogs.checksum_mismatch_dialog =
-                        Some(ChecksumMismatchDialogState {
-                            context,
-                            selected_rom_path: rom_path,
-                        });
-                }
-                AsyncFrontendMessage::LoadSavestateAnyway(context, rom_path) => {
-                    // User chose to load anyway despite checksum mismatch
-                    self.load_savestate_with_rom(&context, &rom_path);
-                }
-                AsyncFrontendMessage::SelectAnotherRom(context) => {
-                    // User chose to select a different ROM after checksum mismatch
-                    util::spawn_rom_picker_for_savestate(
-                        &self.async_sender,
-                        context,
-                        self.config.user_config.previous_rom_path.as_ref(),
-                    );
-                }
-                AsyncFrontendMessage::SavestateLoadFailed(error) => {
-                    // Show error dialog for failed savestate loading
-                    let message = match error {
-                        SavestateLoadError::FailedToLoadSavestate => {
-                            "Failed to load or parse the savestate file. The file may be corrupted or invalid."
-                        }
-                        SavestateLoadError::FailedToComputeChecksum => {
-                            "Failed to compute checksum for the ROM file."
-                        }
-                    };
-                    self.config.pending_dialogs.error_dialog = Some(ErrorDialogState {
-                        title: "Savestate Load Error".to_string(),
-                        message: message.to_string(),
-                    });
-                }
-                AsyncFrontendMessage::RomVerificationFailed(context, error) => {
-                    // Show error dialog for failed ROM verification
-                    let message = match error {
-                        SavestateLoadError::FailedToLoadSavestate => {
-                            "Unexpected error during ROM verification."
-                        }
-                        SavestateLoadError::FailedToComputeChecksum => {
-                            "Failed to read or compute checksum for the ROM file."
-                        }
-                    };
-                    self.config.pending_dialogs.error_dialog = Some(ErrorDialogState {
-                        title: "ROM Verification Error".to_string(),
-                        message: format!(
-                            "{}\n\nWould you like to select a different ROM?",
-                            message
-                        ),
-                    });
-                    // Also store the context to allow retrying
-                    self.config.pending_dialogs.rom_selection_dialog =
-                        Some(RomSelectionDialogState {
-                            context,
-                        });
-                }
-                AsyncFrontendMessage::Quickload => {
-                    if let Some(path) = self.get_current_quicksave_path() {
-                        let savestate = match savestate::try_load_state(&path) {
-                            Some(s) => s,
-                            None => {
-                                // Failed to load savestate - send error notification
-                                let _ = self.async_sender.send(
-                                    AsyncFrontendMessage::SavestateLoadFailed(
-                                        SavestateLoadError::FailedToLoadSavestate,
-                                    ),
-                                );
-                                return;
-                            }
-                        };
-
-                        let context = SavestateLoadContext {
-                            savestate,
-                            savestate_path: path,
-                        };
-
-                        if let Some(rom_path) = self.config.user_config.previous_rom_path.clone() {
-                            self.load_savestate_with_rom(&context, &rom_path)
-                        }
-                    }
-                }
-                AsyncFrontendMessage::Quicksave => {
-                    let _ = self
-                        .to_emulator
-                        .send(FrontendMessage::CreateSaveState(SaveType::Quicksave));
-                }
-                AsyncFrontendMessage::LoadRom(path) => {
-                    if let Some(path) = path {
-                        let _ = self
-                            .to_emulator
-                            .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
-                        let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-                        self.load_rom(path);
-                        let _ = self.to_emulator.send(FrontendMessage::Power);
-                        self.config.console_config.is_powered = true;
-                    }
-                }
-
-                // Consolidated emulator operations
-                AsyncFrontendMessage::PowerOn => {
-                    let _ = self
-                        .to_emulator
-                        .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
-                    let _ = self.to_emulator.send(FrontendMessage::Power);
-                    self.config.console_config.is_powered = true;
-                }
-                AsyncFrontendMessage::PowerOff => {
-                    let _ = self
-                        .to_emulator
-                        .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
-                    let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-                    self.config.console_config.is_powered = false;
-                }
-                AsyncFrontendMessage::Reset => {
-                    let _ = self
-                        .to_emulator
-                        .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
-                    let _ = self.to_emulator.send(FrontendMessage::Reset);
-                }
-                AsyncFrontendMessage::CreateSavestate => {
-                    let _ = self
-                        .to_emulator
-                        .send(FrontendMessage::CreateSaveState(SaveType::Manual));
-                }
-                AsyncFrontendMessage::SetPalette(palette) => {
-                    self.config.view_config.palette_rgb_data = palette;
-                    let _ = self
-                        .to_emulator
-                        .send(FrontendMessage::SetPalette(Box::new(palette)));
-                    // Trigger texture refresh
-                    if self.is_tile_viewer_visible() {
-                        self.emu_textures.update_tile_textures(
-                            ctx,
-                            &self.config.view_config.palette_rgb_data,
-                            None,
-                            None,
-                        );
-                    }
-                }
-                AsyncFrontendMessage::WritePpuPalette {
-                    address,
-                    value,
-                } => {
-                    let _ = self
-                        .to_emulator
-                        .send(FrontendMessage::WritePpu(address, value));
-                    let _ = self.to_emulator.send(FrontendMessage::RequestDebugData(
-                        EmulatorFetchable::Palettes(None),
-                    ));
-                }
-                AsyncFrontendMessage::WritePpuPattern {
-                    addr_0,
-                    value_0,
-                    addr_1,
-                    value_1,
-                } => {
-                    let _ = self
-                        .to_emulator
-                        .send(FrontendMessage::WritePpu(addr_0, value_0));
-                    let _ = self
-                        .to_emulator
-                        .send(FrontendMessage::WritePpu(addr_1, value_1));
-                    let _ = self.to_emulator.send(FrontendMessage::RequestDebugData(
-                        EmulatorFetchable::Tiles(None),
-                    ));
-                }
-                AsyncFrontendMessage::ControllerInput(event) => {
-                    let _ = self
-                        .to_emulator
-                        .send(FrontendMessage::ControllerInput(event));
-                }
-            }
-        }
-    }
-
-    fn load_rom(&mut self, rom_path: PathBuf) {
+    pub(crate) fn load_rom(&mut self, rom_path: PathBuf) {
         let _ = self
             .to_emulator
             .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
@@ -462,7 +215,7 @@ impl EguiApp {
     }
 
     /// Load a savestate after ROM has been verified/selected
-    fn load_savestate_with_rom(&mut self, context: &SavestateLoadContext, rom_path: &Path) {
+    pub(crate) fn load_savestate_with_rom(&mut self, context: &SavestateLoadContext, rom_path: &Path) {
         if self.config.user_config.loaded_rom.is_some() {
             let _ = self
                 .to_emulator
@@ -485,113 +238,7 @@ impl EguiApp {
         self.config.user_config.previous_savestate_path = Some(context.savestate_path.clone());
     }
 
-    /// Process messages from the emulator (frames, debug data, etc.)
-    fn process_emulator_messages(&mut self, ctx: &Context) {
-        while let Ok(msg) = self.from_emulator.try_recv() {
-            match msg {
-                EmulatorMessage::FrameReady(frame) => {
-                    self.emu_textures.current_frame = Some(frame);
-                    self.fps_counter.update();
-                    self.emu_textures.update_emulator_texture(ctx);
-                }
-                EmulatorMessage::DebugData(data) => match data {
-                    EmulatorFetchable::Palettes(p) => {
-                        // Only rebuild textures if palette data actually changed and a tile viewer is visible
-                        if self.emu_textures.palette_data != p {
-                            // Detect which palettes changed
-                            let changed_palettes = self.detect_changed_palettes(&p);
-                            self.emu_textures.palette_data = p;
-
-                            // Only update tile textures if a tile viewer is visible
-                            if self.is_tile_viewer_visible() {
-                                // Update only the changed palettes
-                                for palette_idx in changed_palettes {
-                                    self.emu_textures.update_tile_textures(
-                                        ctx,
-                                        &self.config.view_config.palette_rgb_data,
-                                        Some(palette_idx),
-                                        None, // Update all tiles for changed palettes
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    EmulatorFetchable::Tiles(t) => {
-                        // Detect which tiles changed for efficient updates
-                        let changed_tiles = self.detect_changed_tiles(&t);
-                        self.emu_textures.tile_data = t;
-
-                        // Only update tile textures if a tile viewer is visible
-                        if self.is_tile_viewer_visible() {
-                            if changed_tiles.is_empty() || changed_tiles.len() > 10 {
-                                // If many tiles changed, or we couldn't detect changes, rebuild all
-                                self.emu_textures.update_tile_textures(
-                                    ctx,
-                                    &self.config.view_config.palette_rgb_data,
-                                    None,
-                                    None,
-                                );
-                            } else {
-                                // Only rebuild the specific tiles that changed (for all palettes)
-                                for tile_idx in changed_tiles {
-                                    self.emu_textures.update_tile_textures(
-                                        ctx,
-                                        &self.config.view_config.palette_rgb_data,
-                                        None, // All palettes
-                                        Some(tile_idx),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    EmulatorFetchable::Nametables(n) => {
-                        self.emu_textures.nametable_data = n;
-                    }
-                },
-                EmulatorMessage::Stopped => {
-                    ctx.send_viewport_cmd(ViewportCommand::Close);
-                }
-                EmulatorMessage::SaveState(s, t) => match t {
-                    SaveType::Manual => {
-                        util::spawn_save_dialog(
-                            Some(&self.async_sender),
-                            self.config.user_config.previous_savestate_path.as_ref(),
-                            FileType::Savestate,
-                            s,
-                        );
-                    }
-                    SaveType::Quicksave => {
-                        if let Some(rom) = &self.config.user_config.loaded_rom {
-                            let rom_hash = &rom.data_checksum;
-                            let prev_path = &self.config.user_config.previous_rom_path;
-                            if let Some(prev_path) = prev_path {
-                                let display_name = util::rom_display_name(prev_path, rom_hash);
-
-                                let path = get_data_file_path(
-                                    format!(
-                                        "saves/{}/quicksaves/quicksave_{}.sav",
-                                        display_name,
-                                        chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
-                                    )
-                                    .as_str(),
-                                );
-
-                                if let Some(path) = path {
-                                    let _ = write_file_async(path, s.to_bytes(None), false);
-                                }
-                            }
-                        }
-                    }
-                    SaveType::Autosave => self.create_auto_save(s),
-                },
-                EmulatorMessage::RomLoaded(rom) => {
-                    self.config.user_config.loaded_rom = rom;
-                }
-            }
-        }
-    }
-
-    fn create_auto_save(&self, savestate: Box<SaveState>) {
+    pub(crate) fn create_auto_save(&self, savestate: Box<SaveState>) {
         if let Some(rom) = &self.config.user_config.loaded_rom {
             let rom_hash = &rom.data_checksum;
             let prev_path = &self.config.user_config.previous_rom_path;
@@ -609,12 +256,51 @@ impl EguiApp {
 
                 if let Some(path) = path {
                     let _ = write_file_async(path, savestate.to_bytes(None), false);
+
+                    // Clean up old autosaves asynchronously to avoid blocking the UI
+                    Self::cleanup_old_autosaves_async(display_name);
                 }
             }
         }
     }
 
-    fn get_current_quicksave_path(&self) -> Option<PathBuf> {
+    /// Remove the oldest autosaves if there are more than MAX_AUTOSAVES_PER_GAME.
+    /// Runs asynchronously in a background thread to avoid blocking the UI.
+    fn cleanup_old_autosaves_async(display_name: String) {
+        std::thread::spawn(move || {
+            if let Some(data_dir) = get_data_dir() {
+                let autosaves_dir = data_dir.join("saves").join(&display_name).join("autosaves");
+
+                if let Ok(entries) = std::fs::read_dir(&autosaves_dir) {
+                    // Collect all autosave files with their modification times
+                    let mut autosaves: Vec<(PathBuf, std::time::SystemTime)> = entries
+                        .filter_map(|entry| entry.ok())
+                        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "sav"))
+                        .filter_map(|entry| {
+                            let path = entry.path();
+                            let modified = entry.metadata().ok()?.modified().ok()?;
+                            Some((path, modified))
+                        })
+                        .collect();
+
+                    // If we have at least the limit, delete oldest to make room
+                    // (use >= to maintain exactly MAX_AUTOSAVES_PER_GAME after the new save)
+                    if autosaves.len() >= MAX_AUTOSAVES_PER_GAME {
+                        // Sort by modification time (oldest first)
+                        autosaves.sort_by_key(|a| a.1);
+
+                        // Delete enough files to get back under the limit
+                        let to_delete = autosaves.len() - MAX_AUTOSAVES_PER_GAME + 1;
+                        for (path, _) in autosaves.into_iter().take(to_delete) {
+                            let _ = std::fs::remove_file(path);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    pub(crate) fn get_current_quicksave_path(&self) -> Option<PathBuf> {
         let data_dir = get_data_dir();
 
         if let Some(rom) = &self.config.user_config.loaded_rom
@@ -689,7 +375,7 @@ impl EguiApp {
     }
 
     /// Check if any viewer that needs tile textures is visible
-    fn is_tile_viewer_visible(&self) -> bool {
+    pub(crate) fn is_tile_viewer_visible(&self) -> bool {
         self.is_pattern_tables_visible() || self.is_nametables_visible()
     }
 
@@ -712,7 +398,7 @@ impl EguiApp {
     }
 
     /// Detect which palettes changed between old and new palette data
-    fn detect_changed_palettes(&self, new_palette_data: &Option<Box<PaletteData>>) -> Vec<usize> {
+    pub(crate) fn detect_changed_palettes(&self, new_palette_data: &Option<Box<PaletteData>>) -> Vec<usize> {
         match (&self.emu_textures.palette_data, new_palette_data) {
             (Some(old), Some(new)) => old
                 .colors
@@ -728,7 +414,7 @@ impl EguiApp {
     }
 
     /// Detect which tiles changed between old and new tile data
-    fn detect_changed_tiles(
+    pub(crate) fn detect_changed_tiles(
         &self,
         new_tile_data: &Option<Box<[TileData; TILE_COUNT]>>,
     ) -> Vec<usize> {
@@ -836,6 +522,40 @@ impl EguiApp {
             &self.async_sender,
         );
     }
+
+    /// Check if a periodic autosave should be triggered based on elapsed time
+    fn check_periodic_autosave(&mut self) {
+        // Only autosave if a ROM is loaded and console is powered
+        if self.config.user_config.loaded_rom.is_some()
+            && self.config.console_config.is_powered
+            && self.last_autosave.elapsed() >= AUTOSAVE_INTERVAL
+        {
+            // Update timestamp first to prevent overlapping save operations
+            self.last_autosave = Instant::now();
+            let savestate = self.channel_emu.nes.save_state();
+            self.create_auto_save(Box::new(savestate));
+        }
+    }
+
+    /// Check if window focus was lost and trigger autosave if needed
+    fn check_focus_autosave(&mut self, ctx: &Context) {
+        let is_focused = ctx.input(|i| i.focused);
+
+        // Only autosave when focus is lost (transition from focused to unfocused)
+        // This also resets the periodic timer since we just saved
+        if self.was_focused
+            && !is_focused
+            && self.config.user_config.loaded_rom.is_some()
+            && self.config.console_config.is_powered
+        {
+            // Update timestamp first to prevent overlapping save operations
+            self.last_autosave = Instant::now();
+            let savestate = self.channel_emu.nes.save_state();
+            self.create_auto_save(Box::new(savestate));
+        }
+
+        self.was_focused = is_focused;
+    }
 }
 
 impl eframe::App for EguiApp {
@@ -865,6 +585,12 @@ impl eframe::App for EguiApp {
         // Update required debug fetches based on visible panes
         self.config.view_config.required_debug_fetches =
             compute_required_fetches_from_tree(&self.tree);
+
+        // Check for periodic autosave (every 5 minutes)
+        self.check_periodic_autosave();
+
+        // Check for focus loss autosave (when window loses focus)
+        self.check_focus_autosave(ctx);
 
         add_menu_bar(ctx, &self.config, &self.async_sender, &mut self.tree);
 

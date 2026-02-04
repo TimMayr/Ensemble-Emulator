@@ -6,9 +6,9 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp};
-use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::mem::Memory;
 use crate::emulation::messages::{RgbColor, RgbPalette};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
@@ -59,11 +59,11 @@ impl Nes {
         self.ppu_cycle_counter = 0;
     }
 
-    pub fn run(&mut self) -> Result<ExecutionFinishedType, String> { self.run_until(u128::MAX) }
+    pub fn run(&mut self) -> Result<ExecutionFinishedType, String> { self.run_until(u128::MAX, false) }
 
-    pub fn run_until(&mut self, last_cycle: u128) -> Result<ExecutionFinishedType, String> {
+    pub fn run_until(&mut self, last_cycle: u128, stop_at_frame: bool) -> Result<ExecutionFinishedType, String> {
         loop {
-            let res = self.step_internal(last_cycle);
+            let res = self.step_internal(last_cycle, stop_at_frame);
             match res {
                 Ok(ExecutionFinishedType::CycleCompleted) => {
                     continue;
@@ -114,7 +114,10 @@ impl Nes {
 
     #[inline]
     pub fn step_frame(&mut self) -> Result<ExecutionFinishedType, String> {
-        self.run_until(self.total_cycles + MASTER_CYCLES_PER_FRAME as u128)
+        let start= self.total_cycles;
+        let res =self.run_until(u128::MAX,true);
+        println!("Master Cycles in Frame: {}", self.total_cycles - start);
+        res
     }
 }
 
@@ -192,11 +195,15 @@ impl Nes {
 
     #[inline(always)]
     pub fn step(&mut self) -> Result<ExecutionFinishedType, String> {
-        self.step_internal(u128::MAX)
+        self.step_internal(u128::MAX, false)
     }
 
     #[inline]
-    fn step_internal(&mut self, last_cycle: u128) -> Result<ExecutionFinishedType, String> {
+    fn step_internal(
+        &mut self,
+        last_cycle: u128,
+        stop_at_frame: bool,
+    ) -> Result<ExecutionFinishedType, String> {
         self.total_cycles += 1;
         self.cpu_cycle_counter = self.cpu_cycle_counter.wrapping_add(1);
         self.ppu_cycle_counter = self.ppu_cycle_counter.wrapping_add(1);
@@ -216,10 +223,11 @@ impl Nes {
             return Ok(ExecutionFinishedType::ReachedLastCycle);
         };
 
-        let mut cpu_res = Ok(ExecutionFinishedType::CycleCompleted);
+        let mut res = Ok(ExecutionFinishedType::CycleCompleted);
+        let mut is_frame_done = false;
 
         if self.ppu_cycle_counter == 4 {
-            self.ppu.borrow_mut().step();
+            is_frame_done = self.ppu.borrow_mut().step();
             self.ppu_cycle_counter = 0;
         }
 
@@ -230,7 +238,7 @@ impl Nes {
             let do_trace = self.trace_log.is_some()
                 && matches!(&self.cpu.current_op, &MicroOp::FetchOpcode(..));
 
-            cpu_res = self.cpu.step();
+            res = self.cpu.step();
 
             if do_trace && let Some(ref mut trace) = self.trace_log {
                 let ppu_state = {
@@ -257,7 +265,11 @@ impl Nes {
             self.cpu_cycle_counter = 0;
         }
 
-        cpu_res
+        if stop_at_frame && is_frame_done {
+            res = Ok(ExecutionFinishedType::FrameDone);
+        }
+
+        res
     }
 }
 
@@ -274,4 +286,5 @@ pub enum ExecutionFinishedType {
     ReachedLastCycle,
     ReachedHlt,
     CycleCompleted,
+    FrameDone,
 }

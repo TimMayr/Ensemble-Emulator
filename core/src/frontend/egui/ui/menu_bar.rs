@@ -62,6 +62,10 @@ pub fn add_menu_bar(
                     add_pane_if_missing(tree, Pane::Options);
                     ui.close();
                 }
+                if ui.button("Keybindings").clicked() {
+                    add_pane_if_missing(tree, Pane::Keybindings);
+                    ui.close();
+                }
                 ui.separator();
                 ui.label("Debug Viewers");
                 if ui.button("Palettes").clicked() {
