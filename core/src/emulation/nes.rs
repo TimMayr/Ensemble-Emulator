@@ -116,7 +116,6 @@ impl Nes {
     pub fn step_frame(&mut self) -> Result<ExecutionFinishedType, String> {
         let start= self.total_cycles;
         let res =self.run_until(u128::MAX,true);
-        println!("Master Cycles in Frame: {}", self.total_cycles - start);
         res
     }
 }
