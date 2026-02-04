@@ -716,6 +716,15 @@ impl ExecutionEngine {
     /// - Uses parallel upscaling via rayon (if encoder has upscaling enabled)
     /// - O(1) memory usage per frame instead of O(n) for all frames
     /// - Frames are written immediately, reducing peak memory usage
+    ///
+    /// # FPS Multipliers
+    ///
+    /// When the encoder's FPS config specifies a multiplier > 1 (e.g., 2x, 3x),
+    /// this method captures frames at sub-frame intervals. For example:
+    /// - 2x: Captures at mid-frame and end of frame (2 captures per PPU frame)
+    /// - 3x: Captures at 1/3, 2/3, and end of frame (3 captures per PPU frame)
+    ///
+    /// This produces true intermediate states showing partial rendering progress.
     pub fn run_with_video_encoder(
         &mut self,
         encoder: &mut super::video::StreamingVideoEncoder,
@@ -731,27 +740,50 @@ impl ExecutionEngine {
         let max_cycles = self.config.max_cycles();
         let start_cycles = self.emu.total_cycles;
 
+        // Get the number of captures per PPU frame from the encoder's FPS config
+        let captures_per_frame = encoder.captures_per_frame();
+
         // Run frame by frame for stop condition checking
         loop {
-            // Run one frame
-            match self.emu.step_frame() {
-                Ok(_) => {}
-                Err(e) => {
-                    return Ok(ExecutionResult {
-                        stop_reason: StopReason::Error(e),
-                        total_cycles: self.emu.total_cycles - start_cycles,
-                        total_frames: self.frame_count,
-                    });
+            // Track the start of this PPU frame to calculate capture targets
+            // This avoids accumulated rounding errors from integer division
+            let frame_start_cycles = self.emu.total_cycles;
+
+            // Run partial frames based on FPS multiplier and capture at each interval
+            for capture_idx in 0..captures_per_frame {
+                // Calculate target cycle for this capture relative to frame start
+                // Using (capture_idx + 1) * MASTER_CYCLES_PER_FRAME / captures_per_frame
+                // ensures the final capture always aligns with the frame boundary
+                let capture_point = (capture_idx + 1) as u128 * MASTER_CYCLES_PER_FRAME as u128
+                    / captures_per_frame as u128;
+                let target_cycles = frame_start_cycles + capture_point;
+
+                // Run until the target cycle
+                match self.emu.run_until(target_cycles) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        return Ok(ExecutionResult {
+                            stop_reason: StopReason::Error(e),
+                            total_cycles: self.emu.total_cycles - start_cycles,
+                            total_frames: self.frame_count,
+                        });
+                    }
+                }
+
+                // Write frame directly to encoder (with upscaling if configured)
+                // This captures the current pixel buffer state, which may be mid-render
+                let frame = self.emu.get_pixel_buffer();
+                encoder
+                    .write_frame(&frame)
+                    .map_err(|e| format!("Video encoding error: {}", e))?;
+
+                // Only increment frame_count at the end of a full PPU frame
+                // (when we've done all captures for this frame)
+                if capture_idx == captures_per_frame - 1 {
+                    self.frame_count += 1;
                 }
             }
 
-            // Write frame directly to encoder (with upscaling if configured)
-            let frame = self.emu.get_pixel_buffer();
-            encoder
-                .write_frame(&frame)
-                .map_err(|e| format!("Video encoding error: {}", e))?;
-
-            self.frame_count += 1;
             let cycles_run = self.emu.total_cycles - start_cycles;
 
             // Check stop conditions
