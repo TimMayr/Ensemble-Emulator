@@ -24,11 +24,13 @@
 /// - `config`: Configuration types for app state and settings
 /// - `fps_counter`: FPS tracking utility
 /// - `input`: Input handling logic
+/// - `message_handlers`: Async and emulator message processing
 /// - `textures`: Texture storage and management
 /// - `ui`: UI rendering modules for different panels and windows
 pub mod config;
 pub mod fps_counter;
 pub mod input;
+pub mod message_handlers;
 pub mod textures;
 pub mod tiles;
 pub mod ui;
