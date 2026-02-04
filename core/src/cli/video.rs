@@ -139,6 +139,133 @@ fn fit_to_bounds(
 }
 
 // =============================================================================
+// FPS Configuration
+// =============================================================================
+
+use super::args::VideoExportMode;
+
+/// NES NTSC framerate: 39375000 / 655171 ≈ 60.098814
+pub const NES_NTSC_FPS: f64 = 39375000.0 / 655171.0;
+
+/// NES NTSC framerate as exact numerator/denominator
+pub const NES_NTSC_FPS_NUM: u64 = 39375000;
+pub const NES_NTSC_FPS_DEN: u64 = 655171;
+
+/// Smooth framerate target (exactly 60 fps)
+pub const SMOOTH_FPS: f64 = 60.0;
+
+/// Parsed FPS configuration.
+///
+/// This struct handles parsing of FPS strings (like "1x", "2x", "120") and
+/// calculates the appropriate capture rate and output framerate based on
+/// the video export mode.
+#[derive(Debug, Clone)]
+pub struct FpsConfig {
+    /// Multiplier for frame capture (1 = normal, 2 = capture twice per frame, etc.)
+    pub multiplier: u32,
+    /// The export mode (accurate or smooth)
+    pub mode: VideoExportMode,
+}
+
+impl FpsConfig {
+    /// Parse an FPS string (e.g., "1x", "2x", "60", "120.0").
+    ///
+    /// - Multipliers like "1x", "2x", "3x" specify how often to sample the framebuffer
+    /// - Fixed values like "60" or "120.0" are converted to the nearest multiplier
+    pub fn parse(s: &str, mode: VideoExportMode) -> Result<Self, String> {
+        let s = s.trim().to_lowercase();
+
+        // Try parsing as multiplier (e.g., "1x", "2x", "3x")
+        if let Some(mult_str) = s.strip_suffix('x') {
+            let multiplier: u32 = mult_str
+                .parse()
+                .map_err(|_| format!("Invalid FPS multiplier: '{}'", s))?;
+            if multiplier == 0 {
+                return Err("FPS multiplier must be at least 1".to_string());
+            }
+            return Ok(Self {
+                multiplier,
+                mode,
+            });
+        }
+
+        // Try parsing as a fixed FPS value
+        let fps: f64 = s
+            .parse()
+            .map_err(|_| format!("Invalid FPS value: '{}'. Use multipliers like '2x' or fixed values like '60.0'", s))?;
+
+        if fps <= 0.0 {
+            return Err("FPS must be positive".to_string());
+        }
+
+        // Convert fixed FPS to multiplier based on mode
+        let base_fps = match mode {
+            VideoExportMode::Accurate => NES_NTSC_FPS,
+            VideoExportMode::Smooth => SMOOTH_FPS,
+        };
+
+        // Calculate multiplier (round to nearest integer)
+        let multiplier = (fps / base_fps).round() as u32;
+        let multiplier = multiplier.max(1);
+
+        Ok(Self {
+            multiplier,
+            mode,
+        })
+    }
+
+    /// Get the output framerate as a floating-point value.
+    pub fn output_fps(&self) -> f64 {
+        match self.mode {
+            VideoExportMode::Accurate => NES_NTSC_FPS * self.multiplier as f64,
+            VideoExportMode::Smooth => SMOOTH_FPS * self.multiplier as f64,
+        }
+    }
+
+    /// Get the output framerate as a rational string for FFmpeg.
+    ///
+    /// For accurate mode, this returns the exact NES framerate fraction multiplied.
+    /// For smooth mode, this returns clean integer multiples of 60.
+    pub fn output_fps_rational(&self) -> String {
+        match self.mode {
+            VideoExportMode::Accurate => {
+                // Use exact rational: (39375000 * multiplier) / 655171
+                let numerator = NES_NTSC_FPS_NUM * self.multiplier as u64;
+                format!("{}/{}", numerator, NES_NTSC_FPS_DEN)
+            }
+            VideoExportMode::Smooth => {
+                // Clean integer FPS
+                let fps = 60 * self.multiplier;
+                format!("{}/1", fps)
+            }
+        }
+    }
+
+    /// Get the number of frames to capture per PPU frame.
+    ///
+    /// For 1x, this is 1 (capture once per complete frame).
+    /// For 2x, this is 2 (capture at mid-frame and end of frame).
+    /// For 3x, this is 3 (capture at 1/3, 2/3, and end of frame).
+    pub fn captures_per_frame(&self) -> u32 {
+        self.multiplier
+    }
+
+    /// Check if this configuration requires mid-frame captures.
+    pub fn needs_mid_frame_capture(&self) -> bool {
+        self.multiplier > 1
+    }
+}
+
+impl Default for FpsConfig {
+    fn default() -> Self {
+        Self {
+            multiplier: 1,
+            mode: VideoExportMode::Accurate,
+        }
+    }
+}
+
+// =============================================================================
 // Error Types
 // =============================================================================
 
@@ -719,33 +846,44 @@ impl VideoEncoder for RawEncoder {
 /// Known framerates (like NES NTSC 60.0988 FPS) are converted to their
 /// exact rational form. Other values use a high-precision approximation.
 fn fps_to_rational(fps: f64) -> String {
+    // Tolerance values:
+    // - NES NTSC: 0.01 because the irrational framerate may have rounding errors
+    // - Smooth/standard: 0.001 for clean integer framerates
+    const NES_TOLERANCE: f64 = 0.01;
+    const STANDARD_TOLERANCE: f64 = 0.001;
+
+    // Check for NES NTSC framerate and its multiples (within tolerance)
     // NES NTSC framerate: 39375000 / 655171 ≈ 60.098814
-    // This is derived from the master clock (39.375 MHz) divided by
-    // the number of master cycles per frame.
-    const NES_NTSC_FPS: f64 = 39375000.0 / 655171.0;
-
-    // Check if this is the NES NTSC framerate (within tolerance)
-    if (fps - NES_NTSC_FPS).abs() < 0.0001 {
-        return "39375000/655171".to_string();
+    for multiplier in 1..=10 {
+        let target = NES_NTSC_FPS * multiplier as f64;
+        if (fps - target).abs() < NES_TOLERANCE {
+            let numerator = NES_NTSC_FPS_NUM * multiplier as u64;
+            return format!("{}/{}", numerator, NES_NTSC_FPS_DEN);
+        }
     }
 
-    // Check for common standard framerates
-    if (fps - 60.0).abs() < 0.0001 {
-        return "60/1".to_string();
+    // Check for smooth framerate multiples (60, 120, 180, etc.)
+    for multiplier in 1..=10 {
+        let target = SMOOTH_FPS * multiplier as f64;
+        if (fps - target).abs() < STANDARD_TOLERANCE {
+            return format!("{}/1", 60 * multiplier);
+        }
     }
-    if (fps - 30.0).abs() < 0.0001 {
+
+    // Check for other common standard framerates
+    if (fps - 30.0).abs() < STANDARD_TOLERANCE {
         return "30/1".to_string();
     }
-    if (fps - 24.0).abs() < 0.0001 {
+    if (fps - 24.0).abs() < STANDARD_TOLERANCE {
         return "24/1".to_string();
     }
-    if (fps - 59.94).abs() < 0.01 {
+    if (fps - 59.94).abs() < NES_TOLERANCE {
         return "60000/1001".to_string(); // NTSC video standard
     }
-    if (fps - 29.97).abs() < 0.01 {
+    if (fps - 29.97).abs() < NES_TOLERANCE {
         return "30000/1001".to_string(); // NTSC video standard
     }
-    if (fps - 23.976).abs() < 0.01 {
+    if (fps - 23.976).abs() < NES_TOLERANCE {
         return "24000/1001".to_string(); // Film standard
     }
 
@@ -800,22 +938,23 @@ pub struct StreamingVideoEncoder {
     src_height: u32,
     dst_width: u32,
     dst_height: u32,
+    fps_config: FpsConfig,
 }
 
 impl StreamingVideoEncoder {
-    /// Create a new streaming encoder.
+    /// Create a new streaming encoder with explicit FPS configuration.
     ///
-    /// If the resolution specifies scaling, FFmpeg will handle it natively
-    /// using nearest-neighbor interpolation.
-    pub fn new(
+    /// This is the preferred constructor when using the new FPS multiplier system.
+    pub fn with_fps_config(
         format: VideoFormat,
         output_path: &Path,
         src_width: u32,
         src_height: u32,
         resolution: &VideoResolution,
-        fps: f64,
+        fps_config: FpsConfig,
     ) -> Result<Self, VideoError> {
         let (dst_width, dst_height) = resolution.dimensions(src_width, src_height);
+        let fps = fps_config.output_fps();
 
         let encoder: Box<dyn VideoEncoder> = match format {
             VideoFormat::Mp4 => {
@@ -855,6 +994,7 @@ impl StreamingVideoEncoder {
             src_height,
             dst_width,
             dst_height,
+            fps_config,
         })
     }
 
@@ -878,6 +1018,19 @@ impl StreamingVideoEncoder {
     /// Check if scaling is enabled.
     pub fn is_scaling(&self) -> bool {
         self.dst_width != self.src_width || self.dst_height != self.src_height
+    }
+
+    /// Get the FPS configuration.
+    pub fn fps_config(&self) -> &FpsConfig { &self.fps_config }
+
+    /// Check if mid-frame captures are needed.
+    pub fn needs_mid_frame_capture(&self) -> bool {
+        self.fps_config.needs_mid_frame_capture()
+    }
+
+    /// Get the number of captures per PPU frame.
+    pub fn captures_per_frame(&self) -> u32 {
+        self.fps_config.captures_per_frame()
     }
 }
 
@@ -1016,5 +1169,111 @@ mod tests {
 
         // Custom framerate (fallback to x/1000)
         assert_eq!(fps_to_rational(50.0), "50000/1000");
+
+        // NES NTSC multiples (accurate mode)
+        let nes_ntsc_2x = nes_ntsc * 2.0;
+        assert_eq!(fps_to_rational(nes_ntsc_2x), "78750000/655171");
+
+        // Smooth mode multiples
+        assert_eq!(fps_to_rational(120.0), "120/1");
+        assert_eq!(fps_to_rational(180.0), "180/1");
+    }
+
+    #[test]
+    fn test_fps_config_parse_multipliers() {
+        // Parse multipliers
+        let config = FpsConfig::parse("1x", VideoExportMode::Accurate).unwrap();
+        assert_eq!(config.multiplier, 1);
+        assert_eq!(config.mode, VideoExportMode::Accurate);
+
+        let config = FpsConfig::parse("2x", VideoExportMode::Accurate).unwrap();
+        assert_eq!(config.multiplier, 2);
+
+        let config = FpsConfig::parse("3x", VideoExportMode::Smooth).unwrap();
+        assert_eq!(config.multiplier, 3);
+        assert_eq!(config.mode, VideoExportMode::Smooth);
+    }
+
+    #[test]
+    fn test_fps_config_parse_fixed_values() {
+        // Parse fixed FPS values - should convert to multipliers
+        let config = FpsConfig::parse("60.0", VideoExportMode::Smooth).unwrap();
+        assert_eq!(config.multiplier, 1); // 60/60 = 1x
+
+        let config = FpsConfig::parse("120", VideoExportMode::Smooth).unwrap();
+        assert_eq!(config.multiplier, 2); // 120/60 = 2x
+
+        let config = FpsConfig::parse("60.0988", VideoExportMode::Accurate).unwrap();
+        assert_eq!(config.multiplier, 1); // ~60.0988/60.0988 = 1x
+
+        let config = FpsConfig::parse("120.2", VideoExportMode::Accurate).unwrap();
+        assert_eq!(config.multiplier, 2); // ~120.2/60.0988 ≈ 2x
+    }
+
+    #[test]
+    fn test_fps_config_output_fps() {
+        // Accurate mode at 1x
+        let config = FpsConfig::parse("1x", VideoExportMode::Accurate).unwrap();
+        assert!((config.output_fps() - NES_NTSC_FPS).abs() < 0.001);
+
+        // Smooth mode at 1x
+        let config = FpsConfig::parse("1x", VideoExportMode::Smooth).unwrap();
+        assert!((config.output_fps() - 60.0).abs() < 0.001);
+
+        // Accurate mode at 2x
+        let config = FpsConfig::parse("2x", VideoExportMode::Accurate).unwrap();
+        assert!((config.output_fps() - NES_NTSC_FPS * 2.0).abs() < 0.001);
+
+        // Smooth mode at 2x
+        let config = FpsConfig::parse("2x", VideoExportMode::Smooth).unwrap();
+        assert!((config.output_fps() - 120.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_fps_config_output_rational() {
+        // Accurate mode at 1x - exact NES framerate
+        let config = FpsConfig::parse("1x", VideoExportMode::Accurate).unwrap();
+        assert_eq!(config.output_fps_rational(), "39375000/655171");
+
+        // Smooth mode at 1x - clean 60fps
+        let config = FpsConfig::parse("1x", VideoExportMode::Smooth).unwrap();
+        assert_eq!(config.output_fps_rational(), "60/1");
+
+        // Accurate mode at 2x
+        let config = FpsConfig::parse("2x", VideoExportMode::Accurate).unwrap();
+        assert_eq!(config.output_fps_rational(), "78750000/655171");
+
+        // Smooth mode at 2x
+        let config = FpsConfig::parse("2x", VideoExportMode::Smooth).unwrap();
+        assert_eq!(config.output_fps_rational(), "120/1");
+    }
+
+    #[test]
+    fn test_fps_config_parse_errors() {
+        // Invalid multiplier
+        assert!(FpsConfig::parse("0x", VideoExportMode::Accurate).is_err());
+        assert!(FpsConfig::parse("-1x", VideoExportMode::Accurate).is_err());
+
+        // Invalid value
+        assert!(FpsConfig::parse("abc", VideoExportMode::Accurate).is_err());
+        assert!(FpsConfig::parse("", VideoExportMode::Accurate).is_err());
+
+        // Negative FPS
+        assert!(FpsConfig::parse("-60", VideoExportMode::Accurate).is_err());
+    }
+
+    #[test]
+    fn test_fps_config_captures_per_frame() {
+        let config = FpsConfig::parse("1x", VideoExportMode::Accurate).unwrap();
+        assert_eq!(config.captures_per_frame(), 1);
+        assert!(!config.needs_mid_frame_capture());
+
+        let config = FpsConfig::parse("2x", VideoExportMode::Accurate).unwrap();
+        assert_eq!(config.captures_per_frame(), 2);
+        assert!(config.needs_mid_frame_capture());
+
+        let config = FpsConfig::parse("3x", VideoExportMode::Smooth).unwrap();
+        assert_eq!(config.captures_per_frame(), 3);
+        assert!(config.needs_mid_frame_capture());
     }
 }

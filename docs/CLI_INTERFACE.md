@@ -232,9 +232,11 @@ Arguments are organized into logical groups:
 |------|---------------------------------|--------------------------------------------------|---------|
 |      | `--screenshot`                  | Save screenshot on exit                          | PathBuf |
 |      | `--screenshot-on`               | When to capture (same as save-state-on)          | String  |
-|      | `--video`                       | Record video to file                             | PathBuf |
+|      | `--video-path`                  | Record video to file                             | PathBuf |
 |      | `--video-format`                | Video output format                              | String  |
-|      | `--video-fps`                   | Video frame rate                                 | u32     |
+|      | `--video-fps`                   | Video frame rate (multiplier like "2x" or fixed) | String  |
+|      | `--video-mode`                  | Video export mode (accurate or smooth)           | String  |
+|      | `--video-scale`                 | Video output resolution                          | String  |
 
 **Video Formats:**
 
@@ -242,6 +244,26 @@ Arguments are organized into logical groups:
 - `ppm` - PPM image sequence
 - `png` - PNG image sequence
 - `mp4` - MP4 video
+
+**Video Export Modes:**
+
+- `accurate` - Encode at exact NES framerate (60.0988 fps or its multiple). This is the default mode and preserves the exact timing of the original hardware.
+- `smooth` - Encode at exactly 60 fps (or its multiple), accepting slight timing drift. This produces videos that are more compatible with standard video players and avoid visual artifacts on displays that expect standard framerates.
+
+**Video FPS:**
+
+The `--video-fps` option accepts either:
+- Multipliers like `1x`, `2x`, `3x` (default is `1x`)
+- Fixed values like `60`, `120`, `180`
+
+When using multipliers greater than 1x, the emulator captures the framebuffer more frequently, inserting "half-finished" frames between complete PPU frames. This allows for smoother slow-motion playback or higher framerate output.
+
+Examples:
+- `--video-fps 1x --video-mode accurate`: 60.0988 fps (exact NES timing)
+- `--video-fps 1x --video-mode smooth`: 60.0 fps (standard timing)
+- `--video-fps 2x --video-mode accurate`: 120.1976 fps
+- `--video-fps 2x --video-mode smooth`: 120.0 fps
+- `--video-fps 120`: Converted to 2x multiplier based on mode
 
 #### Execution Control
 
@@ -543,19 +565,28 @@ nes_main -H --rom game.nes --screenshot-on pc:0x8500 --screenshot level_end.png
 ### Video Recording
 
 ```bash
+# Record MP4 with accurate NES timing (60.0988 fps)
+nes_main -H --rom game.nes --frames 600 --video-path video.mp4 --video-format mp4 --video-mode accurate
+
+# Record MP4 with smooth 60fps timing (avoids player artifacts)
+nes_main -H --rom game.nes --frames 600 --video-path video.mp4 --video-format mp4 --video-mode smooth
+
+# Record at 2x framerate (120fps) - captures mid-frame states
+nes_main -H --rom game.nes --frames 600 --video-path video_2x.mp4 --video-format mp4 --video-fps 2x
+
+# Record at 2x smooth framerate (exactly 120fps)
+nes_main -H --rom game.nes --frames 600 --video-path video_2x_smooth.mp4 --video-format mp4 --video-fps 2x --video-mode smooth
+
 # Record raw frames (pipe to ffmpeg)
-nes_main -H --rom game.nes --frames 600 --video-format raw --video - | \
+nes_main -H --rom game.nes --frames 600 --video-format raw --video-path - | \
   ffmpeg -f rawvideo -pixel_format rgba -video_size 256x240 \
          -framerate 60 -i - output.mp4
 
 # Record PNG sequence
-nes_main -H --rom game.nes --frames 600 --video frame_%04d.png --video-format png
+nes_main -H --rom game.nes --frames 600 --video-path frames.png --video-format png
 
 # Record PPM sequence (faster, larger files)
-nes_main -H --rom game.nes --frames 600 --video frame_%04d.ppm --video-format ppm
-
-# Record MP4
-nes_main -H --rom game.nes --frames 600 --video video.mp4 --video-format mp4
+nes_main -H --rom game.nes --frames 600 --video-path frames.ppm --video-format ppm
 ```
 
 ---

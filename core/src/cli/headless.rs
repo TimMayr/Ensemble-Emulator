@@ -11,7 +11,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use crate::cli::{
-    CliArgs, ExecutionConfig, ExecutionEngine, ExecutionResult, MemoryDump, MemoryInit,
+    CliArgs, ExecutionConfig, ExecutionEngine, ExecutionResult, FpsConfig, MemoryDump, MemoryInit,
     MemoryInitConfig, MemoryType, OutputWriter, SavestateConfig, StopReason, StreamingVideoEncoder,
     VideoFormat, VideoResolution, apply_memory_init, apply_memory_init_config, is_ffmpeg_available,
 };
@@ -251,8 +251,11 @@ fn run_with_streaming_video(
     let resolution = VideoResolution::parse(args.video.video_scale.as_ref().unwrap())
         .map_err(|e| format!("Invalid video scale: {}", e))?;
 
+    // Parse FPS configuration
+    let fps_config = FpsConfig::parse(&args.video.video_fps, args.video.video_mode)
+        .map_err(|e| format!("Invalid video FPS: {}", e))?;
+
     let (dst_width, dst_height) = resolution.dimensions(NES_WIDTH, NES_HEIGHT);
-    let fps = args.video.video_fps;
 
     // Print export info
     if !args.quiet {
@@ -265,17 +268,18 @@ fn run_with_streaming_video(
             dst_width,
             dst_height,
             true,
+            &fps_config,
         );
     }
 
-    // Create streaming encoder
-    let mut encoder = StreamingVideoEncoder::new(
+    // Create streaming encoder with FPS config
+    let mut encoder = StreamingVideoEncoder::with_fps_config(
         args.video.video_format,
         video_path,
         NES_WIDTH,
         NES_HEIGHT,
         &resolution,
-        fps,
+        fps_config,
     )
     .map_err(|e| format!("Failed to create video encoder: {}", e))?;
 
@@ -311,27 +315,48 @@ fn print_video_info(
     dst_width: u32,
     dst_height: u32,
     streaming: bool,
+    fps_config: &FpsConfig,
 ) {
     let mode_str = if streaming { " [streaming mode]" } else { "" };
+    let fps_str = format!(
+        "{:.2} fps ({:?}, {}x)",
+        fps_config.output_fps(),
+        fps_config.mode,
+        fps_config.multiplier
+    );
+
+    // Add note about mid-frame capture for multipliers > 1
+    let capture_note = if fps_config.multiplier > 1 {
+        format!(
+            " ({} captures per PPU frame)",
+            fps_config.multiplier
+        )
+    } else {
+        String::new()
+    };
 
     if *resolution == VideoResolution::Native {
         eprintln!(
-            "Exporting to {} as {:?} ({}x{}){}...",
+            "Exporting to {} as {:?} ({}x{}, {}{}){}...",
             video_path.display(),
             format,
             src_width,
             src_height,
+            fps_str,
+            capture_note,
             mode_str
         );
     } else if matches!(format, VideoFormat::Mp4) {
         eprintln!(
-            "Exporting to {} as {:?} ({}x{} → {}x{} via FFmpeg nearest-neighbor){}...",
+            "Exporting to {} as {:?} ({}x{} → {}x{} via FFmpeg nearest-neighbor, {}{}){}...",
             video_path.display(),
             format,
             src_width,
             src_height,
             dst_width,
             dst_height,
+            fps_str,
+            capture_note,
             mode_str
         );
     } else {
@@ -341,11 +366,13 @@ fn print_video_info(
             ""
         };
         eprintln!(
-            "Exporting to {} as {:?} ({}x{}){}...",
+            "Exporting to {} as {:?} ({}x{}, {}{}){}...",
             video_path.display(),
             format,
             src_width,
             src_height,
+            fps_str,
+            capture_note,
             scale_note
         );
     }
@@ -430,15 +457,20 @@ pub fn save_video(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String
         let resolution = VideoResolution::parse(&args.video.video_scale.clone().unwrap())
             .map_err(|e| format!("Invalid video scale: {}", e))?;
 
+        // Parse FPS configuration
+        let fps_config = FpsConfig::parse(&args.video.video_fps, args.video.video_mode)
+            .map_err(|e| format!("Invalid video FPS: {}", e))?;
+
         let (dst_width, dst_height) = resolution.dimensions(NES_WIDTH, NES_HEIGHT);
 
-        let fps = args.video.video_fps;
         if !args.quiet {
             eprintln!(
-                "Exporting {} frames to {} as {:?}...",
+                "Exporting {} frames to {} as {:?} ({:.2} fps, {:?})...",
                 frames.len(),
                 video_path.display(),
-                args.video.video_format
+                args.video.video_format,
+                fps_config.output_fps(),
+                fps_config.mode
             );
             if resolution != VideoResolution::Native && args.video.video_format == VideoFormat::Mp4
             {
@@ -450,13 +482,13 @@ pub fn save_video(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String
         }
 
         // Use streaming encoder for proper scaling support
-        let mut encoder = StreamingVideoEncoder::new(
+        let mut encoder = StreamingVideoEncoder::with_fps_config(
             args.video.video_format,
             video_path,
             NES_WIDTH,
             NES_HEIGHT,
             &resolution,
-            fps,
+            fps_config,
         )
         .map_err(|e| format!("Failed to create video encoder: {}", e))?;
 

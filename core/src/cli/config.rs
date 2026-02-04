@@ -11,10 +11,13 @@ use std::str::FromStr;
 use serde::Deserialize;
 
 use crate::cli::SavestateFormat;
-use crate::cli::args::{BuiltinPalette, CliArgs, OutputFormat, VideoFormat};
+use crate::cli::args::{BuiltinPalette, CliArgs, OutputFormat, VideoExportMode, VideoFormat};
 
-/// Default video FPS value
-pub const DEFAULT_VIDEO_FPS: f64 = 39375000.0 / 655171.0;
+/// Default video FPS string value (1x multiplier)
+pub const DEFAULT_VIDEO_FPS: &str = "1x";
+
+/// NES NTSC framerate: 39375000 / 655171 ≈ 60.098814
+pub const NES_NTSC_FPS: f64 = 39375000.0 / 655171.0;
 
 /// TOML configuration file structure
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -127,7 +130,10 @@ pub struct VideoConfig {
     pub screenshot_on: Option<String>,
     pub video_path: Option<PathBuf>,
     pub video_format: Option<String>,
-    pub video_fps: Option<f64>,
+    /// Video FPS: Can be a multiplier like "2x", "3x" or a fixed value like "60.0"
+    pub video_fps: Option<String>,
+    /// Video export mode: "accurate" or "smooth"
+    pub video_mode: Option<String>,
     pub video_scale: Option<String>,
 }
 
@@ -306,10 +312,18 @@ impl ConfigFile {
                 cli.video.video_scale = self.video.video_scale.clone();
             }
         }
+        // Only override video_fps if CLI is at default
         if cli.video.video_fps == DEFAULT_VIDEO_FPS
-            && let Some(fps) = self.video.video_fps
+            && let Some(ref fps) = self.video.video_fps
         {
-            cli.video.video_fps = fps;
+            cli.video.video_fps = fps.clone();
+        }
+        // Only override video_mode if CLI is at default
+        if cli.video.video_mode == VideoExportMode::Accurate
+            && let Some(ref mode) = self.video.video_mode
+        {
+            cli.video.video_mode =
+                VideoExportMode::from_str(mode).unwrap_or(VideoExportMode::Accurate);
         }
 
         // Execution options

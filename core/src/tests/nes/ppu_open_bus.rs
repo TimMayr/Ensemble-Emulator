@@ -8,7 +8,7 @@ fn test_ppu_open_bus() {
     ));
     emu.power();
 
-    emu.run_until(100_000_000)
+    emu.run_until(100_000_000, false)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601A));

@@ -8,7 +8,7 @@ fn test_oam_stress() {
     ));
     emu.power();
 
-    emu.run_until(700_119_365)
+    emu.run_until(700_119_365, false)
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6129));

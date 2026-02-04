@@ -7,7 +7,7 @@ fn test_13_rts() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/13-rts.nes",
     ));
     emu.reset();
-    emu.run_until(6977013).expect("Error while running test");
+    emu.run_until(6977013, false).expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6018));
     let cpu_mem = whole_mem[0].as_slice();

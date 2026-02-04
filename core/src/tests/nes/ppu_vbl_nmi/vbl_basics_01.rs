@@ -7,7 +7,7 @@ fn test_01_vbl_basics() {
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/01-vbl_basics.nes",
     ));
     emu.power();
-    emu.run_until(51119365).expect("Error while running test");
+    emu.run_until(51119365, false).expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601B));
     let cpu_mem = whole_mem[0].as_slice();

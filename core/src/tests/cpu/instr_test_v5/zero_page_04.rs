@@ -7,7 +7,7 @@ fn test_04_zero_page() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/04-zero_page.nes",
     ));
     emu.reset();
-    emu.run_until(51428549).expect("Error while running test");
+    emu.run_until(51428549, false).expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601A));
     let cpu_mem = whole_mem[0].as_slice();
