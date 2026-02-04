@@ -942,32 +942,6 @@ pub struct StreamingVideoEncoder {
 }
 
 impl StreamingVideoEncoder {
-    /// Create a new streaming encoder with a simple f64 FPS value.
-    ///
-    /// **Note:** This is a legacy constructor for backward compatibility.
-    /// The `fps` parameter is currently ignored as we default to 1x multiplier
-    /// in accurate mode. Use [`with_fps_config`] for full control over FPS settings.
-    ///
-    /// If the resolution specifies scaling, FFmpeg will handle it natively
-    /// using nearest-neighbor interpolation.
-    #[deprecated(since = "0.2.0", note = "Use with_fps_config for full FPS control")]
-    pub fn new(
-        format: VideoFormat,
-        output_path: &Path,
-        src_width: u32,
-        src_height: u32,
-        resolution: &VideoResolution,
-        _fps: f64,
-    ) -> Result<Self, VideoError> {
-        // The fps parameter is ignored - we use default FpsConfig for backward compatibility.
-        // New code should use with_fps_config() instead.
-        let fps_config = FpsConfig {
-            multiplier: 1,
-            mode: VideoExportMode::Accurate,
-        };
-        Self::with_fps_config(format, output_path, src_width, src_height, resolution, fps_config)
-    }
-
     /// Create a new streaming encoder with explicit FPS configuration.
     ///
     /// This is the preferred constructor when using the new FPS multiplier system.

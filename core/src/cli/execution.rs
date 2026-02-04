@@ -759,7 +759,7 @@ impl ExecutionEngine {
                 let target_cycles = frame_start_cycles + capture_point;
 
                 // Run until the target cycle
-                match self.emu.run_until(target_cycles) {
+                match self.emu.run_until(target_cycles, false) {
                     Ok(_) => {}
                     Err(e) => {
                         return Ok(ExecutionResult {
