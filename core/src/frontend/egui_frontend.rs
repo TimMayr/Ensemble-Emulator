@@ -83,8 +83,6 @@ pub struct EguiApp {
     was_focused: bool,
 }
 
-const UNCAPPED_EMU_TIME: u64 = 70;
-
 impl EguiApp {
     pub fn new(
         cc: &eframe::CreationContext<'_>,
@@ -442,13 +440,8 @@ impl EguiApp {
             let frame_budget = self.get_frame_budget();
             let is_uncapped = self.config.speed_config.app_speed == AppSpeed::Uncapped;
 
-            // Maximum time to spend emulating per UI update to keep UI responsive
-            // For uncapped mode, allow more time; for normal mode, limit to prevent UI lag
-            let max_emulation_time = if is_uncapped {
-                Duration::from_millis(UNCAPPED_EMU_TIME) // Allow up to 70ms of emulation per UI frame
-            } else {
-                Duration::from_millis(50) // More conservative for normal speeds
-            };
+            let max_emulation_time = Duration::from_millis(17);
+
             let emulation_start = Instant::now();
 
             // Effectively paused, so we skip

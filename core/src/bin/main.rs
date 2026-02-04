@@ -6,13 +6,17 @@
 //! See `docs/CLI_INTERFACE.md` for full CLI documentation.
 
 use std::process::ExitCode;
-
+use mimalloc::MiMalloc;
 use nes_core::cli::{self, CliArgs, run_headless};
 use nes_core::frontend::egui_frontend;
 
 // =============================================================================
 // Exit Codes (as documented in CLI_INTERFACE.md)
 // =============================================================================
+
+
+ #[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 const EXIT_SUCCESS: u8 = 0;
 const EXIT_GENERAL_ERROR: u8 = 1;

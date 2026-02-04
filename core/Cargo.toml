@@ -28,6 +28,7 @@ toml = {version = "0.9.11", features = ["fast_hash"]}
 directories = { version = "6.0.0" }
 chrono = { version = "0.4.43", features = ["serde", "now"] }
 image = {version = "0.25.9"}
+mimalloc = {version = "0.1.48"}
 
 [features]
 full=["cpal"]
