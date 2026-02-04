@@ -743,18 +743,20 @@ impl ExecutionEngine {
         // Get the number of captures per PPU frame from the encoder's FPS config
         let captures_per_frame = encoder.captures_per_frame();
 
-        // Calculate cycles per capture segment
-        // For 1x: full frame (357366 cycles)
-        // For 2x: half frame (178683 cycles)
-        // For 3x: third of frame (119122 cycles)
-        let cycles_per_capture = MASTER_CYCLES_PER_FRAME / captures_per_frame;
-
         // Run frame by frame for stop condition checking
         loop {
+            // Track the start of this PPU frame to calculate capture targets
+            // This avoids accumulated rounding errors from integer division
+            let frame_start_cycles = self.emu.total_cycles;
+
             // Run partial frames based on FPS multiplier and capture at each interval
             for capture_idx in 0..captures_per_frame {
-                // Calculate target cycle for this capture
-                let target_cycles = self.emu.total_cycles + cycles_per_capture as u128;
+                // Calculate target cycle for this capture relative to frame start
+                // Using (capture_idx + 1) * MASTER_CYCLES_PER_FRAME / captures_per_frame
+                // ensures the final capture always aligns with the frame boundary
+                let capture_point = (capture_idx + 1) as u128 * MASTER_CYCLES_PER_FRAME as u128
+                    / captures_per_frame as u128;
+                let target_cycles = frame_start_cycles + capture_point;
 
                 // Run until the target cycle
                 match self.emu.run_until(target_cycles) {
