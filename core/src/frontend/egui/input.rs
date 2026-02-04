@@ -5,7 +5,16 @@ use egui::Context;
 
 use crate::emulation::messages::ControllerEvent;
 use crate::frontend::egui::config::AppConfig;
+use crate::frontend::egui::keybindings::Binding;
 use crate::frontend::messages::AsyncFrontendMessage;
+
+/// Check if a keybind is pressed in the given input state.
+fn is_binding_pressed(input: &egui::InputState, binding: &Option<Binding>) -> bool {
+    match binding {
+        Some(b) => b.pressed(input),
+        None => false,
+    }
+}
 
 /// Handle keyboard input from the user.
 ///
@@ -22,67 +31,71 @@ pub fn handle_keyboard_input(
 ) {
     ctx.input(|i| {
         // Debug controls
-        if i.key_pressed(egui::Key::N) {
+        if is_binding_pressed(i, &config.keybindings.debug.cycle_palette) {
             config.view_config.debug_active_palette += 1;
             config.view_config.debug_active_palette &= 7;
         }
 
         // Emulation controls
-        if i.key_pressed(egui::Key::Period) {
+        if is_binding_pressed(i, &config.keybindings.emulation.pause) {
             config.speed_config.is_paused = !config.speed_config.is_paused;
             *last_frame_request = Instant::now();
         }
 
-        if i.key_pressed(egui::Key::R) {
+        if is_binding_pressed(i, &config.keybindings.emulation.reset) {
             let _ = async_sender.send(AsyncFrontendMessage::Reset);
         }
 
-        if i.key_pressed(egui::Key::F5) {
+        if is_binding_pressed(i, &config.keybindings.emulation.quicksave) {
             let _ = async_sender.send(AsyncFrontendMessage::Quicksave);
         }
 
-        if i.key_pressed(egui::Key::F8) {
+        if is_binding_pressed(i, &config.keybindings.emulation.quickload) {
             let _ = async_sender.send(AsyncFrontendMessage::Quickload);
         }
 
         // NES controller input
-        handle_controller_input(i, async_sender);
+        handle_controller_input(i, async_sender, config);
     });
 }
 
 /// Handle NES controller input mapping from keyboard
-fn handle_controller_input(input: &egui::InputState, async_sender: &Sender<AsyncFrontendMessage>) {
+fn handle_controller_input(
+    input: &egui::InputState,
+    async_sender: &Sender<AsyncFrontendMessage>,
+    config: &AppConfig,
+) {
     // D-pad
-    if input.key_pressed(egui::Key::ArrowLeft) {
+    if is_binding_pressed(input, &config.keybindings.controller.left) {
         let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(ControllerEvent::Left));
     }
-    if input.key_pressed(egui::Key::ArrowRight) {
+    if is_binding_pressed(input, &config.keybindings.controller.right) {
         let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(
             ControllerEvent::Right,
         ));
     }
-    if input.key_pressed(egui::Key::ArrowUp) {
+    if is_binding_pressed(input, &config.keybindings.controller.up) {
         let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(ControllerEvent::Up));
     }
-    if input.key_pressed(egui::Key::ArrowDown) {
+    if is_binding_pressed(input, &config.keybindings.controller.down) {
         let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(ControllerEvent::Down));
     }
 
     // Buttons
-    if input.key_pressed(egui::Key::S) {
+    if is_binding_pressed(input, &config.keybindings.controller.start) {
         let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(
             ControllerEvent::Start,
         ));
     }
-    if input.key_pressed(egui::Key::Tab) {
+    if is_binding_pressed(input, &config.keybindings.controller.select) {
         let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(
             ControllerEvent::Select,
         ));
     }
-    if input.key_pressed(egui::Key::Space) {
+    if is_binding_pressed(input, &config.keybindings.controller.a) {
         let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(ControllerEvent::A));
     }
-    if input.modifiers.shift {
+    if is_binding_pressed(input, &config.keybindings.controller.b) {
         let _ = async_sender.send(AsyncFrontendMessage::ControllerInput(ControllerEvent::B));
     }
 }

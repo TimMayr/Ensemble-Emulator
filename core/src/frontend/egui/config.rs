@@ -1,9 +1,9 @@
-use std::cmp::max;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
 use crate::emulation::messages::{EmulatorFetchable, RgbPalette};
 use crate::emulation::rom::RomFile;
+use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::messages::SavestateLoadContext;
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
@@ -27,6 +27,7 @@ pub struct AppConfig {
     pub user_config: UserConfig,
     pub console_config: ConsoleConfig,
     pub pending_dialogs: PendingDialogs,
+    pub keybindings: KeybindingsConfig,
 }
 
 /// Pending dialog states for multi-step operations
@@ -101,11 +102,11 @@ pub enum AppSpeed {
 }
 
 impl AppSpeed {
-    pub fn get_fps(&self, speed_config: &SpeedConfig) -> u16 {
+    pub fn get_fps(&self, speed_config: &SpeedConfig) -> f32 {
         match self {
-            AppSpeed::DefaultSpeed => 60,
-            AppSpeed::Uncapped => u16::MAX,
-            AppSpeed::Custom => (60.0 * (speed_config.custom_speed as f32 / 100.0)) as u16,
+            AppSpeed::DefaultSpeed => 60.0988,
+            AppSpeed::Uncapped => f32::MAX,
+            AppSpeed::Custom => 60.0988 * (speed_config.custom_speed as f32 / 100.0),
         }
     }
 }
@@ -120,25 +121,21 @@ pub enum DebugSpeed {
 }
 
 impl DebugSpeed {
-    pub fn get_fps(&self, speed_config: &SpeedConfig) -> u16 {
+    pub fn get_fps(&self, speed_config: &SpeedConfig) -> f32 {
         match self {
-            DebugSpeed::Default => 10,
+            DebugSpeed::Default => 10.0,
             DebugSpeed::InStep => speed_config.app_speed.get_fps(speed_config),
             DebugSpeed::Custom => {
                 if speed_config.debug_custom_speed == 0 {
-                    return 0;
+                    return 0.0;
                 }
 
                 if speed_config.app_speed == AppSpeed::Uncapped {
-                    return 10;
+                    return 10.0;
                 }
 
-                max(
-                    ((speed_config.debug_custom_speed as f64 / 100.0)
-                        * speed_config.app_speed.get_fps(speed_config) as f64)
-                        as u16,
-                    1,
-                )
+                ((speed_config.debug_custom_speed as f64 / 100.0)
+                    * speed_config.app_speed.get_fps(speed_config) as f64).max(1.0) as f32
             }
         }
     }

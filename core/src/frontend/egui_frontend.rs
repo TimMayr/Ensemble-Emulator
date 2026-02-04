@@ -140,7 +140,7 @@ impl EguiApp {
             .app_speed
             .get_fps(&self.config.speed_config);
 
-        if speed == 0 {
+        if speed == 0.0 {
             return Duration::from_secs(5);
         }
 
@@ -155,7 +155,7 @@ impl EguiApp {
             .debug_speed
             .get_fps(&self.config.speed_config);
 
-        if fps == 0 {
+        if fps == 0.0 {
             return Duration::from_secs(5);
         }
 
