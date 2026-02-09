@@ -13,7 +13,7 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use nes_core::cli::error::{CliError, CliResult};
+//! use lockstep::cli::error::{CliError, CliResult};
 //!
 //! fn load_config(path: &str) -> CliResult<Config> {
 //!     let content = std::fs::read_to_string(path)

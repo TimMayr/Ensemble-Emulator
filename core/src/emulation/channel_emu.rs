@@ -23,9 +23,9 @@ use std::sync::OnceLock;
 /// # Example
 ///
 /// ```ignore
-/// use nes_core::emulation::channel_emu::ChannelEmulator;
-/// use nes_core::emulation::emu::{Console, Consoles};
-/// use nes_core::emulation::nes::Nes;
+/// use lockstep::emulation::channel_emu::ChannelEmulator;
+/// use lockstep::emulation::emu::{Console, Consoles};
+/// use lockstep::emulation::nes::Nes;
 ///
 /// let console = Nes::default();
 /// let (mut emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);

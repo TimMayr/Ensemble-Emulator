@@ -7,8 +7,8 @@
 
 use std::process::ExitCode;
 use mimalloc::MiMalloc;
-use nes_core::cli::{self, CliArgs, run_headless};
-use nes_core::frontend::egui_frontend;
+use lockstep::cli::{self, CliArgs, run_headless};
+use lockstep::frontend::egui_frontend;
 
 // =============================================================================
 // Exit Codes (as documented in CLI_INTERFACE.md)

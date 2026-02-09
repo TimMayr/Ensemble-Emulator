@@ -112,31 +112,7 @@ impl Binding {
     }
 
     /// Format as a short string for display.
-    pub fn into_short(self) -> String {
-        let mut items = Vec::new();
-        if self.modifiers.ctrl {
-            items.push("^");
-        }
-        if self.modifiers.alt {
-            items.push("⌥");
-        }
-        if self.modifiers.shift {
-            items.push("⇧");
-        }
-        if self.modifiers.command {
-            items.push("⌘");
-        }
-
-        let merged = items.join("");
-        if merged.is_empty() {
-            self.variant.to_string()
-        } else {
-            format!("{merged}{}", self.variant)
-        }
-    }
-
-    /// Format as a long string for tooltip display.
-    pub fn into_long(self) -> String {
+    pub fn into_string(self) -> String {
         let mut items = Vec::new();
         if self.modifiers.ctrl {
             items.push("Ctrl");
@@ -147,15 +123,12 @@ impl Binding {
         if self.modifiers.shift {
             items.push("Shift");
         }
-        if self.modifiers.command {
-            items.push("Cmd");
-        }
 
-        let merged = items.join(" + ");
+        let merged = items.join("+");
         if merged.is_empty() {
             self.variant.to_string()
         } else {
-            format!("{merged} + {}", self.variant)
+            format!("{merged}+{}", self.variant)
         }
     }
 
@@ -189,6 +162,10 @@ impl HotkeyBinding for Binding {
     const ACCEPT_MOUSE: bool = true;
     const ACCEPT_KEYBOARD: bool = true;
 
+    fn new(variant: BindVariant, modifiers: Modifiers) -> Self {
+        Binding { variant, modifiers }
+    }
+
     fn get(&self) -> Option<Binding> {
         Some(*self)
     }
@@ -201,10 +178,6 @@ impl HotkeyBinding for Binding {
     fn clear(&mut self) {
         panic!("Binding cannot be cleared directly. Use Option<Binding> wrapper type if clearing is needed, as Binding always requires a value.");
     }
-
-    fn new(variant: BindVariant, modifiers: Modifiers) -> Self {
-        Binding { variant, modifiers }
-    }
 }
 
 impl<B> HotkeyBinding for Option<B>
@@ -213,6 +186,10 @@ where
 {
     const ACCEPT_MOUSE: bool = B::ACCEPT_MOUSE;
     const ACCEPT_KEYBOARD: bool = B::ACCEPT_KEYBOARD;
+
+    fn new(variant: BindVariant, modifiers: Modifiers) -> Self {
+        Some(B::new(variant, modifiers))
+    }
 
     fn get(&self) -> Option<Binding> {
         self.as_ref()?.get()
@@ -228,10 +205,6 @@ where
 
     fn clear(&mut self) {
         *self = None;
-    }
-
-    fn new(variant: BindVariant, modifiers: Modifiers) -> Self {
-        Some(B::new(variant, modifiers))
     }
 }
 
@@ -323,11 +296,10 @@ where
                     }
                 }
             }
-        } else if let Some(bind) = self.binding.get() {
-            if self.tooltip.unwrap_or(true) {
-                response = response.on_hover_text(bind.into_long());
+        } else if let Some(bind) = self.binding.get()
+            && self.tooltip.unwrap_or(true) {
+                response = response.on_hover_text(bind.into_string());
             }
-        }
 
         if ui.is_rect_visible(rect) {
             let visuals = ui.style().interact_selectable(&response, expecting);
@@ -337,7 +309,7 @@ where
             let binding = self.binding.get();
 
             let text = binding
-                .map(|hk| hk.into_short())
+                .map(|hk| hk.into_string())
                 .unwrap_or_else(|| "None".into());
 
             ui.painter().text(
