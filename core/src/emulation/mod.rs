@@ -1,7 +1,5 @@
-pub mod channel_emu;
 pub mod cpu;
 pub mod mem;
-pub mod messages;
 pub mod nes;
 pub mod opcode;
 pub mod ppu;

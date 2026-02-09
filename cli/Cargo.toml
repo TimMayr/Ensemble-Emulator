@@ -1,0 +1,24 @@
+[package]
+name = "choreo-ensemble"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "choreo_ensemble"
+path = "src/lib.rs"
+
+[[bin]]
+name = "choreo"
+path = "src/bin/main.rs"
+
+[dependencies]
+serde = {version = "1.0.228", features = ["derive", "alloc", "rc"]}
+serde_json = { version = "1.0.149" }
+bincode = { version = "2.0.1", features = ["serde"] }
+
+clap = { version = "4.5.54", features = ["derive", "cargo", "env", "string", "unicode", "wrap_help"] }
+toml = {version = "0.9.11", features = ["fast_hash"]}
+image = {version = "0.25.9"}
+
+lockstep-ensemble = { path = "../core" }
+

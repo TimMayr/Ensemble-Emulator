@@ -61,4 +61,6 @@ impl MemoryDevice for NametableMemory {
     fn init(&mut self, addr: u16, data: u8) { self.vram.init(self.mirror_addr(addr), data) }
 
     fn load(&mut self, data: Box<[u8]>) { self.vram.load(data) }
+
+    fn snapshot_all(&self) -> Vec<u8> { self.vram.snapshot_all() }
 }

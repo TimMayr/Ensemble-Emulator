@@ -5,8 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::emulation::cpu::{Cpu, INTERNAL_RAM_SIZE, MicroOp};
 use crate::emulation::mem::OpenBus;
-use crate::emulation::messages::RgbColor;
-use crate::emulation::ppu::{Ppu, VRAM_SIZE};
+use crate::emulation::ppu::{Ppu, RgbColor, VRAM_SIZE};
 use crate::emulation::rom::RomFile;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]

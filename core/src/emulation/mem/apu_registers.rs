@@ -93,4 +93,6 @@ impl MemoryDevice for ApuRegisters {
             _ => 0,
         }
     }
+
+    fn snapshot_all(&self) -> Vec<u8> { vec![self.snapshot(0, 0)] }
 }

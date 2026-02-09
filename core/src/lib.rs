@@ -1,9 +1,7 @@
 #![feature(likely_unlikely)]
 extern crate core;
-
-pub mod cli;
 pub mod emulation;
-pub mod frontend;
+pub mod palettes;
 #[cfg(test)]
 mod tests;
 mod trace;

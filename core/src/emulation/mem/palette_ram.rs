@@ -47,4 +47,10 @@ impl MemoryDevice for PaletteRam {
             }
         }
     }
+
+    fn snapshot_all(&self) -> Vec<u8> {
+        let mut out = self.palettes.snapshot_all();
+        out.extend(self.zero_bits);
+        out
+    }
 }

@@ -128,4 +128,13 @@ impl MemoryDevice for PpuRegisters {
             _ => 0,
         }
     }
+
+    fn snapshot_all(&self) -> Vec<u8> {
+        vec![
+            self.snapshot(0, 0),
+            self.snapshot(2, 0),
+            self.snapshot(4, 0),
+            self.snapshot(7, 0),
+        ]
+    }
 }

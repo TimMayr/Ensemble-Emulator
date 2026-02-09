@@ -1,7 +1,7 @@
 [workspace]
-members = ["core"]
-default-members = ["core"]
-resolver = "2"
+members = ["core", "frontend", "cli"]
+default-members = ["core", "frontend"]
+resolver = "3"
 
 [profile.release]
 strip = true

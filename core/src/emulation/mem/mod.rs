@@ -118,6 +118,18 @@ impl MemoryDevice for Memory {
             Memory::NametableMemory(nametable_memory) => nametable_memory.snapshot(addr, open_bus),
         }
     }
+
+    fn snapshot_all(&self) -> Vec<u8> {
+        match self {
+            Memory::Ram(ram) => ram.snapshot_all(),
+            Memory::Rom(rom) => rom.snapshot_all(),
+            Memory::MirrorMemory(mirror_memory) => mirror_memory.snapshot_all(),
+            Memory::PaletteRam(palette_ram) => palette_ram.snapshot_all(),
+            Memory::PpuRegisters(ppu_registers) => ppu_registers.snapshot_all(),
+            Memory::ApuRegisters(apu_registers) => apu_registers.snapshot_all(),
+            Memory::NametableMemory(nametable_memory) => nametable_memory.snapshot_all(),
+        }
+    }
 }
 
 pub trait MemoryDevice: Debug {
@@ -128,6 +140,7 @@ pub trait MemoryDevice: Debug {
 
     fn is_internal(&self) -> bool { false }
     fn snapshot(&self, addr: u16, open_bus: u8) -> u8 { self.read(addr, open_bus) }
+    fn snapshot_all(&self) -> Vec<u8>;
 }
 
 #[derive(Debug, Clone)]
@@ -162,6 +175,8 @@ impl MemoryDevice for Ram {
     }
 
     fn load(&mut self, data: Box<[u8]>) { self.memory = data }
+
+    fn snapshot_all(&self) -> Vec<u8> { self.memory.to_vec() }
 }
 
 #[derive(Debug, Clone)]
@@ -194,6 +209,8 @@ impl MemoryDevice for Rom {
     }
 
     fn load(&mut self, data: Box<[u8]>) { self.memory = data }
+
+    fn snapshot_all(&self) -> Vec<u8> { self.memory.to_vec() }
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]

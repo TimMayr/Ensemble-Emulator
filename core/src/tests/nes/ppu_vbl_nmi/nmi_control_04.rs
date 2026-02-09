@@ -7,7 +7,8 @@ fn test_04_nmi_control() {
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/04-nmi_control.nes",
     ));
     emu.power();
-    emu.run_until(13523621, false).expect("Error while running test");
+    emu.run_until(13523621, false)
+        .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x604C));
     let cpu_mem = whole_mem[0].as_slice();

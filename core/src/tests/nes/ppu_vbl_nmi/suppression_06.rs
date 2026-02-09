@@ -7,7 +7,8 @@ fn test_06_suppression() {
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/06-suppression.nes",
     ));
     emu.power();
-    emu.run_until(85341973, false).expect("Error while running test");
+    emu.run_until(85341973, false)
+        .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6062));
     let cpu_mem = whole_mem[0].as_slice();

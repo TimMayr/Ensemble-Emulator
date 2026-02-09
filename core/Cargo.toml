@@ -1,29 +1,14 @@
 [package]
-name = "lockstep"
+name = "lockstep-ensemble"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "lockstep"
+name = "lockstep_ensemble"
 path = "src/lib.rs"
-
-[[bin]]
-name = "lockstep"
-path = "src/bin/main.rs"
 
 [dependencies]
 serde = {version = "1.0.228", features = ["derive", "alloc", "rc"]}
 serde_json = { version = "1.0.149" }
 bincode = { version = "2.0.1", features = ["serde"] }
-crossbeam-channel = { version = "0.5.15" }
-rfd = { version = "0.17.2" }
-eframe = { version = "0.33.3", features = ["persistence", "accesskit", "serde"] }
-egui = { version = "0.33.3", features = ["accesskit", "persistence", "rayon"] }
-egui_tiles = { version = "0.14.1", features = ["serde"] }
-clap = { version = "4.5.54", features = ["derive", "cargo", "env", "string", "unicode", "wrap_help"] }
-sha2 = { version = "0.11.0-rc.4" }
-toml = {version = "0.9.11", features = ["fast_hash"]}
-directories = { version = "6.0.0" }
-chrono = { version = "0.4.43", features = ["serde", "now"] }
-image = {version = "0.25.9"}
-mimalloc = {version = "0.1.48"}
+sha2 = {version = "0.11.0-rc.5"}

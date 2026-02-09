@@ -6,13 +6,30 @@ use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, OpenBus, Ram};
-use crate::emulation::messages::{
-    EmulatorFetchable, NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, NametableData,
-    PATTERN_TABLE_SIZE, PaletteData, RgbColor, RgbPalette, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
-    TileData,
-};
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::PpuState;
+use crate::palettes::parse_palette_from_file;
+
+pub const PATTERN_TABLE_WIDTH: usize = 256 + 16; // 16*8*2 + 16px gap
+pub const PATTERN_TABLE_HEIGHT: usize = 128; // 16*8
+
+// Nametable display: 4 nametables of 32x30 tiles (8px each) arranged 2x2
+pub const NAMETABLE_WIDTH: usize = 512; // 32*8*2
+pub const NAMETABLE_HEIGHT: usize = 480; // 30*8*2
+
+pub const SPRITE_COUNT: usize = 64;
+pub const SPRITE_WIDTH: usize = 8;
+
+pub const TOTAL_OUTPUT_WIDTH: usize = 256;
+pub const TOTAL_OUTPUT_HEIGHT: usize = 240;
+
+pub const TILE_COUNT: usize = 512;
+pub const PALETTE_COUNT: usize = 8;
+pub const NAMETABLE_COUNT: usize = 4;
+pub const NAMETABLE_ROWS: usize = 30;
+pub const NAMETABLE_COLS: usize = 32;
+pub const PATTERN_TABLE_SIZE: usize = 256;
+
 pub const VBLANK_NMI_BIT: u8 = 0x80;
 pub const VRAM_ADDR_INC_BIT: u8 = 0x4;
 pub const UPPER_BYTE: u16 = 0xFF00;
@@ -1111,8 +1128,6 @@ impl Ppu {
     }
 
     pub fn from(state: &PpuState, rom: &RomFile) -> Self {
-        use crate::emulation::messages::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
-
         let mut ppu = Self {
             dot_counter: state.cycle_counter,
             ctrl_register: state.ctrl_register,
@@ -1266,4 +1281,90 @@ impl Display for SpriteFifo {
         res += format!("Attribute: {:08b}\n", self.attribute).as_str();
         f.write_str(res.as_str())
     }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct RgbPalette {
+    pub colors: [[RgbColor; 64]; 8],
+}
+
+impl Default for RgbPalette {
+    fn default() -> Self { parse_palette_from_file(None, None) }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum EmulatorFetchable {
+    Palettes(Option<Box<PaletteData>>),
+    Tiles(Option<Box<[TileData; TILE_COUNT]>>),
+    Nametables(Option<Box<NametableData>>),
+}
+
+impl EmulatorFetchable {
+    #[inline]
+    pub fn get_empty(emulator_fetchable: &EmulatorFetchable) -> EmulatorFetchable {
+        match emulator_fetchable {
+            EmulatorFetchable::Palettes(_) => EmulatorFetchable::Palettes(None),
+            EmulatorFetchable::Tiles(_) => EmulatorFetchable::Tiles(None),
+            EmulatorFetchable::Nametables(_) => EmulatorFetchable::Nametables(None),
+        }
+    }
+
+    /// Returns true if this fetchable should only be fetched when the emulator
+    /// notifies that the data has changed (passive), rather than on a regular
+    /// interval (active).
+    ///
+    /// Passive fetches reduce CPU overhead for data that rarely changes.
+    #[inline]
+    pub fn is_passive(&self) -> bool {
+        matches!(
+            self,
+            EmulatorFetchable::Palettes(_) | EmulatorFetchable::Tiles(_)
+        )
+    }
+}
+
+/// RGB color represented as a tuple of (R, G, B) bytes.
+/// This is more memory-efficient than u32 ARGB (3 bytes vs 4 bytes per pixel).
+pub type RgbColor = (u8, u8, u8);
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct PaletteData {
+    pub colors: [[u8; 4]; 8],
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct NametableData {
+    pub tiles: [[u16; NAMETABLE_ROWS * NAMETABLE_COLS]; NAMETABLE_COUNT],
+    pub palettes: [[u8; 64]; NAMETABLE_COUNT],
+}
+
+// #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+// pub struct SpriteViewerData {
+//     pub sprites: [SpriteData; 64],
+//     pub sprite_height: u8,
+//     pub palette: PaletteData,
+// }
+
+// #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+// pub struct SpriteData {
+//     pub tile: u16,
+//     pub tile_2: Option<u16>,
+//     pub y_pos: usize,
+//     pub x_pos: usize,
+//     pub attributes: SpriteAttributes,
+// }
+//
+// #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+// pub struct SpriteAttributes {
+//     pub palette_index: u8,
+//     pub priority: bool,
+//     pub flip_x: bool,
+//     pub flip_y: bool,
+// }
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Default)]
+pub struct TileData {
+    pub address: u16,
+    pub plane_0: u64,
+    pub plane_1: u64,
 }

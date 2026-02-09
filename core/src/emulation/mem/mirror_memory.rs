@@ -32,4 +32,6 @@ impl MemoryDevice for MirrorMemory {
     fn snapshot(&self, addr: u16, open_bus: u8) -> u8 {
         self.base.snapshot(addr & self.mirror_mask, open_bus)
     }
+
+    fn snapshot_all(&self) -> Vec<u8> { self.base.snapshot_all() }
 }

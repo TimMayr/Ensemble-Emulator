@@ -7,6 +7,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::emulation::mem::nametable_memory::{NametableArrangement, NametableMemory};
 use crate::emulation::mem::{Memory, MemoryDevice, Ram, Rom};
@@ -137,7 +138,6 @@ impl RomFile {
     }
 
     pub fn load(path: &String) -> RomFile {
-        use sha2::{Digest, Sha256};
         let path = Path::new(&path);
         let mut file = match File::open(path) {
             Ok(file) => file,

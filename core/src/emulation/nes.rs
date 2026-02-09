@@ -6,11 +6,10 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp};
+use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
-use crate::emulation::mem::Memory;
-use crate::emulation::messages::{RgbColor, RgbPalette};
-use crate::emulation::ppu::Ppu;
+use crate::emulation::ppu::{Ppu, RgbColor, RgbPalette};
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::{CpuState, PpuState, SaveState};
 use crate::trace::TraceLog;
@@ -59,9 +58,15 @@ impl Nes {
         self.ppu_cycle_counter = 0;
     }
 
-    pub fn run(&mut self) -> Result<ExecutionFinishedType, String> { self.run_until(u128::MAX, false) }
+    pub fn run(&mut self) -> Result<ExecutionFinishedType, String> {
+        self.run_until(u128::MAX, false)
+    }
 
-    pub fn run_until(&mut self, last_cycle: u128, stop_at_frame: bool) -> Result<ExecutionFinishedType, String> {
+    pub fn run_until(
+        &mut self,
+        last_cycle: u128,
+        stop_at_frame: bool,
+    ) -> Result<ExecutionFinishedType, String> {
         loop {
             let res = self.step_internal(last_cycle, stop_at_frame);
             match res {
@@ -114,7 +119,7 @@ impl Nes {
 
     #[inline]
     pub fn step_frame(&mut self) -> Result<ExecutionFinishedType, String> {
-        self.run_until(u128::MAX,true)
+        self.run_until(u128::MAX, true)
     }
 }
 
