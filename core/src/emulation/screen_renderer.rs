@@ -13,9 +13,25 @@ pub trait ScreenRenderer: Debug + Serialize + DeserializeOwned {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize, Default)]
 pub struct RgbColor {
-    r: u8,
-    g: u8,
-    b: u8,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+impl RgbColor {
+    pub fn new(r: u8, g: u8, b: u8) -> Self {
+        Self { r, g, b }
+    }
+
+    pub fn to_tuple(self) -> (u8, u8, u8) {
+        (self.r, self.g, self.b)
+    }
+}
+
+impl From<(u8, u8, u8)> for RgbColor {
+    fn from((r, g, b): (u8, u8, u8)) -> Self {
+        Self { r, g, b }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]

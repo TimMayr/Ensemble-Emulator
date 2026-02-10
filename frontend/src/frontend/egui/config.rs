@@ -3,9 +3,50 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use ensemble_lockstep::emulation::rom::RomFile;
-use ensemble_lockstep::emulation::screen_renderer::{ScreenRenderer};
+use ensemble_lockstep::emulation::screen_renderer::RgbPalette;
 use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::messages::SavestateLoadContext;
+
+/// Enumeration of available renderer types.
+/// 
+/// This allows for selecting different rendering strategies while maintaining
+/// serializability for persistence. New renderers can be added as variants.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RendererType {
+    /// Lookup table-based palette renderer (default)
+    /// Uses a precomputed lookup table for fast color conversion
+    #[default]
+    LookupPaletteRenderer,
+    // Future renderers can be added here:
+    // NtscFilterRenderer,
+    // CrtShaderRenderer,
+    // etc.
+}
+
+impl RendererType {
+    /// Returns a list of all available renderer types
+    pub fn all_variants() -> &'static [RendererType] {
+        &[
+            RendererType::LookupPaletteRenderer,
+            // Add new variants here as they are implemented
+        ]
+    }
+    
+    /// Returns a human-readable display name for the renderer
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            RendererType::LookupPaletteRenderer => "Palette Lookup Table",
+        }
+    }
+    
+    /// Returns a description of the renderer
+    pub fn description(&self) -> &'static str {
+        match self {
+            RendererType::LookupPaletteRenderer => 
+                "Fast lookup table-based renderer using the selected palette file",
+        }
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct ViewConfig {
@@ -13,7 +54,10 @@ pub struct ViewConfig {
     pub show_pattern_table: bool,
     pub show_nametable: bool,
     pub required_debug_fetches: HashSet<EmulatorFetchable>,
-    pub renderer: Option<Box<dyn ScreenRenderer>>,
+    /// The currently selected renderer type
+    pub renderer_type: RendererType,
+    /// The RGB palette data used for rendering
+    pub palette_rgb_data: RgbPalette,
     pub debug_active_palette: usize,
 }
 

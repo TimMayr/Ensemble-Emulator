@@ -7,7 +7,8 @@ use ensemble_lockstep::emulation::screen_renderer::{RgbColor, RgbPalette};
 /// Texture storage and management for the emulator display
 #[derive(Eq, PartialEq, Clone)]
 pub struct EmuTextures {
-    pub current_frame: Option<Vec<RgbColor>>,
+    /// Raw frame data as u16 palette indices (from emulator)
+    pub current_frame: Option<Vec<u16>>,
     pub frame_texture: Option<TextureHandle>,
     pub last_debug_request: Instant,
     pub last_frame_request: Instant,
@@ -38,8 +39,8 @@ impl EmuTextures {
     /// Convert RgbColor pixel data to egui ColorImage
     pub fn rgb_to_color_image(data: &[RgbColor], width: usize, height: usize) -> ColorImage {
         let mut pixels = Vec::with_capacity(width * height);
-        for &(r, g, b) in data {
-            pixels.push(egui::Color32::from_rgb(r, g, b));
+        for color in data {
+            pixels.push(egui::Color32::from_rgb(color.r, color.g, color.b));
         }
         ColorImage {
             size: [width, height],
@@ -48,11 +49,27 @@ impl EmuTextures {
         }
     }
 
+    /// Convert raw u16 palette indices to RgbColor using the given palette
+    pub fn indices_to_rgb(indices: &[u16], palette: &RgbPalette) -> Vec<RgbColor> {
+        indices
+            .iter()
+            .map(|&index| {
+                // The index includes emphasis bits in the upper bits
+                // Use emphasis 0 for now (first 64 colors in the palette)
+                let color_index = (index as usize) & 0x3F; // Lower 6 bits are the color
+                let emphasis = ((index as usize) >> 6) & 0x7; // Upper 3 bits are emphasis
+                palette.colors[emphasis][color_index]
+            })
+            .collect()
+    }
+
     /// Update the main emulator display texture
-    pub fn update_emulator_texture(&mut self, ctx: &Context) {
+    /// Takes the palette to convert raw u16 indices to RGB colors
+    pub fn update_emulator_texture(&mut self, ctx: &Context, palette: &RgbPalette) {
         if let Some(ref frame) = self.current_frame {
+            let rgb_frame = Self::indices_to_rgb(frame.as_ref(), palette);
             let image =
-                Self::rgb_to_color_image(frame.as_ref(), TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT);
+                Self::rgb_to_color_image(&rgb_frame, TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT);
 
             let texture = ctx.load_texture(
                 "emulator_output",
@@ -74,7 +91,7 @@ impl EmuTextures {
         rgb_palette_map: &RgbPalette,
         ctx: &Context,
     ) -> TextureHandle {
-        let mut data: [RgbColor; 64] = [(0, 0, 0); 64];
+        let mut data: [RgbColor; 64] = [RgbColor::default(); 64];
 
         for (i, color) in data.iter_mut().enumerate() {
             let bit = 63 - i;

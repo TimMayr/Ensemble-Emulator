@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use ensemble_lockstep::emulation::rom::RomFile;
 use ensemble_lockstep::emulation::savestate::SaveState;
-use ensemble_lockstep::emulation::screen_renderer::{RgbColor, RgbPalette};
 
 /// Message types for communication between the frontend and emulator.
 ///
@@ -28,7 +27,6 @@ pub enum FrontendMessage {
     /// Request to step one frame
     StepFrame,
     RequestDebugData(EmulatorFetchable),
-    SetPalette(Box<RgbPalette>),
     LoadRom(PathBuf),
     WritePpu(u16, u8),
     WriteCpu(u16, u8),
@@ -60,7 +58,8 @@ pub enum ControllerEvent {
 /// Messages sent from the emulator to the frontend
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum EmulatorMessage {
-    FrameReady(Vec<RgbColor>),
+    /// Raw frame data as u16 palette indices (frontend applies RGB palette)
+    FrameReady(Vec<u16>),
     /// Emulator has stopped/quit
     Stopped,
     DebugData(EmulatorFetchable),

@@ -51,25 +51,25 @@ pub fn draw_pattern_table(
                         ui,
                         &mut config.user_config.pattern_edit_color,
                         0,
-                        egui::Color32::from_rgb(palette[0].0, palette[0].1, palette[0].2),
+                        egui::Color32::from_rgb(palette[0].r, palette[0].g, palette[0].b),
                     );
                     color_radio(
                         ui,
                         &mut config.user_config.pattern_edit_color,
                         1,
-                        egui::Color32::from_rgb(palette[1].0, palette[1].1, palette[1].2),
+                        egui::Color32::from_rgb(palette[1].r, palette[1].g, palette[1].b),
                     );
                     color_radio(
                         ui,
                         &mut config.user_config.pattern_edit_color,
                         2,
-                        egui::Color32::from_rgb(palette[2].0, palette[2].1, palette[2].2),
+                        egui::Color32::from_rgb(palette[2].r, palette[2].g, palette[2].b),
                     );
                     color_radio(
                         ui,
                         &mut config.user_config.pattern_edit_color,
                         3,
-                        egui::Color32::from_rgb(palette[3].0, palette[3].1, palette[3].2),
+                        egui::Color32::from_rgb(palette[3].r, palette[3].g, palette[3].b),
                     );
                 });
 
@@ -95,7 +95,7 @@ pub fn draw_pattern_table(
                     painter.rect_filled(
                         pixel_rect,
                         0.0,
-                        egui::Color32::from_rgb(color.0, color.1, color.2),
+                        egui::Color32::from_rgb(color.r, color.g, color.b),
                     );
 
                     // Support both click and drag for editing pixels

@@ -25,7 +25,6 @@ use ensemble_lockstep::emulation::ppu::{
     EmulatorFetchable, PaletteData ,TILE_COUNT, TileData,
 };
 use ensemble_lockstep::emulation::savestate::SaveState;
-use ensemble_lockstep::emulation::screen_renderer::{parse_palette_from_file, RgbPalette};
 use ensemble_lockstep::util::ToBytes;
 
 use crate::channel_emu::ChannelEmulator;
@@ -90,7 +89,6 @@ impl EguiApp {
         from_emulator: Receiver<EmulatorMessage>,
         to_async: Sender<AsyncFrontendMessage>,
         from_async: Receiver<AsyncFrontendMessage>,
-        rgb_palette: RgbPalette,
     ) -> Self {
         // Load configuration from TOML file
         let loaded_config = load_config();
@@ -640,12 +638,13 @@ impl Debug for EguiApp {
 /// Run the egui frontend
 pub fn run(
     rom: Option<PathBuf>,
-    palette: Option<PathBuf>,
+    _palette: Option<PathBuf>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Create the emulator instance
     let console = Nes::default();
 
-    let palette = parse_palette_from_file(palette, None);
+    // Palette is now loaded from persistent config, not command line
+    // The _palette parameter is kept for API compatibility but unused
 
     // Create channel-based emulator wrapper
     let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
@@ -653,7 +652,6 @@ pub fn run(
 
     // Setup Emulator State via messages
     let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(rom));
-    let _ = tx_to_emu.send(FrontendMessage::SetPalette(Box::new(palette)));
 
     // Get the storage path for egui persistence
     let storage_path = get_egui_storage_path();
@@ -689,7 +687,6 @@ pub fn run(
                 rx_from_emu,
                 to_frontend,
                 from_async,
-                palette,
             )))
         }),
     )?;
