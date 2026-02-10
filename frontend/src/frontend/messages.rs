@@ -1,8 +1,7 @@
 use std::path::PathBuf;
 
-use lockstep_ensemble::emulation::ppu::RgbPalette;
-use lockstep_ensemble::emulation::savestate::SaveState;
-
+use ensemble_lockstep::emulation::savestate::SaveState;
+use ensemble_lockstep::emulation::screen_renderer::RgbPalette;
 use crate::frontend::util::SavestateLoadError;
 use crate::messages::ControllerEvent;
 

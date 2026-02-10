@@ -20,13 +20,13 @@ use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
 use egui::{Context, Style, ViewportCommand, Visuals};
-use lockstep_ensemble::emulation::nes::Nes;
-use lockstep_ensemble::emulation::ppu::{
-    EmulatorFetchable, PaletteData, RgbPalette, TILE_COUNT, TileData,
+use ensemble_lockstep::emulation::nes::Nes;
+use ensemble_lockstep::emulation::ppu::{
+    EmulatorFetchable, PaletteData ,TILE_COUNT, TileData,
 };
-use lockstep_ensemble::emulation::savestate::SaveState;
-use lockstep_ensemble::palettes::parse_palette_from_file;
-use lockstep_ensemble::util::ToBytes;
+use ensemble_lockstep::emulation::savestate::SaveState;
+use ensemble_lockstep::emulation::screen_renderer::{parse_palette_from_file, RgbPalette};
+use ensemble_lockstep::util::ToBytes;
 
 use crate::channel_emu::ChannelEmulator;
 use crate::frontend::egui::config::{AppConfig, AppSpeed};
@@ -108,7 +108,6 @@ impl EguiApp {
         if let Some(ref persistent_config) = loaded_config {
             config = persistent_config.into();
         }
-        config.view_config.palette_rgb_data = rgb_palette;
 
         Self {
             channel_emu,

@@ -1,19 +1,19 @@
 use std::collections::HashSet;
+use std::fmt::Debug;
 use std::path::PathBuf;
-
-use lockstep_ensemble::emulation::ppu::{EmulatorFetchable, RgbPalette};
-use lockstep_ensemble::emulation::rom::RomFile;
-
+use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
+use ensemble_lockstep::emulation::rom::RomFile;
+use ensemble_lockstep::emulation::screen_renderer::{ScreenRenderer};
 use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::messages::SavestateLoadContext;
 
-#[derive(Debug, Clone, Eq, PartialEq, Default)]
+#[derive(Debug, Default)]
 pub struct ViewConfig {
     pub show_palette: bool,
     pub show_pattern_table: bool,
     pub show_nametable: bool,
     pub required_debug_fetches: HashSet<EmulatorFetchable>,
-    pub palette_rgb_data: RgbPalette,
+    pub renderer: Option<Box<dyn ScreenRenderer>>,
     pub debug_active_palette: usize,
 }
 
@@ -21,7 +21,7 @@ pub struct ViewConfig {
 ///
 /// Note: `Eq` and `PartialEq` are not derived because `PendingDialogs` contains
 /// `SavestateLoadContext` which includes `SaveState`, which is not trivially comparable.
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct AppConfig {
     pub view_config: ViewConfig,
     pub speed_config: SpeedConfig,
@@ -116,7 +116,7 @@ impl AppSpeed {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 pub enum DebugSpeed {
     #[default]
-    Default,
+    DefaultSpeed,
     InStep,
     Custom,
 }
@@ -124,7 +124,7 @@ pub enum DebugSpeed {
 impl DebugSpeed {
     pub fn get_fps(&self, speed_config: &SpeedConfig) -> f32 {
         match self {
-            DebugSpeed::Default => 10.0,
+            DebugSpeed::DefaultSpeed => 10.0,
             DebugSpeed::InStep => speed_config.app_speed.get_fps(speed_config),
             DebugSpeed::Custom => {
                 if speed_config.debug_custom_speed == 0 {

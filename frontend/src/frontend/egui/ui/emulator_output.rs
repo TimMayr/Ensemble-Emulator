@@ -1,6 +1,6 @@
 //! Emulator output pane rendering
 
-use lockstep_ensemble::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+use ensemble_lockstep::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 
 use crate::frontend::egui::textures::EmuTextures;
 

@@ -4,9 +4,9 @@
 //! frame updates, debug data, and savestate operations.
 
 use egui::{Context, ViewportCommand};
-use lockstep_ensemble::emulation::ppu::{EmulatorFetchable, PaletteData, TILE_COUNT, TileData};
-use lockstep_ensemble::emulation::savestate::SaveState;
-use lockstep_ensemble::util::ToBytes;
+use ensemble_lockstep::emulation::ppu::{EmulatorFetchable, PaletteData, TILE_COUNT, TileData};
+use ensemble_lockstep::emulation::savestate::SaveState;
+use ensemble_lockstep::util::ToBytes;
 
 use crate::frontend::egui_frontend::EguiApp;
 use crate::frontend::persistence::{get_data_file_path, write_file_async};

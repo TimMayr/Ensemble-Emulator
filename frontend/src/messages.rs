@@ -1,8 +1,8 @@
 use std::path::PathBuf;
-
-use lockstep_ensemble::emulation::ppu::{EmulatorFetchable, RgbColor, RgbPalette};
-use lockstep_ensemble::emulation::rom::RomFile;
-use lockstep_ensemble::emulation::savestate::SaveState;
+use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
+use ensemble_lockstep::emulation::rom::RomFile;
+use ensemble_lockstep::emulation::savestate::SaveState;
+use ensemble_lockstep::emulation::screen_renderer::{RgbColor, RgbPalette};
 
 /// Message types for communication between the frontend and emulator.
 ///

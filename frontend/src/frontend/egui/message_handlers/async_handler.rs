@@ -6,9 +6,9 @@
 use std::path::Path;
 
 use egui::Context;
-use lockstep_ensemble::emulation::ppu::{EmulatorFetchable, RgbPalette};
-use lockstep_ensemble::emulation::savestate;
-
+use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
+use ensemble_lockstep::emulation::savestate;
+use ensemble_lockstep::emulation::screen_renderer::RgbPalette;
 use crate::frontend::egui::config::{
     ChecksumMismatchDialogState, ErrorDialogState, MatchingRomDialogState, RomSelectionDialogState,
 };

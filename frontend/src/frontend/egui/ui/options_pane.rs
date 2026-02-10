@@ -44,7 +44,7 @@ fn render_speed_settings(ui: &mut egui::Ui, config: &mut AppConfig) {
             .on_hover_text("Sets the speed at which the debug views update");
         ui.radio_value(
             &mut config.speed_config.debug_speed,
-            DebugSpeed::Default,
+            DebugSpeed::DefaultSpeed,
             "10fps",
         );
         ui.radio_value(

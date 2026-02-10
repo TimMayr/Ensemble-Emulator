@@ -1,10 +1,10 @@
 [package]
-name = "choreo-ensemble"
+name = "ensemble-choreo"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "choreo_ensemble"
+name = "ensemble_choreo"
 path = "src/lib.rs"
 
 [[bin]]
@@ -20,5 +20,5 @@ clap = { version = "4.5.54", features = ["derive", "cargo", "env", "string", "un
 toml = {version = "0.9.11", features = ["fast_hash"]}
 image = {version = "0.25.9"}
 
-lockstep-ensemble = { path = "../core" }
+ensemble-lockstep = { path = "../core" }
 

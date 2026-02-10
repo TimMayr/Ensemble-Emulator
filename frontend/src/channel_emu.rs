@@ -2,9 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 use crossbeam_channel::{Receiver, Sender};
-use lockstep_ensemble::emulation::nes::{ExecutionFinishedType, Nes};
-use lockstep_ensemble::emulation::ppu::{EmulatorFetchable, PaletteData};
-use lockstep_ensemble::util::Hashable;
+use ensemble_lockstep::emulation::nes::{ExecutionFinishedType, Nes};
+use ensemble_lockstep::emulation::ppu::{EmulatorFetchable, PaletteData};
+use ensemble_lockstep::util::Hashable;
 
 use crate::messages::{ControllerEvent, EmulatorMessage, FrontendMessage, SaveType};
 

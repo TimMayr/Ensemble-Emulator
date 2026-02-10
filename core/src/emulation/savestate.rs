@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::emulation::cpu::{Cpu, INTERNAL_RAM_SIZE, MicroOp};
 use crate::emulation::mem::OpenBus;
-use crate::emulation::ppu::{Ppu, RgbColor, VRAM_SIZE};
+use crate::emulation::ppu::{Ppu, VRAM_SIZE};
 use crate::emulation::rom::RomFile;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
@@ -109,9 +109,6 @@ pub struct PpuState {
     pub fine_x_scroll: u8,
     pub even_frame: bool,
     pub reset_signal: bool,
-    // pixel_buffer is skipped - it's just the framebuffer, regenerated every frame
-    #[serde(skip)]
-    pub pixel_buffer: Vec<RgbColor>,
     pub dot: u16,
     pub scanline: u16,
     pub bg_next_tile_id: u8,
@@ -181,8 +178,6 @@ impl From<&Ppu> for PpuState {
             fine_x_scroll: ppu.fine_x_scroll,
             even_frame: ppu.even_frame,
             reset_signal: ppu.reset_signal,
-            // pixel_buffer is not saved - it will be regenerated
-            pixel_buffer: Vec::new(),
             dot: ppu.dot,
             scanline: ppu.scanline,
             palette_ram: ppu.palette_ram.get_memory_debug(None),

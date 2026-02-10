@@ -1,10 +1,10 @@
 [package]
-name = "ballroom-ensemble"
+name = "ensemble-ballroom"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "ballroom_ensemble"
+name = "ensemble_ballroom"
 path = "src/lib.rs"
 
 [[bin]]
@@ -25,4 +25,5 @@ sha2 = { version = "0.11.0-rc.5" }
 serde = { version = "1.0.228", features = ["derive", "alloc", "rc"] }
 toml = { version = "0.9.11", features = ["fast_hash"] }
 
-lockstep-ensemble = { path = "../core" }
+ensemble-lockstep = { path = "../core" }
+ensemble-gown = { path = "../renderer" }

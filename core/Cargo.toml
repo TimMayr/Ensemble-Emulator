@@ -1,10 +1,10 @@
 [package]
-name = "lockstep-ensemble"
+name = "ensemble-lockstep"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "lockstep_ensemble"
+name = "ensemble_lockstep"
 path = "src/lib.rs"
 
 [dependencies]

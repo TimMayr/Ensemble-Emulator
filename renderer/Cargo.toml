@@ -1,0 +1,13 @@
+[package]
+name = "ensemble-gown"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "ensemble_gown"
+path = "src/lib.rs"
+
+[dependencies]
+ensemble-lockstep = { path = "../core" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde-big-array = {version = "0.5.1"}

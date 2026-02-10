@@ -1,7 +1,7 @@
 use crossbeam_channel::Sender;
-use lockstep_ensemble::emulation::ppu::PALETTE_RAM_START_ADDRESS;
-use lockstep_ensemble::palettes::parse_palette_from_file;
-use lockstep_ensemble::util::Hashable;
+use ensemble_lockstep::emulation::ppu::PALETTE_RAM_START_ADDRESS;
+use ensemble_lockstep::emulation::screen_renderer::parse_palette_from_file;
+use ensemble_lockstep::util::Hashable;
 
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;

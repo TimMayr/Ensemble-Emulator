@@ -1,6 +1,5 @@
 use crate::emulation::cpu::UPPER_BYTE;
 use crate::emulation::mem::{Memory, MemoryDevice};
-use crate::emulation::ppu::RgbPalette;
 use crate::emulation::savestate::SaveState;
 
 #[inline(always)]
@@ -29,16 +28,6 @@ pub trait ToBytes {
     fn to_bytes(&self, format: Option<String>) -> Vec<u8>;
 }
 
-impl ToBytes for RgbPalette {
-    fn to_bytes(&self, _: Option<String>) -> Vec<u8> {
-        self.colors
-            .iter()
-            .flatten()
-            .flat_map(|&(r, g, b)| [r, g, b])
-            .collect()
-    }
-}
-
 impl ToBytes for SaveState {
     fn to_bytes(&self, format: Option<String>) -> Vec<u8> {
         if let Some(format) = format {
@@ -51,16 +40,6 @@ impl ToBytes for SaveState {
             bincode::serde::encode_to_vec(self, bincode::config::standard())
                 .expect("Failed to serialize SaveState")
         }
-    }
-}
-
-impl Hashable for RgbPalette {
-    /// Compute a fast hash of the given data for change detection.
-    /// Uses FNV-1a algorithm which is fast and has good distribution.
-    #[inline]
-    fn hash(&self) -> u64 {
-        let bytes = self.to_bytes(None);
-        compute_hash(&bytes[..])
     }
 }
 

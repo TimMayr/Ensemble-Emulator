@@ -8,7 +8,6 @@ use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, OpenBus, Ram};
 use crate::emulation::rom::{RomFile, RomFileConvertible};
 use crate::emulation::savestate::PpuState;
-use crate::palettes::parse_palette_from_file;
 
 pub const PATTERN_TABLE_WIDTH: usize = 256 + 16; // 16*8*2 + 16px gap
 pub const PATTERN_TABLE_HEIGHT: usize = 128; // 16*8
@@ -93,7 +92,7 @@ pub struct Ppu {
     pub fine_x_scroll: u8,
     pub even_frame: bool,
     pub reset_signal: bool,
-    pub pixel_buffer: Vec<RgbColor>,
+    pub pixel_buffer: Vec<u16>,
     pub vbl_reset_counter: Cell<u8>,
     pub vbl_clear_scheduled: Cell<Option<u8>>,
     pub scanline: u16,
@@ -122,7 +121,6 @@ pub struct Ppu {
     pub current_sprite_tile_id: u8,
     pub oam_fetch: u8,
     pub log: String,
-    pub rgb_palette: RgbPalette,
 }
 
 impl Default for Ppu {
@@ -151,7 +149,7 @@ impl Ppu {
             t_register: 0,
             even_frame: false,
             reset_signal: false,
-            pixel_buffer: vec![(0, 0, 0); TOTAL_OUTPUT_HEIGHT * TOTAL_OUTPUT_WIDTH],
+            pixel_buffer: vec![0; TOTAL_OUTPUT_HEIGHT * TOTAL_OUTPUT_WIDTH],
             vbl_reset_counter: 0.into(),
             vbl_clear_scheduled: None.into(),
             scanline: 0,
@@ -177,7 +175,6 @@ impl Ppu {
             current_sprite_tile_id: 0,
             oam_fetch: 0,
             log: "".to_string(),
-            rgb_palette: Default::default(),
         }
     }
 
@@ -380,7 +377,7 @@ impl Ppu {
 
                     self.pixel_buffer
                         [self.scanline as usize * SCREEN_RENDER_WIDTH + (self.dot - 1) as usize] =
-                        self.rgb_palette.colors[0][pixel_color as usize];
+                        (pixel_color as u16) | ((self.get_emph_bits() as u16) << 6);
                 }
 
                 self.shift_bg_shifters();
@@ -453,6 +450,9 @@ impl Ppu {
 
         is_frame_end || res
     }
+
+    #[inline]
+    pub fn get_emph_bits(&self) -> u8 { self.get_mask_register() >> 5 }
 
     #[inline]
     pub fn sprite_fetch(&mut self) {
@@ -1068,7 +1068,7 @@ impl Ppu {
     pub fn reset(&mut self) { self.reset_signal = false; }
 
     #[inline]
-    pub fn get_pixel_buffer(&self) -> &Vec<RgbColor> { &self.pixel_buffer }
+    pub fn get_pixel_buffer(&self) -> &Vec<u16> { &self.pixel_buffer }
 
     pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
         self.memory.get_memory_debug(range)
@@ -1149,7 +1149,7 @@ impl Ppu {
             even_frame: state.even_frame,
             reset_signal: state.reset_signal,
             // Initialize pixel buffer fresh - it's not saved in savestate
-            pixel_buffer: vec![(0, 0, 0); TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT],
+            pixel_buffer: vec![0; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT],
             vbl_reset_counter: Cell::new(state.vbl_reset_counter),
             vbl_clear_scheduled: Cell::new(state.vbl_clear_scheduled),
             scanline: state.scanline,
@@ -1175,7 +1175,6 @@ impl Ppu {
             current_sprite_y: 0,
             sprite_fifo: [SpriteFifo::default(); 8],
             log: "".to_string(),
-            rgb_palette: Default::default(),
         };
 
         // Load ROM first to set up memory mapping (CHR ROM and nametables)
@@ -1283,14 +1282,14 @@ impl Display for SpriteFifo {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct RgbPalette {
-    pub colors: [[RgbColor; 64]; 8],
-}
-
-impl Default for RgbPalette {
-    fn default() -> Self { parse_palette_from_file(None, None) }
-}
+// #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+// pub struct RgbPalette {
+//     pub colors: [[RgbColor; 64]; 8],
+// }
+//
+// impl Default for RgbPalette {
+//     fn default() -> Self { parse_palette_from_file(None, None) }
+// }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum EmulatorFetchable {
@@ -1322,10 +1321,6 @@ impl EmulatorFetchable {
         )
     }
 }
-
-/// RGB color represented as a tuple of (R, G, B) bytes.
-/// This is more memory-efficient than u32 ARGB (3 bytes vs 4 bytes per pixel).
-pub type RgbColor = (u8, u8, u8);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct PaletteData {

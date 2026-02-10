@@ -13,9 +13,9 @@
 use std::io::{Read, Write};
 use std::path::PathBuf;
 
-use lockstep_ensemble::emulation::nes::{MASTER_CYCLES_PER_FRAME, Nes};
-use lockstep_ensemble::emulation::ppu::RgbColor;
-use lockstep_ensemble::emulation::savestate::{SaveState, try_load_state};
+use ensemble_lockstep::emulation::nes::{MASTER_CYCLES_PER_FRAME, Nes};
+use ensemble_lockstep::emulation::ppu::RgbColor;
+use ensemble_lockstep::emulation::savestate::{SaveState, try_load_state};
 
 use crate::cli::args::parse_hex_u8;
 // =============================================================================

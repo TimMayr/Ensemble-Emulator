@@ -3,12 +3,11 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use crossbeam_channel::Sender;
-use lockstep_ensemble::emulation::savestate::{self};
-use lockstep_ensemble::palettes::parse_palette_from_file;
-use lockstep_ensemble::util::ToBytes;
+use ensemble_lockstep::emulation::savestate::{self};
+use ensemble_lockstep::util::ToBytes;
 use rfd::FileDialog;
 use sha2::{Digest, Sha256};
-
+use ensemble_lockstep::emulation::screen_renderer::parse_palette_from_file;
 use crate::frontend::messages::{AsyncFrontendMessage, SavestateLoadContext};
 
 /// Enum to represent errors that can occur during savestate loading UI flow

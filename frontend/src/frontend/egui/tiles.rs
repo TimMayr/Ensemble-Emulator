@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crossbeam_channel::Sender;
 use egui::WidgetText;
 use egui_tiles::{Behavior, SimplificationOptions, TileId, Tiles, UiResponse};
-use lockstep_ensemble::emulation::ppu::EmulatorFetchable;
+use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use serde::{Deserialize, Serialize};
 
 use crate::channel_emu::{ChannelEmulator, FETCH_DEPS};

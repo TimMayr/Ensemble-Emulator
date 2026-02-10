@@ -11,7 +11,7 @@ const EXIT_GENERAL_ERROR: u8 = 1;
 
 use std::path::PathBuf;
 
-use ballroom_ensemble::frontend::egui_frontend;
+use ensemble_ballroom::frontend::egui_frontend;
 use clap::{Parser, ValueEnum};
 
 #[derive(Parser, Debug, Clone, Default)]

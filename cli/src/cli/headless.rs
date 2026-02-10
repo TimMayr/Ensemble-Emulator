@@ -10,9 +10,9 @@
 use std::path::Path;
 use std::time::Instant;
 
-use lockstep_ensemble::emulation::nes::Nes;
-use lockstep_ensemble::emulation::ppu::{RgbColor, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
-use lockstep_ensemble::emulation::rom::RomFile;
+use ensemble_lockstep::emulation::nes::Nes;
+use ensemble_lockstep::emulation::ppu::{RgbColor, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+use ensemble_lockstep::emulation::rom::RomFile;
 
 use crate::cli::{
     CliArgs, ExecutionConfig, ExecutionEngine, ExecutionResult, FpsConfig, MemoryDump, MemoryInit,

@@ -7,7 +7,7 @@
 
 use std::process::ExitCode;
 
-use choreo_ensemble::cli::{parse_args, run_headless, validate_args};
+use ensemble_choreo::cli::{parse_args, run_headless, validate_args};
 // =============================================================================
 // Exit Codes (as documented in CLI_INTERFACE.md)
 // =============================================================================

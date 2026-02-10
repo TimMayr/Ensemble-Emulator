@@ -552,24 +552,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ballroom-ensemble"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "clap",
- "crossbeam-channel",
- "directories",
- "eframe",
- "egui",
- "egui_tiles",
- "lockstep-ensemble",
- "rfd",
- "serde",
- "sha2",
- "toml",
-]
-
-[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -818,19 +800,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ced0551234e87afee12411d535648dd89d2e7f34c78b753395567aff3d447ff"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "choreo-ensemble"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "clap",
- "image",
- "lockstep-ensemble",
- "serde",
- "serde_json",
- "toml",
 ]
 
 [[package]]
@@ -1344,6 +1313,57 @@ name = "endi"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
+
+[[package]]
+name = "ensemble-ballroom"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "crossbeam-channel",
+ "directories",
+ "eframe",
+ "egui",
+ "egui_tiles",
+ "ensemble-gown",
+ "ensemble-lockstep",
+ "rfd",
+ "serde",
+ "sha2",
+ "toml",
+]
+
+[[package]]
+name = "ensemble-choreo"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "clap",
+ "ensemble-lockstep",
+ "image",
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
+name = "ensemble-gown"
+version = "0.1.0"
+dependencies = [
+ "ensemble-lockstep",
+ "serde",
+ "serde-big-array",
+]
+
+[[package]]
+name = "ensemble-lockstep"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "serde",
+ "serde_json",
+ "sha2",
+]
 
 [[package]]
 name = "enumflags2"
@@ -2238,16 +2258,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965"
 dependencies = [
  "scopeguard",
-]
-
-[[package]]
-name = "lockstep-ensemble"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "serde",
- "serde_json",
- "sha2",
 ]
 
 [[package]]
@@ -3377,6 +3387,15 @@ checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
 dependencies = [
  "serde_core",
  "serde_derive",
+]
+
+[[package]]
+name = "serde-big-array"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

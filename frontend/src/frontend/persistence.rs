@@ -15,10 +15,9 @@ use std::{fs, thread};
 
 use crossbeam_channel::{Receiver, bounded};
 use directories::ProjectDirs;
-use lockstep_ensemble::emulation::ppu::EmulatorFetchable;
-use lockstep_ensemble::palettes::parse_palette_from_file;
+use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use serde::{Deserialize, Serialize};
-
+use ensemble_lockstep::emulation::screen_renderer::{parse_palette_from_file, ScreenRenderer};
 use crate::frontend::egui::config::{
     AppConfig, AppSpeed, ConsoleConfig, DebugSpeed, SpeedConfig, UserConfig, ViewConfig,
 };
@@ -467,7 +466,7 @@ pub enum PersistentDebugSpeed {
 impl From<DebugSpeed> for PersistentDebugSpeed {
     fn from(speed: DebugSpeed) -> Self {
         match speed {
-            DebugSpeed::Default => PersistentDebugSpeed::Default,
+            DebugSpeed::DefaultSpeed => PersistentDebugSpeed::Default,
             DebugSpeed::InStep => PersistentDebugSpeed::InStep,
             DebugSpeed::Custom => PersistentDebugSpeed::Custom,
         }
@@ -477,7 +476,7 @@ impl From<DebugSpeed> for PersistentDebugSpeed {
 impl From<PersistentDebugSpeed> for DebugSpeed {
     fn from(speed: PersistentDebugSpeed) -> Self {
         match speed {
-            PersistentDebugSpeed::Default => DebugSpeed::Default,
+            PersistentDebugSpeed::Default => DebugSpeed::DefaultSpeed,
             PersistentDebugSpeed::InStep => DebugSpeed::InStep,
             PersistentDebugSpeed::Custom => DebugSpeed::Custom,
         }

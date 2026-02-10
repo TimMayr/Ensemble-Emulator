@@ -1,10 +1,8 @@
 use std::time::Instant;
 
 use egui::{ColorImage, Context, TextureHandle, TextureOptions};
-use lockstep_ensemble::emulation::ppu::{
-    NametableData, PALETTE_COUNT, PaletteData, RgbColor, RgbPalette, TILE_COUNT, TILE_SIZE,
-    TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData,
-};
+use ensemble_lockstep::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData, TILE_SIZE, NametableData, TILE_COUNT, PaletteData, PALETTE_COUNT};
+use ensemble_lockstep::emulation::screen_renderer::{RgbColor, RgbPalette};
 
 /// Texture storage and management for the emulator display
 #[derive(Eq, PartialEq, Clone)]
