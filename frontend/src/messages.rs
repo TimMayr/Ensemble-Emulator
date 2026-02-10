@@ -13,22 +13,6 @@ use lockstep_ensemble::emulation::savestate::SaveState;
 ///
 /// The message-based architecture provides clean separation between the frontend
 /// and emulation logic, enabling future threading and remote control features.
-// Pattern table display: 2 tables of 16x16 tiles (8px each) with 16px gap
-/// Convert an ARGB u32 color to an RGB tuple.
-#[inline]
-pub const fn argb_to_rgb(argb: u32) -> RgbColor {
-    (
-        ((argb >> 16) & 0xFF) as u8, // R
-        ((argb >> 8) & 0xFF) as u8,  // G
-        (argb & 0xFF) as u8,         // B
-    )
-}
-
-/// Convert an RGB tuple to an ARGB u32 color (with alpha = 0xFF).
-#[inline]
-pub const fn rgb_to_argb(rgb: RgbColor) -> u32 {
-    0xFF00_0000 | ((rgb.0 as u32) << 16) | ((rgb.1 as u32) << 8) | (rgb.2 as u32)
-}
 
 /// Messages sent from the frontend to the emulator
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]

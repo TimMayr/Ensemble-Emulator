@@ -16,9 +16,6 @@ use crate::cli::{CliArgs, OutputFormat, SavestateFormat, VideoExportMode, VideoF
 /// Default video FPS string value (1x multiplier)
 pub const DEFAULT_VIDEO_FPS: &str = "1x";
 
-/// NES NTSC framerate: 39375000 / 655171 ≈ 60.098814
-pub const NES_NTSC_FPS: f64 = 39375000.0 / 655171.0;
-
 /// TOML configuration file structure
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]

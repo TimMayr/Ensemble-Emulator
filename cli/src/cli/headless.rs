@@ -11,7 +11,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use lockstep_ensemble::emulation::nes::Nes;
-use lockstep_ensemble::emulation::ppu::RgbColor;
+use lockstep_ensemble::emulation::ppu::{RgbColor, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use lockstep_ensemble::emulation::rom::RomFile;
 
 use crate::cli::{
@@ -20,12 +20,18 @@ use crate::cli::{
     VideoFormat, VideoResolution, apply_memory_init, apply_memory_init_config, is_ffmpeg_available,
     parse_memory_range,
 };
+
 // =============================================================================
 // NES Constants
 // =============================================================================
 
-pub const NES_WIDTH: u32 = 256;
-pub const NES_HEIGHT: u32 = 240;
+/// NES output width in pixels (256). Re-exported from core as u32 for image library APIs
+/// which require u32 dimensions rather than usize.
+pub const NES_WIDTH: u32 = TOTAL_OUTPUT_WIDTH as u32;
+
+/// NES output height in pixels (240). Re-exported from core as u32 for image library APIs
+/// which require u32 dimensions rather than usize.
+pub const NES_HEIGHT: u32 = TOTAL_OUTPUT_HEIGHT as u32;
 
 // =============================================================================
 // Main Headless Entry Point

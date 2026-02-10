@@ -1,41 +1,7 @@
-use std::fs::{File, OpenOptions};
-use std::io::{Seek, SeekFrom, Write};
-
 use crate::emulation::cpu::UPPER_BYTE;
 use crate::emulation::mem::{Memory, MemoryDevice};
 use crate::emulation::ppu::RgbPalette;
 use crate::emulation::savestate::SaveState;
-
-pub fn write_at_offset(path: &str, value: u8, offset: u16) -> std::io::Result<()> {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(path)?;
-
-    // Seek to 0xFFFC (65532 bytes)
-    file.seek(SeekFrom::Start(offset as u64))?;
-
-    // Write the byte
-    file.write_all(&[value])?;
-
-    Ok(())
-}
-
-pub fn write_to_file(path: &str, data: Vec<u8>) -> Result<(), String> {
-    let file = File::create(path);
-
-    match file {
-        Ok(mut file) => {
-            let res = file.write_all(&data);
-            match res {
-                Ok(_) => Ok(()),
-                Err(e) => Err(format!("Error writing to file: {}\n\t{}", path, e)),
-            }
-        }
-        Err(e) => Err(format!("Error creating file: {}\n\t{}", path, e)),
-    }
-}
 
 #[inline(always)]
 pub fn crosses_page_boundary_u8(base: u16, offset: u8) -> bool {
