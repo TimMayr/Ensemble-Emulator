@@ -49,15 +49,21 @@ impl EmuTextures {
         }
     }
 
-    /// Convert raw u16 palette indices to RgbColor using the given palette
+    /// Convert raw u16 palette indices to RgbColor using the given palette.
+    /// 
+    /// # Index Format
+    /// The NES PPU outputs a 9-bit value for each pixel:
+    /// - Bits 0-5 (6 bits): Color index (0-63 from the NES palette)
+    /// - Bits 6-8 (3 bits): Emphasis bits (R, G, B emphasis from PPU mask register)
+    /// - Bits 9-15: Unused (ignored by this function)
+    /// 
+    /// The palette contains 8 variations (one per emphasis combination) of 64 colors each.
     pub fn indices_to_rgb(indices: &[u16], palette: &RgbPalette) -> Vec<RgbColor> {
         indices
             .iter()
             .map(|&index| {
-                // The index includes emphasis bits in the upper bits
-                // Use emphasis 0 for now (first 64 colors in the palette)
-                let color_index = (index as usize) & 0x3F; // Lower 6 bits are the color
-                let emphasis = ((index as usize) >> 6) & 0x7; // Upper 3 bits are emphasis
+                let color_index = (index as usize) & 0x3F; // Bits 0-5: color (0-63)
+                let emphasis = ((index as usize) >> 6) & 0x7; // Bits 6-8: emphasis (0-7)
                 palette.colors[emphasis][color_index]
             })
             .collect()

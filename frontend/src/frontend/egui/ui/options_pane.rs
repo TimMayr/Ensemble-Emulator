@@ -19,13 +19,12 @@ fn render_renderer_settings(ui: &mut egui::Ui, config: &mut AppConfig) {
         // Show all available renderer types
         for renderer_type in RendererType::all_variants() {
             let is_selected = config.view_config.renderer_type == *renderer_type;
-            if ui.selectable_label(is_selected, renderer_type.display_name()).clicked() {
+            let response = ui.selectable_label(is_selected, renderer_type.display_name());
+            if response.clicked() {
                 config.view_config.renderer_type = *renderer_type;
             }
             // Show description on hover
-            if ui.rect_contains_pointer(ui.min_rect()) {
-                ui.label(renderer_type.description());
-            }
+            response.on_hover_text(renderer_type.description());
         }
         
         ui.separator();

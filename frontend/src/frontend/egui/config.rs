@@ -11,6 +11,85 @@ use crate::frontend::messages::SavestateLoadContext;
 /// 
 /// This allows for selecting different rendering strategies while maintaining
 /// serializability for persistence. New renderers can be added as variants.
+/// 
+/// # Feasibility Analysis: Dynamic Renderer Registration
+/// 
+/// The user requested an analysis of dynamically registering renderers at runtime.
+/// Here are the findings:
+/// 
+/// ## Current Approach (Static Enum)
+/// 
+/// **Pros:**
+/// - Simple and type-safe
+/// - Easy serialization/deserialization (TOML persistence)
+/// - Compile-time guarantees about renderer existence
+/// - Zero runtime overhead
+/// - Settings for each renderer can be strongly typed
+/// 
+/// **Cons:**
+/// - Adding new renderers requires modifying the enum
+/// - Not extensible by plugins/external code
+/// 
+/// ## Dynamic Registration Approaches
+/// 
+/// ### Option 1: Trait Objects with Type Registry
+/// 
+/// Create a trait like:
+/// ```ignore
+/// trait Renderer: Send + Sync {
+///     fn name(&self) -> &str;
+///     fn render(&self, buffer: &[u16], palette: &RgbPalette) -> Vec<RgbColor>;
+///     fn settings_ui(&mut self, ui: &mut egui::Ui);
+///     fn serialize_settings(&self) -> String;  // JSON/TOML settings
+///     fn deserialize_settings(&mut self, data: &str);
+/// }
+/// ```
+/// 
+/// **Challenges:**
+/// - Type erasure loses compile-time guarantees
+/// - Persistence is complex (need to store renderer name + settings blob)
+/// - Settings UI requires careful design to work with trait objects
+/// 
+/// ### Option 2: Plugin System with Dynamic Libraries
+/// 
+/// Allow loading renderers from `.so`/`.dll` files at runtime.
+/// 
+/// **Challenges:**
+/// - Platform-specific (different on Windows/Linux/macOS)
+/// - ABI compatibility issues
+/// - Security concerns (loading untrusted code)
+/// - Significant implementation complexity
+/// - Not recommended for this use case
+/// 
+/// ### Option 3: Hybrid Approach (Recommended for Future)
+/// 
+/// Keep the enum for built-in renderers, but add a `Custom(Box<dyn Renderer>)`
+/// variant that can hold dynamically created renderers:
+/// 
+/// ```ignore
+/// enum RendererType {
+///     LookupPaletteRenderer,
+///     NtscFilter,
+///     CrtShader,
+///     Custom { name: String, settings: RendererSettings },
+/// }
+/// ```
+/// 
+/// This provides:
+/// - Type safety for built-in renderers
+/// - Extensibility for future custom renderers
+/// - Reasonable persistence (name + serialized settings)
+/// 
+/// ## Recommendation
+/// 
+/// For now, the static enum approach is best because:
+/// 1. There's only one renderer currently
+/// 2. New renderers will likely be added by the main developers
+/// 3. The overhead of a full plugin system is not justified
+/// 4. Settings persistence is straightforward with enums
+/// 
+/// When more renderers are added, consider the hybrid approach (Option 3)
+/// if external extensibility becomes a requirement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RendererType {
     /// Lookup table-based palette renderer (default)
