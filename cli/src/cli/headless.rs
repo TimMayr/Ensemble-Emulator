@@ -22,10 +22,15 @@ use crate::cli::{
 };
 
 // =============================================================================
-// NES Constants (re-exported from core for convenience with u32 type)
+// NES Constants
 // =============================================================================
 
+/// NES output width in pixels (256). Re-exported from core as u32 for image library APIs
+/// which require u32 dimensions rather than usize.
 pub const NES_WIDTH: u32 = TOTAL_OUTPUT_WIDTH as u32;
+
+/// NES output height in pixels (240). Re-exported from core as u32 for image library APIs
+/// which require u32 dimensions rather than usize.
 pub const NES_HEIGHT: u32 = TOTAL_OUTPUT_HEIGHT as u32;
 
 // =============================================================================
