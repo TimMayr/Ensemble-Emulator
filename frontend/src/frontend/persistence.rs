@@ -19,7 +19,7 @@ use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use serde::{Deserialize, Serialize};
 use ensemble_lockstep::emulation::screen_renderer::parse_palette_from_file;
 use crate::frontend::egui::config::{
-    AppConfig, AppSpeed, ConsoleConfig, DebugSpeed, RendererType, SpeedConfig, UserConfig, ViewConfig,
+    AppConfig, AppSpeed, ConsoleConfig, DebugSpeed, SpeedConfig, UserConfig, ViewConfig,
 };
 use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::util::append_to_filename;
@@ -306,30 +306,6 @@ impl From<&PersistentConfig> for AppConfig {
     }
 }
 
-/// Serializable renderer type for persistence
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
-pub enum PersistentRendererType {
-    #[default]
-    LookupPaletteRenderer,
-    // Future renderers can be added here as variants
-}
-
-impl From<RendererType> for PersistentRendererType {
-    fn from(rt: RendererType) -> Self {
-        match rt {
-            RendererType::LookupPaletteRenderer => PersistentRendererType::LookupPaletteRenderer,
-        }
-    }
-}
-
-impl From<PersistentRendererType> for RendererType {
-    fn from(prt: PersistentRendererType) -> Self {
-        match prt {
-            PersistentRendererType::LookupPaletteRenderer => RendererType::LookupPaletteRenderer,
-        }
-    }
-}
-
 /// Persistent View configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PersistentViewConfig {
@@ -340,9 +316,8 @@ pub struct PersistentViewConfig {
     pub palette_rgb_data: Option<PathBuf>,
     pub required_debug_fetches: HashSet<PersistentEmulatorFetchable>,
     pub debug_active_palette: usize,
-    /// The selected renderer type
-    #[serde(default)]
-    pub renderer_type: PersistentRendererType,
+    // Note: Renderer is not persisted directly - it uses the default LookupPaletteRenderer
+    // and loads its palette from previous_palette_path on startup
 }
 
 impl From<&ViewConfig> for PersistentViewConfig {
@@ -358,21 +333,24 @@ impl From<&ViewConfig> for PersistentViewConfig {
                 .map(|f| f.into())
                 .collect(),
             debug_active_palette: config.debug_active_palette,
-            renderer_type: config.renderer_type.into(),
         }
     }
 }
 
 impl From<&PersistentViewConfig> for ViewConfig {
     fn from(config: &PersistentViewConfig) -> Self {
+        let palette = parse_palette_from_file(config.palette_rgb_data.clone(), None);
+        let mut renderer = ensemble_gown::LookupPaletteRenderer::new();
+        renderer.set_palette(palette);
+        
         Self {
             debug_active_palette: config.debug_active_palette,
-            palette_rgb_data: parse_palette_from_file(config.palette_rgb_data.clone(), None),
+            palette_rgb_data: palette,
             show_nametable: config.show_nametable,
             show_palette: config.show_palette,
             show_pattern_table: config.show_pattern_table,
             required_debug_fetches: Default::default(),
-            renderer_type: config.renderer_type.into(),
+            renderer,
         }
     }
 }

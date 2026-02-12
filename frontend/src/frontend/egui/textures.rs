@@ -3,6 +3,7 @@ use std::time::Instant;
 use egui::{ColorImage, Context, TextureHandle, TextureOptions};
 use ensemble_lockstep::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData, TILE_SIZE, NametableData, TILE_COUNT, PaletteData, PALETTE_COUNT};
 use ensemble_lockstep::emulation::screen_renderer::{RgbColor, RgbPalette};
+use ensemble_gown::LookupPaletteRenderer;
 
 /// Texture storage and management for the emulator display
 #[derive(Eq, PartialEq, Clone)]
@@ -49,31 +50,14 @@ impl EmuTextures {
         }
     }
 
-    /// Convert raw u16 palette indices to RgbColor using the given palette.
+    /// Update the main emulator display texture using the renderer from ensemble-gown.
     /// 
-    /// # Index Format
-    /// The NES PPU outputs a 9-bit value for each pixel:
-    /// - Bits 0-5 (6 bits): Color index (0-63 from the NES palette)
-    /// - Bits 6-8 (3 bits): Emphasis bits (R, G, B emphasis from PPU mask register)
-    /// - Bits 9-15: Unused (ignored by this function)
-    /// 
-    /// The palette contains 8 variations (one per emphasis combination) of 64 colors each.
-    pub fn indices_to_rgb(indices: &[u16], palette: &RgbPalette) -> Vec<RgbColor> {
-        indices
-            .iter()
-            .map(|&index| {
-                let color_index = (index as usize) & 0x3F; // Bits 0-5: color (0-63)
-                let emphasis = ((index as usize) >> 6) & 0x7; // Bits 6-8: emphasis (0-7)
-                palette.colors[emphasis][color_index]
-            })
-            .collect()
-    }
-
-    /// Update the main emulator display texture
-    /// Takes the palette to convert raw u16 indices to RGB colors
-    pub fn update_emulator_texture(&mut self, ctx: &Context, palette: &RgbPalette) {
+    /// The actual conversion from palette indices to RGB colors is done by the
+    /// renderer implementation in the ensemble-gown crate.
+    pub fn update_emulator_texture(&mut self, ctx: &Context, renderer: &LookupPaletteRenderer) {
         if let Some(ref frame) = self.current_frame {
-            let rgb_frame = Self::indices_to_rgb(frame.as_ref(), palette);
+            // Use the renderer from ensemble-gown for the actual rendering
+            let rgb_frame = renderer.indices_to_rgb(frame.as_ref());
             let image =
                 Self::rgb_to_color_image(&rgb_frame, TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT);
 

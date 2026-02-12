@@ -38,7 +38,7 @@ impl EguiApp {
             EmulatorMessage::FrameReady(frame) => {
                 self.emu_textures.current_frame = Some(frame);
                 self.fps_counter.update();
-                self.emu_textures.update_emulator_texture(ctx, &self.config.view_config.palette_rgb_data);
+                self.emu_textures.update_emulator_texture(ctx, &self.config.view_config.renderer);
             }
             EmulatorMessage::DebugData(data) => {
                 self.handle_debug_data(ctx, data);

@@ -184,8 +184,10 @@ impl EguiApp {
     ) {
         self.config.view_config.palette_rgb_data = palette;
         self.config.user_config.previous_palette_path = path;
+        // Update the renderer's palette
+        self.config.view_config.renderer.set_palette(palette);
         // Re-render the current frame with the new palette
-        self.emu_textures.update_emulator_texture(ctx, &self.config.view_config.palette_rgb_data);
+        self.emu_textures.update_emulator_texture(ctx, &self.config.view_config.renderer);
         if self.is_tile_viewer_visible() {
             self.emu_textures.update_tile_textures(
                 ctx,
@@ -287,8 +289,10 @@ impl EguiApp {
 
     fn handle_set_palette(&mut self, ctx: &Context, palette: RgbPalette) {
         self.config.view_config.palette_rgb_data = palette;
+        // Update the renderer's palette
+        self.config.view_config.renderer.set_palette(palette);
         // Re-render the current frame with the new palette
-        self.emu_textures.update_emulator_texture(ctx, &self.config.view_config.palette_rgb_data);
+        self.emu_textures.update_emulator_texture(ctx, &self.config.view_config.renderer);
         if self.is_tile_viewer_visible() {
             self.emu_textures.update_tile_textures(
                 ctx,

@@ -1,6 +1,6 @@
 //! Options pane rendering
 
-use crate::frontend::egui::config::{AppConfig, AppSpeed, DebugSpeed, RendererType};
+use crate::frontend::egui::config::{AppConfig, AppSpeed, DebugSpeed};
 
 /// Render the options panel
 pub fn render_options(ui: &mut egui::Ui, config: &mut AppConfig) {
@@ -13,37 +13,22 @@ pub fn render_options(ui: &mut egui::Ui, config: &mut AppConfig) {
 /// Render renderer selection section
 fn render_renderer_settings(ui: &mut egui::Ui, config: &mut AppConfig) {
     ui.collapsing("Renderer", |ui| {
-        ui.label("Select Renderer")
-            .on_hover_text("Choose the rendering method for converting emulator output to screen");
-        
-        // Show all available renderer types
-        for renderer_type in RendererType::all_variants() {
-            let is_selected = config.view_config.renderer_type == *renderer_type;
-            let response = ui.selectable_label(is_selected, renderer_type.display_name());
-            if response.clicked() {
-                config.view_config.renderer_type = *renderer_type;
-            }
-            // Show description on hover
-            response.on_hover_text(renderer_type.description());
-        }
+        // Currently using the LookupPaletteRenderer from ensemble-gown
+        // Future renderers can be selected here when implemented
+        ui.label("Current Renderer: Palette Lookup Table");
+        ui.small("Fast lookup table-based renderer using the selected palette file");
         
         ui.separator();
         
-        // Renderer-specific settings based on selected renderer
-        match config.view_config.renderer_type {
-            RendererType::LookupPaletteRenderer => {
-                ui.label("Palette Lookup Renderer Settings:");
-                ui.label(format!("Current palette: {}", 
-                    config.user_config.previous_palette_path
-                        .as_ref()
-                        .and_then(|p| p.file_name())
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "Default (2C02G)".to_string())
-                ));
-                ui.small("Use the Palette viewer to load custom palette files.");
-            }
-            // Future renderers can add their settings here
-        }
+        // Show current palette
+        ui.label(format!("Current palette: {}", 
+            config.user_config.previous_palette_path
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "Default (2C02G)".to_string())
+        ));
+        ui.small("Use the Palette viewer to load custom palette files.");
     });
 }
 
