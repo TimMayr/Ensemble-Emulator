@@ -133,9 +133,6 @@ impl ChannelEmulator {
                         ));
                     }
                 },
-                FrontendMessage::SetPalette(p) => {
-                    self.nes.ppu.borrow_mut().rgb_palette = *p;
-                }
                 FrontendMessage::WritePpu(address, data) => {
                     self.nes.ppu.borrow_mut().mem_init(address, data)
                 }

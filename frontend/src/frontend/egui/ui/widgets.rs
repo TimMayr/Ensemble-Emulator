@@ -32,7 +32,7 @@ pub fn color_cell_rgb(
     painter.rect_filled(
         rect,
         0.0,
-        egui::Color32::from_rgb(color.0, color.1, color.2),
+        egui::Color32::from_rgb(color.r, color.g, color.b),
     );
 
     if response.hovered() {

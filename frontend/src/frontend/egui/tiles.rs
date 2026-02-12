@@ -57,7 +57,7 @@ impl Pane {
     }
 }
 
-/// Behavior implementation for the tile tree
+/// Behavior implementation for the tile tree.
 pub struct TreeBehavior<'a> {
     pub config: &'a mut AppConfig,
     pub emu_textures: &'a EmuTextures,

@@ -7,15 +7,40 @@ use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use crate::util::{compute_hash, Hashable, ToBytes};
 
+/// Trait for rendering palette indices to RGB colors.
+/// 
+/// Implementations must be serializable to enable persistence of renderer state.
 pub trait ScreenRenderer: Debug + Serialize + DeserializeOwned {
+    /// Convert a buffer of palette indices to RGB colors.
     fn buffer_to_image(&mut self, buffer: &[u16]) -> &[RgbColor];
+    
+    /// Set the palette to use for rendering.
+    /// 
+    /// Called when the user loads a new palette file.
+    fn set_palette(&mut self, palette: RgbPalette);
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize, Default)]
 pub struct RgbColor {
-    r: u8,
-    g: u8,
-    b: u8,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+impl RgbColor {
+    pub fn new(r: u8, g: u8, b: u8) -> Self {
+        Self { r, g, b }
+    }
+
+    pub fn to_tuple(self) -> (u8, u8, u8) {
+        (self.r, self.g, self.b)
+    }
+}
+
+impl From<(u8, u8, u8)> for RgbColor {
+    fn from((r, g, b): (u8, u8, u8)) -> Self {
+        Self { r, g, b }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]

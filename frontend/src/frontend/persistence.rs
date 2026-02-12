@@ -15,9 +15,10 @@ use std::{fs, thread};
 
 use crossbeam_channel::{Receiver, bounded};
 use directories::ProjectDirs;
+use ensemble_gown::RendererKind;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
+use ensemble_lockstep::emulation::screen_renderer::parse_palette_from_file;
 use serde::{Deserialize, Serialize};
-use ensemble_lockstep::emulation::screen_renderer::{parse_palette_from_file, ScreenRenderer};
 use crate::frontend::egui::config::{
     AppConfig, AppSpeed, ConsoleConfig, DebugSpeed, SpeedConfig, UserConfig, ViewConfig,
 };
@@ -259,11 +260,10 @@ pub fn read_from_cache_dir(filename: &str) -> Option<Receiver<AsyncFileResult>> 
 /// Configuration file name
 const CONFIG_FILENAME: &str = "config.toml";
 
-/// Persistent configuration structure that can be serialized to TOML
-///
-/// This excludes transient data like PendingDialogs and ViewConfig
-/// (which contains runtime display state like palette RGB data)
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// Persistent configuration structure that can be serialized to TOML.
+/// 
+/// Uses `RendererKind` for runtime-switchable renderer persistence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistentConfig {
     pub user_config: PersistentUserConfig,
     pub view_config: PersistentViewConfig,
@@ -271,6 +271,18 @@ pub struct PersistentConfig {
     pub console_config: PersistentConsoleConfig,
     #[serde(default)]
     pub keybindings: KeybindingsConfig,
+}
+
+impl Default for PersistentConfig {
+    fn default() -> Self {
+        Self {
+            user_config: PersistentUserConfig::default(),
+            view_config: PersistentViewConfig::default(),
+            speed_config: PersistentSpeedConfig::default(),
+            console_config: PersistentConsoleConfig::default(),
+            keybindings: KeybindingsConfig::default(),
+        }
+    }
 }
 
 impl From<&AppConfig> for PersistentConfig {
@@ -306,15 +318,34 @@ impl From<&PersistentConfig> for AppConfig {
     }
 }
 
-/// Persistent View configuration
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// Persistent View configuration with RendererKind for runtime switching.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistentViewConfig {
     pub show_palette: bool,
     pub show_pattern_table: bool,
     pub show_nametable: bool,
+    /// Path to the palette file (used to reconstruct palette_rgb_data on load)
     pub palette_rgb_data: Option<PathBuf>,
     pub required_debug_fetches: HashSet<PersistentEmulatorFetchable>,
     pub debug_active_palette: usize,
+    /// The serialized renderer state. When present, the renderer is restored from this.
+    /// When absent (e.g., first run), a default renderer is created.
+    #[serde(default)]
+    pub renderer: Option<RendererKind>,
+}
+
+impl Default for PersistentViewConfig {
+    fn default() -> Self {
+        Self {
+            show_palette: false,
+            show_pattern_table: false,
+            show_nametable: false,
+            palette_rgb_data: None,
+            required_debug_fetches: HashSet::new(),
+            debug_active_palette: 0,
+            renderer: None,
+        }
+    }
 }
 
 impl From<&ViewConfig> for PersistentViewConfig {
@@ -330,19 +361,29 @@ impl From<&ViewConfig> for PersistentViewConfig {
                 .map(|f| f.into())
                 .collect(),
             debug_active_palette: config.debug_active_palette,
+            renderer: Some(config.renderer.clone()),
         }
     }
 }
 
 impl From<&PersistentViewConfig> for ViewConfig {
     fn from(config: &PersistentViewConfig) -> Self {
+        // If renderer was persisted, use it; otherwise create a default
+        let renderer = match &config.renderer {
+            Some(r) => r.clone(),
+            None => RendererKind::default(),
+        };
+        
+        let palette = parse_palette_from_file(config.palette_rgb_data.clone(), None);
+        
         Self {
             debug_active_palette: config.debug_active_palette,
-            palette_rgb_data: parse_palette_from_file(config.palette_rgb_data.clone(), None),
+            palette_rgb_data: palette,
             show_nametable: config.show_nametable,
             show_palette: config.show_palette,
             show_pattern_table: config.show_pattern_table,
             required_debug_fetches: Default::default(),
+            renderer,
         }
     }
 }

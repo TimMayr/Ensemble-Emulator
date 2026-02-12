@@ -1,5 +1,6 @@
 //! Keybindings pane rendering
 
+
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::keybindings::Hotkey;
 

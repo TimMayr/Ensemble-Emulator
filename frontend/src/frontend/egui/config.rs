@@ -1,27 +1,48 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::path::PathBuf;
+use ensemble_gown::RendererKind;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use ensemble_lockstep::emulation::rom::RomFile;
-use ensemble_lockstep::emulation::screen_renderer::{ScreenRenderer};
+use ensemble_lockstep::emulation::screen_renderer::RgbPalette;
 use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::messages::SavestateLoadContext;
 
-#[derive(Debug, Default)]
+/// View configuration for the emulator frontend.
+/// 
+/// Contains settings related to rendering and debug viewers.
+#[derive(Debug)]
 pub struct ViewConfig {
     pub show_palette: bool,
     pub show_pattern_table: bool,
     pub show_nametable: bool,
     pub required_debug_fetches: HashSet<EmulatorFetchable>,
-    pub renderer: Option<Box<dyn ScreenRenderer>>,
+    /// The renderer instance used for converting palette indices to RGB colors.
+    /// This can be changed at runtime by replacing with a different `RendererKind` variant.
+    pub renderer: RendererKind,
+    /// The RGB palette data used for rendering (kept for debug viewers like pattern tables).
+    pub palette_rgb_data: RgbPalette,
     pub debug_active_palette: usize,
 }
 
-/// Main application configuration
+impl Default for ViewConfig {
+    fn default() -> Self {
+        Self {
+            show_palette: false,
+            show_pattern_table: false,
+            show_nametable: false,
+            required_debug_fetches: HashSet::new(),
+            renderer: RendererKind::default(),
+            palette_rgb_data: RgbPalette::default(),
+            debug_active_palette: 0,
+        }
+    }
+}
+
+/// Main application configuration.
 ///
 /// Note: `Eq` and `PartialEq` are not derived because `PendingDialogs` contains
 /// `SavestateLoadContext` which includes `SaveState`, which is not trivially comparable.
-#[derive(Default)]
 pub struct AppConfig {
     pub view_config: ViewConfig,
     pub speed_config: SpeedConfig,
@@ -29,6 +50,19 @@ pub struct AppConfig {
     pub console_config: ConsoleConfig,
     pub pending_dialogs: PendingDialogs,
     pub keybindings: KeybindingsConfig,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            view_config: ViewConfig::default(),
+            speed_config: SpeedConfig::default(),
+            user_config: UserConfig::default(),
+            console_config: ConsoleConfig::default(),
+            pending_dialogs: PendingDialogs::default(),
+            keybindings: KeybindingsConfig::default(),
+        }
+    }
 }
 
 /// Pending dialog states for multi-step operations

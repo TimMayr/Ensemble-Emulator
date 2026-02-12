@@ -1,13 +1,15 @@
 use std::time::Instant;
 
 use egui::{ColorImage, Context, TextureHandle, TextureOptions};
+use ensemble_gown::RendererKind;
 use ensemble_lockstep::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData, TILE_SIZE, NametableData, TILE_COUNT, PaletteData, PALETTE_COUNT};
 use ensemble_lockstep::emulation::screen_renderer::{RgbColor, RgbPalette};
 
 /// Texture storage and management for the emulator display
 #[derive(Eq, PartialEq, Clone)]
 pub struct EmuTextures {
-    pub current_frame: Option<Vec<RgbColor>>,
+    /// Raw frame data as u16 palette indices (from emulator)
+    pub current_frame: Option<Vec<u16>>,
     pub frame_texture: Option<TextureHandle>,
     pub last_debug_request: Instant,
     pub last_frame_request: Instant,
@@ -38,8 +40,8 @@ impl EmuTextures {
     /// Convert RgbColor pixel data to egui ColorImage
     pub fn rgb_to_color_image(data: &[RgbColor], width: usize, height: usize) -> ColorImage {
         let mut pixels = Vec::with_capacity(width * height);
-        for &(r, g, b) in data {
-            pixels.push(egui::Color32::from_rgb(r, g, b));
+        for color in data {
+            pixels.push(egui::Color32::from_rgb(color.r, color.g, color.b));
         }
         ColorImage {
             size: [width, height],
@@ -48,11 +50,21 @@ impl EmuTextures {
         }
     }
 
-    /// Update the main emulator display texture
-    pub fn update_emulator_texture(&mut self, ctx: &Context) {
+    /// Update the main emulator display texture using a RendererKind.
+    /// 
+    /// The actual conversion from palette indices to RGB colors is done by the
+    /// renderer implementation.
+    /// 
+    /// # Note
+    /// Takes a mutable reference to the renderer because `buffer_to_image`
+    /// requires `&mut self` - renderers may use internal buffers to avoid reallocating
+    /// the output image on each frame.
+    pub fn update_emulator_texture(&mut self, ctx: &Context, renderer: &mut RendererKind) {
         if let Some(ref frame) = self.current_frame {
+            // Use the renderer's buffer_to_image method
+            let rgb_frame = renderer.buffer_to_image(frame.as_ref());
             let image =
-                Self::rgb_to_color_image(frame.as_ref(), TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT);
+                Self::rgb_to_color_image(rgb_frame, TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT);
 
             let texture = ctx.load_texture(
                 "emulator_output",
@@ -74,7 +86,7 @@ impl EmuTextures {
         rgb_palette_map: &RgbPalette,
         ctx: &Context,
     ) -> TextureHandle {
-        let mut data: [RgbColor; 64] = [(0, 0, 0); 64];
+        let mut data: [RgbColor; 64] = [RgbColor::default(); 64];
 
         for (i, color) in data.iter_mut().enumerate() {
             let bit = 63 - i;

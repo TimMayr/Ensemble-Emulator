@@ -1,6 +1,6 @@
 use crossbeam_channel::Sender;
 use ensemble_lockstep::emulation::ppu::PALETTE_RAM_START_ADDRESS;
-use ensemble_lockstep::emulation::screen_renderer::parse_palette_from_file;
+use ensemble_lockstep::emulation::screen_renderer::{parse_palette_from_file, RgbColor};
 use ensemble_lockstep::util::Hashable;
 
 use crate::frontend::egui::config::AppConfig;
@@ -61,7 +61,7 @@ pub fn render_palettes(
                     ui.label(format!("Address: ${:0X}", address));
                     ui.label(format!(
                         "Palette RGB mapping: #{:02X}{:02X}{:02X}",
-                        rgb_color.0, rgb_color.1, rgb_color.2
+                        rgb_color.r, rgb_color.g, rgb_color.b
                     ));
                 });
             }
@@ -115,7 +115,7 @@ pub fn render_palettes(
         let response = color_cell_rgb(ui, rect, *color, egui::Sense::all(), ("rgb_palette", i));
 
         // Convert RgbColor to Color32 for the color picker
-        let mut picked_color = egui::Color32::from_rgb(color.0, color.1, color.2);
+        let mut picked_color = egui::Color32::from_rgb(color.r, color.g, color.b);
         egui::Popup::context_menu(&response)
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| {
@@ -128,11 +128,11 @@ pub fn render_palettes(
 
         // Convert Color32 back to RgbColor
         let [r, g, b, _] = picked_color.to_array();
-        config.view_config.palette_rgb_data.colors[0][i] = (r, g, b);
+        config.view_config.palette_rgb_data.colors[0][i] = RgbColor::new(r, g, b);
 
         response.on_hover_ui(|ui| {
             ui.label(format!("Index: {i}"));
-            ui.label(format!("RGB: ({}, {}, {})", color.0, color.1, color.2));
+            ui.label(format!("RGB: ({}, {}, {})", color.r, color.g, color.b));
         });
     }
 
