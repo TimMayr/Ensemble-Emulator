@@ -53,6 +53,11 @@ impl EmuTextures {
     /// 
     /// The actual conversion from palette indices to RGB colors is done by the
     /// renderer implementation, which must implement the `ScreenRenderer` trait.
+    /// 
+    /// # Note
+    /// Takes a mutable reference to the renderer because `ScreenRenderer::buffer_to_image`
+    /// requires `&mut self` - renderers may use internal buffers to avoid reallocating
+    /// the output image on each frame.
     pub fn update_emulator_texture<R: ScreenRenderer>(&mut self, ctx: &Context, renderer: &mut R) {
         if let Some(ref frame) = self.current_frame {
             // Use the ScreenRenderer trait's buffer_to_image method

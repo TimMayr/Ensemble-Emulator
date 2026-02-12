@@ -14,9 +14,11 @@ pub fn render_options<R: ScreenRenderer>(ui: &mut egui::Ui, config: &mut AppConf
 /// Render renderer selection section
 fn render_renderer_settings<R: ScreenRenderer>(ui: &mut egui::Ui, config: &mut AppConfig<R>) {
     ui.collapsing("Renderer", |ui| {
-        // The renderer type is specified at app construction time
-        // Display info about the current renderer
-        ui.label(format!("Current Renderer: {:?}", config.view_config.renderer));
+        // Display the renderer type name using type_name for cleaner output
+        let type_name = std::any::type_name::<R>();
+        // Extract just the type name without the full module path
+        let display_name = type_name.rsplit("::").next().unwrap_or(type_name);
+        ui.label(format!("Current Renderer: {}", display_name));
         
         ui.separator();
         
