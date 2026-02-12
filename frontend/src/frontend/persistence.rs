@@ -343,17 +343,18 @@ impl From<&ViewConfig> for PersistentViewConfig {
 impl From<&PersistentViewConfig> for ViewConfig {
     fn from(config: &PersistentViewConfig) -> Self {
         // If renderer was persisted, use it; otherwise create a new one with the palette
-        let renderer = match &config.renderer {
-            Some(r) => r.clone(),
+        let (renderer, palette) = match &config.renderer {
+            Some(r) => {
+                let palette = parse_palette_from_file(config.palette_rgb_data.clone(), None);
+                (r.clone(), palette)
+            }
             None => {
                 let palette = parse_palette_from_file(config.palette_rgb_data.clone(), None);
                 let mut r = ensemble_gown::LookupPaletteRenderer::new();
                 r.set_palette(palette);
-                r
+                (r, palette)
             }
         };
-        
-        let palette = parse_palette_from_file(config.palette_rgb_data.clone(), None);
         
         Self {
             debug_active_palette: config.debug_active_palette,
