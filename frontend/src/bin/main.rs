@@ -12,7 +12,6 @@ const EXIT_GENERAL_ERROR: u8 = 1;
 use std::path::PathBuf;
 
 use ensemble_ballroom::frontend::egui_frontend;
-use ensemble_gown::LookupPaletteRenderer;
 use clap::{Parser, ValueEnum};
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -67,7 +66,8 @@ fn main() -> ExitCode {
 // =============================================================================
 
 fn run_gui(args: &CliArgs) -> Result<(), String> {
-    // Specify the concrete renderer type here - the frontend itself is generic
-    egui_frontend::run::<LookupPaletteRenderer>(args.rom.clone(), args.palette.clone())
+    // Renderer type is selected at runtime via RendererKind
+    // The frontend uses RendererKind which can be switched dynamically
+    egui_frontend::run(args.rom.clone(), args.palette.clone())
         .map_err(|e| e.to_string())
 }

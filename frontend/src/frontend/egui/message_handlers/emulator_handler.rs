@@ -6,7 +6,6 @@
 use egui::{Context, ViewportCommand};
 use ensemble_lockstep::emulation::ppu::{EmulatorFetchable, PaletteData, TILE_COUNT, TileData};
 use ensemble_lockstep::emulation::savestate::SaveState;
-use ensemble_lockstep::emulation::screen_renderer::ScreenRenderer;
 use ensemble_lockstep::util::ToBytes;
 
 use crate::frontend::egui_frontend::EguiApp;
@@ -24,7 +23,7 @@ pub trait EmulatorMessageHandler {
     fn handle_emulator_messages(&mut self, ctx: &Context);
 }
 
-impl<R: ScreenRenderer + Default + Clone> EmulatorMessageHandler for EguiApp<R> {
+impl EmulatorMessageHandler for EguiApp {
     fn handle_emulator_messages(&mut self, ctx: &Context) {
         while let Ok(msg) = self.from_emulator.try_recv() {
             self.handle_single_emulator_message(msg, ctx);
@@ -32,7 +31,7 @@ impl<R: ScreenRenderer + Default + Clone> EmulatorMessageHandler for EguiApp<R> 
     }
 }
 
-impl<R: ScreenRenderer + Default + Clone> EguiApp<R> {
+impl EguiApp {
     /// Handle a single emulator message.
     pub(crate) fn handle_single_emulator_message(&mut self, msg: EmulatorMessage, ctx: &Context) {
         match msg {

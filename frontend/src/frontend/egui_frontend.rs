@@ -25,7 +25,6 @@ use ensemble_lockstep::emulation::ppu::{
     EmulatorFetchable, PaletteData ,TILE_COUNT, TileData,
 };
 use ensemble_lockstep::emulation::savestate::SaveState;
-use ensemble_lockstep::emulation::screen_renderer::ScreenRenderer;
 use ensemble_lockstep::util::ToBytes;
 
 use crate::channel_emu::ChannelEmulator;
@@ -57,12 +56,11 @@ const MAX_AUTOSAVES_PER_GAME: usize = 1024;
 /// Shared deque for frontend events that can be pushed from UI components
 pub type FrontendEventQueue = Rc<RefCell<VecDeque<FrontendEvent>>>;
 
-/// Main egui application state, generic over a ScreenRenderer implementation.
+/// Main egui application state.
 /// 
-/// The type parameter `R` specifies the renderer used for converting palette
-/// indices to RGB colors. This allows the frontend to work with any renderer
-/// that implements the `ScreenRenderer` trait.
-pub struct EguiApp<R: ScreenRenderer> {
+/// Uses `RendererKind` for runtime-switchable rendering. The renderer can be
+/// changed at runtime by updating `config.view_config.renderer`.
+pub struct EguiApp {
     pub(crate) channel_emu: ChannelEmulator,
     pub(crate) to_emulator: Sender<FrontendMessage>,
     pub(crate) from_emulator: Receiver<EmulatorMessage>,
@@ -73,7 +71,7 @@ pub struct EguiApp<R: ScreenRenderer> {
     pub(crate) emu_textures: EmuTextures,
     pub(crate) fps_counter: FpsCounter,
     accumulator: Duration,
-    pub(crate) config: AppConfig<R>,
+    pub(crate) config: AppConfig,
     /// The tile tree for docking behavior
     tree: egui_tiles::Tree<Pane>,
     /// Track if pattern tables was visible last frame to detect when it becomes visible
@@ -86,7 +84,7 @@ pub struct EguiApp<R: ScreenRenderer> {
     was_focused: bool,
 }
 
-impl<R: ScreenRenderer + Default + Clone> EguiApp<R> {
+impl EguiApp {
     pub fn new(
         cc: &eframe::CreationContext<'_>,
         channel_emu: ChannelEmulator,
@@ -96,7 +94,7 @@ impl<R: ScreenRenderer + Default + Clone> EguiApp<R> {
         from_async: Receiver<AsyncFrontendMessage>,
     ) -> Self {
         // Load configuration from TOML file
-        let loaded_config = load_config::<R>();
+        let loaded_config = load_config();
 
         // Try to restore the tile tree from egui's storage, fall back to default
         let tree = cc
@@ -107,7 +105,7 @@ impl<R: ScreenRenderer + Default + Clone> EguiApp<R> {
             .unwrap_or_else(create_tree);
 
         // Create default config and apply loaded settings
-        let mut config = AppConfig::<R>::default();
+        let mut config = AppConfig::default();
         if let Some(ref persistent_config) = loaded_config {
             config = persistent_config.into();
         }
@@ -559,7 +557,7 @@ impl<R: ScreenRenderer + Default + Clone> EguiApp<R> {
     }
 }
 
-impl<R: ScreenRenderer + Default + Clone> eframe::App for EguiApp<R> {
+impl eframe::App for EguiApp {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         // Handle keyboard input
         handle_keyboard_input(
@@ -636,20 +634,17 @@ impl<R: ScreenRenderer + Default + Clone> eframe::App for EguiApp<R> {
     }
 }
 
-impl<R: ScreenRenderer> Debug for EguiApp<R> {
+impl Debug for EguiApp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { f.write_str("EguiApp") }
 }
 
-/// Run the egui frontend with the specified renderer type.
+/// Run the egui frontend.
 /// 
-/// The renderer type `R` must implement `ScreenRenderer`, `Default`, `Clone`, and `Send + 'static`.
-pub fn run<R>(
+/// Uses `RendererKind` for runtime-switchable rendering.
+pub fn run(
     rom: Option<PathBuf>,
     _palette: Option<PathBuf>,
-) -> Result<(), Box<dyn std::error::Error>> 
-where
-    R: ScreenRenderer + Default + Clone + Send + 'static,
-{
+) -> Result<(), Box<dyn std::error::Error>> {
     // Create the emulator instance
     let console = Nes::default();
 
@@ -690,7 +685,7 @@ where
             };
             cc.egui_ctx.set_style(style);
             cc.egui_ctx.set_theme(egui::Theme::Dark);
-            Ok(Box::new(EguiApp::<R>::new(
+            Ok(Box::new(EguiApp::new(
                 cc,
                 channel_emu,
                 tx_to_emu,

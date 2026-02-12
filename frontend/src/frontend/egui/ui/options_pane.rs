@@ -1,10 +1,10 @@
 //! Options pane rendering
 
-use ensemble_lockstep::emulation::screen_renderer::ScreenRenderer;
+use ensemble_gown::RendererKind;
 use crate::frontend::egui::config::{AppConfig, AppSpeed, DebugSpeed};
 
 /// Render the options panel
-pub fn render_options<R: ScreenRenderer>(ui: &mut egui::Ui, config: &mut AppConfig<R>) {
+pub fn render_options(ui: &mut egui::Ui, config: &mut AppConfig) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         render_renderer_settings(ui, config);
         render_speed_settings(ui, config);
@@ -12,13 +12,30 @@ pub fn render_options<R: ScreenRenderer>(ui: &mut egui::Ui, config: &mut AppConf
 }
 
 /// Render renderer selection section
-fn render_renderer_settings<R: ScreenRenderer>(ui: &mut egui::Ui, config: &mut AppConfig<R>) {
+fn render_renderer_settings(ui: &mut egui::Ui, config: &mut AppConfig) {
     ui.collapsing("Renderer", |ui| {
-        // Display the renderer type name using type_name for cleaner output
-        let type_name = std::any::type_name::<R>();
-        // Extract just the type name without the full module path
-        let display_name = type_name.rsplit("::").next().unwrap_or(type_name);
-        ui.label(format!("Current Renderer: {}", display_name));
+        // Display the renderer type name
+        ui.label(format!("Current Renderer: {}", config.view_config.renderer.display_name()));
+        ui.small(config.view_config.renderer.description());
+        
+        ui.separator();
+        
+        // Renderer selection dropdown
+        ui.label("Select Renderer:");
+        let current_id = config.view_config.renderer.type_id();
+        egui::ComboBox::from_id_salt("renderer_selector")
+            .selected_text(config.view_config.renderer.display_name())
+            .show_ui(ui, |ui| {
+                for variant in RendererKind::all_variants() {
+                    let selected = variant.type_id() == current_id;
+                    if ui.selectable_label(selected, variant.display_name()).clicked() {
+                        // Transfer the current palette to the new renderer
+                        let palette = config.view_config.palette_rgb_data;
+                        config.view_config.renderer = variant;
+                        config.view_config.renderer.set_palette(palette);
+                    }
+                }
+            });
         
         ui.separator();
         
@@ -35,7 +52,7 @@ fn render_renderer_settings<R: ScreenRenderer>(ui: &mut egui::Ui, config: &mut A
 }
 
 /// Render speed settings section
-fn render_speed_settings<R: ScreenRenderer>(ui: &mut egui::Ui, config: &mut AppConfig<R>) {
+fn render_speed_settings(ui: &mut egui::Ui, config: &mut AppConfig) {
     ui.collapsing("Speed", |ui| {
         ui.label("Emulation Speed")
             .on_hover_text("Sets the speed at which the emulation runs");

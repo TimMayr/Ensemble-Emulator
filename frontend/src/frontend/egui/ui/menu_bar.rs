@@ -1,15 +1,15 @@
 use crossbeam_channel::Sender;
 use egui::Context;
-use ensemble_lockstep::emulation::screen_renderer::ScreenRenderer;
+
 
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::tiles::{Pane, add_pane_if_missing};
 use crate::frontend::messages::AsyncFrontendMessage;
 use crate::frontend::util::{spawn_rom_picker, spawn_savestate_picker};
 
-pub fn add_menu_bar<R: ScreenRenderer>(
+pub fn add_menu_bar(
     ctx: &Context,
-    config: &AppConfig<R>,
+    config: &AppConfig,
     async_sender: &Sender<AsyncFrontendMessage>,
     tree: &mut egui_tiles::Tree<Pane>,
 ) {

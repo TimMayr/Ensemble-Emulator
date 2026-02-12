@@ -8,7 +8,7 @@ use std::path::Path;
 use egui::Context;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use ensemble_lockstep::emulation::savestate;
-use ensemble_lockstep::emulation::screen_renderer::{RgbPalette, ScreenRenderer};
+use ensemble_lockstep::emulation::screen_renderer::RgbPalette;
 use crate::frontend::egui::config::{
     ChecksumMismatchDialogState, ErrorDialogState, MatchingRomDialogState, RomSelectionDialogState,
 };
@@ -27,7 +27,7 @@ pub trait AsyncMessageHandler {
     fn handle_async_messages(&mut self, ctx: &Context);
 }
 
-impl<R: ScreenRenderer + Default + Clone> AsyncMessageHandler for EguiApp<R> {
+impl AsyncMessageHandler for EguiApp {
     fn handle_async_messages(&mut self, ctx: &Context) {
         while let Ok(msg) = self.from_async.try_recv() {
             self.handle_single_async_message(msg, ctx);
@@ -35,7 +35,7 @@ impl<R: ScreenRenderer + Default + Clone> AsyncMessageHandler for EguiApp<R> {
     }
 }
 
-impl<R: ScreenRenderer + Default + Clone> EguiApp<R> {
+impl EguiApp {
     /// Handle a single async message.
     pub(crate) fn handle_single_async_message(&mut self, msg: AsyncFrontendMessage, ctx: &Context) {
         match msg {

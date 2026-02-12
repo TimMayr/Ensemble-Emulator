@@ -1,6 +1,6 @@
 use crossbeam_channel::Sender;
 use ensemble_lockstep::emulation::ppu::PALETTE_RAM_START_ADDRESS;
-use ensemble_lockstep::emulation::screen_renderer::{parse_palette_from_file, RgbColor, ScreenRenderer};
+use ensemble_lockstep::emulation::screen_renderer::{parse_palette_from_file, RgbColor};
 use ensemble_lockstep::util::Hashable;
 
 use crate::frontend::egui::config::AppConfig;
@@ -9,9 +9,9 @@ use crate::frontend::egui::ui::widgets::{PainterGridConfig, color_cell_rgb};
 use crate::frontend::messages::AsyncFrontendMessage;
 use crate::frontend::util::{FileType, spawn_palette_picker, spawn_save_dialog};
 
-pub fn render_palettes<R: ScreenRenderer>(
+pub fn render_palettes(
     ui: &mut egui::Ui,
-    config: &mut AppConfig<R>,
+    config: &mut AppConfig,
     emu_textures: &EmuTextures,
     async_sender: &Sender<AsyncFrontendMessage>,
 ) {
