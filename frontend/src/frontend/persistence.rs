@@ -316,8 +316,10 @@ pub struct PersistentViewConfig {
     pub palette_rgb_data: Option<PathBuf>,
     pub required_debug_fetches: HashSet<PersistentEmulatorFetchable>,
     pub debug_active_palette: usize,
-    // Note: Renderer is not persisted directly - it uses the default LookupPaletteRenderer
-    // and loads its palette from previous_palette_path on startup
+    /// The serialized renderer state. When present, the renderer is restored from this.
+    /// When absent (e.g., first run), a default renderer is created.
+    #[serde(default)]
+    pub renderer: Option<ensemble_gown::LookupPaletteRenderer>,
 }
 
 impl From<&ViewConfig> for PersistentViewConfig {
@@ -333,15 +335,25 @@ impl From<&ViewConfig> for PersistentViewConfig {
                 .map(|f| f.into())
                 .collect(),
             debug_active_palette: config.debug_active_palette,
+            renderer: Some(config.renderer.clone()),
         }
     }
 }
 
 impl From<&PersistentViewConfig> for ViewConfig {
     fn from(config: &PersistentViewConfig) -> Self {
+        // If renderer was persisted, use it; otherwise create a new one with the palette
+        let renderer = match &config.renderer {
+            Some(r) => r.clone(),
+            None => {
+                let palette = parse_palette_from_file(config.palette_rgb_data.clone(), None);
+                let mut r = ensemble_gown::LookupPaletteRenderer::new();
+                r.set_palette(palette);
+                r
+            }
+        };
+        
         let palette = parse_palette_from_file(config.palette_rgb_data.clone(), None);
-        let mut renderer = ensemble_gown::LookupPaletteRenderer::new();
-        renderer.set_palette(palette);
         
         Self {
             debug_active_palette: config.debug_active_palette,

@@ -19,7 +19,7 @@ const PALETTE_INDEX_MASK: usize = FLAT_PALETTE_SIZE - 1;
 /// - Bits 6-8 (3 bits): Emphasis bits (R, G, B emphasis from PPU mask register)
 /// 
 /// This flat structure allows O(1) lookup using the raw index value.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct FlatPalette {
     #[serde(with = "BigArray")]
     palette: [RgbColor; FLAT_PALETTE_SIZE],
@@ -55,7 +55,7 @@ impl From<RgbPalette> for FlatPalette {
 /// renderer.set_palette(my_palette);
 /// let rgb_colors = renderer.buffer_to_image(&pixel_indices);
 /// ```
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct LookupPaletteRenderer {
     palette: FlatPalette,
     /// Internal buffer used by the `ScreenRenderer` trait implementation
