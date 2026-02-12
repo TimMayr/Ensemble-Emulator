@@ -3,6 +3,15 @@ use std::fmt::{Debug, Formatter};
 use ensemble_lockstep::emulation::screen_renderer::{RgbColor, RgbPalette, ScreenRenderer};
 use serde::{Deserialize, Serialize};
 
+/// Number of colors in the NES palette (64 base colors)
+const PALETTE_COLORS: usize = 64;
+/// Number of emphasis combinations (8 = 2^3 for R, G, B emphasis bits)
+const EMPHASIS_COMBINATIONS: usize = 8;
+/// Total size of the flat palette lookup table
+const FLAT_PALETTE_SIZE: usize = PALETTE_COLORS * EMPHASIS_COMBINATIONS;
+/// Bitmask for extracting the 9-bit palette index (6 color bits + 3 emphasis bits)
+const PALETTE_INDEX_MASK: usize = FLAT_PALETTE_SIZE - 1;
+
 /// A flat palette structure optimized for lookup-table based rendering.
 /// 
 /// The NES PPU outputs a 9-bit value for each pixel:
@@ -13,15 +22,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 struct FlatPalette {
     #[serde(with = "BigArray")]
-    palette: [RgbColor; 64*8],
+    palette: [RgbColor; FLAT_PALETTE_SIZE],
 }
 
 impl From<RgbPalette> for FlatPalette {
     fn from(palette: RgbPalette) -> Self {
-        let mut flat = [RgbColor::default(); 8 * 64];
+        let mut flat = [RgbColor::default(); FLAT_PALETTE_SIZE];
 
-        for color in 0..64 {
-            for emph in 0..8 {
+        for color in 0..PALETTE_COLORS {
+            for emph in 0..EMPHASIS_COMBINATIONS {
                 flat[color | (emph << 6)] = palette.colors[emph][color];
             }
         }
@@ -49,6 +58,8 @@ impl From<RgbPalette> for FlatPalette {
 #[derive(Serialize, Deserialize)]
 pub struct LookupPaletteRenderer {
     palette: FlatPalette,
+    /// Internal buffer used by the `ScreenRenderer` trait implementation
+    /// to return a reference to the rendered image.
     image: Vec<RgbColor>,
 }
 
@@ -83,14 +94,14 @@ impl LookupPaletteRenderer {
     pub fn indices_to_rgb(&self, indices: &[u16]) -> Vec<RgbColor> {
         indices
             .iter()
-            .map(|&index| self.palette.palette[(index as usize) & ((8 * 64) - 1)])
+            .map(|&index| self.palette.palette[(index as usize) & PALETTE_INDEX_MASK])
             .collect()
     }
     
     /// Convert a single index to RgbColor
     #[inline]
     pub fn index_to_rgb(&self, index: u16) -> RgbColor {
-        self.palette.palette[(index as usize) & ((8 * 64) - 1)]
+        self.palette.palette[(index as usize) & PALETTE_INDEX_MASK]
     }
 }
 
@@ -109,7 +120,7 @@ impl ScreenRenderer for LookupPaletteRenderer {
         self.image.clear();
         for x in buffer.iter() {
             self.image
-                .push(self.palette.palette[(*x as usize) & ((8 * 64) - 1)])
+                .push(self.palette.palette[(*x as usize) & PALETTE_INDEX_MASK])
         }
 
         &self.image

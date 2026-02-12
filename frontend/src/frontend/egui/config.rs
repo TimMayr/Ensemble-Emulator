@@ -16,8 +16,16 @@ pub struct ViewConfig {
     pub required_debug_fetches: HashSet<EmulatorFetchable>,
     /// The renderer instance used for converting palette indices to RGB colors.
     /// All rendering logic is contained in the ensemble-gown crate.
+    /// 
+    /// **Important**: The renderer's internal palette must be kept in sync with
+    /// `palette_rgb_data`. When changing palettes, callers must update both:
+    /// 1. Set `palette_rgb_data` to the new palette
+    /// 2. Call `renderer.set_palette(new_palette)` to update the renderer
     pub renderer: LookupPaletteRenderer,
-    /// The RGB palette data used for rendering (kept for debug viewers)
+    /// The RGB palette data used for rendering (kept for debug viewers like pattern tables).
+    /// 
+    /// **Important**: This must be kept in sync with the renderer's palette.
+    /// See the `renderer` field documentation for details.
     pub palette_rgb_data: RgbPalette,
     pub debug_active_palette: usize,
 }
