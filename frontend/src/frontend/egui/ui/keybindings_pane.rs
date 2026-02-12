@@ -1,10 +1,11 @@
 //! Keybindings pane rendering
 
+use ensemble_lockstep::emulation::screen_renderer::ScreenRenderer;
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::keybindings::Hotkey;
 
 /// Render the keybindings panel
-pub fn render_keybindings(ui: &mut egui::Ui, config: &mut AppConfig) {
+pub fn render_keybindings<R: ScreenRenderer>(ui: &mut egui::Ui, config: &mut AppConfig<R>) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         render_controller_keybindings(ui, config);
         ui.separator();
@@ -17,7 +18,7 @@ pub fn render_keybindings(ui: &mut egui::Ui, config: &mut AppConfig) {
 }
 
 /// Render NES controller keybindings section
-fn render_controller_keybindings(ui: &mut egui::Ui, config: &mut AppConfig) {
+fn render_controller_keybindings<R: ScreenRenderer>(ui: &mut egui::Ui, config: &mut AppConfig<R>) {
     ui.collapsing("Controller", |ui| {
         egui::Grid::new("controller_keybindings_grid")
             .num_columns(2)
@@ -84,7 +85,7 @@ fn render_controller_keybindings(ui: &mut egui::Ui, config: &mut AppConfig) {
 }
 
 /// Render emulation control keybindings section
-fn render_emulation_keybindings(ui: &mut egui::Ui, config: &mut AppConfig) {
+fn render_emulation_keybindings<R: ScreenRenderer>(ui: &mut egui::Ui, config: &mut AppConfig<R>) {
     ui.collapsing("Emulation Controls", |ui| {
         egui::Grid::new("emulation_keybindings_grid")
             .num_columns(2)
@@ -123,7 +124,7 @@ fn render_emulation_keybindings(ui: &mut egui::Ui, config: &mut AppConfig) {
 }
 
 /// Render debug control keybindings section
-fn render_debug_keybindings(ui: &mut egui::Ui, config: &mut AppConfig) {
+fn render_debug_keybindings<R: ScreenRenderer>(ui: &mut egui::Ui, config: &mut AppConfig<R>) {
     ui.collapsing("Debug Controls", |ui| {
         egui::Grid::new("debug_keybindings_grid")
             .num_columns(2)
@@ -141,7 +142,7 @@ fn render_debug_keybindings(ui: &mut egui::Ui, config: &mut AppConfig) {
 }
 
 /// Render reset to defaults button
-fn render_reset_button(ui: &mut egui::Ui, config: &mut AppConfig) {
+fn render_reset_button<R: ScreenRenderer>(ui: &mut egui::Ui, config: &mut AppConfig<R>) {
     if ui.button("Reset to Defaults").clicked() {
         config.keybindings.reset_to_defaults();
     }

@@ -8,7 +8,7 @@ use std::path::Path;
 use egui::Context;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use ensemble_lockstep::emulation::savestate;
-use ensemble_lockstep::emulation::screen_renderer::RgbPalette;
+use ensemble_lockstep::emulation::screen_renderer::{RgbPalette, ScreenRenderer};
 use crate::frontend::egui::config::{
     ChecksumMismatchDialogState, ErrorDialogState, MatchingRomDialogState, RomSelectionDialogState,
 };
@@ -27,7 +27,7 @@ pub trait AsyncMessageHandler {
     fn handle_async_messages(&mut self, ctx: &Context);
 }
 
-impl AsyncMessageHandler for EguiApp {
+impl<R: ScreenRenderer + Default + Clone> AsyncMessageHandler for EguiApp<R> {
     fn handle_async_messages(&mut self, ctx: &Context) {
         while let Ok(msg) = self.from_async.try_recv() {
             self.handle_single_async_message(msg, ctx);
@@ -35,7 +35,7 @@ impl AsyncMessageHandler for EguiApp {
     }
 }
 
-impl EguiApp {
+impl<R: ScreenRenderer + Default + Clone> EguiApp<R> {
     /// Handle a single async message.
     pub(crate) fn handle_single_async_message(&mut self, msg: AsyncFrontendMessage, ctx: &Context) {
         match msg {
@@ -187,7 +187,7 @@ impl EguiApp {
         // Update the renderer's palette
         self.config.view_config.renderer.set_palette(palette);
         // Re-render the current frame with the new palette
-        self.emu_textures.update_emulator_texture(ctx, &self.config.view_config.renderer);
+        self.emu_textures.update_emulator_texture(ctx, &mut self.config.view_config.renderer);
         if self.is_tile_viewer_visible() {
             self.emu_textures.update_tile_textures(
                 ctx,
@@ -292,7 +292,7 @@ impl EguiApp {
         // Update the renderer's palette
         self.config.view_config.renderer.set_palette(palette);
         // Re-render the current frame with the new palette
-        self.emu_textures.update_emulator_texture(ctx, &self.config.view_config.renderer);
+        self.emu_textures.update_emulator_texture(ctx, &mut self.config.view_config.renderer);
         if self.is_tile_viewer_visible() {
             self.emu_textures.update_tile_textures(
                 ctx,

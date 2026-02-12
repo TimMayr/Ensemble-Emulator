@@ -125,4 +125,8 @@ impl ScreenRenderer for LookupPaletteRenderer {
 
         &self.image
     }
+    
+    fn set_palette(&mut self, rgb_palette: RgbPalette) {
+        self.palette = rgb_palette.into();
+    }
 }

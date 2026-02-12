@@ -25,6 +25,7 @@ use ensemble_lockstep::emulation::ppu::{
     EmulatorFetchable, PaletteData ,TILE_COUNT, TileData,
 };
 use ensemble_lockstep::emulation::savestate::SaveState;
+use ensemble_lockstep::emulation::screen_renderer::ScreenRenderer;
 use ensemble_lockstep::util::ToBytes;
 
 use crate::channel_emu::ChannelEmulator;
@@ -56,8 +57,12 @@ const MAX_AUTOSAVES_PER_GAME: usize = 1024;
 /// Shared deque for frontend events that can be pushed from UI components
 pub type FrontendEventQueue = Rc<RefCell<VecDeque<FrontendEvent>>>;
 
-/// Main egui application state
-pub struct EguiApp {
+/// Main egui application state, generic over a ScreenRenderer implementation.
+/// 
+/// The type parameter `R` specifies the renderer used for converting palette
+/// indices to RGB colors. This allows the frontend to work with any renderer
+/// that implements the `ScreenRenderer` trait.
+pub struct EguiApp<R: ScreenRenderer> {
     pub(crate) channel_emu: ChannelEmulator,
     pub(crate) to_emulator: Sender<FrontendMessage>,
     pub(crate) from_emulator: Receiver<EmulatorMessage>,
@@ -68,7 +73,7 @@ pub struct EguiApp {
     pub(crate) emu_textures: EmuTextures,
     pub(crate) fps_counter: FpsCounter,
     accumulator: Duration,
-    pub(crate) config: AppConfig,
+    pub(crate) config: AppConfig<R>,
     /// The tile tree for docking behavior
     tree: egui_tiles::Tree<Pane>,
     /// Track if pattern tables was visible last frame to detect when it becomes visible
@@ -81,7 +86,7 @@ pub struct EguiApp {
     was_focused: bool,
 }
 
-impl EguiApp {
+impl<R: ScreenRenderer + Default + Clone> EguiApp<R> {
     pub fn new(
         cc: &eframe::CreationContext<'_>,
         channel_emu: ChannelEmulator,
@@ -91,7 +96,7 @@ impl EguiApp {
         from_async: Receiver<AsyncFrontendMessage>,
     ) -> Self {
         // Load configuration from TOML file
-        let loaded_config = load_config();
+        let loaded_config = load_config::<R>();
 
         // Try to restore the tile tree from egui's storage, fall back to default
         let tree = cc
@@ -102,7 +107,7 @@ impl EguiApp {
             .unwrap_or_else(create_tree);
 
         // Create default config and apply loaded settings
-        let mut config = AppConfig::default();
+        let mut config = AppConfig::<R>::default();
         if let Some(ref persistent_config) = loaded_config {
             config = persistent_config.into();
         }
@@ -554,7 +559,7 @@ impl EguiApp {
     }
 }
 
-impl eframe::App for EguiApp {
+impl<R: ScreenRenderer + Default + Clone> eframe::App for EguiApp<R> {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         // Handle keyboard input
         handle_keyboard_input(
@@ -631,15 +636,20 @@ impl eframe::App for EguiApp {
     }
 }
 
-impl Debug for EguiApp {
+impl<R: ScreenRenderer> Debug for EguiApp<R> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { f.write_str("EguiApp") }
 }
 
-/// Run the egui frontend
-pub fn run(
+/// Run the egui frontend with the specified renderer type.
+/// 
+/// The renderer type `R` must implement `ScreenRenderer`, `Default`, `Clone`, and `Send + 'static`.
+pub fn run<R>(
     rom: Option<PathBuf>,
     _palette: Option<PathBuf>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> 
+where
+    R: ScreenRenderer + Default + Clone + Send + 'static,
+{
     // Create the emulator instance
     let console = Nes::default();
 
@@ -680,7 +690,7 @@ pub fn run(
             };
             cc.egui_ctx.set_style(style);
             cc.egui_ctx.set_theme(egui::Theme::Dark);
-            Ok(Box::new(EguiApp::new(
+            Ok(Box::new(EguiApp::<R>::new(
                 cc,
                 channel_emu,
                 tx_to_emu,

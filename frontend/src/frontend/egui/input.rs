@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use crossbeam_channel::Sender;
 use egui::Context;
+use ensemble_lockstep::emulation::screen_renderer::ScreenRenderer;
 
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::keybindings::Binding;
@@ -23,10 +24,10 @@ fn is_binding_pressed(input: &egui::InputState, binding: &Option<Binding>) -> bo
 /// * `async_sender` - Channel to send async messages
 /// * `config` - Application configuration (modified for speed/view settings)
 /// * `last_frame_request` - Last frame request time (reset when pausing)
-pub fn handle_keyboard_input(
+pub fn handle_keyboard_input<R: ScreenRenderer>(
     ctx: &Context,
     async_sender: &Sender<AsyncFrontendMessage>,
-    config: &mut AppConfig,
+    config: &mut AppConfig<R>,
     last_frame_request: &mut Instant,
 ) {
     ctx.input(|i| {
@@ -60,10 +61,10 @@ pub fn handle_keyboard_input(
 }
 
 /// Handle NES controller input mapping from keyboard
-fn handle_controller_input(
+fn handle_controller_input<R: ScreenRenderer>(
     input: &egui::InputState,
     async_sender: &Sender<AsyncFrontendMessage>,
-    config: &AppConfig,
+    config: &AppConfig<R>,
 ) {
     // D-pad
     if is_binding_pressed(input, &config.keybindings.controller.left) {

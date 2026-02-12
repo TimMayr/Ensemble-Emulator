@@ -4,6 +4,7 @@ use crossbeam_channel::Sender;
 use egui::WidgetText;
 use egui_tiles::{Behavior, SimplificationOptions, TileId, Tiles, UiResponse};
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
+use ensemble_lockstep::emulation::screen_renderer::ScreenRenderer;
 use serde::{Deserialize, Serialize};
 
 use crate::channel_emu::{ChannelEmulator, FETCH_DEPS};
@@ -57,16 +58,16 @@ impl Pane {
     }
 }
 
-/// Behavior implementation for the tile tree
-pub struct TreeBehavior<'a> {
-    pub config: &'a mut AppConfig,
+/// Behavior implementation for the tile tree, generic over a ScreenRenderer.
+pub struct TreeBehavior<'a, R: ScreenRenderer> {
+    pub config: &'a mut AppConfig<R>,
     pub emu_textures: &'a EmuTextures,
     pub async_sender: &'a Sender<AsyncFrontendMessage>,
 }
 
-impl<'a> TreeBehavior<'a> {
+impl<'a, R: ScreenRenderer> TreeBehavior<'a, R> {
     pub fn new(
-        config: &'a mut AppConfig,
+        config: &'a mut AppConfig<R>,
         emu_textures: &'a EmuTextures,
         async_sender: &'a Sender<AsyncFrontendMessage>,
     ) -> Self {
@@ -78,7 +79,7 @@ impl<'a> TreeBehavior<'a> {
     }
 }
 
-impl Behavior<Pane> for TreeBehavior<'_> {
+impl<R: ScreenRenderer> Behavior<Pane> for TreeBehavior<'_, R> {
     fn pane_ui(&mut self, ui: &mut egui::Ui, _: TileId, pane: &mut Pane) -> UiResponse {
         match pane {
             Pane::EmulatorOutput => {

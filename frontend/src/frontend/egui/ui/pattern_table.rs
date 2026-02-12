@@ -2,21 +2,21 @@ use crossbeam_channel::Sender;
 use eframe::epaint::TextureHandle;
 use egui::Ui;
 use ensemble_lockstep::emulation::ppu::TileData;
-use ensemble_lockstep::emulation::screen_renderer::RgbColor;
+use ensemble_lockstep::emulation::screen_renderer::{RgbColor, ScreenRenderer};
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::ui::widgets::{PainterGridConfig, image_cell};
 use crate::frontend::messages::AsyncFrontendMessage;
 use crate::frontend::util::color_radio;
 
 /// Draw a pattern table (left or right) in the UI
-pub fn draw_pattern_table(
+pub fn draw_pattern_table<R: ScreenRenderer>(
     ui: &mut Ui,
     width: f32,
     emu_textures: &[TextureHandle],
     palette: [RgbColor; 4],
     pattern_data: &[TileData],
     async_sender: &Sender<AsyncFrontendMessage>,
-    config: &mut AppConfig,
+    config: &mut AppConfig<R>,
 ) {
     let grid_config = PainterGridConfig::square(width, 16);
     let (parent, _) = ui.allocate_exact_size(grid_config.total_size(), egui::Sense::hover());
@@ -131,10 +131,10 @@ pub fn draw_pattern_table(
 }
 
 /// Handle editing a single pixel in a tile pattern
-fn handle_pixel_edit(
+fn handle_pixel_edit<R: ScreenRenderer>(
     tile_data: &TileData,
     index: usize,
-    config: &AppConfig,
+    config: &AppConfig<R>,
     async_sender: &Sender<AsyncFrontendMessage>,
     clear: bool,
 ) {

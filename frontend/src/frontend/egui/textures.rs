@@ -2,8 +2,7 @@ use std::time::Instant;
 
 use egui::{ColorImage, Context, TextureHandle, TextureOptions};
 use ensemble_lockstep::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData, TILE_SIZE, NametableData, TILE_COUNT, PaletteData, PALETTE_COUNT};
-use ensemble_lockstep::emulation::screen_renderer::{RgbColor, RgbPalette};
-use ensemble_gown::LookupPaletteRenderer;
+use ensemble_lockstep::emulation::screen_renderer::{RgbColor, RgbPalette, ScreenRenderer};
 
 /// Texture storage and management for the emulator display
 #[derive(Eq, PartialEq, Clone)]
@@ -50,16 +49,16 @@ impl EmuTextures {
         }
     }
 
-    /// Update the main emulator display texture using the renderer from ensemble-gown.
+    /// Update the main emulator display texture using a ScreenRenderer.
     /// 
     /// The actual conversion from palette indices to RGB colors is done by the
-    /// renderer implementation in the ensemble-gown crate.
-    pub fn update_emulator_texture(&mut self, ctx: &Context, renderer: &LookupPaletteRenderer) {
+    /// renderer implementation, which must implement the `ScreenRenderer` trait.
+    pub fn update_emulator_texture<R: ScreenRenderer>(&mut self, ctx: &Context, renderer: &mut R) {
         if let Some(ref frame) = self.current_frame {
-            // Use the renderer from ensemble-gown for the actual rendering
-            let rgb_frame = renderer.indices_to_rgb(frame.as_ref());
+            // Use the ScreenRenderer trait's buffer_to_image method
+            let rgb_frame = renderer.buffer_to_image(frame.as_ref());
             let image =
-                Self::rgb_to_color_image(&rgb_frame, TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT);
+                Self::rgb_to_color_image(rgb_frame, TOTAL_OUTPUT_WIDTH, TOTAL_OUTPUT_HEIGHT);
 
             let texture = ctx.load_texture(
                 "emulator_output",

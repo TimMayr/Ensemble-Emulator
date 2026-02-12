@@ -1,9 +1,10 @@
 //! Options pane rendering
 
+use ensemble_lockstep::emulation::screen_renderer::ScreenRenderer;
 use crate::frontend::egui::config::{AppConfig, AppSpeed, DebugSpeed};
 
 /// Render the options panel
-pub fn render_options(ui: &mut egui::Ui, config: &mut AppConfig) {
+pub fn render_options<R: ScreenRenderer>(ui: &mut egui::Ui, config: &mut AppConfig<R>) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         render_renderer_settings(ui, config);
         render_speed_settings(ui, config);
@@ -11,12 +12,11 @@ pub fn render_options(ui: &mut egui::Ui, config: &mut AppConfig) {
 }
 
 /// Render renderer selection section
-fn render_renderer_settings(ui: &mut egui::Ui, config: &mut AppConfig) {
+fn render_renderer_settings<R: ScreenRenderer>(ui: &mut egui::Ui, config: &mut AppConfig<R>) {
     ui.collapsing("Renderer", |ui| {
-        // Currently using the LookupPaletteRenderer from ensemble-gown
-        // Future renderers can be selected here when implemented
-        ui.label("Current Renderer: Palette Lookup Table");
-        ui.small("Fast lookup table-based renderer using the selected palette file");
+        // The renderer type is specified at app construction time
+        // Display info about the current renderer
+        ui.label(format!("Current Renderer: {:?}", config.view_config.renderer));
         
         ui.separator();
         
@@ -33,7 +33,7 @@ fn render_renderer_settings(ui: &mut egui::Ui, config: &mut AppConfig) {
 }
 
 /// Render speed settings section
-fn render_speed_settings(ui: &mut egui::Ui, config: &mut AppConfig) {
+fn render_speed_settings<R: ScreenRenderer>(ui: &mut egui::Ui, config: &mut AppConfig<R>) {
     ui.collapsing("Speed", |ui| {
         ui.label("Emulation Speed")
             .on_hover_text("Sets the speed at which the emulation runs");

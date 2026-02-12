@@ -1,6 +1,7 @@
 //! Pattern table viewer pane rendering
 
 use crossbeam_channel::Sender;
+use ensemble_lockstep::emulation::screen_renderer::ScreenRenderer;
 
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
@@ -8,9 +9,9 @@ use crate::frontend::egui::ui::draw_pattern_table;
 use crate::frontend::messages::AsyncFrontendMessage;
 
 /// Render both pattern tables side by side
-pub fn render_pattern_table(
+pub fn render_pattern_table<R: ScreenRenderer>(
     ui: &mut egui::Ui,
-    config: &mut AppConfig,
+    config: &mut AppConfig<R>,
     emu_textures: &EmuTextures,
     async_sender: &Sender<AsyncFrontendMessage>,
 ) {

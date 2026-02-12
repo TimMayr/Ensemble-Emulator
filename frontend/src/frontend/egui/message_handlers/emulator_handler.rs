@@ -6,6 +6,7 @@
 use egui::{Context, ViewportCommand};
 use ensemble_lockstep::emulation::ppu::{EmulatorFetchable, PaletteData, TILE_COUNT, TileData};
 use ensemble_lockstep::emulation::savestate::SaveState;
+use ensemble_lockstep::emulation::screen_renderer::ScreenRenderer;
 use ensemble_lockstep::util::ToBytes;
 
 use crate::frontend::egui_frontend::EguiApp;
@@ -23,7 +24,7 @@ pub trait EmulatorMessageHandler {
     fn handle_emulator_messages(&mut self, ctx: &Context);
 }
 
-impl EmulatorMessageHandler for EguiApp {
+impl<R: ScreenRenderer + Default + Clone> EmulatorMessageHandler for EguiApp<R> {
     fn handle_emulator_messages(&mut self, ctx: &Context) {
         while let Ok(msg) = self.from_emulator.try_recv() {
             self.handle_single_emulator_message(msg, ctx);
@@ -31,14 +32,14 @@ impl EmulatorMessageHandler for EguiApp {
     }
 }
 
-impl EguiApp {
+impl<R: ScreenRenderer + Default + Clone> EguiApp<R> {
     /// Handle a single emulator message.
     pub(crate) fn handle_single_emulator_message(&mut self, msg: EmulatorMessage, ctx: &Context) {
         match msg {
             EmulatorMessage::FrameReady(frame) => {
                 self.emu_textures.current_frame = Some(frame);
                 self.fps_counter.update();
-                self.emu_textures.update_emulator_texture(ctx, &self.config.view_config.renderer);
+                self.emu_textures.update_emulator_texture(ctx, &mut self.config.view_config.renderer);
             }
             EmulatorMessage::DebugData(data) => {
                 self.handle_debug_data(ctx, data);

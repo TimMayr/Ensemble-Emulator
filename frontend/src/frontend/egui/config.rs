@@ -3,45 +3,67 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use ensemble_lockstep::emulation::rom::RomFile;
-use ensemble_lockstep::emulation::screen_renderer::RgbPalette;
-use ensemble_gown::LookupPaletteRenderer;
+use ensemble_lockstep::emulation::screen_renderer::{RgbPalette, ScreenRenderer};
 use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::messages::SavestateLoadContext;
 
-#[derive(Debug, Default)]
-pub struct ViewConfig {
+/// View configuration generic over a ScreenRenderer implementation.
+/// 
+/// The renderer type `R` must implement the `ScreenRenderer` trait from 
+/// `ensemble_lockstep`. This allows the frontend to work with any renderer
+/// implementation without depending on concrete types like `LookupPaletteRenderer`.
+#[derive(Debug)]
+pub struct ViewConfig<R: ScreenRenderer> {
     pub show_palette: bool,
     pub show_pattern_table: bool,
     pub show_nametable: bool,
     pub required_debug_fetches: HashSet<EmulatorFetchable>,
     /// The renderer instance used for converting palette indices to RGB colors.
-    /// All rendering logic is contained in the ensemble-gown crate.
-    /// 
-    /// **Important**: The renderer's internal palette must be kept in sync with
-    /// `palette_rgb_data`. When changing palettes, callers must update both:
-    /// 1. Set `palette_rgb_data` to the new palette
-    /// 2. Call `renderer.set_palette(new_palette)` to update the renderer
-    pub renderer: LookupPaletteRenderer,
+    /// The renderer must implement the `ScreenRenderer` trait.
+    pub renderer: R,
     /// The RGB palette data used for rendering (kept for debug viewers like pattern tables).
-    /// 
-    /// **Important**: This must be kept in sync with the renderer's palette.
-    /// See the `renderer` field documentation for details.
     pub palette_rgb_data: RgbPalette,
     pub debug_active_palette: usize,
 }
 
-/// Main application configuration
+impl<R: ScreenRenderer + Default> Default for ViewConfig<R> {
+    fn default() -> Self {
+        Self {
+            show_palette: false,
+            show_pattern_table: false,
+            show_nametable: false,
+            required_debug_fetches: HashSet::new(),
+            renderer: R::default(),
+            palette_rgb_data: RgbPalette::default(),
+            debug_active_palette: 0,
+        }
+    }
+}
+
+/// Main application configuration generic over a ScreenRenderer implementation.
 ///
 /// Note: `Eq` and `PartialEq` are not derived because `PendingDialogs` contains
 /// `SavestateLoadContext` which includes `SaveState`, which is not trivially comparable.
-#[derive(Default)]
-pub struct AppConfig {
-    pub view_config: ViewConfig,
+pub struct AppConfig<R: ScreenRenderer> {
+    pub view_config: ViewConfig<R>,
     pub speed_config: SpeedConfig,
     pub user_config: UserConfig,
     pub console_config: ConsoleConfig,
     pub pending_dialogs: PendingDialogs,
     pub keybindings: KeybindingsConfig,
+}
+
+impl<R: ScreenRenderer + Default> Default for AppConfig<R> {
+    fn default() -> Self {
+        Self {
+            view_config: ViewConfig::default(),
+            speed_config: SpeedConfig::default(),
+            user_config: UserConfig::default(),
+            console_config: ConsoleConfig::default(),
+            pending_dialogs: PendingDialogs::default(),
+            keybindings: KeybindingsConfig::default(),
+        }
+    }
 }
 
 /// Pending dialog states for multi-step operations
