@@ -20,12 +20,12 @@ const PALETTE_INDEX_MASK: usize = FLAT_PALETTE_SIZE - 1;
 /// 
 /// This flat structure allows O(1) lookup using the raw index value.
 #[derive(Clone, Serialize, Deserialize)]
-struct FlatPalette {
+struct FlatPalette2 {
     #[serde(with = "BigArray")]
     palette: [RgbColor; FLAT_PALETTE_SIZE],
 }
 
-impl From<RgbPalette> for FlatPalette {
+impl From<RgbPalette> for FlatPalette2 {
     fn from(palette: RgbPalette) -> Self {
         let mut flat = [RgbColor::default(); FLAT_PALETTE_SIZE];
 
@@ -56,16 +56,16 @@ impl From<RgbPalette> for FlatPalette {
 /// let rgb_colors = renderer.buffer_to_image(&pixel_indices);
 /// ```
 #[derive(Clone, Serialize, Deserialize)]
-pub struct LookupPaletteRenderer {
-    palette: FlatPalette,
+pub struct LookupPaletteRenderer2 {
+    palette: FlatPalette2,
     image: Vec<RgbColor>,
 }
 
-impl Default for LookupPaletteRenderer {
+impl Default for LookupPaletteRenderer2 {
     fn default() -> Self { Self::new() }
 }
 
-impl LookupPaletteRenderer {
+impl LookupPaletteRenderer2 {
     /// Create a new renderer with the default palette
     pub fn new() -> Self {
         Self {
@@ -75,13 +75,13 @@ impl LookupPaletteRenderer {
     }
 }
 
-impl Debug for LookupPaletteRenderer {
+impl Debug for LookupPaletteRenderer2 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("LookupPaletteRenderer")
     }
 }
 
-impl ScreenRenderer for LookupPaletteRenderer {
+impl ScreenRenderer for LookupPaletteRenderer2 {
     fn buffer_to_image(&mut self, buffer: &[u16]) -> &[RgbColor] {
         if self.image.len() != buffer.len() {
             self.image = Vec::with_capacity(buffer.len());
@@ -90,7 +90,7 @@ impl ScreenRenderer for LookupPaletteRenderer {
         self.image.clear();
         for x in buffer.iter() {
             self.image
-                .push(self.palette.palette[(*x as usize) & PALETTE_INDEX_MASK])
+                .push(self.palette.palette[(*x as usize) ^ PALETTE_INDEX_MASK])
         }
 
         &self.image
