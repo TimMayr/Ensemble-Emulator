@@ -630,6 +630,8 @@ impl Debug for EguiApp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { f.write_str("EguiApp") }
 }
 
+/// Native: common setup with PathBuf for command-line ROM loading
+#[cfg(not(target_arch = "wasm32"))]
 fn common_setup(
     rom: Option<PathBuf>,
 ) -> (
@@ -644,9 +646,6 @@ fn common_setup(
     
     // Create the emulator instance
     let console = Nes::default();
-
-    // Palette is now loaded from persistent config, not command line
-    // The _palette parameter is kept for API compatibility but unused
 
     // Create channel-based emulator wrapper
     let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
@@ -673,15 +672,51 @@ fn common_setup(
     )
 }
 
+/// WASM: common setup without filesystem access
+#[cfg(target_arch = "wasm32")]
+fn common_setup_wasm() -> (
+    ChannelEmulator,
+    Sender<FrontendMessage>,
+    Receiver<EmulatorMessage>,
+    Sender<AsyncFrontendMessage>,
+    Receiver<AsyncFrontendMessage>,
+) {
+    // Create the emulator instance
+    let console = Nes::default();
+
+    // Create channel-based emulator wrapper
+    let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
+    let (to_frontend, from_async) = crossbeam_channel::unbounded();
+
+    // No ROM loaded at startup in WASM - user will pick via file dialog
+    let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(None));
+
+    (
+        channel_emu,
+        tx_to_emu,
+        rx_from_emu,
+        to_frontend,
+        from_async,
+    )
+}
+
 /// Run the egui frontend.
 ///
 /// Uses `RendererKind` for runtime-switchable rendering.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn run(
     rom: Option<PathBuf>,
     _palette: Option<PathBuf>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let res = common_setup(rom);
     run_internal(res)
+}
+
+/// Run the egui frontend for WASM.
+#[cfg(target_arch = "wasm32")]
+pub fn run_wasm() -> Result<(), Box<dyn std::error::Error>> {
+    let res = common_setup_wasm();
+    run_internal_wasm(res)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -730,9 +765,8 @@ fn run_internal(
 }
 
 #[cfg(target_arch = "wasm32")]
-fn run_internal(
+fn run_internal_wasm(
     res: (
-        Option<PathBuf>,
         ChannelEmulator,
         Sender<FrontendMessage>,
         Receiver<EmulatorMessage>,
@@ -774,7 +808,7 @@ fn run_internal(
                     cc.egui_ctx.set_style(style);
                     cc.egui_ctx.set_theme(egui::Theme::Dark);
                     Ok(Box::new(EguiApp::new(
-                        cc, res.1, res.2, res.3, res.4, res.5,
+                        cc, res.0, res.1, res.2, res.3, res.4,
                     )))
                 }),
             )
