@@ -204,7 +204,11 @@ pub struct SaveState {
 /// Try to load a savestate from a file path, returning None on error
 pub fn try_load_state(path: &PathBuf) -> Option<SaveState> {
     let encoded = std::fs::read(path).ok()?;
+    try_load_state_from_bytes(&encoded)
+}
 
+/// Try to load a savestate from raw bytes, returning None on error
+pub fn try_load_state_from_bytes(encoded: &[u8]) -> Option<SaveState> {
     if encoded.len() < MAGIC.len() + 1 {
         return None;
     }
