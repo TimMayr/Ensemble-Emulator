@@ -73,37 +73,24 @@ pub fn render_palettes(
     egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
             if ui.button("Load Palette").clicked() {
-                spawn_palette_picker(
-                    async_sender,
-                    config.user_config.previous_palette_path.as_ref(),
-                    config.user_config.previous_palette_path.clone(),
-                );
+                spawn_palette_picker(async_sender);
             }
 
             if ui.button("Save Palette").clicked() {
                 spawn_save_dialog(
                     Some(async_sender),
-                    config.user_config.previous_palette_path.as_ref(),
                     FileType::Palette,
                     Box::new(config.view_config.palette_rgb_data),
                 );
             }
 
             if ui.button("Reset Palette").clicked() {
-                let path = config.user_config.previous_palette_path.clone();
                 let sender = async_sender.clone();
 
                 std::thread::spawn(move || {
-                    // Load palette from the previous path if available, otherwise use default
-                    let palette = if let Some(ref path) = path {
-                        match std::fs::read(path) {
-                            Ok(data) => ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&data),
-                            Err(_) => ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&[]),
-                        }
-                    } else {
-                        ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&[])
-                    };
-                    let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette, path));
+                    // Reset to default palette
+                    let palette = ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&[]);
+                    let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette));
                 });
             }
         })

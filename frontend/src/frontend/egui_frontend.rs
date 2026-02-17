@@ -14,7 +14,7 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::fmt::{Debug, Formatter};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -192,45 +192,36 @@ impl EguiApp {
         }
     }
 
-    pub(crate) fn load_rom(&mut self, rom_path: PathBuf) {
+    pub(crate) fn load_rom(&mut self, data: Vec<u8>, name: String) {
         let _ = self
             .to_emulator
             .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
 
-        // Read the ROM file and send the data to the emulator
-        let rom_data = match std::fs::read(&rom_path) {
-            Ok(data) => data,
-            Err(e) => {
-                eprintln!("Failed to read ROM file '{}': {}", rom_path.display(), e);
-                return;
-            }
-        };
-        let rom_name = rom_path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "Unknown".to_string());
-
         let _ = self
             .to_emulator
-            .send(FrontendMessage::LoadRom((rom_data, rom_name)));
+            .send(FrontendMessage::LoadRom((data, name.clone())));
 
-        self.config.user_config.previous_rom_path = Some(rom_path.clone());
+        // Extract stem for window title
+        let stem = name.rsplit_once('.').map(|(s, _)| s).unwrap_or(&name);
+        let window_title = if stem.is_empty() {
+            "Ensemble".to_string()
+        } else {
+            format!("Ensemble - {}", stem)
+        };
+
+        self.config.user_config.previous_rom_name = Some(name);
 
         self.event_queue
             .borrow_mut()
-            .push_back(FrontendEvent::ChangeWindowTitle(
-                rom_path
-                    .file_stem()
-                    .map(|f| format!("Ensemble - {}", f.to_string_lossy()))
-                    .unwrap_or("Ensemble".to_string()),
-            ));
+            .push_back(FrontendEvent::ChangeWindowTitle(window_title));
     }
 
     /// Load a savestate after ROM has been verified/selected
     pub(crate) fn load_savestate_with_rom(
         &mut self,
         context: &SavestateLoadContext,
-        rom_path: &Path,
+        rom_data: Vec<u8>,
+        rom_name: String,
     ) {
         if self.config.user_config.loaded_rom.is_some() {
             let _ = self
@@ -240,7 +231,7 @@ impl EguiApp {
 
         // First power off, load ROM, power on
         let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-        self.load_rom(rom_path.to_path_buf());
+        self.load_rom(rom_data, rom_name);
         let _ = self.to_emulator.send(FrontendMessage::Power);
 
         // Then load the savestate
@@ -250,16 +241,16 @@ impl EguiApp {
                 context.savestate.clone(),
             )));
 
-        // Update config paths
-        self.config.user_config.previous_savestate_path = Some(context.savestate_path.clone());
+        // Update config names
+        self.config.user_config.previous_savestate_name = Some(context.savestate_name.clone());
     }
 
     pub(crate) fn create_auto_save(&self, savestate: Box<SaveState>) {
         if let Some(rom) = &self.config.user_config.loaded_rom {
             let rom_hash = &rom.data_checksum;
-            let prev_path = &self.config.user_config.previous_rom_path;
-            if let Some(prev_path) = prev_path {
-                let display_name = util::rom_display_name(prev_path, rom_hash);
+            let prev_name = &self.config.user_config.previous_rom_name;
+            if let Some(prev_name) = prev_name {
+                let display_name = util::rom_display_name(prev_name, rom_hash);
                 let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
                 let key = storage::autosave_key(&display_name, &timestamp);
 
@@ -305,17 +296,17 @@ impl EguiApp {
         });
     }
 
-    pub(crate) fn get_current_quicksave_path(&self) -> Option<PathBuf> {
+    pub(crate) fn get_current_quicksave_key(&self) -> Option<String> {
         if let Some(rom) = &self.config.user_config.loaded_rom
-            && let Some(prev_path) = &self.config.user_config.previous_rom_path
+            && let Some(prev_name) = &self.config.user_config.previous_rom_name
         {
             let rom_hash = &rom.data_checksum;
-            let display_name = util::rom_display_name(prev_path, rom_hash);
+            let display_name = util::rom_display_name(prev_name, rom_hash);
             let prefix = storage::quicksaves_prefix(&display_name);
 
             // List all quicksaves using storage
             if let Ok(entries) = storage::list_sync(&prefix) {
-                let mut quicksave_path: Option<(PathBuf, chrono::NaiveDateTime, u8)> = None;
+                let mut quicksave_key: Option<(String, chrono::NaiveDateTime, u8)> = None;
 
                 for entry in entries {
                     if !entry.key.ends_with(".sav") {
@@ -341,10 +332,7 @@ impl EguiApp {
                     let version = version.parse::<u8>().unwrap_or(0);
 
                     if let Ok(time) = time {
-                        // Get the actual filesystem path for this key
-                        let path = storage::get_path_for_key(&entry.key)?;
-
-                        let should_update = match &quicksave_path {
+                        let should_update = match &quicksave_key {
                             None => true,
                             Some(current) => {
                                 current.1 < time || (current.1 == time && current.2 < version)
@@ -352,12 +340,12 @@ impl EguiApp {
                         };
 
                         if should_update {
-                            quicksave_path = Some((path, time, version));
+                            quicksave_key = Some((entry.key.clone(), time, version));
                         }
                     }
                 }
 
-                return quicksave_path.map(|p| p.0);
+                return quicksave_key.map(|p| p.0);
             }
         }
 
@@ -652,6 +640,8 @@ fn common_setup(
     Sender<AsyncFrontendMessage>,
     Receiver<AsyncFrontendMessage>,
 ) {
+    use crate::frontend::messages::LoadedRom;
+    
     // Create the emulator instance
     let console = Nes::default();
 
@@ -662,8 +652,13 @@ fn common_setup(
     let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
     let (to_frontend, from_async) = crossbeam_channel::unbounded();
 
-    // Setup Emulator State via messages
-    let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(rom));
+    // Setup Emulator State via messages - read ROM file if provided
+    let loaded_rom = rom.as_ref().and_then(|path| {
+        let data = std::fs::read(path).ok()?;
+        let name = path.file_name()?.to_string_lossy().to_string();
+        Some(LoadedRom { data, name })
+    });
+    let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(loaded_rom));
 
     // Get the storage path for egui persistence
     let storage_path = get_egui_storage_path();

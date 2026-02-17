@@ -18,14 +18,11 @@ use directories::ProjectDirs;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use ensemble_lockstep::emulation::screen_renderer::{create_renderer, RgbPalette};
 use serde::{Deserialize, Serialize};
-use ensemble_lockstep::emulation::screen_renderer;
-use screen_renderer::parse_palette_from_bytes;
 use crate::frontend::egui::config::{
     AppConfig, AppSpeed, ConsoleConfig, DebugSpeed, SpeedConfig, UserConfig, ViewConfig,
 };
 use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::storage;
-use crate::frontend::util::append_to_filename;
 
 /// Application identifier used for directory paths
 const APP_QUALIFIER: &str = "com";
@@ -215,6 +212,26 @@ fn extract(f: &OsStr) -> String {
         .to_string()
 }
 
+/// Append a suffix to a filename before the extension
+fn append_to_filename(path: &Path, suffix: &str, strip_chars: usize) -> PathBuf {
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    let ext = path.extension().map(|e| e.to_string_lossy().to_string());
+    
+    // Strip the specified number of characters from the end of the stem
+    let trimmed_stem = if strip_chars > 0 && stem.len() >= strip_chars {
+        &stem[..stem.len() - strip_chars]
+    } else {
+        &stem
+    };
+    
+    let new_filename = match ext {
+        Some(e) => format!("{}{}.{}", trimmed_stem, suffix, e),
+        None => format!("{}{}", trimmed_stem, suffix),
+    };
+    
+    path.with_file_name(new_filename)
+}
+
 /// Save data to the data directory asynchronously
 pub fn save_to_data_dir(
     filename: &str,
@@ -286,41 +303,26 @@ impl Default for PersistentConfig {
 
 impl From<&AppConfig> for PersistentConfig {
     fn from(value: &AppConfig) -> Self {
-        let mut this = Self {
+        Self {
             user_config: (&value.user_config).into(),
             view_config: (&value.view_config).into(),
             speed_config: (&value.speed_config).into(),
             console_config: (&value.console_config).into(),
             keybindings: value.keybindings.clone(),
-        };
-
-        this.view_config.palette_rgb_data = this.user_config.previous_palette_path.clone();
-        this
+        }
     }
 }
 
 impl From<&PersistentConfig> for AppConfig {
     fn from(value: &PersistentConfig) -> Self {
-        let mut this = Self {
+        Self {
             view_config: (&value.view_config).into(),
             speed_config: (&value.speed_config).into(),
             user_config: (&value.user_config).into(),
             console_config: (&value.console_config).into(),
             pending_dialogs: Default::default(),
             keybindings: value.keybindings.clone(),
-        };
-
-        // Load palette from the previous path if available
-        this.view_config.palette_rgb_data = if let Some(ref path) = value.user_config.previous_palette_path {
-            match fs::read(path) {
-                Ok(data) => parse_palette_from_bytes(&data),
-                Err(_) => parse_palette_from_bytes(&[]),
-            }
-        } else {
-            parse_palette_from_bytes(&[])
-        };
-
-        this
+        }
     }
 }
 
@@ -330,8 +332,6 @@ pub struct PersistentViewConfig {
     pub show_palette: bool,
     pub show_pattern_table: bool,
     pub show_nametable: bool,
-    /// Path to the palette file (used to reconstruct palette_rgb_data on load)
-    pub palette_rgb_data: RgbPalette,
     pub required_debug_fetches: HashSet<PersistentEmulatorFetchable>,
     pub debug_active_palette: usize,
     /// The serialized renderer state. When present, the renderer is restored from this.
@@ -346,7 +346,6 @@ impl Default for PersistentViewConfig {
             show_palette: false,
             show_pattern_table: false,
             show_nametable: false,
-            palette_rgb_data: RgbPalette::default(),
             required_debug_fetches: HashSet::new(),
             debug_active_palette: 0,
             renderer: "NoneRenderer".to_string(),
@@ -360,7 +359,6 @@ impl From<&ViewConfig> for PersistentViewConfig {
             show_palette: config.show_palette,
             show_pattern_table: config.show_pattern_table,
             show_nametable: config.show_nametable,
-            palette_rgb_data: config.palette_rgb_data,
             required_debug_fetches: config
                 .required_debug_fetches
                 .iter()
@@ -379,7 +377,7 @@ impl From<&PersistentViewConfig> for ViewConfig {
 
         Self {
             debug_active_palette: config.debug_active_palette,
-            palette_rgb_data: config.palette_rgb_data,
+            palette_rgb_data: RgbPalette::default(),
             show_nametable: config.show_nametable,
             show_palette: config.show_palette,
             show_pattern_table: config.show_pattern_table,
@@ -415,21 +413,24 @@ impl From<PersistentEmulatorFetchable> for EmulatorFetchable {
     }
 }
 
-/// Persistent user configuration
+/// Persistent user configuration - stores display names instead of paths for WASM compatibility
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PersistentUserConfig {
-    pub previous_palette_path: Option<PathBuf>,
-    pub previous_rom_path: Option<PathBuf>,
-    pub previous_savestate_path: Option<PathBuf>,
+    /// Last loaded palette filename (display only)
+    pub previous_palette_name: Option<String>,
+    /// Last loaded ROM filename (display only)
+    pub previous_rom_name: Option<String>,
+    /// Last loaded savestate filename (display only)
+    pub previous_savestate_name: Option<String>,
     pub pattern_edit_color: u8,
 }
 
 impl From<&UserConfig> for PersistentUserConfig {
     fn from(config: &UserConfig) -> Self {
         Self {
-            previous_palette_path: config.previous_palette_path.clone(),
-            previous_rom_path: config.previous_rom_path.clone(),
-            previous_savestate_path: config.previous_savestate_path.clone(),
+            previous_palette_name: config.previous_palette_name.clone(),
+            previous_rom_name: config.previous_rom_name.clone(),
+            previous_savestate_name: config.previous_savestate_name.clone(),
             pattern_edit_color: config.pattern_edit_color,
         }
     }
@@ -438,9 +439,9 @@ impl From<&UserConfig> for PersistentUserConfig {
 impl From<&PersistentUserConfig> for UserConfig {
     fn from(config: &PersistentUserConfig) -> Self {
         Self {
-            previous_palette_path: config.previous_palette_path.clone(),
-            previous_rom_path: config.previous_rom_path.clone(),
-            previous_savestate_path: config.previous_savestate_path.clone(),
+            previous_palette_name: config.previous_palette_name.clone(),
+            previous_rom_name: config.previous_rom_name.clone(),
+            previous_savestate_name: config.previous_savestate_name.clone(),
             pattern_edit_color: config.pattern_edit_color,
             loaded_rom: None,
         }
