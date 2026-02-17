@@ -28,7 +28,7 @@ use crate::frontend::util::append_to_filename;
 /// Application identifier used for directory paths
 const APP_QUALIFIER: &str = "com";
 const APP_ORGANIZATION: &str = "Lightsong";
-const APP_NAME: &str = "Tensordance";
+const APP_NAME: &str = "EnsembleEmulator";
 
 /// Singleton for project directories.
 ///

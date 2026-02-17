@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::util::{compute_hash, Hashable, ToBytes};
+use crate::util::{Hashable, ToBytes, compute_hash};
 
 /// Trait for rendering palette indices to RGB colors.
 ///
@@ -20,16 +20,19 @@ pub trait ScreenRenderer: Debug {
     fn set_palette(&mut self, palette: RgbPalette);
 
     fn get_name(&self) -> &str;
+
+    fn get_width(&self) -> usize;
+    fn get_height(&self) -> usize;
 }
 
 pub struct NoneRenderer {
-    image: [RgbColor; 0],
+    image: [RgbColor; 1],
 }
 
 impl NoneRenderer {
     pub fn new() -> Self {
         NoneRenderer {
-            image: [],
+            image: [RgbColor::default()],
         }
     }
 }
@@ -44,6 +47,17 @@ impl ScreenRenderer for NoneRenderer {
     fn set_palette(&mut self, _: RgbPalette) {}
 
     fn get_name(&self) -> &str { "None" }
+
+    fn get_width(&self) -> usize { 1 }
+
+    fn get_height(&self) -> usize { 1 }
+}
+
+inventory::submit! {
+    RendererRegistration {
+
+    name: "None",
+        factory: || Box::new(NoneRenderer::new())}
 }
 
 pub struct RendererRegistration {

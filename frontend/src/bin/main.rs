@@ -2,6 +2,11 @@ use std::process::ExitCode;
 
 use clap::value_parser;
 
+#[cfg(feature = "default_renderers")]
+mod renderers {
+    extern crate ensemble_gown;
+}
+
 const EXIT_SUCCESS: u8 = 0;
 const EXIT_GENERAL_ERROR: u8 = 1;
 // const EXIT_ROM_LOAD_FAILED: u8 = 3;  // Reserved for future use
@@ -11,8 +16,8 @@ const EXIT_GENERAL_ERROR: u8 = 1;
 
 use std::path::PathBuf;
 
-use ensemble_ballroom::frontend::egui_frontend;
 use clap::{Parser, ValueEnum};
+use ensemble_ballroom::frontend::egui_frontend;
 
 #[derive(Parser, Debug, Clone, Default)]
 #[command(name = "Ensemble-Emulator - Ballroom")]

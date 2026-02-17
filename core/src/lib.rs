@@ -1,4 +1,3 @@
-#![feature(likely_unlikely)]
 extern crate core;
 pub mod emulation;
 #[cfg(test)]

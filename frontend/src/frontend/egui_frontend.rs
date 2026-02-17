@@ -19,6 +19,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
+use eframe::glow;
 use egui::{Context, Style, ViewportCommand, Visuals};
 use ensemble_lockstep::emulation::nes::Nes;
 use ensemble_lockstep::emulation::ppu::{
@@ -206,8 +207,8 @@ impl EguiApp {
             .push_back(FrontendEvent::ChangeWindowTitle(
                 rom_path
                     .file_stem()
-                    .map(|f| format!("Tensordance - {}", f.to_string_lossy()))
-                    .unwrap_or("Tensordance".to_string()),
+                    .map(|f| format!("Ensemble - {}", f.to_string_lossy()))
+                    .unwrap_or("Ensemble".to_string()),
             ));
     }
 
@@ -620,7 +621,7 @@ impl eframe::App for EguiApp {
         eframe::set_value(storage, EGUI_TILES_TREE_KEY, &self.tree);
     }
 
-    fn on_exit(&mut self) {
+    fn on_exit(&mut self,  _gl: Option<&glow::Context>) {
         // Save configuration to TOML file before exiting (synchronous to ensure completion)
         let persistent_config = (&self.config).into();
         if let Err(e) = crate::frontend::persistence::save_config(&persistent_config) {
@@ -666,8 +667,8 @@ pub fn run(
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1024.0, 768.0])
-            .with_title("Tensordance")
-            .with_app_id("tensordance"),
+            .with_title("Ensemble")
+            .with_app_id("ensemble-emulator"),
         vsync: false, // Disable vsync for uncapped performance
         // Enable persistence with custom storage path
         persistence_path: storage_path,
@@ -676,7 +677,7 @@ pub fn run(
 
     // Run the application
     eframe::run_native(
-        "Tensordance",
+        "Ensemble",
         options,
         Box::new(move |cc| {
             let style = Style {

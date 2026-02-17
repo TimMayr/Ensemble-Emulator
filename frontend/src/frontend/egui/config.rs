@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use ensemble_lockstep::emulation::rom::RomFile;
-use ensemble_lockstep::emulation::screen_renderer::{create_renderer, RgbPalette, ScreenRenderer};
+use ensemble_lockstep::emulation::screen_renderer::{create_renderer, get_all_renderers, RgbPalette, ScreenRenderer};
 
 use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::messages::SavestateLoadContext;
@@ -28,6 +28,8 @@ pub struct ViewConfig {
 
 impl Default for ViewConfig {
     fn default() -> Self {
+        println!("{:?}", get_all_renderers());
+
         Self {
             show_palette: false,
             show_pattern_table: false,
