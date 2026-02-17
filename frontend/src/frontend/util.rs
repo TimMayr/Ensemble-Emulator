@@ -4,10 +4,13 @@ use std::path::{Path, PathBuf};
 
 use crossbeam_channel::Sender;
 use ensemble_lockstep::emulation::savestate::{self};
+use ensemble_lockstep::emulation::screen_renderer::{
+    parse_palette_from_bytes, parse_palette_from_file,
+};
 use ensemble_lockstep::util::ToBytes;
-use rfd::FileDialog;
+use rfd::{AsyncFileDialog, FileHandle};
 use sha2::{Digest, Sha256};
-use ensemble_lockstep::emulation::screen_renderer::parse_palette_from_file;
+
 use crate::frontend::messages::{AsyncFrontendMessage, SavestateLoadContext};
 
 /// Enum to represent errors that can occur during savestate loading UI flow
@@ -67,22 +70,23 @@ impl AsU32 for egui::Color32 {
             | (self.b() as u32)
     }
 }
-
-pub fn pick_file(previous: PathBuf, file_type: FileType) -> Option<PathBuf> {
-    FileDialog::new()
+pub async fn pick_file(previous: PathBuf, file_type: FileType) -> Option<FileHandle> {
+    AsyncFileDialog::new()
         .add_filetype_filter(file_type)
         .add_filetype_filter(FileType::All)
         .set_directory(previous)
         .pick_file()
+        .await
 }
 
-pub fn save_file(previous: PathBuf, file_type: FileType) -> Option<PathBuf> {
-    FileDialog::new()
+pub async fn save_file(previous: PathBuf, file_type: FileType) -> Option<FileHandle> {
+    AsyncFileDialog::new()
         .set_directory(previous)
         .add_filetype_filter(file_type)
         .add_filetype_filter(FileType::All)
         .set_can_create_directories(true)
         .save_file()
+        .await
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
@@ -94,7 +98,7 @@ pub enum FileType {
 }
 
 impl FileType {
-    pub fn add_filters(&self, dialog: FileDialog) -> FileDialog {
+    pub fn add_filters(&self, dialog: AsyncFileDialog) -> AsyncFileDialog {
         match self {
             FileType::Rom => dialog.add_filter("NES ROM File", &[self.get_default_extension()]),
             FileType::Savestate => {
@@ -121,7 +125,7 @@ pub trait AddFilter {
     fn add_filetype_filter(self, file_type: FileType) -> Self;
 }
 
-impl AddFilter for FileDialog {
+impl AddFilter for AsyncFileDialog {
     fn add_filetype_filter(self, file_type: FileType) -> Self { file_type.add_filters(self) }
 }
 
@@ -148,11 +152,12 @@ pub fn spawn_palette_picker(
 ) {
     let sender = sender.clone();
     let prev_dir = get_parent_dir(previous_path);
-    std::thread::spawn(move || {
-        if let Some(path) = pick_file(prev_dir, FileType::Palette) {
-            // Parse the palette file in this background thread
-            let palette = parse_palette_from_file(Some(path.clone()), fallback_path);
-            let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette, Some(path)));
+    spawn_async(async move {
+        if let Some(handle) = pick_file(prev_dir, FileType::Palette).await {
+            let bytes = handle.read().await;
+
+            let palette = parse_palette_from_bytes(bytes);
+            let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette, None));
         }
     });
 }
@@ -378,3 +383,9 @@ pub fn append_to_filename(path: &Path, suffix: &str, overwrite: usize) -> PathBu
         None => parent.join(name),
     }
 }
+
+#[cfg(target_arch = "wasm32")]
+fn spawn_async<F: Future<Output = ()> + 'static>(f: F) { wasm_bindgen_futures::spawn_local(f); }
+
+#[cfg(not(target_arch = "wasm32"))]
+fn spawn_async<F: Future<Output = ()> + Send + 'static>(f: F) { tokio::spawn(f); }

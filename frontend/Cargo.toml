@@ -12,7 +12,7 @@ name = "ballroom"
 path = "src/bin/main.rs"
 
 [dependencies]
-eframe = { version = "0.33.3", features = ["serde", "wgpu", "persistence"] }
+eframe = { version = "0.33.3", features = ["wgpu", "persistence"] }
 egui = { version = "0.33.3", features = ["accesskit", "persistence", "rayon"] }
 egui_tiles = { version = "0.14.1", features = ["serde"] }
 clap = { version = "4.5.54", features = ["derive", "cargo", "env", "string", "unicode", "wrap_help"] }
@@ -26,7 +26,14 @@ toml = { version = "1.0.2", features = ["fast_hash"] }
 
 ensemble-lockstep = { path = "../core" }
 ensemble-gown = { path = "../renderer", optional = true }
+tokio = "1.49.0"
 
 [features]
-default_renderers = ["ensemble-gown"]
 default = ["default_renderers"]
+default_renderers = ["ensemble-gown"]
+
+# Web-only dependencies
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["Window", "Document", "HtmlCanvasElement"] }
+wasm-bindgen = "0.2.108"
+wasm-bindgen-futures = "0.4.58"

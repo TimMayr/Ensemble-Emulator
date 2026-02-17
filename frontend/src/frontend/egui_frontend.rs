@@ -18,13 +18,13 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
+
 use crossbeam_channel::{Receiver, Sender};
+
 use eframe::glow;
 use egui::{Context, Style, ViewportCommand, Visuals};
 use ensemble_lockstep::emulation::nes::Nes;
-use ensemble_lockstep::emulation::ppu::{
-    EmulatorFetchable, PaletteData ,TILE_COUNT, TileData,
-};
+use ensemble_lockstep::emulation::ppu::{EmulatorFetchable, PaletteData, TileData, TILE_COUNT};
 use ensemble_lockstep::emulation::savestate::SaveState;
 use ensemble_lockstep::util::ToBytes;
 
@@ -35,7 +35,7 @@ use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::message_handlers::{AsyncMessageHandler, EmulatorMessageHandler};
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
-    Pane, TreeBehavior, compute_required_fetches_from_tree, create_tree,
+    compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
 };
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
 use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent, SavestateLoadContext};
@@ -58,7 +58,7 @@ const MAX_AUTOSAVES_PER_GAME: usize = 1024;
 pub type FrontendEventQueue = Rc<RefCell<VecDeque<FrontendEvent>>>;
 
 /// Main egui application state.
-/// 
+///
 /// Uses `RendererKind` for runtime-switchable rendering. The renderer can be
 /// changed at runtime by updating `config.view_config.renderer`.
 pub struct EguiApp {
@@ -366,13 +366,13 @@ impl EguiApp {
 
     /// Check if the pattern tables pane is visible
     fn is_pattern_tables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{Pane, find_pane};
+        use crate::frontend::egui::tiles::{find_pane, Pane};
         find_pane(&self.tree.tiles, &Pane::PatternTables).is_some()
     }
 
     /// Check if the nametables pane is visible
     fn is_nametables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{Pane, find_pane};
+        use crate::frontend::egui::tiles::{find_pane, Pane};
         find_pane(&self.tree.tiles, &Pane::Nametables).is_some()
     }
 
@@ -533,7 +533,7 @@ impl EguiApp {
             // Update timestamp first to prevent overlapping save operations
             self.last_autosave = Instant::now();
             let savestate = self.channel_emu.nes.save_state();
-            self.create_auto_save(Box::new(savestate));
+            self.create_auto_save(Box::new(savestate.unwrap()));
         }
     }
 
@@ -551,7 +551,7 @@ impl EguiApp {
             // Update timestamp first to prevent overlapping save operations
             self.last_autosave = Instant::now();
             let savestate = self.channel_emu.nes.save_state();
-            self.create_auto_save(Box::new(savestate));
+            self.create_auto_save(Box::new(savestate.unwrap()));
         }
 
         self.was_focused = is_focused;
@@ -621,7 +621,7 @@ impl eframe::App for EguiApp {
         eframe::set_value(storage, EGUI_TILES_TREE_KEY, &self.tree);
     }
 
-    fn on_exit(&mut self,  _gl: Option<&glow::Context>) {
+    fn on_exit(&mut self, _gl: Option<&glow::Context>) {
         // Save configuration to TOML file before exiting (synchronous to ensure completion)
         let persistent_config = (&self.config).into();
         if let Err(e) = crate::frontend::persistence::save_config(&persistent_config) {
@@ -629,7 +629,10 @@ impl eframe::App for EguiApp {
         }
 
         let savestate = self.channel_emu.nes.save_state();
-        self.create_auto_save(Box::new(savestate));
+
+        if let Some(state) = savestate {
+            self.create_auto_save(Box::new(state));
+        }
 
         let _ = self.to_emulator.send(FrontendMessage::Quit);
     }
@@ -639,13 +642,16 @@ impl Debug for EguiApp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { f.write_str("EguiApp") }
 }
 
-/// Run the egui frontend.
-/// 
-/// Uses `RendererKind` for runtime-switchable rendering.
-pub fn run(
+fn common_setup(
     rom: Option<PathBuf>,
-    _palette: Option<PathBuf>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> (
+    Option<PathBuf>,
+    ChannelEmulator,
+    Sender<FrontendMessage>,
+    Receiver<EmulatorMessage>,
+    Sender<AsyncFrontendMessage>,
+    Receiver<AsyncFrontendMessage>,
+) {
     // Create the emulator instance
     let console = Nes::default();
 
@@ -662,6 +668,38 @@ pub fn run(
     // Get the storage path for egui persistence
     let storage_path = get_egui_storage_path();
 
+    (
+        storage_path,
+        channel_emu,
+        tx_to_emu,
+        rx_from_emu,
+        to_frontend,
+        from_async,
+    )
+}
+
+/// Run the egui frontend.
+///
+/// Uses `RendererKind` for runtime-switchable rendering.
+pub fn run(
+    rom: Option<PathBuf>,
+    _palette: Option<PathBuf>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let res = common_setup(rom);
+    run_internal(res)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn run_internal(
+    res: (
+        Option<PathBuf>,
+        ChannelEmulator,
+        Sender<FrontendMessage>,
+        Receiver<EmulatorMessage>,
+        Sender<AsyncFrontendMessage>,
+        Receiver<AsyncFrontendMessage>,
+    ),
+) -> Result<(), Box<dyn std::error::Error>> {
     // Configure eframe options
     // Disable vsync to allow uncapped frame rates - emulator handles its own timing
     let options = eframe::NativeOptions {
@@ -671,7 +709,8 @@ pub fn run(
             .with_app_id("ensemble-emulator"),
         vsync: false, // Disable vsync for uncapped performance
         // Enable persistence with custom storage path
-        persistence_path: storage_path,
+        persistence_path: res.0,
+        renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
 
@@ -687,15 +726,66 @@ pub fn run(
             cc.egui_ctx.set_style(style);
             cc.egui_ctx.set_theme(egui::Theme::Dark);
             Ok(Box::new(EguiApp::new(
-                cc,
-                channel_emu,
-                tx_to_emu,
-                rx_from_emu,
-                to_frontend,
-                from_async,
+                cc, res.1, res.2, res.3, res.4, res.5,
             )))
         }),
     )?;
+
+    Ok(())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn run_internal(
+    res: (
+        Option<PathBuf>,
+        ChannelEmulator,
+        Sender<FrontendMessage>,
+        Receiver<EmulatorMessage>,
+        Sender<AsyncFrontendMessage>,
+        Receiver<AsyncFrontendMessage>,
+    ),
+) -> Result<(), Box<dyn std::error::Error>> {
+    use wasm_bindgen::JsCast;
+    use eframe::web_sys;
+    use web_sys::HtmlCanvasElement;
+
+    wasm_bindgen_futures::spawn_local(async {
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+
+        let canvas = document
+            .create_element("canvas")
+            .unwrap()
+            .dyn_into::<HtmlCanvasElement>()
+            .unwrap();
+
+        document.body().unwrap().append_child(&canvas).unwrap();
+
+        // Configure eframe options
+        // Disable vsync to allow uncapped frame rates - emulator handles its own timing
+        let options = eframe::WebOptions {
+            ..Default::default()
+        };
+
+        eframe::WebRunner::new()
+            .start(
+                canvas,
+                options,
+                Box::new(move |cc| {
+                    let style = Style {
+                        visuals: Visuals::dark(),
+                        ..Default::default()
+                    };
+                    cc.egui_ctx.set_style(style);
+                    cc.egui_ctx.set_theme(egui::Theme::Dark);
+                    Ok(Box::new(EguiApp::new(
+                        cc, res.1, res.2, res.3, res.4, res.5,
+                    )))
+                }),
+            )
+            .await
+            .unwrap()
+    });
 
     Ok(())
 }

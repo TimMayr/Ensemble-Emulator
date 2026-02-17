@@ -99,10 +99,12 @@ impl ChannelEmulator {
             match msg {
                 FrontendMessage::Quit => {
                     let state = self.nes.save_state();
-                    let _ = self.to_frontend.send(EmulatorMessage::SaveState(
-                        Box::new(state),
-                        SaveType::Autosave,
-                    ));
+                    if let Some(state) = state {
+                        let _ = self.to_frontend.send(EmulatorMessage::SaveState(
+                            Box::new(state),
+                            SaveType::Autosave,
+                        ));
+                    }
                     let _ = self.to_frontend.send(EmulatorMessage::Stopped);
                     return Err("Quit requested".to_string());
                 }
@@ -150,9 +152,11 @@ impl ChannelEmulator {
                 FrontendMessage::CreateSaveState(t) => {
                     if self.nes.rom_file.is_some() {
                         let state = self.nes.save_state();
-                        let _ = self
-                            .to_frontend
-                            .send(EmulatorMessage::SaveState(Box::new(state), t));
+                        if let Some(state) = state {
+                            let _ = self
+                                .to_frontend
+                                .send(EmulatorMessage::SaveState(Box::new(state), t));
+                        }
                     }
                 }
                 FrontendMessage::LoadSaveState(s) => self.nes.load_state(*s),

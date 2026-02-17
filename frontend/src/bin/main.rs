@@ -18,7 +18,6 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use ensemble_ballroom::frontend::egui_frontend;
-
 #[derive(Parser, Debug, Clone, Default)]
 #[command(name = "Ensemble-Emulator - Ballroom")]
 #[command(version, about, long_about = None)]

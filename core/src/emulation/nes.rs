@@ -9,9 +9,9 @@ use crate::emulation::cpu::{Cpu, MicroOp};
 use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
-use crate::emulation::ppu::{Ppu};
+use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::{RomFile, RomFileConvertible};
-use crate::emulation::savestate::{CpuState, PpuState, SaveState,};
+use crate::emulation::savestate::{CpuState, PpuState, SaveState};
 use crate::trace::TraceLog;
 
 pub const CPU_CYCLES_PER_FRAME: u16 = 29780;
@@ -144,21 +144,25 @@ impl Nes {
         self.rom_file = Some(rom_file);
     }
 
-    pub fn save_state(&self) -> SaveState {
+    pub fn save_state(&self) -> Option<SaveState> {
         let ppu_state = {
             let ppu_ref = self.ppu.borrow();
             PpuState::from(ppu_ref.deref())
         };
 
-        SaveState {
-            cpu: CpuState::from(&self.cpu),
-            ppu: ppu_state,
-            cycle: self.cpu_cycle_counter,
-            total_cycles: self.total_cycles,
-            rom_file: self.rom_file.as_ref().unwrap().clone(),
-            version: 1,
-            ppu_cycle_counter: self.ppu_cycle_counter,
-            cpu_cycle_counter: self.cpu_cycle_counter,
+        if let Some(rom) = &self.rom_file {
+            Some(SaveState {
+                cpu: CpuState::from(&self.cpu),
+                ppu: ppu_state,
+                cycle: self.cpu_cycle_counter,
+                total_cycles: self.total_cycles,
+                rom_file: rom.clone(),
+                version: 1,
+                ppu_cycle_counter: self.ppu_cycle_counter,
+                cpu_cycle_counter: self.cpu_cycle_counter,
+            })
+        } else {
+            None
         }
     }
 
