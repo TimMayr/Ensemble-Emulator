@@ -152,11 +152,9 @@ pub fn spawn_palette_picker(
 ) {
     let sender = sender.clone();
     let prev_dir = get_parent_dir(previous_path);
-    spawn_async(async move {
-        if let Some(handle) = pick_file(prev_dir, FileType::Palette).await {
-            let bytes = handle.read().await;
-
-            let palette = parse_palette_from_bytes(bytes);
+    std::thread::spawn(move || {
+        if let Some(path) = pick_file(prev_dir, FileType::Palette) {
+            let palette = parse_palette_from_file(path, fallback_path);
             let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette, None));
         }
     });
