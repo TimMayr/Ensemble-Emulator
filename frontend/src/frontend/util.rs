@@ -1,17 +1,12 @@
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::future::Future;
 
 use crossbeam_channel::Sender;
-use ensemble_lockstep::emulation::savestate::{self};
-use ensemble_lockstep::emulation::screen_renderer::{
-    parse_palette_from_bytes, parse_palette_from_file,
-};
+use ensemble_lockstep::emulation::savestate;
 use ensemble_lockstep::util::ToBytes;
 use rfd::{AsyncFileDialog, FileHandle};
 use sha2::{Digest, Sha256};
 
-use crate::frontend::messages::{AsyncFrontendMessage, SavestateLoadContext};
+use crate::frontend::messages::{AsyncFrontendMessage, LoadedRom, SavestateLoadContext};
 
 /// Enum to represent errors that can occur during savestate loading UI flow
 pub enum SavestateLoadError {
@@ -19,6 +14,19 @@ pub enum SavestateLoadError {
     FailedToLoadSavestate,
     /// Failed to compute checksum for a ROM file
     FailedToComputeChecksum,
+}
+
+/// Extract the parent directory from a FileHandle.
+/// On native, this uses the file's path. On WASM, returns None.
+#[cfg(not(target_arch = "wasm32"))]
+fn get_file_directory(handle: &FileHandle) -> Option<String> {
+    handle.path().parent().map(|p| p.to_string_lossy().to_string())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn get_file_directory(_handle: &FileHandle) -> Option<String> {
+    // WASM doesn't have filesystem paths
+    None
 }
 
 pub trait Contrastable {
@@ -70,23 +78,34 @@ impl AsU32 for egui::Color32 {
             | (self.b() as u32)
     }
 }
-pub async fn pick_file(previous: PathBuf, file_type: FileType) -> Option<FileHandle> {
-    AsyncFileDialog::new()
+
+/// Pick a file using the async file dialog.
+/// The directory hint is used to set the initial directory if provided.
+pub async fn pick_file(file_type: FileType, directory: Option<&str>) -> Option<FileHandle> {
+    let mut dialog = AsyncFileDialog::new()
         .add_filetype_filter(file_type)
-        .add_filetype_filter(FileType::All)
-        .set_directory(previous)
-        .pick_file()
-        .await
+        .add_filetype_filter(FileType::All);
+    
+    if let Some(dir) = directory {
+        dialog = dialog.set_directory(dir);
+    }
+    
+    dialog.pick_file().await
 }
 
-pub async fn save_file(previous: PathBuf, file_type: FileType) -> Option<FileHandle> {
-    AsyncFileDialog::new()
-        .set_directory(previous)
+/// Save a file using the async file dialog.
+/// The directory hint is used to set the initial directory if provided.
+pub async fn save_file(file_type: FileType, directory: Option<&str>) -> Option<FileHandle> {
+    let mut dialog = AsyncFileDialog::new()
         .add_filetype_filter(file_type)
         .add_filetype_filter(FileType::All)
-        .set_can_create_directories(true)
-        .save_file()
-        .await
+        .set_can_create_directories(true);
+    
+    if let Some(dir) = directory {
+        dialog = dialog.set_directory(dir);
+    }
+    
+    dialog.save_file().await
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
@@ -129,86 +148,84 @@ impl AddFilter for AsyncFileDialog {
     fn add_filetype_filter(self, file_type: FileType) -> Self { file_type.add_filters(self) }
 }
 
-/// Extract the parent directory from an optional path, or return a default empty path.
-/// This is commonly used to set the initial directory for file dialogs.
-pub fn get_parent_dir(path: Option<&PathBuf>) -> PathBuf {
-    path.and_then(|p| p.parent())
-        .map(|p| p.to_path_buf())
-        .unwrap_or_default()
-}
-
 /// Spawn a file picker for palette files that loads the palette asynchronously.
 ///
-/// This reads and parses the palette file in a background thread to avoid blocking the UI.
+/// This reads and parses the palette file asynchronously to avoid blocking the UI.
 ///
 /// # Arguments
 /// * `sender` - Channel to send the loaded palette back to the UI thread
-/// * `previous_path` - Used to set the initial directory for the file picker dialog
-/// * `fallback_path` - Used as fallback if the selected file cannot be parsed
-pub fn spawn_palette_picker(
-    sender: &Sender<AsyncFrontendMessage>,
-    previous_path: Option<&PathBuf>,
-    fallback_path: Option<PathBuf>,
-) {
+/// * `directory` - Optional directory hint for the file picker
+pub fn spawn_palette_picker(sender: &Sender<AsyncFrontendMessage>, directory: Option<&str>) {
     let sender = sender.clone();
-    let prev_dir = get_parent_dir(previous_path);
-    std::thread::spawn(move || {
-        if let Some(path) = pick_file(prev_dir, FileType::Palette) {
-            let palette = parse_palette_from_file(path, fallback_path);
-            let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette, None));
+    let dir = directory.map(|s| s.to_string());
+    spawn_async(async move {
+        if let Some(handle) = pick_file(FileType::Palette, dir.as_deref()).await {
+            // Read the file contents from the handle
+            let data = handle.read().await;
+            let palette = ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(
+                &data,
+            );
+            let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette));
         }
     });
 }
 
-pub fn spawn_rom_picker(sender: &Sender<AsyncFrontendMessage>, previous_path: Option<&PathBuf>) {
+/// Spawn a file picker for ROM files that loads the ROM data asynchronously.
+/// 
+/// # Arguments
+/// * `sender` - Channel to send the loaded ROM back to the UI thread
+/// * `directory` - Optional directory hint for the file picker
+pub fn spawn_rom_picker(sender: &Sender<AsyncFrontendMessage>, directory: Option<&str>) {
     let sender = sender.clone();
-    let prev_dir = get_parent_dir(previous_path);
-    std::thread::spawn(move || {
-        if let Some(path) = pick_file(prev_dir, FileType::Rom) {
-            let _ = sender.send(AsyncFrontendMessage::LoadRom(Some(path)));
+    let dir = directory.map(|s| s.to_string());
+    spawn_async(async move {
+        if let Some(handle) = pick_file(FileType::Rom, dir.as_deref()).await {
+            let data = handle.read().await;
+            let name = handle.file_name();
+            let directory = get_file_directory(&handle);
+            let _ = sender.send(AsyncFrontendMessage::LoadRom(Some(LoadedRom { data, name, directory })));
         }
     });
 }
 
-/// Spawn a save dialog for a file in a background thread.
-/// The file is written asynchronously after the user selects a path.
+/// Spawn a save dialog for a file asynchronously.
+/// The file is written after the user selects a path.
+/// 
+/// # Arguments
+/// * `sender` - Optional channel to notify completion
+/// * `directory` - Optional directory hint for the file picker
+/// * `file_type` - Type of file being saved
+/// * `data` - Data to write to the file
 pub fn spawn_save_dialog(
     sender: Option<&Sender<AsyncFrontendMessage>>,
-    previous_path: Option<&PathBuf>,
+    directory: Option<&str>,
     file_type: FileType,
     data: Box<dyn ToBytes + Send>,
 ) {
-    let prev_dir = get_parent_dir(previous_path);
     let sender = sender.cloned();
-    std::thread::spawn(move || {
-        if let Some(p) = save_file(prev_dir, file_type) {
-            let p = p
-                .extension()
-                .map(|_| p.clone())
-                .unwrap_or(p.with_extension(file_type.get_default_extension()));
+    let dir = directory.map(|s| s.to_string());
+    spawn_async(async move {
+        if let Some(handle) = save_file(file_type, dir.as_deref()).await {
+            // Get filename for format detection
+            let filename = handle.file_name();
+            let format = get_extension(&filename);
 
-            let format = p
-                .extension()
-                .map(|format| format.to_string_lossy().to_string());
+            // Write data using the file handle
+            let bytes = data.to_bytes(format);
+            let result = handle.write(&bytes).await;
 
-            let result = match OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(&p)
-            {
-                Ok(mut file) => match file.write_all(&data.to_bytes(format)) {
-                    Ok(_) => None,
-                    Err(e) => Some(format!("Failed to write file: {}", e)),
-                },
-                Err(e) => Some(format!("Failed to create file: {}", e)),
-            };
             // Notify completion if a sender was provided
+            let error = result.err().map(|e| format!("Failed to write file: {}", e));
             if let Some(sender) = sender {
-                let _ = sender.send(AsyncFrontendMessage::FileSaveCompleted(result));
+                let _ = sender.send(AsyncFrontendMessage::FileSaveCompleted(error));
             }
         }
     });
+}
+
+/// Extract the file extension from a filename
+fn get_extension(filename: &str) -> Option<String> {
+    filename.rsplit_once('.').map(|(_, ext)| ext.to_string())
 }
 
 pub fn color_radio<Value: PartialEq>(
@@ -246,52 +263,34 @@ pub fn color_radio<Value: PartialEq>(
     response
 }
 
-/// Compute SHA256 checksum for a file
-pub fn compute_file_checksum(path: &Path) -> Option<[u8; 32]> {
-    let mut file = File::open(path).ok()?;
-    let mut data = Vec::new();
-    file.read_to_end(&mut data).ok()?;
-
+/// Compute SHA256 checksum for data
+pub fn compute_data_checksum(data: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
-    hasher.update(&data);
-    Some(hasher.finalize().into())
+    hasher.update(data);
+    hasher.finalize().into()
 }
 
-/// Check if a ROM file matches the expected filename and checksum
-pub fn find_matching_rom_in_dir(
-    dir: &Path,
-    expected_filename: &str,
-    expected_checksum: &[u8; 32],
-) -> Option<PathBuf> {
-    let rom_path = dir.join(expected_filename);
-    if rom_path.exists()
-        && let Some(checksum) = compute_file_checksum(&rom_path)
-        && checksum == *expected_checksum
-    {
-        return Some(rom_path);
-    }
-    None
-}
-
-/// Spawn the initial savestate file picker in a background thread.
-/// After the savestate is loaded, it will check for a matching ROM.
-pub fn spawn_savestate_picker(
-    sender: &Sender<AsyncFrontendMessage>,
-    previous_savestate_path: Option<&PathBuf>,
-    previous_rom_path: Option<PathBuf>,
-) {
+/// Spawn the initial savestate file picker asynchronously.
+/// After the savestate is loaded, it will prompt for ROM selection.
+/// 
+/// # Arguments
+/// * `sender` - Channel to send the loaded savestate back to the UI thread
+/// * `directory` - Optional directory hint for the file picker
+pub fn spawn_savestate_picker(sender: &Sender<AsyncFrontendMessage>, directory: Option<&str>) {
     let sender = sender.clone();
-    let prev_dir = get_parent_dir(previous_savestate_path);
-    let rom_dir = previous_rom_path.and_then(|p| p.parent().map(|p| p.to_path_buf()));
+    let dir = directory.map(|s| s.to_string());
 
-    std::thread::spawn(move || {
-        let path = pick_file(prev_dir, FileType::Savestate);
+    spawn_async(async move {
+        let handle = pick_file(FileType::Savestate, dir.as_deref()).await;
 
-        if let Some(savestate_path) = path
-            && let Ok(canonical_path) = savestate_path.canonicalize()
-        {
-            // Try to load the savestate, handle errors gracefully
-            let savestate = match savestate::try_load_state(&canonical_path) {
+        if let Some(handle) = handle {
+            // Read savestate data from the file handle
+            let data = handle.read().await;
+            let savestate_name = handle.file_name();
+            let savestate_dir = get_file_directory(&handle);
+
+            // Try to parse the savestate from the data
+            let savestate = match savestate::try_load_state_from_bytes(&data) {
                 Some(s) => s,
                 None => {
                     // Failed to load savestate - send error notification
@@ -303,61 +302,57 @@ pub fn spawn_savestate_picker(
             };
             let context = SavestateLoadContext {
                 savestate,
-                savestate_path: canonical_path,
+                savestate_name,
+                savestate_dir,
             };
 
-            // Check if there's a matching ROM in the last ROM directory
-            if let Some(ref rom_dir) = rom_dir
-                && let Some(ref rom_name) = context.savestate.rom_file.name
-                && let Some(matching_rom) = find_matching_rom_in_dir(
-                    rom_dir,
-                    rom_name,
-                    &context.savestate.rom_file.data_checksum,
-                )
-            {
-                // Found a matching ROM - ask user if they want to use it
-                let _ = sender.send(AsyncFrontendMessage::ShowMatchingRomDialog(
-                    Box::new(context),
-                    matching_rom,
-                ));
-                return;
-            }
-
-            // No matching ROM found, send context for next step
+            // Send context for next step - user will need to select ROM
             let _ = sender.send(AsyncFrontendMessage::SavestateLoaded(Box::new(context)));
         }
     });
 }
 
 /// Spawn a file picker to select a ROM for a savestate
+/// 
+/// # Arguments
+/// * `sender` - Channel to send the loaded ROM back to the UI thread
+/// * `context` - Savestate context for the ROM selection
+/// * `directory` - Optional directory hint for the file picker
 pub fn spawn_rom_picker_for_savestate(
     sender: &Sender<AsyncFrontendMessage>,
     context: Box<SavestateLoadContext>,
-    previous_rom_path: Option<&PathBuf>,
+    directory: Option<&str>,
 ) {
     let sender = sender.clone();
-    let prev_dir = get_parent_dir(previous_rom_path);
+    let dir = directory.map(|s| s.to_string());
 
-    std::thread::spawn(move || {
-        let path = pick_file(prev_dir, FileType::Rom);
+    spawn_async(async move {
+        let handle = pick_file(FileType::Rom, dir.as_deref()).await;
 
-        if let Some(rom_path) = path
-            && let Ok(canonical_path) = rom_path.canonicalize()
-        {
+        if let Some(handle) = handle {
+            let data = handle.read().await;
+            let name = handle.file_name();
+            let directory = get_file_directory(&handle);
+
             let _ = sender.send(AsyncFrontendMessage::RomSelectedForSavestate(
                 context,
-                canonical_path,
+                LoadedRom { data, name, directory },
             ));
         }
     });
 }
 
-pub fn rom_display_name(path: &Path, sha256: &[u8; 32]) -> String {
-    match path.file_stem().and_then(|s| s.to_str()) {
-        Some(name) if !name.is_empty() => name.to_owned(),
-        _ => format!("Unknown ROM ({})", short_hash_hex(sha256)),
+/// Get a display name for a ROM based on its name and checksum
+pub fn rom_display_name(name: &str, sha256: &[u8; 32]) -> String {
+    // Extract stem (filename without extension)
+    let stem = name.rsplit_once('.').map(|(s, _)| s).unwrap_or(name);
+    if !stem.is_empty() {
+        stem.to_owned()
+    } else {
+        format!("Unknown ROM ({})", short_hash_hex(sha256))
     }
 }
+
 pub fn short_hash_hex(hash: &[u8; 32]) -> String {
     use std::fmt::Write;
     let mut s = String::with_capacity(12);
@@ -365,21 +360,6 @@ pub fn short_hash_hex(hash: &[u8; 32]) -> String {
         write!(&mut s, "{:02x}", b).unwrap();
     }
     s
-}
-
-pub fn append_to_filename(path: &Path, suffix: &str, overwrite: usize) -> PathBuf {
-    let parent = path.parent().unwrap_or_else(|| Path::new(""));
-    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-    let ext = path.extension().and_then(|e| e.to_str());
-
-    let cut = stem.len().saturating_sub(overwrite);
-    let mut name = String::from(&stem[..cut]);
-    name.push_str(suffix);
-
-    match ext {
-        Some(ext) => parent.join(format!("{name}.{ext}")),
-        None => parent.join(name),
-    }
 }
 
 #[cfg(target_arch = "wasm32")]

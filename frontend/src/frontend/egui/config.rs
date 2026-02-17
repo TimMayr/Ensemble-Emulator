@@ -1,13 +1,12 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
-use std::path::PathBuf;
 
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use ensemble_lockstep::emulation::rom::RomFile;
 use ensemble_lockstep::emulation::screen_renderer::{create_renderer, RgbPalette, ScreenRenderer};
 
 use crate::frontend::egui::keybindings::KeybindingsConfig;
-use crate::frontend::messages::SavestateLoadContext;
+use crate::frontend::messages::{LoadedRom, SavestateLoadContext};
 
 /// View configuration for the emulator frontend.
 ///
@@ -83,14 +82,16 @@ pub struct PendingDialogs {
 #[derive(Clone)]
 pub struct MatchingRomDialogState {
     pub context: Box<SavestateLoadContext>,
-    pub matching_rom_path: PathBuf,
+    /// The matching ROM data that was found
+    pub matching_rom: LoadedRom,
 }
 
 /// State for the checksum mismatch warning dialog
 #[derive(Clone)]
 pub struct ChecksumMismatchDialogState {
     pub context: Box<SavestateLoadContext>,
-    pub selected_rom_path: PathBuf,
+    /// The selected ROM data (with mismatched checksum)
+    pub selected_rom: LoadedRom,
 }
 
 /// State for the ROM selection dialog
@@ -106,11 +107,21 @@ pub struct ErrorDialogState {
     pub message: String,
 }
 
+/// User configuration - stores display names and directory hints for WASM compatibility
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct UserConfig {
-    pub previous_palette_path: Option<PathBuf>,
-    pub previous_rom_path: Option<PathBuf>,
-    pub previous_savestate_path: Option<PathBuf>,
+    /// Last loaded palette filename (display only, for persistence)
+    pub previous_palette_name: Option<String>,
+    /// Last loaded palette directory (for file picker initial directory)
+    pub previous_palette_dir: Option<String>,
+    /// Last loaded ROM filename (display only, for persistence)
+    pub previous_rom_name: Option<String>,
+    /// Last loaded ROM directory (for file picker initial directory)
+    pub previous_rom_dir: Option<String>,
+    /// Last loaded savestate filename (display only, for persistence)
+    pub previous_savestate_name: Option<String>,
+    /// Last loaded savestate directory (for file picker initial directory)
+    pub previous_savestate_dir: Option<String>,
     pub pattern_edit_color: u8,
     pub loaded_rom: Option<RomFile>,
 }

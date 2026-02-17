@@ -14,7 +14,7 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::fmt::{Debug, Formatter};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -40,8 +40,9 @@ use crate::frontend::egui::tiles::{
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
 use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent, SavestateLoadContext};
 use crate::frontend::persistence::{
-    get_data_dir, get_data_file_path, get_egui_storage_path, load_config, write_file_async,
+    get_egui_storage_path, load_config,
 };
+use crate::frontend::storage;
 use crate::frontend::util;
 use crate::messages::{EmulatorMessage, FrontendMessage, SaveType};
 
@@ -191,32 +192,36 @@ impl EguiApp {
         }
     }
 
-    pub(crate) fn load_rom(&mut self, rom_path: PathBuf) {
+    pub(crate) fn load_rom(&mut self, data: Vec<u8>, name: String) {
         let _ = self
             .to_emulator
             .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
 
         let _ = self
             .to_emulator
-            .send(FrontendMessage::LoadRom(rom_path.clone()));
+            .send(FrontendMessage::LoadRom((data, name.clone())));
 
-        self.config.user_config.previous_rom_path = Some(rom_path.clone());
+        // Extract stem for window title
+        let stem = name.rsplit_once('.').map(|(s, _)| s).unwrap_or(&name);
+        let window_title = if stem.is_empty() {
+            "Ensemble".to_string()
+        } else {
+            format!("Ensemble - {}", stem)
+        };
+
+        self.config.user_config.previous_rom_name = Some(name);
 
         self.event_queue
             .borrow_mut()
-            .push_back(FrontendEvent::ChangeWindowTitle(
-                rom_path
-                    .file_stem()
-                    .map(|f| format!("Ensemble - {}", f.to_string_lossy()))
-                    .unwrap_or("Ensemble".to_string()),
-            ));
+            .push_back(FrontendEvent::ChangeWindowTitle(window_title));
     }
 
     /// Load a savestate after ROM has been verified/selected
     pub(crate) fn load_savestate_with_rom(
         &mut self,
         context: &SavestateLoadContext,
-        rom_path: &Path,
+        rom_data: Vec<u8>,
+        rom_name: String,
     ) {
         if self.config.user_config.loaded_rom.is_some() {
             let _ = self
@@ -226,7 +231,7 @@ impl EguiApp {
 
         // First power off, load ROM, power on
         let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-        self.load_rom(rom_path.to_path_buf());
+        self.load_rom(rom_data, rom_name);
         let _ = self.to_emulator.send(FrontendMessage::Power);
 
         // Then load the savestate
@@ -236,32 +241,30 @@ impl EguiApp {
                 context.savestate.clone(),
             )));
 
-        // Update config paths
-        self.config.user_config.previous_savestate_path = Some(context.savestate_path.clone());
+        // Update config names and directories
+        self.config.user_config.previous_savestate_name = Some(context.savestate_name.clone());
+        if let Some(ref dir) = context.savestate_dir {
+            self.config.user_config.previous_savestate_dir = Some(dir.clone());
+        }
     }
 
     pub(crate) fn create_auto_save(&self, savestate: Box<SaveState>) {
         if let Some(rom) = &self.config.user_config.loaded_rom {
             let rom_hash = &rom.data_checksum;
-            let prev_path = &self.config.user_config.previous_rom_path;
-            if let Some(prev_path) = prev_path {
-                let display_name = util::rom_display_name(prev_path, rom_hash);
+            let prev_name = &self.config.user_config.previous_rom_name;
+            if let Some(prev_name) = prev_name {
+                let display_name = util::rom_display_name(prev_name, rom_hash);
+                let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+                let key = storage::autosave_key(&display_name, &timestamp);
 
-                let path = get_data_file_path(
-                    format!(
-                        "saves/{}/autosaves/autosave_{}.sav",
-                        display_name,
-                        chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
-                    )
-                    .as_str(),
-                );
+                // Write savestate using storage
+                let data = savestate.to_bytes(None);
+                std::thread::spawn(move || {
+                    let _ = storage::write_sync(&key, &data);
+                });
 
-                if let Some(path) = path {
-                    let _ = write_file_async(path, savestate.to_bytes(None), false);
-
-                    // Clean up old autosaves asynchronously to avoid blocking the UI
-                    Self::cleanup_old_autosaves_async(display_name);
-                }
+                // Clean up old autosaves asynchronously to avoid blocking the UI
+                Self::cleanup_old_autosaves_async(display_name);
             }
         }
     }
@@ -270,94 +273,82 @@ impl EguiApp {
     /// Runs asynchronously in a background thread to avoid blocking the UI.
     fn cleanup_old_autosaves_async(display_name: String) {
         std::thread::spawn(move || {
-            if let Some(data_dir) = get_data_dir() {
-                let autosaves_dir = data_dir.join("saves").join(&display_name).join("autosaves");
+            let prefix = storage::autosaves_prefix(&display_name);
 
-                if let Ok(entries) = std::fs::read_dir(&autosaves_dir) {
-                    // Collect all autosave files with their modification times
-                    let mut autosaves: Vec<(PathBuf, std::time::SystemTime)> = entries
-                        .filter_map(|entry| entry.ok())
-                        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "sav"))
-                        .filter_map(|entry| {
-                            let path = entry.path();
-                            let modified = entry.metadata().ok()?.modified().ok()?;
-                            Some((path, modified))
-                        })
-                        .collect();
+            if let Ok(entries) = storage::list_sync(&prefix) {
+                // Filter to only .sav files and collect with their modified times
+                let mut autosaves: Vec<_> = entries
+                    .into_iter()
+                    .filter(|e| e.key.ends_with(".sav"))
+                    .filter_map(|e| Some((e.key, e.modified?)))
+                    .collect();
 
-                    // If we have at least the limit, delete oldest to make room
-                    // (use >= to maintain exactly MAX_AUTOSAVES_PER_GAME after the new save)
-                    if autosaves.len() >= MAX_AUTOSAVES_PER_GAME {
-                        // Sort by modification time (oldest first)
-                        autosaves.sort_by_key(|a| a.1);
+                // If we have at least the limit, delete oldest to make room
+                // (use >= to maintain exactly MAX_AUTOSAVES_PER_GAME after the new save)
+                if autosaves.len() >= MAX_AUTOSAVES_PER_GAME {
+                    // Sort by modification time (oldest first)
+                    autosaves.sort_by_key(|a| a.1);
 
-                        // Delete enough files to get back under the limit
-                        let to_delete = autosaves.len() - MAX_AUTOSAVES_PER_GAME + 1;
-                        for (path, _) in autosaves.into_iter().take(to_delete) {
-                            let _ = std::fs::remove_file(path);
-                        }
+                    // Delete enough files to get back under the limit
+                    let to_delete = autosaves.len() - MAX_AUTOSAVES_PER_GAME + 1;
+                    for (key, _) in autosaves.into_iter().take(to_delete) {
+                        let _ = storage::delete_sync(&key);
                     }
                 }
             }
         });
     }
 
-    pub(crate) fn get_current_quicksave_path(&self) -> Option<PathBuf> {
-        let data_dir = get_data_dir();
-
+    pub(crate) fn get_current_quicksave_key(&self) -> Option<String> {
         if let Some(rom) = &self.config.user_config.loaded_rom
-            && let Some(prev_path) = &self.config.user_config.previous_rom_path
-            && let Some(data_dir) = data_dir
-            && data_dir.exists()
+            && let Some(prev_name) = &self.config.user_config.previous_rom_name
         {
             let rom_hash = &rom.data_checksum;
+            let display_name = util::rom_display_name(prev_name, rom_hash);
+            let prefix = storage::quicksaves_prefix(&display_name);
 
-            let quicksave_dir = data_dir
-                .join("saves")
-                .join(util::rom_display_name(prev_path, rom_hash))
-                .join("quicksaves");
+            // List all quicksaves using storage
+            if let Ok(entries) = storage::list_sync(&prefix) {
+                let mut quicksave_key: Option<(String, chrono::NaiveDateTime, u8)> = None;
 
-            if std::fs::create_dir_all(quicksave_dir.clone()).is_ok() {
-                let children = quicksave_dir.read_dir();
+                for entry in entries {
+                    if !entry.key.ends_with(".sav") {
+                        continue;
+                    }
 
-                let mut quicksave_path = None;
-                if let Ok(children) = children {
-                    for child in children.flatten() {
-                        let stem = child.path().file_stem()?.to_string_lossy().to_string();
+                    // Extract filename from the key
+                    let filename = entry.key.rsplit('/').next()?;
+                    let stem = filename.strip_suffix(".sav")?;
 
-                        let time_version = stem.split_once('_')?.1;
+                    let time_version = stem.split_once('_')?.1;
 
-                        let (timestamp, version) =
-                            if time_version.chars().filter(|c| *c == '_').count() > 1 {
-                                time_version.rsplit_once('_')?
-                            } else {
-                                (time_version, "0")
-                            };
+                    let (timestamp, version) =
+                        if time_version.chars().filter(|c| *c == '_').count() > 1 {
+                            time_version.rsplit_once('_')?
+                        } else {
+                            (time_version, "0")
+                        };
 
-                        let time =
-                            chrono::NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d_%H-%M-%S");
+                    let time =
+                        chrono::NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d_%H-%M-%S");
 
-                        let version = version.parse::<u8>().unwrap_or(0);
+                    let version = version.parse::<u8>().unwrap_or(0);
 
-                        if let Ok(time) = time {
-                            if quicksave_path.is_none() {
-                                quicksave_path = Some((child.path(), time, version))
+                    if let Ok(time) = time {
+                        let should_update = match &quicksave_key {
+                            None => true,
+                            Some(current) => {
+                                current.1 < time || (current.1 == time && current.2 < version)
                             }
+                        };
 
-                            if let Some(path) = quicksave_path.clone() {
-                                if path.1 < time {
-                                    quicksave_path = Some((child.path(), time, version));
-                                }
-
-                                if path.1 == time && path.2 < version {
-                                    quicksave_path = Some((child.path(), time, version));
-                                }
-                            }
+                        if should_update {
+                            quicksave_key = Some((entry.key.clone(), time, version));
                         }
                     }
                 }
 
-                return quicksave_path.map(|p| p.0);
+                return quicksave_key.map(|p| p.0);
             }
         }
 
@@ -642,6 +633,8 @@ impl Debug for EguiApp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { f.write_str("EguiApp") }
 }
 
+/// Native: common setup with PathBuf for command-line ROM loading
+#[cfg(not(target_arch = "wasm32"))]
 fn common_setup(
     rom: Option<PathBuf>,
 ) -> (
@@ -652,18 +645,23 @@ fn common_setup(
     Sender<AsyncFrontendMessage>,
     Receiver<AsyncFrontendMessage>,
 ) {
+    use crate::frontend::messages::LoadedRom;
+    
     // Create the emulator instance
     let console = Nes::default();
-
-    // Palette is now loaded from persistent config, not command line
-    // The _palette parameter is kept for API compatibility but unused
 
     // Create channel-based emulator wrapper
     let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
     let (to_frontend, from_async) = crossbeam_channel::unbounded();
 
-    // Setup Emulator State via messages
-    let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(rom));
+    // Setup Emulator State via messages - read ROM file if provided
+    let loaded_rom = rom.as_ref().and_then(|path| {
+        let data = std::fs::read(path).ok()?;
+        let name = path.file_name()?.to_string_lossy().to_string();
+        let directory = path.parent().map(|p| p.to_string_lossy().to_string());
+        Some(LoadedRom { data, name, directory })
+    });
+    let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(loaded_rom));
 
     // Get the storage path for egui persistence
     let storage_path = get_egui_storage_path();
@@ -678,15 +676,51 @@ fn common_setup(
     )
 }
 
+/// WASM: common setup without filesystem access
+#[cfg(target_arch = "wasm32")]
+fn common_setup_wasm() -> (
+    ChannelEmulator,
+    Sender<FrontendMessage>,
+    Receiver<EmulatorMessage>,
+    Sender<AsyncFrontendMessage>,
+    Receiver<AsyncFrontendMessage>,
+) {
+    // Create the emulator instance
+    let console = Nes::default();
+
+    // Create channel-based emulator wrapper
+    let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
+    let (to_frontend, from_async) = crossbeam_channel::unbounded();
+
+    // No ROM loaded at startup in WASM - user will pick via file dialog
+    let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(None));
+
+    (
+        channel_emu,
+        tx_to_emu,
+        rx_from_emu,
+        to_frontend,
+        from_async,
+    )
+}
+
 /// Run the egui frontend.
 ///
 /// Uses `RendererKind` for runtime-switchable rendering.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn run(
     rom: Option<PathBuf>,
     _palette: Option<PathBuf>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let res = common_setup(rom);
     run_internal(res)
+}
+
+/// Run the egui frontend for WASM.
+#[cfg(target_arch = "wasm32")]
+pub fn run_wasm() -> Result<(), Box<dyn std::error::Error>> {
+    let res = common_setup_wasm();
+    run_internal_wasm(res)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -735,9 +769,8 @@ fn run_internal(
 }
 
 #[cfg(target_arch = "wasm32")]
-fn run_internal(
+fn run_internal_wasm(
     res: (
-        Option<PathBuf>,
         ChannelEmulator,
         Sender<FrontendMessage>,
         Receiver<EmulatorMessage>,
@@ -779,7 +812,7 @@ fn run_internal(
                     cc.egui_ctx.set_style(style);
                     cc.egui_ctx.set_theme(egui::Theme::Dark);
                     Ok(Box::new(EguiApp::new(
-                        cc, res.1, res.2, res.3, res.4, res.5,
+                        cc, res.0, res.1, res.2, res.3, res.4,
                     )))
                 }),
             )

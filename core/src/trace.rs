@@ -1,35 +1,28 @@
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::path::PathBuf;
-
 use crate::emulation::cpu::{
-    CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, OpType, Source, UNUSED_BIT,
+    OpType, Source, CARRY_BIT, DECIMAL_BIT, IRQ_BIT, NEGATIVE_BIT, OVERFLOW_BIT, UNUSED_BIT,
     ZERO_BIT,
 };
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OpCode, get_opcode};
+use crate::emulation::opcode::{get_opcode, OpCode};
 use crate::emulation::savestate::{CpuState, SaveState};
 use crate::util::add_to_low_byte;
 
 pub struct TraceLog {
     pub log: String,
-    pub output: PathBuf,
 }
 impl Default for TraceLog {
-    fn default() -> Self { Self::new("./trace-log.txt".into()) }
+    fn default() -> Self { Self::new() }
 }
 
 impl TraceLog {
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new() -> Self {
         Self {
             log: String::from(""),
-            output: path,
         }
     }
 
     pub fn trace(&mut self, nes: SaveState) {
         let mut cpu = nes.cpu.clone();
-        let _ppu = nes.ppu;
         let current_opcode = get_opcode(cpu.current_opcode.unwrap()).unwrap();
 
         let relevant_mem_start = cpu.program_counter.wrapping_sub(1);
@@ -56,8 +49,6 @@ impl TraceLog {
             cpu.y_register,
             cpu.processor_status | UNUSED_BIT,
             cpu.stack_pointer,
-            // ppu.scanline,
-            // ppu.dot,
             nes.total_cycles / 12
         )
         .as_str();
@@ -106,34 +97,6 @@ impl TraceLog {
         }
 
         str
-    }
-
-    pub fn flush(&mut self) -> Result<(), String> {
-        let file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&self.output);
-
-        let mut file = match file {
-            Ok(f) => f,
-            Err(e) => {
-                return Err(format!(
-                    "Error opening log file: {}\n\t{}",
-                    self.output.to_string_lossy(),
-                    e
-                ));
-            }
-        };
-
-        match file.write_all(self.log.as_bytes()) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(format!(
-                "Error saving log to file: {}\n\t{}",
-                self.output.to_string_lossy(),
-                e
-            )),
-        }
     }
 }
 

@@ -3,8 +3,6 @@
 //! This module contains helper functions for rendering the various dialogs
 //! that appear during the multistep savestate loading process.
 
-use std::path::Path;
-
 use crossbeam_channel::Sender;
 
 use crate::frontend::egui::config::{PendingDialogs, RomSelectionDialogState, UserConfig};
@@ -17,13 +15,6 @@ fn modal_window(title: &str) -> egui::Window<'_> {
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-}
-
-/// Extract filename from path or return "Unknown"
-fn get_filename(path: &Path) -> String {
-    path.file_name()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "Unknown".to_string())
 }
 
 /// Extract ROM name from context or return "Unknown"
@@ -63,7 +54,6 @@ fn render_rom_selection_dialog(
 
     let rom_name = get_rom_name(state);
     let context = state.context.clone();
-    let prev_rom_path = user_config.previous_rom_path.clone();
     let sender = sender.clone();
 
     let mut close = false;
@@ -87,7 +77,7 @@ fn render_rom_selection_dialog(
 
     if close {
         if spawn_picker {
-            util::spawn_rom_picker_for_savestate(&sender, context, prev_rom_path.as_ref());
+            util::spawn_rom_picker_for_savestate(&sender, context, user_config.previous_rom_dir.as_deref());
         }
         dialogs.rom_selection_dialog = None;
     }
@@ -103,9 +93,9 @@ fn render_matching_rom_dialog(
         return;
     };
 
-    let rom_name = get_filename(&state.matching_rom_path);
+    let rom_name = state.matching_rom.name.clone();
     let context = state.context.clone();
-    let rom_path = state.matching_rom_path.clone();
+    let rom = state.matching_rom.clone();
     let sender = sender.clone();
 
     let mut close = false;
@@ -136,7 +126,7 @@ fn render_matching_rom_dialog(
 
     if close {
         if use_matching {
-            let _ = sender.send(AsyncFrontendMessage::UseMatchingRom(context, rom_path));
+            let _ = sender.send(AsyncFrontendMessage::UseMatchingRom(context, rom));
         } else if select_manual {
             let _ = sender.send(AsyncFrontendMessage::ManuallySelectRom(context));
         }
@@ -161,9 +151,9 @@ fn render_checksum_mismatch_dialog(
         .name
         .clone()
         .unwrap_or_else(|| "Unknown".to_string());
-    let selected_name = get_filename(&state.selected_rom_path);
+    let selected_name = state.selected_rom.name.clone();
     let context = state.context.clone();
-    let rom_path = state.selected_rom_path.clone();
+    let rom = state.selected_rom.clone();
     let sender = sender.clone();
 
     let mut close = false;
@@ -195,7 +185,7 @@ fn render_checksum_mismatch_dialog(
 
     if close {
         if load_anyway {
-            let _ = sender.send(AsyncFrontendMessage::LoadSavestateAnyway(context, rom_path));
+            let _ = sender.send(AsyncFrontendMessage::LoadSavestateAnyway(context, rom));
         } else if select_another {
             let _ = sender.send(AsyncFrontendMessage::SelectAnotherRom(context));
         }

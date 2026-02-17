@@ -2,9 +2,6 @@ mod formats;
 
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
-use std::fs::File;
-use std::io::Read;
-use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -13,8 +10,8 @@ use crate::emulation::mem::nametable_memory::{NametableArrangement, NametableMem
 use crate::emulation::mem::{Memory, MemoryDevice, Ram, Rom};
 use crate::emulation::rom::formats::archaic_ines::ArchaicInes;
 use crate::emulation::rom::formats::ines::Ines;
-use crate::emulation::rom::formats::ines_07::Ines07;
 use crate::emulation::rom::formats::ines2::Ines2;
+use crate::emulation::rom::formats::ines_07::Ines07;
 
 #[derive(Debug, Clone)]
 pub enum ParseError {
@@ -37,7 +34,7 @@ impl Display for ParseError {
 impl Error for ParseError {}
 
 pub trait RomParser: Debug {
-    fn parse(&self, rom: &[u8], file: Option<PathBuf>) -> Result<RomFile, ParseError>;
+    fn parse(&self, rom: &[u8], name: Option<String>) -> Result<RomFile, ParseError>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -137,25 +134,14 @@ impl RomFile {
         panic!("Romtype not yet implemented")
     }
 
-    pub fn load(path: &String) -> RomFile {
-        let path = Path::new(&path);
-        let mut file = match File::open(path) {
-            Ok(file) => file,
-            Err(e) => panic!("Couldn't read file {}: {}", path.display(), e),
-        };
-
-        let mut rom: Vec<u8> = Vec::new();
-        file.read_to_end(&mut rom).expect("Couldn't read file");
-
+    pub fn load(data: &[u8], name: Option<String>) -> RomFile {
         let mut hasher = Sha256::new();
-        hasher.update(&rom);
+        hasher.update(data);
         let hash: [u8; 32] = hasher.finalize().into();
 
-        let rom_type = RomFile::get_rom_type(&rom);
-        let mut rom_file = rom_type
-            .parse(&rom, Some(PathBuf::from(path)))
-            .expect("Error loading Rom");
-        rom_file.data = rom;
+        let rom_type = RomFile::get_rom_type(&data);
+        let mut rom_file = rom_type.parse(&data, name).expect("Error loading Rom");
+        rom_file.data = data.to_vec();
         rom_file.data_checksum = hash;
         rom_file
     }
@@ -228,16 +214,32 @@ impl RomFile {
     }
 }
 
-impl From<&String> for RomFile {
-    fn from(path: &String) -> Self { RomFile::load(path) }
-}
-
 impl From<&RomFile> for RomFile {
     fn from(rom: &RomFile) -> Self { rom.clone() }
 }
 
-impl From<&PathBuf> for RomFile {
-    fn from(path: &PathBuf) -> Self { RomFile::load(&path.to_string_lossy().to_string()) }
+impl From<&[u8]> for RomFile {
+    fn from(data: &[u8]) -> Self { RomFile::load(data, None) }
+}
+
+impl From<&(&[u8], String)> for RomFile {
+    fn from((data, name): &(&[u8], String)) -> Self { RomFile::load(data, Some(name.clone())) }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl From<&String> for RomFile {
+    fn from(path: &String) -> Self {
+        use std::fs::File;
+        use std::io::Read;
+
+        let data = File::open(path)
+            .unwrap()
+            .bytes()
+            .map(|b| b.unwrap())
+            .collect::<Vec<u8>>();
+
+        RomFile::load(&data[..], Some(path.clone()))
+    }
 }
 
 pub struct RomBuilder {
@@ -415,20 +417,4 @@ impl RomBuilder {
             data: Vec::new(),
         }
     }
-}
-
-pub trait RomFileConvertible {
-    fn as_rom_file(&self) -> RomFile;
-}
-
-impl RomFileConvertible for String {
-    fn as_rom_file(&self) -> RomFile { RomFile::from(self) }
-}
-
-impl RomFileConvertible for RomFile {
-    fn as_rom_file(&self) -> RomFile { RomFile::from(self) }
-}
-
-impl RomFileConvertible for PathBuf {
-    fn as_rom_file(&self) -> RomFile { RomFile::from(self) }
 }

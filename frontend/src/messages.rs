@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use ensemble_lockstep::emulation::rom::RomFile;
 use ensemble_lockstep::emulation::savestate::SaveState;
@@ -27,7 +26,7 @@ pub enum FrontendMessage {
     /// Request to step one frame
     StepFrame,
     RequestDebugData(EmulatorFetchable),
-    LoadRom(PathBuf),
+    LoadRom((Vec<u8>, String)),
     WritePpu(u16, u8),
     WriteCpu(u16, u8),
     CreateSaveState(SaveType),

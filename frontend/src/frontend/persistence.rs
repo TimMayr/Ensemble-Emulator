@@ -1,7 +1,7 @@
 //! Persistent configuration and file storage utilities.
 //!
 //! This module provides:
-//! - Directory management using the `directories` crate for OS-appropriate paths
+//! - Directory management using the storage abstraction for cross-platform paths
 //! - Generic async file read/write operations to avoid blocking the UI thread
 //! - TOML-based configuration persistence for application settings
 //! - Helper functions for saving files to data and cache directories
@@ -16,14 +16,13 @@ use std::{fs, thread};
 use crossbeam_channel::{bounded, Receiver};
 use directories::ProjectDirs;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
-use ensemble_lockstep::emulation::screen_renderer::{create_renderer, parse_palette_from_file};
+use ensemble_lockstep::emulation::screen_renderer::{create_renderer, RgbPalette};
 use serde::{Deserialize, Serialize};
-
 use crate::frontend::egui::config::{
     AppConfig, AppSpeed, ConsoleConfig, DebugSpeed, SpeedConfig, UserConfig, ViewConfig,
 };
 use crate::frontend::egui::keybindings::KeybindingsConfig;
-use crate::frontend::util::append_to_filename;
+use crate::frontend::storage;
 
 /// Application identifier used for directory paths
 const APP_QUALIFIER: &str = "com";
@@ -213,6 +212,26 @@ fn extract(f: &OsStr) -> String {
         .to_string()
 }
 
+/// Append a suffix to a filename before the extension
+fn append_to_filename(path: &Path, suffix: &str, strip_chars: usize) -> PathBuf {
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    let ext = path.extension().map(|e| e.to_string_lossy().to_string());
+    
+    // Strip the specified number of characters from the end of the stem
+    let trimmed_stem = if strip_chars > 0 && stem.len() >= strip_chars {
+        &stem[..stem.len() - strip_chars]
+    } else {
+        &stem
+    };
+    
+    let new_filename = match ext {
+        Some(e) => format!("{}{}.{}", trimmed_stem, suffix, e),
+        None => format!("{}{}", trimmed_stem, suffix),
+    };
+    
+    path.with_file_name(new_filename)
+}
+
 /// Save data to the data directory asynchronously
 pub fn save_to_data_dir(
     filename: &str,
@@ -257,9 +276,6 @@ pub fn read_from_cache_dir(filename: &str) -> Option<Receiver<AsyncFileResult>> 
 // Configuration Persistence (TOML format)
 // ============================================================================
 
-/// Configuration file name
-const CONFIG_FILENAME: &str = "config.toml";
-
 /// Persistent configuration structure that can be serialized to TOML.
 ///
 /// Uses `RendererKind` for runtime-switchable renderer persistence.
@@ -287,34 +303,26 @@ impl Default for PersistentConfig {
 
 impl From<&AppConfig> for PersistentConfig {
     fn from(value: &AppConfig) -> Self {
-        let mut this = Self {
+        Self {
             user_config: (&value.user_config).into(),
             view_config: (&value.view_config).into(),
             speed_config: (&value.speed_config).into(),
             console_config: (&value.console_config).into(),
             keybindings: value.keybindings.clone(),
-        };
-
-        this.view_config.palette_rgb_data = this.user_config.previous_palette_path.clone();
-        this
+        }
     }
 }
 
 impl From<&PersistentConfig> for AppConfig {
     fn from(value: &PersistentConfig) -> Self {
-        let mut this = Self {
+        Self {
             view_config: (&value.view_config).into(),
             speed_config: (&value.speed_config).into(),
             user_config: (&value.user_config).into(),
             console_config: (&value.console_config).into(),
             pending_dialogs: Default::default(),
             keybindings: value.keybindings.clone(),
-        };
-
-        this.view_config.palette_rgb_data =
-            parse_palette_from_file(value.user_config.previous_palette_path.clone(), None);
-
-        this
+        }
     }
 }
 
@@ -324,8 +332,6 @@ pub struct PersistentViewConfig {
     pub show_palette: bool,
     pub show_pattern_table: bool,
     pub show_nametable: bool,
-    /// Path to the palette file (used to reconstruct palette_rgb_data on load)
-    pub palette_rgb_data: Option<PathBuf>,
     pub required_debug_fetches: HashSet<PersistentEmulatorFetchable>,
     pub debug_active_palette: usize,
     /// The serialized renderer state. When present, the renderer is restored from this.
@@ -340,7 +346,6 @@ impl Default for PersistentViewConfig {
             show_palette: false,
             show_pattern_table: false,
             show_nametable: false,
-            palette_rgb_data: None,
             required_debug_fetches: HashSet::new(),
             debug_active_palette: 0,
             renderer: "NoneRenderer".to_string(),
@@ -354,7 +359,6 @@ impl From<&ViewConfig> for PersistentViewConfig {
             show_palette: config.show_palette,
             show_pattern_table: config.show_pattern_table,
             show_nametable: config.show_nametable,
-            palette_rgb_data: None,
             required_debug_fetches: config
                 .required_debug_fetches
                 .iter()
@@ -371,11 +375,9 @@ impl From<&PersistentViewConfig> for ViewConfig {
         // If renderer was persisted, use it; otherwise create a default
         let renderer = create_renderer(Some(config.renderer.as_str()));
 
-        let palette = parse_palette_from_file(config.palette_rgb_data.clone(), None);
-
         Self {
             debug_active_palette: config.debug_active_palette,
-            palette_rgb_data: palette,
+            palette_rgb_data: RgbPalette::default(),
             show_nametable: config.show_nametable,
             show_palette: config.show_palette,
             show_pattern_table: config.show_pattern_table,
@@ -411,21 +413,33 @@ impl From<PersistentEmulatorFetchable> for EmulatorFetchable {
     }
 }
 
-/// Persistent user configuration
+/// Persistent user configuration - stores display names instead of paths for WASM compatibility
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PersistentUserConfig {
-    pub previous_palette_path: Option<PathBuf>,
-    pub previous_rom_path: Option<PathBuf>,
-    pub previous_savestate_path: Option<PathBuf>,
+    /// Last loaded palette filename (display only)
+    pub previous_palette_name: Option<String>,
+    /// Last loaded palette directory (for file picker initial directory)
+    pub previous_palette_dir: Option<String>,
+    /// Last loaded ROM filename (display only)
+    pub previous_rom_name: Option<String>,
+    /// Last loaded ROM directory (for file picker initial directory)
+    pub previous_rom_dir: Option<String>,
+    /// Last loaded savestate filename (display only)
+    pub previous_savestate_name: Option<String>,
+    /// Last loaded savestate directory (for file picker initial directory)
+    pub previous_savestate_dir: Option<String>,
     pub pattern_edit_color: u8,
 }
 
 impl From<&UserConfig> for PersistentUserConfig {
     fn from(config: &UserConfig) -> Self {
         Self {
-            previous_palette_path: config.previous_palette_path.clone(),
-            previous_rom_path: config.previous_rom_path.clone(),
-            previous_savestate_path: config.previous_savestate_path.clone(),
+            previous_palette_name: config.previous_palette_name.clone(),
+            previous_palette_dir: config.previous_palette_dir.clone(),
+            previous_rom_name: config.previous_rom_name.clone(),
+            previous_rom_dir: config.previous_rom_dir.clone(),
+            previous_savestate_name: config.previous_savestate_name.clone(),
+            previous_savestate_dir: config.previous_savestate_dir.clone(),
             pattern_edit_color: config.pattern_edit_color,
         }
     }
@@ -434,9 +448,12 @@ impl From<&UserConfig> for PersistentUserConfig {
 impl From<&PersistentUserConfig> for UserConfig {
     fn from(config: &PersistentUserConfig) -> Self {
         Self {
-            previous_palette_path: config.previous_palette_path.clone(),
-            previous_rom_path: config.previous_rom_path.clone(),
-            previous_savestate_path: config.previous_savestate_path.clone(),
+            previous_palette_name: config.previous_palette_name.clone(),
+            previous_palette_dir: config.previous_palette_dir.clone(),
+            previous_rom_name: config.previous_rom_name.clone(),
+            previous_rom_dir: config.previous_rom_dir.clone(),
+            previous_savestate_name: config.previous_savestate_name.clone(),
+            previous_savestate_dir: config.previous_savestate_dir.clone(),
             pattern_edit_color: config.pattern_edit_color,
             loaded_rom: None,
         }
@@ -585,13 +602,26 @@ impl From<&PersistentConsoleConfig> for ConsoleConfig {
 /// allowing the application to start with default config if the
 /// config file is malformed.
 pub fn load_config() -> Option<PersistentConfig> {
-    let config_path = get_config_file_path(CONFIG_FILENAME)?;
-    if !config_path.exists() {
-        return None;
+    let key = storage::config_key();
+
+    // Check if config exists using storage
+    match storage::exists_sync(&key) {
+        Ok(false) => return None,
+        Err(e) => {
+            eprintln!("Failed to check if config exists: {}", e);
+            return None;
+        }
+        Ok(true) => {}
     }
 
-    let contents = match fs::read_to_string(&config_path) {
-        Ok(c) => c,
+    let contents = match storage::read_sync(&key) {
+        Ok(data) => match String::from_utf8(data) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Config file is not valid UTF-8: {}", e);
+                return None;
+            }
+        },
         Err(e) => {
             eprintln!("Failed to read config file: {}", e);
             return None;
@@ -609,13 +639,13 @@ pub fn load_config() -> Option<PersistentConfig> {
 
 /// Save configuration to the config file
 pub fn save_config(config: &PersistentConfig) -> Result<(), String> {
-    let config_path = get_config_file_path(CONFIG_FILENAME)
-        .ok_or_else(|| "Failed to get config file path".to_string())?;
+    let key = storage::config_key();
 
     let toml_string =
         toml::to_string_pretty(config).map_err(|e| format!("Failed to serialize config: {}", e))?;
 
-    fs::write(&config_path, toml_string).map_err(|e| format!("Failed to write config: {}", e))?;
+    storage::write_sync(&key, toml_string.as_bytes())
+        .map_err(|e| format!("Failed to write config: {}", e))?;
 
     Ok(())
 }

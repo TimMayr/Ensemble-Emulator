@@ -9,7 +9,7 @@ use ensemble_lockstep::emulation::savestate::SaveState;
 use ensemble_lockstep::util::ToBytes;
 
 use crate::frontend::egui_frontend::EguiApp;
-use crate::frontend::persistence::{get_data_file_path, write_file_async};
+use crate::frontend::storage;
 use crate::frontend::util;
 use crate::frontend::util::FileType;
 use crate::messages::{EmulatorMessage, SaveType};
@@ -122,7 +122,7 @@ impl EguiApp {
             SaveType::Manual => {
                 util::spawn_save_dialog(
                     Some(&self.async_sender),
-                    self.config.user_config.previous_savestate_path.as_ref(),
+                    self.config.user_config.previous_savestate_dir.as_deref(),
                     FileType::Savestate,
                     savestate,
                 );
@@ -139,22 +139,17 @@ impl EguiApp {
     fn handle_quicksave(&self, savestate: Box<SaveState>) {
         if let Some(rom) = &self.config.user_config.loaded_rom {
             let rom_hash = &rom.data_checksum;
-            let prev_path = &self.config.user_config.previous_rom_path;
-            if let Some(prev_path) = prev_path {
-                let display_name = util::rom_display_name(prev_path, rom_hash);
+            let prev_name = &self.config.user_config.previous_rom_name;
+            if let Some(prev_name) = prev_name {
+                let display_name = util::rom_display_name(prev_name, rom_hash);
+                let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+                let key = storage::quicksave_key(&display_name, &timestamp);
 
-                let path = get_data_file_path(
-                    format!(
-                        "saves/{}/quicksaves/quicksave_{}.sav",
-                        display_name,
-                        chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
-                    )
-                    .as_str(),
-                );
-
-                if let Some(path) = path {
-                    let _ = write_file_async(path, savestate.to_bytes(None), false);
-                }
+                // Write savestate using storage
+                let data = savestate.to_bytes(None);
+                std::thread::spawn(move || {
+                    let _ = storage::write_sync(&key, &data);
+                });
             }
         }
     }
