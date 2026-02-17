@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Formatter};
 
 use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 
 use crate::util::{compute_hash, Hashable, ToBytes};
 
@@ -116,9 +117,9 @@ impl From<(u8, u8, u8)> for RgbColor {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct RgbPalette {
-    pub colors: [[RgbColor; 64]; 8],
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+pub struct  RgbPalette {
+    pub colors: [[RgbColor; 64]; 8]
 }
 
 impl Default for RgbPalette {

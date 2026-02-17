@@ -16,9 +16,10 @@ use std::{fs, thread};
 use crossbeam_channel::{bounded, Receiver};
 use directories::ProjectDirs;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
-use ensemble_lockstep::emulation::screen_renderer::create_renderer;
+use ensemble_lockstep::emulation::screen_renderer::{create_renderer, RgbPalette};
 use serde::{Deserialize, Serialize};
-
+use ensemble_lockstep::emulation::screen_renderer;
+use screen_renderer::parse_palette_from_bytes;
 use crate::frontend::egui::config::{
     AppConfig, AppSpeed, ConsoleConfig, DebugSpeed, SpeedConfig, UserConfig, ViewConfig,
 };
@@ -311,12 +312,12 @@ impl From<&PersistentConfig> for AppConfig {
 
         // Load palette from the previous path if available
         this.view_config.palette_rgb_data = if let Some(ref path) = value.user_config.previous_palette_path {
-            match std::fs::read(path) {
-                Ok(data) => ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&data),
-                Err(_) => ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&[]),
+            match fs::read(path) {
+                Ok(data) => parse_palette_from_bytes(&data),
+                Err(_) => parse_palette_from_bytes(&[]),
             }
         } else {
-            ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&[])
+            parse_palette_from_bytes(&[])
         };
 
         this
@@ -330,7 +331,7 @@ pub struct PersistentViewConfig {
     pub show_pattern_table: bool,
     pub show_nametable: bool,
     /// Path to the palette file (used to reconstruct palette_rgb_data on load)
-    pub palette_rgb_data: Option<PathBuf>,
+    pub palette_rgb_data: RgbPalette,
     pub required_debug_fetches: HashSet<PersistentEmulatorFetchable>,
     pub debug_active_palette: usize,
     /// The serialized renderer state. When present, the renderer is restored from this.
@@ -345,7 +346,7 @@ impl Default for PersistentViewConfig {
             show_palette: false,
             show_pattern_table: false,
             show_nametable: false,
-            palette_rgb_data: None,
+            palette_rgb_data: RgbPalette::default(),
             required_debug_fetches: HashSet::new(),
             debug_active_palette: 0,
             renderer: "NoneRenderer".to_string(),
@@ -359,7 +360,7 @@ impl From<&ViewConfig> for PersistentViewConfig {
             show_palette: config.show_palette,
             show_pattern_table: config.show_pattern_table,
             show_nametable: config.show_nametable,
-            palette_rgb_data: None,
+            palette_rgb_data: config.palette_rgb_data,
             required_debug_fetches: config
                 .required_debug_fetches
                 .iter()
@@ -376,19 +377,9 @@ impl From<&PersistentViewConfig> for ViewConfig {
         // If renderer was persisted, use it; otherwise create a default
         let renderer = create_renderer(Some(config.renderer.as_str()));
 
-        // Load palette from the persisted path if available
-        let palette = if let Some(ref path) = config.palette_rgb_data {
-            match std::fs::read(path) {
-                Ok(data) => ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&data),
-                Err(_) => ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&[]),
-            }
-        } else {
-            ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&[])
-        };
-
         Self {
             debug_active_palette: config.debug_active_palette,
-            palette_rgb_data: palette,
+            palette_rgb_data: config.palette_rgb_data,
             show_nametable: config.show_nametable,
             show_palette: config.show_palette,
             show_pattern_table: config.show_pattern_table,
