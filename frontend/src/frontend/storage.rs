@@ -36,8 +36,7 @@
 //!
 //! This module uses IndexedDB for WASM to support save states and other binary data.
 
-use std::future::Future;
-use std::pin::Pin;
+use async_trait::async_trait;
 
 /// Type alias for async storage results
 pub type StorageResult<T> = Result<T, StorageError>;
@@ -119,28 +118,25 @@ impl StorageCategory {
 ///
 /// All operations are async to support both native (thread-based) and
 /// WASM (Promise-based) implementations.
+///
+/// Note: On WASM, futures don't need to be Send since JavaScript is single-threaded.
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait Storage: Send + Sync {
     /// Get data by key
-    fn get(&self, key: &str) -> Pin<Box<dyn Future<Output = StorageResult<Vec<u8>>> + Send + '_>>;
+    async fn get(&self, key: &str) -> StorageResult<Vec<u8>>;
 
     /// Set data for a key
-    fn set(
-        &self,
-        key: &str,
-        data: Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = StorageResult<()>> + Send + '_>>;
+    async fn set(&self, key: &str, data: Vec<u8>) -> StorageResult<()>;
 
     /// Delete data by key
-    fn delete(&self, key: &str) -> Pin<Box<dyn Future<Output = StorageResult<()>> + Send + '_>>;
+    async fn delete(&self, key: &str) -> StorageResult<()>;
 
     /// Check if a key exists
-    fn exists(&self, key: &str) -> Pin<Box<dyn Future<Output = StorageResult<bool>> + Send + '_>>;
+    async fn exists(&self, key: &str) -> StorageResult<bool>;
 
     /// List all keys with a given prefix
-    fn list(
-        &self,
-        prefix: &str,
-    ) -> Pin<Box<dyn Future<Output = StorageResult<Vec<StorageMetadata>>> + Send + '_>>;
+    async fn list(&self, prefix: &str) -> StorageResult<Vec<StorageMetadata>>;
 
     /// Get the full path/URL for a key (for display purposes)
     fn get_display_path(&self, key: &str) -> String;
@@ -206,123 +202,96 @@ mod native {
         }
     }
 
+    #[async_trait]
     impl Storage for NativeStorage {
-        fn get(
-            &self,
-            key: &str,
-        ) -> Pin<Box<dyn Future<Output = StorageResult<Vec<u8>>> + Send + '_>> {
-            let key = key.to_string();
-            Box::pin(async move {
-                let path = self
-                    .key_to_path(&key)
-                    .ok_or(StorageError::NotAvailable)?;
+        async fn get(&self, key: &str) -> StorageResult<Vec<u8>> {
+            let path = self
+                .key_to_path(key)
+                .ok_or(StorageError::NotAvailable)?;
 
-                if !path.exists() {
-                    return Err(StorageError::NotFound);
-                }
+            if !path.exists() {
+                return Err(StorageError::NotFound);
+            }
 
-                let mut file = std::fs::File::open(&path)
-                    .map_err(|e| StorageError::ReadError(e.to_string()))?;
+            let mut file = std::fs::File::open(&path)
+                .map_err(|e| StorageError::ReadError(e.to_string()))?;
 
-                let mut data = Vec::new();
-                file.read_to_end(&mut data)
-                    .map_err(|e| StorageError::ReadError(e.to_string()))?;
+            let mut data = Vec::new();
+            file.read_to_end(&mut data)
+                .map_err(|e| StorageError::ReadError(e.to_string()))?;
 
-                Ok(data)
-            })
+            Ok(data)
         }
 
-        fn set(
-            &self,
-            key: &str,
-            data: Vec<u8>,
-        ) -> Pin<Box<dyn Future<Output = StorageResult<()>> + Send + '_>> {
-            let key = key.to_string();
-            Box::pin(async move {
-                let path = self
-                    .key_to_path(&key)
-                    .ok_or(StorageError::NotAvailable)?;
+        async fn set(&self, key: &str, data: Vec<u8>) -> StorageResult<()> {
+            let path = self
+                .key_to_path(key)
+                .ok_or(StorageError::NotAvailable)?;
 
-                // Create parent directories
-                if let Some(parent) = path.parent() {
-                    std::fs::create_dir_all(parent)
-                        .map_err(|e| StorageError::WriteError(e.to_string()))?;
-                }
-
-                let mut file = std::fs::File::create(&path)
+            // Create parent directories
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)
                     .map_err(|e| StorageError::WriteError(e.to_string()))?;
+            }
 
-                file.write_all(&data)
-                    .map_err(|e| StorageError::WriteError(e.to_string()))?;
+            let mut file = std::fs::File::create(&path)
+                .map_err(|e| StorageError::WriteError(e.to_string()))?;
 
-                Ok(())
-            })
+            file.write_all(&data)
+                .map_err(|e| StorageError::WriteError(e.to_string()))?;
+
+            Ok(())
         }
 
-        fn delete(&self, key: &str) -> Pin<Box<dyn Future<Output = StorageResult<()>> + Send + '_>> {
-            let key = key.to_string();
-            Box::pin(async move {
-                let path = self
-                    .key_to_path(&key)
-                    .ok_or(StorageError::NotAvailable)?;
+        async fn delete(&self, key: &str) -> StorageResult<()> {
+            let path = self
+                .key_to_path(key)
+                .ok_or(StorageError::NotAvailable)?;
 
-                if path.exists() {
-                    std::fs::remove_file(&path)
-                        .map_err(|e| StorageError::DeleteError(e.to_string()))?;
-                }
+            if path.exists() {
+                std::fs::remove_file(&path)
+                    .map_err(|e| StorageError::DeleteError(e.to_string()))?;
+            }
 
-                Ok(())
-            })
+            Ok(())
         }
 
-        fn exists(
-            &self,
-            key: &str,
-        ) -> Pin<Box<dyn Future<Output = StorageResult<bool>> + Send + '_>> {
-            let key = key.to_string();
-            Box::pin(async move {
-                let path = self
-                    .key_to_path(&key)
-                    .ok_or(StorageError::NotAvailable)?;
+        async fn exists(&self, key: &str) -> StorageResult<bool> {
+            let path = self
+                .key_to_path(key)
+                .ok_or(StorageError::NotAvailable)?;
 
-                Ok(path.exists())
-            })
+            Ok(path.exists())
         }
 
-        fn list(
-            &self,
-            prefix: &str,
-        ) -> Pin<Box<dyn Future<Output = StorageResult<Vec<StorageMetadata>>> + Send + '_>> {
-            let prefix = prefix.to_string();
-            Box::pin(async move {
-                let base_path = self
-                    .key_to_path(&prefix)
-                    .ok_or(StorageError::NotAvailable)?;
+        async fn list(&self, prefix: &str) -> StorageResult<Vec<StorageMetadata>> {
+            let base_path = self
+                .key_to_path(prefix)
+                .ok_or(StorageError::NotAvailable)?;
 
-                if !base_path.exists() {
-                    return Ok(Vec::new());
+            if !base_path.exists() {
+                return Ok(Vec::new());
+            }
+
+            let mut results = Vec::new();
+
+            if base_path.is_dir() {
+                Self::collect_files(&base_path, prefix, &mut results)?;
+            } else if base_path.is_file() {
+                if let Ok(metadata) = std::fs::metadata(&base_path) {
+                    results.push(StorageMetadata {
+                        key: prefix.to_string(),
+                        size: Some(metadata.len()),
+                        modified: metadata
+                            .modified()
+                            .ok()
+                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                            .map(|d| d.as_secs()),
+                    });
                 }
+            }
 
-                let mut results = Vec::new();
-
-                if base_path.is_dir() {
-                    Self::collect_files(&base_path, &prefix, &mut results)?;
-                } else if base_path.is_file() {
-                    if let Ok(metadata) = std::fs::metadata(&base_path) {
-                        results.push(StorageMetadata {
-                            key: prefix.clone(),
-                            size: Some(metadata.len()),
-                            modified: metadata
-                                .modified()
-                                .ok()
-                                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                                .map(|d| d.as_secs()),
-                        });
-                    }
-                }
-
-                Ok(results)
-            })
+            Ok(results)
         }
 
         fn get_display_path(&self, key: &str) -> String {
@@ -408,7 +377,7 @@ mod wasm {
 
     // Note: The actual implementation requires the indexed_db_futures crate.
     // For now, we provide a stub that returns NotAvailable errors.
-    // 
+    //
     // When implementing, use:
     // - indexed_db_futures::IdbDatabase for database access
     // - Store binary data directly as Uint8Array
@@ -428,64 +397,39 @@ mod wasm {
     // }
     // ```
 
+    #[async_trait(?Send)]
     impl Storage for WasmStorage {
-        fn get(
-            &self,
-            _key: &str,
-        ) -> Pin<Box<dyn Future<Output = StorageResult<Vec<u8>>> + Send + '_>> {
-            Box::pin(async move {
-                // TODO: Implement IndexedDB read
-                // 1. Open database
-                // 2. Create read transaction
-                // 3. Get value from object store
-                // 4. Convert Uint8Array to Vec<u8>
-                Err(StorageError::NotAvailable)
-            })
+        async fn get(&self, _key: &str) -> StorageResult<Vec<u8>> {
+            // TODO: Implement IndexedDB read
+            // 1. Open database
+            // 2. Create read transaction
+            // 3. Get value from object store
+            // 4. Convert Uint8Array to Vec<u8>
+            Err(StorageError::NotAvailable)
         }
 
-        fn set(
-            &self,
-            _key: &str,
-            _data: Vec<u8>,
-        ) -> Pin<Box<dyn Future<Output = StorageResult<()>> + Send + '_>> {
-            Box::pin(async move {
-                // TODO: Implement IndexedDB write
-                // 1. Open database
-                // 2. Create readwrite transaction
-                // 3. Put value in object store
-                Err(StorageError::NotAvailable)
-            })
+        async fn set(&self, _key: &str, _data: Vec<u8>) -> StorageResult<()> {
+            // TODO: Implement IndexedDB write
+            // 1. Open database
+            // 2. Create readwrite transaction
+            // 3. Put value in object store
+            Err(StorageError::NotAvailable)
         }
 
-        fn delete(
-            &self,
-            _key: &str,
-        ) -> Pin<Box<dyn Future<Output = StorageResult<()>> + Send + '_>> {
-            Box::pin(async move {
-                // TODO: Implement IndexedDB delete
-                Err(StorageError::NotAvailable)
-            })
+        async fn delete(&self, _key: &str) -> StorageResult<()> {
+            // TODO: Implement IndexedDB delete
+            Err(StorageError::NotAvailable)
         }
 
-        fn exists(
-            &self,
-            _key: &str,
-        ) -> Pin<Box<dyn Future<Output = StorageResult<bool>> + Send + '_>> {
-            Box::pin(async move {
-                // TODO: Implement IndexedDB exists check
-                Err(StorageError::NotAvailable)
-            })
+        async fn exists(&self, _key: &str) -> StorageResult<bool> {
+            // TODO: Implement IndexedDB exists check
+            Err(StorageError::NotAvailable)
         }
 
-        fn list(
-            &self,
-            _prefix: &str,
-        ) -> Pin<Box<dyn Future<Output = StorageResult<Vec<StorageMetadata>>> + Send + '_>> {
-            Box::pin(async move {
-                // TODO: Implement IndexedDB list
-                // Use IDBKeyRange.bound(prefix, prefix + '\uffff') to get all keys with prefix
-                Err(StorageError::NotAvailable)
-            })
+        async fn list(&self, _prefix: &str) -> StorageResult<Vec<StorageMetadata>> {
+            // TODO: Implement IndexedDB list
+            // Use IDBKeyRange.bound(prefix, prefix + '\uffff') to get all keys with prefix
+            Err(StorageError::NotAvailable)
         }
 
         fn get_display_path(&self, key: &str) -> String {

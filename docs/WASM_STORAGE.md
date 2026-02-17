@@ -15,17 +15,22 @@ The emulator needs to work in both native and WASM environments. This requires a
 
 ### Storage Abstraction (`frontend/src/frontend/storage.rs`)
 
-The `Storage` trait provides a unified async interface for both platforms:
+The `Storage` trait provides a unified async interface for both platforms using `async_trait`:
 
 ```rust
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait Storage: Send + Sync {
-    fn get(&self, key: &str) -> Pin<Box<dyn Future<Output = StorageResult<Vec<u8>>> + Send + '_>>;
-    fn set(&self, key: &str, data: Vec<u8>) -> Pin<Box<dyn Future<Output = StorageResult<()>> + Send + '_>>;
-    fn delete(&self, key: &str) -> Pin<Box<dyn Future<Output = StorageResult<()>> + Send + '_>>;
-    fn exists(&self, key: &str) -> Pin<Box<dyn Future<Output = StorageResult<bool>> + Send + '_>>;
-    fn list(&self, prefix: &str) -> Pin<Box<dyn Future<Output = StorageResult<Vec<StorageMetadata>>> + Send + '_>>;
+    async fn get(&self, key: &str) -> StorageResult<Vec<u8>>;
+    async fn set(&self, key: &str, data: Vec<u8>) -> StorageResult<()>;
+    async fn delete(&self, key: &str) -> StorageResult<()>;
+    async fn exists(&self, key: &str) -> StorageResult<bool>;
+    async fn list(&self, prefix: &str) -> StorageResult<Vec<StorageMetadata>>;
+    fn get_display_path(&self, key: &str) -> String;
 }
 ```
+
+Note: On WASM, futures don't need to be `Send` since JavaScript is single-threaded.
 
 ### Key Format
 
