@@ -23,7 +23,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
 use image::{ImageBuffer, Rgba, RgbaImage};
-use ensemble_lockstep::emulation::ppu::RgbColor;
 
 use crate::cli::args::VideoFormat;
 

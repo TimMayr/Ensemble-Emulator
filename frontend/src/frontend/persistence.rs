@@ -13,12 +13,12 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::{fs, thread};
 
-use crossbeam_channel::{Receiver, bounded};
+use crossbeam_channel::{bounded, Receiver};
 use directories::ProjectDirs;
-use ensemble_gown::RendererKind;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
-use ensemble_lockstep::emulation::screen_renderer::parse_palette_from_file;
+use ensemble_lockstep::emulation::screen_renderer::{create_renderer, parse_palette_from_file};
 use serde::{Deserialize, Serialize};
+
 use crate::frontend::egui::config::{
     AppConfig, AppSpeed, ConsoleConfig, DebugSpeed, SpeedConfig, UserConfig, ViewConfig,
 };
@@ -261,7 +261,7 @@ pub fn read_from_cache_dir(filename: &str) -> Option<Receiver<AsyncFileResult>> 
 const CONFIG_FILENAME: &str = "config.toml";
 
 /// Persistent configuration structure that can be serialized to TOML.
-/// 
+///
 /// Uses `RendererKind` for runtime-switchable renderer persistence.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistentConfig {
@@ -331,7 +331,7 @@ pub struct PersistentViewConfig {
     /// The serialized renderer state. When present, the renderer is restored from this.
     /// When absent (e.g., first run), a default renderer is created.
     #[serde(default)]
-    pub renderer: Option<RendererKind>,
+    pub renderer: String,
 }
 
 impl Default for PersistentViewConfig {
@@ -343,7 +343,7 @@ impl Default for PersistentViewConfig {
             palette_rgb_data: None,
             required_debug_fetches: HashSet::new(),
             debug_active_palette: 0,
-            renderer: None,
+            renderer: "NoneRenderer".to_string(),
         }
     }
 }
@@ -361,7 +361,7 @@ impl From<&ViewConfig> for PersistentViewConfig {
                 .map(|f| f.into())
                 .collect(),
             debug_active_palette: config.debug_active_palette,
-            renderer: Some(config.renderer.clone()),
+            renderer: config.renderer.get_name().to_string(),
         }
     }
 }
@@ -369,13 +369,10 @@ impl From<&ViewConfig> for PersistentViewConfig {
 impl From<&PersistentViewConfig> for ViewConfig {
     fn from(config: &PersistentViewConfig) -> Self {
         // If renderer was persisted, use it; otherwise create a default
-        let renderer = match &config.renderer {
-            Some(r) => r.clone(),
-            None => RendererKind::default(),
-        };
-        
+        let renderer = create_renderer(Some(config.renderer.as_str()));
+
         let palette = parse_palette_from_file(config.palette_rgb_data.clone(), None);
-        
+
         Self {
             debug_active_palette: config.debug_active_palette,
             palette_rgb_data: palette,

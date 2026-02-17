@@ -1,12 +1,17 @@
 //! Options pane rendering
 
-use ensemble_gown::RendererKind;
+use ensemble_lockstep::emulation::screen_renderer::{
+    create_renderer, get_all_renderers, ScreenRenderer,
+};
+
 use crate::frontend::egui::config::{AppConfig, AppSpeed, DebugSpeed};
 
 /// Render the options panel
 pub fn render_options(ui: &mut egui::Ui, config: &mut AppConfig) {
     egui::ScrollArea::vertical().show(ui, |ui| {
-        render_renderer_settings(ui, config);
+        if !get_all_renderers().is_empty() {
+            render_renderer_settings(ui, config);
+        }
         render_speed_settings(ui, config);
     });
 }
@@ -15,34 +20,40 @@ pub fn render_options(ui: &mut egui::Ui, config: &mut AppConfig) {
 fn render_renderer_settings(ui: &mut egui::Ui, config: &mut AppConfig) {
     ui.collapsing("Renderer", |ui| {
         // Display the renderer type name
-        ui.label(format!("Current Renderer: {}", config.view_config.renderer.display_name()));
-        ui.small(config.view_config.renderer.description());
-        
+        ui.label(format!(
+            "Current Renderer: {}",
+            config.view_config.renderer.get_name()
+        ));
+
         ui.separator();
-        
+
         // Renderer selection dropdown
         ui.label("Select Renderer:");
-        let current_id = config.view_config.renderer.type_id();
+        let current_id = config.view_config.renderer.get_name().to_string();
         egui::ComboBox::from_id_salt("renderer_selector")
-            .selected_text(config.view_config.renderer.display_name())
+            .selected_text(config.view_config.renderer.get_name())
             .show_ui(ui, |ui| {
-                for variant in RendererKind::all_variants() {
-                    let selected = variant.type_id() == current_id;
-                    if ui.selectable_label(selected, variant.display_name()).clicked() {
+                for variant in get_all_renderers() {
+                    let selected = variant == current_id;
+                    if ui.selectable_label(selected, variant).clicked() {
                         // Transfer the current palette to the new renderer
                         // Note: This copies the palette (~1.5KB), but this is an infrequent UI operation
                         let palette = config.view_config.palette_rgb_data;
-                        config.view_config.renderer = variant;
-                        config.view_config.renderer.set_palette(palette);
+                        let mut renderer: Box<dyn ScreenRenderer> = create_renderer(Some(variant));
+                        renderer.set_palette(palette);
+                        config.view_config.renderer = renderer;
                     }
                 }
             });
-        
+
         ui.separator();
-        
+
         // Show current palette
-        ui.label(format!("Current palette: {}", 
-            config.user_config.previous_palette_path
+        ui.label(format!(
+            "Current palette: {}",
+            config
+                .user_config
+                .previous_palette_path
                 .as_ref()
                 .and_then(|p| p.file_name())
                 .map(|n| n.to_string_lossy().to_string())

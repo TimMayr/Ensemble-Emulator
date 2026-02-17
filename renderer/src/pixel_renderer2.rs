@@ -1,7 +1,10 @@
-use serde_big_array::BigArray;
 use std::fmt::{Debug, Formatter};
-use ensemble_lockstep::emulation::screen_renderer::{RgbColor, RgbPalette, ScreenRenderer};
+
+use ensemble_lockstep::emulation::screen_renderer::{
+    RendererRegistration, RgbColor, RgbPalette, ScreenRenderer,
+};
 use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 
 /// Number of colors in the NES palette (64 base colors)
 const PALETTE_COLORS: usize = 64;
@@ -13,11 +16,11 @@ const FLAT_PALETTE_SIZE: usize = PALETTE_COLORS * EMPHASIS_COMBINATIONS;
 const PALETTE_INDEX_MASK: usize = FLAT_PALETTE_SIZE - 1;
 
 /// A flat palette structure optimized for lookup-table based rendering.
-/// 
+///
 /// The NES PPU outputs a 9-bit value for each pixel:
 /// - Bits 0-5 (6 bits): Color index (0-63 from the NES palette)
 /// - Bits 6-8 (3 bits): Emphasis bits (R, G, B emphasis from PPU mask register)
-/// 
+///
 /// This flat structure allows O(1) lookup using the raw index value.
 #[derive(Clone, Serialize, Deserialize)]
 struct FlatPalette2 {
@@ -42,15 +45,15 @@ impl From<RgbPalette> for FlatPalette2 {
 }
 
 /// Lookup table-based palette renderer.
-/// 
+///
 /// This renderer uses a precomputed lookup table for fast color conversion.
 /// It is the default renderer for the NES emulator.
-/// 
+///
 /// # Usage
-/// 
+///
 /// ```ignore
 /// use ensemble_gown::LookupPaletteRenderer;
-/// 
+///
 /// let mut renderer = LookupPaletteRenderer::default();
 /// renderer.set_palette(my_palette);
 /// let rgb_colors = renderer.buffer_to_image(&pixel_indices);
@@ -60,6 +63,8 @@ pub struct LookupPaletteRenderer2 {
     palette: FlatPalette2,
     image: Vec<RgbColor>,
 }
+
+const NAME: &str = "LookupPaletteRenderer2";
 
 impl Default for LookupPaletteRenderer2 {
     fn default() -> Self { Self::new() }
@@ -76,9 +81,7 @@ impl LookupPaletteRenderer2 {
 }
 
 impl Debug for LookupPaletteRenderer2 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str("LookupPaletteRenderer")
-    }
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { f.write_str(self.get_name()) }
 }
 
 impl ScreenRenderer for LookupPaletteRenderer2 {
@@ -95,8 +98,15 @@ impl ScreenRenderer for LookupPaletteRenderer2 {
 
         &self.image
     }
-    
-    fn set_palette(&mut self, rgb_palette: RgbPalette) {
-        self.palette = rgb_palette.into();
+
+    fn set_palette(&mut self, rgb_palette: RgbPalette) { self.palette = rgb_palette.into(); }
+
+    fn get_name(&self) -> &str { NAME }
+}
+
+inventory::submit! {
+    RendererRegistration {
+        name: NAME,
+        factory: || Box::new(LookupPaletteRenderer2::new()),
     }
 }

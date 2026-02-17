@@ -11,3 +11,4 @@ path = "src/lib.rs"
 ensemble-lockstep = { path = "../core" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde-big-array = {version = "0.5.1"}
+inventory = {version = "0.3.21"}

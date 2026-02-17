@@ -210,6 +210,9 @@ pub struct VideoArgs {
     /// Video output resolution (native, 2x, 3x, 4x, 720p, 1080p, 4k, or WIDTHxHEIGHT)
     #[arg(long)]
     pub video_scale: Option<String>,
+
+    #[arg(long)]
+    pub renderer: RendererKind
 }
 
 /// Video export mode options

@@ -1325,7 +1325,6 @@ dependencies = [
  "eframe",
  "egui",
  "egui_tiles",
- "ensemble-gown",
  "ensemble-lockstep",
  "rfd",
  "serde",
@@ -1351,6 +1350,7 @@ name = "ensemble-gown"
 version = "0.1.0"
 dependencies = [
  "ensemble-lockstep",
+ "inventory",
  "serde",
  "serde-big-array",
 ]
@@ -1360,6 +1360,7 @@ name = "ensemble-lockstep"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "inventory",
  "serde",
  "serde_json",
  "sha2",
@@ -2096,6 +2097,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "inventory"
+version = "0.3.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc61209c082fbeb19919bee74b176221b27223e27b65d781eb91af24eb1fb46e"
+dependencies = [
+ "rustversion",
 ]
 
 [[package]]

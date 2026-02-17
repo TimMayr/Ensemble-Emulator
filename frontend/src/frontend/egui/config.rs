@@ -1,15 +1,16 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::path::PathBuf;
-use ensemble_gown::RendererKind;
+
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use ensemble_lockstep::emulation::rom::RomFile;
-use ensemble_lockstep::emulation::screen_renderer::RgbPalette;
+use ensemble_lockstep::emulation::screen_renderer::{create_renderer, RgbPalette, ScreenRenderer};
+
 use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::messages::SavestateLoadContext;
 
 /// View configuration for the emulator frontend.
-/// 
+///
 /// Contains settings related to rendering and debug viewers.
 #[derive(Debug)]
 pub struct ViewConfig {
@@ -19,7 +20,7 @@ pub struct ViewConfig {
     pub required_debug_fetches: HashSet<EmulatorFetchable>,
     /// The renderer instance used for converting palette indices to RGB colors.
     /// This can be changed at runtime by replacing with a different `RendererKind` variant.
-    pub renderer: RendererKind,
+    pub renderer: Box<dyn ScreenRenderer>,
     /// The RGB palette data used for rendering (kept for debug viewers like pattern tables).
     pub palette_rgb_data: RgbPalette,
     pub debug_active_palette: usize,
@@ -32,7 +33,7 @@ impl Default for ViewConfig {
             show_pattern_table: false,
             show_nametable: false,
             required_debug_fetches: HashSet::new(),
-            renderer: RendererKind::default(),
+            renderer: create_renderer(Some("LookupPaletteRenderer")),
             palette_rgb_data: RgbPalette::default(),
             debug_active_palette: 0,
         }

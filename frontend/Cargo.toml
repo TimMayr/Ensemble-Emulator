@@ -26,4 +26,3 @@ serde = { version = "1.0.228", features = ["derive", "alloc", "rc"] }
 toml = { version = "0.9.11", features = ["fast_hash"] }
 
 ensemble-lockstep = { path = "../core" }
-ensemble-gown = { path = "../renderer" }

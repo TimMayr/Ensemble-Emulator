@@ -1,9 +1,8 @@
 use std::time::Instant;
 
 use egui::{ColorImage, Context, TextureHandle, TextureOptions};
-use ensemble_gown::RendererKind;
 use ensemble_lockstep::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData, TILE_SIZE, NametableData, TILE_COUNT, PaletteData, PALETTE_COUNT};
-use ensemble_lockstep::emulation::screen_renderer::{RgbColor, RgbPalette};
+use ensemble_lockstep::emulation::screen_renderer::{RgbColor, RgbPalette, ScreenRenderer};
 
 /// Texture storage and management for the emulator display
 #[derive(Eq, PartialEq, Clone)]
@@ -59,7 +58,7 @@ impl EmuTextures {
     /// Takes a mutable reference to the renderer because `buffer_to_image`
     /// requires `&mut self` - renderers may use internal buffers to avoid reallocating
     /// the output image on each frame.
-    pub fn update_emulator_texture(&mut self, ctx: &Context, renderer: &mut RendererKind) {
+    pub fn update_emulator_texture(&mut self, ctx: &Context, renderer: &mut Box<dyn ScreenRenderer>) {
         if let Some(ref frame) = self.current_frame {
             // Use the renderer's buffer_to_image method
             let rgb_frame = renderer.buffer_to_image(frame.as_ref());

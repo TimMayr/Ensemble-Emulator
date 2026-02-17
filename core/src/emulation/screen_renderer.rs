@@ -1,23 +1,79 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use serde::de::DeserializeOwned;
+
 use crate::util::{compute_hash, Hashable, ToBytes};
 
 /// Trait for rendering palette indices to RGB colors.
-/// 
+///
 /// Implementations must be serializable to enable persistence of renderer state.
-pub trait ScreenRenderer: Debug + Serialize + DeserializeOwned {
+pub trait ScreenRenderer: Debug {
     /// Convert a buffer of palette indices to RGB colors.
     fn buffer_to_image(&mut self, buffer: &[u16]) -> &[RgbColor];
-    
+
     /// Set the palette to use for rendering.
-    /// 
+    ///
     /// Called when the user loads a new palette file.
     fn set_palette(&mut self, palette: RgbPalette);
+
+    fn get_name(&self) -> &str;
+}
+
+pub struct NoneRenderer {
+    image: [RgbColor; 0],
+}
+
+impl NoneRenderer {
+    pub fn new() -> Self {
+        NoneRenderer {
+            image: [],
+        }
+    }
+}
+
+impl Debug for NoneRenderer {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { f.write_str("None") }
+}
+
+impl ScreenRenderer for NoneRenderer {
+    fn buffer_to_image(&mut self, _: &[u16]) -> &[RgbColor] { &self.image }
+
+    fn set_palette(&mut self, _: RgbPalette) {}
+
+    fn get_name(&self) -> &str { "None" }
+}
+
+pub struct RendererRegistration {
+    pub name: &'static str,
+    pub factory: fn() -> Box<dyn ScreenRenderer>,
+}
+
+inventory::collect!(RendererRegistration);
+
+pub fn create_renderer(name: Option<&str>) -> Box<dyn ScreenRenderer> {
+    if let Some(name) = name {
+        inventory::iter::<RendererRegistration>
+            .into_iter()
+            .find(|r| r.name == name)
+            .map(|r| (r.factory)())
+            .unwrap_or_else(|| Box::new(NoneRenderer::new()))
+    } else {
+        Box::new(NoneRenderer::new())
+    }
+}
+
+pub fn get_all_renderers() -> Vec<&'static str> {
+    let mut renderers: Vec<&'static str> = inventory::iter::<RendererRegistration>
+        .into_iter()
+        .map(|r| r.name)
+        .collect::<Vec<&'static str>>();
+
+    renderers.sort();
+
+    renderers
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize, Default)]
@@ -29,17 +85,23 @@ pub struct RgbColor {
 
 impl RgbColor {
     pub fn new(r: u8, g: u8, b: u8) -> Self {
-        Self { r, g, b }
+        Self {
+            r,
+            g,
+            b,
+        }
     }
 
-    pub fn to_tuple(self) -> (u8, u8, u8) {
-        (self.r, self.g, self.b)
-    }
+    pub fn to_tuple(self) -> (u8, u8, u8) { (self.r, self.g, self.b) }
 }
 
 impl From<(u8, u8, u8)> for RgbColor {
     fn from((r, g, b): (u8, u8, u8)) -> Self {
-        Self { r, g, b }
+        Self {
+            r,
+            g,
+            b,
+        }
     }
 }
 
