@@ -1,7 +1,7 @@
 //! Persistent configuration and file storage utilities.
 //!
 //! This module provides:
-//! - Directory management using the `directories` crate for OS-appropriate paths
+//! - Directory management using the storage abstraction for cross-platform paths
 //! - Generic async file read/write operations to avoid blocking the UI thread
 //! - TOML-based configuration persistence for application settings
 //! - Helper functions for saving files to data and cache directories
@@ -23,6 +23,7 @@ use crate::frontend::egui::config::{
     AppConfig, AppSpeed, ConsoleConfig, DebugSpeed, SpeedConfig, UserConfig, ViewConfig,
 };
 use crate::frontend::egui::keybindings::KeybindingsConfig;
+use crate::frontend::storage;
 use crate::frontend::util::append_to_filename;
 
 /// Application identifier used for directory paths
@@ -256,9 +257,6 @@ pub fn read_from_cache_dir(filename: &str) -> Option<Receiver<AsyncFileResult>> 
 // ============================================================================
 // Configuration Persistence (TOML format)
 // ============================================================================
-
-/// Configuration file name
-const CONFIG_FILENAME: &str = "config.toml";
 
 /// Persistent configuration structure that can be serialized to TOML.
 ///
@@ -600,13 +598,26 @@ impl From<&PersistentConsoleConfig> for ConsoleConfig {
 /// allowing the application to start with default config if the
 /// config file is malformed.
 pub fn load_config() -> Option<PersistentConfig> {
-    let config_path = get_config_file_path(CONFIG_FILENAME)?;
-    if !config_path.exists() {
-        return None;
+    let key = storage::config_key();
+
+    // Check if config exists using storage
+    match storage::exists_sync(&key) {
+        Ok(false) => return None,
+        Err(e) => {
+            eprintln!("Failed to check if config exists: {}", e);
+            return None;
+        }
+        Ok(true) => {}
     }
 
-    let contents = match fs::read_to_string(&config_path) {
-        Ok(c) => c,
+    let contents = match storage::read_sync(&key) {
+        Ok(data) => match String::from_utf8(data) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Config file is not valid UTF-8: {}", e);
+                return None;
+            }
+        },
         Err(e) => {
             eprintln!("Failed to read config file: {}", e);
             return None;
@@ -624,13 +635,13 @@ pub fn load_config() -> Option<PersistentConfig> {
 
 /// Save configuration to the config file
 pub fn save_config(config: &PersistentConfig) -> Result<(), String> {
-    let config_path = get_config_file_path(CONFIG_FILENAME)
-        .ok_or_else(|| "Failed to get config file path".to_string())?;
+    let key = storage::config_key();
 
     let toml_string =
         toml::to_string_pretty(config).map_err(|e| format!("Failed to serialize config: {}", e))?;
 
-    fs::write(&config_path, toml_string).map_err(|e| format!("Failed to write config: {}", e))?;
+    storage::write_sync(&key, toml_string.as_bytes())
+        .map_err(|e| format!("Failed to write config: {}", e))?;
 
     Ok(())
 }

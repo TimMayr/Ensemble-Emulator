@@ -40,8 +40,9 @@ use crate::frontend::egui::tiles::{
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
 use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent, SavestateLoadContext};
 use crate::frontend::persistence::{
-    get_data_dir, get_data_file_path, get_egui_storage_path, load_config, write_file_async,
+    get_egui_storage_path, load_config,
 };
+use crate::frontend::storage;
 use crate::frontend::util;
 use crate::messages::{EmulatorMessage, FrontendMessage, SaveType};
 
@@ -200,7 +201,7 @@ impl EguiApp {
         let rom_data = match std::fs::read(&rom_path) {
             Ok(data) => data,
             Err(e) => {
-                eprintln!("Failed to read ROM file: {}", e);
+                eprintln!("Failed to read ROM file '{}': {}", rom_path.display(), e);
                 return;
             }
         };
@@ -259,22 +260,17 @@ impl EguiApp {
             let prev_path = &self.config.user_config.previous_rom_path;
             if let Some(prev_path) = prev_path {
                 let display_name = util::rom_display_name(prev_path, rom_hash);
+                let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+                let key = storage::autosave_key(&display_name, &timestamp);
 
-                let path = get_data_file_path(
-                    format!(
-                        "saves/{}/autosaves/autosave_{}.sav",
-                        display_name,
-                        chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
-                    )
-                    .as_str(),
-                );
+                // Write savestate using storage
+                let data = savestate.to_bytes(None);
+                std::thread::spawn(move || {
+                    let _ = storage::write_sync(&key, &data);
+                });
 
-                if let Some(path) = path {
-                    let _ = write_file_async(path, savestate.to_bytes(None), false);
-
-                    // Clean up old autosaves asynchronously to avoid blocking the UI
-                    Self::cleanup_old_autosaves_async(display_name);
-                }
+                // Clean up old autosaves asynchronously to avoid blocking the UI
+                Self::cleanup_old_autosaves_async(display_name);
             }
         }
     }
@@ -283,32 +279,26 @@ impl EguiApp {
     /// Runs asynchronously in a background thread to avoid blocking the UI.
     fn cleanup_old_autosaves_async(display_name: String) {
         std::thread::spawn(move || {
-            if let Some(data_dir) = get_data_dir() {
-                let autosaves_dir = data_dir.join("saves").join(&display_name).join("autosaves");
+            let prefix = storage::autosaves_prefix(&display_name);
 
-                if let Ok(entries) = std::fs::read_dir(&autosaves_dir) {
-                    // Collect all autosave files with their modification times
-                    let mut autosaves: Vec<(PathBuf, std::time::SystemTime)> = entries
-                        .filter_map(|entry| entry.ok())
-                        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "sav"))
-                        .filter_map(|entry| {
-                            let path = entry.path();
-                            let modified = entry.metadata().ok()?.modified().ok()?;
-                            Some((path, modified))
-                        })
-                        .collect();
+            if let Ok(entries) = storage::list_sync(&prefix) {
+                // Filter to only .sav files and collect with their modified times
+                let mut autosaves: Vec<_> = entries
+                    .into_iter()
+                    .filter(|e| e.key.ends_with(".sav"))
+                    .filter_map(|e| Some((e.key, e.modified?)))
+                    .collect();
 
-                    // If we have at least the limit, delete oldest to make room
-                    // (use >= to maintain exactly MAX_AUTOSAVES_PER_GAME after the new save)
-                    if autosaves.len() >= MAX_AUTOSAVES_PER_GAME {
-                        // Sort by modification time (oldest first)
-                        autosaves.sort_by_key(|a| a.1);
+                // If we have at least the limit, delete oldest to make room
+                // (use >= to maintain exactly MAX_AUTOSAVES_PER_GAME after the new save)
+                if autosaves.len() >= MAX_AUTOSAVES_PER_GAME {
+                    // Sort by modification time (oldest first)
+                    autosaves.sort_by_key(|a| a.1);
 
-                        // Delete enough files to get back under the limit
-                        let to_delete = autosaves.len() - MAX_AUTOSAVES_PER_GAME + 1;
-                        for (path, _) in autosaves.into_iter().take(to_delete) {
-                            let _ = std::fs::remove_file(path);
-                        }
+                    // Delete enough files to get back under the limit
+                    let to_delete = autosaves.len() - MAX_AUTOSAVES_PER_GAME + 1;
+                    for (key, _) in autosaves.into_iter().take(to_delete) {
+                        let _ = storage::delete_sync(&key);
                     }
                 }
             }
@@ -316,56 +306,53 @@ impl EguiApp {
     }
 
     pub(crate) fn get_current_quicksave_path(&self) -> Option<PathBuf> {
-        let data_dir = get_data_dir();
-
         if let Some(rom) = &self.config.user_config.loaded_rom
             && let Some(prev_path) = &self.config.user_config.previous_rom_path
-            && let Some(data_dir) = data_dir
-            && data_dir.exists()
         {
             let rom_hash = &rom.data_checksum;
+            let display_name = util::rom_display_name(prev_path, rom_hash);
+            let prefix = storage::quicksaves_prefix(&display_name);
 
-            let quicksave_dir = data_dir
-                .join("saves")
-                .join(util::rom_display_name(prev_path, rom_hash))
-                .join("quicksaves");
+            // List all quicksaves using storage
+            if let Ok(entries) = storage::list_sync(&prefix) {
+                let mut quicksave_path: Option<(PathBuf, chrono::NaiveDateTime, u8)> = None;
 
-            if std::fs::create_dir_all(quicksave_dir.clone()).is_ok() {
-                let children = quicksave_dir.read_dir();
+                for entry in entries {
+                    if !entry.key.ends_with(".sav") {
+                        continue;
+                    }
 
-                let mut quicksave_path = None;
-                if let Ok(children) = children {
-                    for child in children.flatten() {
-                        let stem = child.path().file_stem()?.to_string_lossy().to_string();
+                    // Extract filename from the key
+                    let filename = entry.key.rsplit('/').next()?;
+                    let stem = filename.strip_suffix(".sav")?;
 
-                        let time_version = stem.split_once('_')?.1;
+                    let time_version = stem.split_once('_')?.1;
 
-                        let (timestamp, version) =
-                            if time_version.chars().filter(|c| *c == '_').count() > 1 {
-                                time_version.rsplit_once('_')?
-                            } else {
-                                (time_version, "0")
-                            };
+                    let (timestamp, version) =
+                        if time_version.chars().filter(|c| *c == '_').count() > 1 {
+                            time_version.rsplit_once('_')?
+                        } else {
+                            (time_version, "0")
+                        };
 
-                        let time =
-                            chrono::NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d_%H-%M-%S");
+                    let time =
+                        chrono::NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d_%H-%M-%S");
 
-                        let version = version.parse::<u8>().unwrap_or(0);
+                    let version = version.parse::<u8>().unwrap_or(0);
 
-                        if let Ok(time) = time {
-                            if quicksave_path.is_none() {
-                                quicksave_path = Some((child.path(), time, version))
+                    if let Ok(time) = time {
+                        // Get the actual filesystem path for this key
+                        let path = storage::get_path_for_key(&entry.key)?;
+
+                        let should_update = match &quicksave_path {
+                            None => true,
+                            Some(current) => {
+                                current.1 < time || (current.1 == time && current.2 < version)
                             }
+                        };
 
-                            if let Some(path) = quicksave_path.clone() {
-                                if path.1 < time {
-                                    quicksave_path = Some((child.path(), time, version));
-                                }
-
-                                if path.1 == time && path.2 < version {
-                                    quicksave_path = Some((child.path(), time, version));
-                                }
-                            }
+                        if should_update {
+                            quicksave_path = Some((path, time, version));
                         }
                     }
                 }

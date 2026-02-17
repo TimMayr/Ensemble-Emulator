@@ -610,7 +610,7 @@ mod sync_wrappers {
     }
 
     fn collect_files_sync(
-        dir: &std::path::PathBuf,
+        dir: &std::path::Path,
         prefix: &str,
         results: &mut Vec<StorageMetadata>,
     ) -> StorageResult<()> {
