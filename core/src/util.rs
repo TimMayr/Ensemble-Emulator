@@ -1,6 +1,6 @@
 use crate::emulation::cpu::UPPER_BYTE;
 use crate::emulation::mem::{Memory, MemoryDevice};
-use crate::emulation::savestate::SaveState;
+use crate::emulation::savestate::{BINARY_FORMAT_VERSION, JSON_FORMAT_VERSION, MAGIC, SaveState};
 
 #[inline(always)]
 pub fn crosses_page_boundary_u8(base: u16, offset: u8) -> bool {
@@ -30,16 +30,27 @@ pub trait ToBytes {
 
 impl ToBytes for SaveState {
     fn to_bytes(&self, format: Option<String>) -> Vec<u8> {
-        if let Some(format) = format {
-            match format.as_str() {
-                "json" => serde_json::to_vec_pretty(self).expect("Failed to serialize SaveState"),
-                _ => bincode::serde::encode_to_vec(self, bincode::config::standard())
-                    .expect("Failed to serialize SaveState"),
-            }
+        let mut res = Vec::new();
+
+        res.extend(MAGIC);
+        let format = if let Some(format) = format {
+            format
         } else {
-            bincode::serde::encode_to_vec(self, bincode::config::standard())
-                .expect("Failed to serialize SaveState")
+            "binary".to_string()
+        };
+
+        if format == "json" {
+            res.push(JSON_FORMAT_VERSION);
+            res.extend(serde_json::to_vec_pretty(self).expect("Error deserializing Savestate"));
+        } else if format == "binary" {
+            res.push(BINARY_FORMAT_VERSION);
+            res.extend(postcard::to_stdvec(self).expect("Error deserializing Savestate"));
+        } else {
+            res.push(BINARY_FORMAT_VERSION);
+            res.extend(postcard::to_stdvec(self).expect("Error deserializing Savestate"));
         }
+
+        res
     }
 }
 

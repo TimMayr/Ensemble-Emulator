@@ -212,7 +212,7 @@ pub struct VideoArgs {
     pub video_scale: Option<String>,
 
     #[arg(long)]
-    pub renderer: RendererKind
+    pub renderer: Option<String>,
 }
 
 /// Video export mode options

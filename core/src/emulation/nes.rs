@@ -11,7 +11,7 @@ use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
 use crate::emulation::ppu::{Ppu};
 use crate::emulation::rom::{RomFile, RomFileConvertible};
-use crate::emulation::savestate::{CpuState, PpuState, SaveState};
+use crate::emulation::savestate::{CpuState, PpuState, SaveState,};
 use crate::trace::TraceLog;
 
 pub const CPU_CYCLES_PER_FRAME: u16 = 29780;

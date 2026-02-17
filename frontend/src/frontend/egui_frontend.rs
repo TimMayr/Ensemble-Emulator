@@ -620,7 +620,7 @@ impl eframe::App for EguiApp {
         eframe::set_value(storage, EGUI_TILES_TREE_KEY, &self.tree);
     }
 
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+    fn on_exit(&mut self) {
         // Save configuration to TOML file before exiting (synchronous to ensure completion)
         let persistent_config = (&self.config).into();
         if let Err(e) = crate::frontend::persistence::save_config(&persistent_config) {

@@ -8,6 +8,10 @@ use crate::emulation::mem::OpenBus;
 use crate::emulation::ppu::{Ppu, VRAM_SIZE};
 use crate::emulation::rom::RomFile;
 
+pub const MAGIC: &[u8; 5] = b"ESSV1"; // NES SaveState
+pub const BINARY_FORMAT_VERSION: u8 = 0;
+pub const JSON_FORMAT_VERSION: u8 = 1;
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CpuState {
     pub program_counter: u16,
@@ -201,12 +205,20 @@ pub struct SaveState {
 pub fn try_load_state(path: &PathBuf) -> Option<SaveState> {
     let encoded = std::fs::read(path).ok()?;
 
-    // Try JSON first (handles both compact and pretty-printed JSON)
-    if let Ok(state) = serde_json::from_slice::<SaveState>(&encoded[..]) {
-        Some(state)
-    } else {
-        bincode::serde::decode_from_slice(&encoded, bincode::config::standard())
-            .ok()
-            .map(|(state, _)| state)
+    if encoded.len() < MAGIC.len() + 1 {
+        return None;
+    }
+
+    if &encoded[..MAGIC.len()] != MAGIC {
+        return None;
+    }
+
+     let format = encoded[MAGIC.len()];
+    let payload = &encoded[MAGIC.len() + 1..];
+
+    match format {
+        JSON_FORMAT_VERSION => serde_json::from_slice(payload).ok(),
+        BINARY_FORMAT_VERSION => postcard::from_bytes(payload).ok(),
+        _ => None,
     }
 }
