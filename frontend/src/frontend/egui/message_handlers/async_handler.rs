@@ -275,17 +275,29 @@ impl EguiApp {
                 }
             };
 
-            // Extract filename from key for savestate_name
-            let savestate_name = key.rsplit('/').next().unwrap_or(&key).to_string();
-            let context = SavestateLoadContext {
-                savestate,
-                savestate_name,
-            };
+            // Verify the currently loaded ROM matches the savestate's ROM checksum
+            if let Some(loaded_rom) = &self.config.user_config.loaded_rom {
+                if loaded_rom.data_checksum != savestate.rom_file.data_checksum {
+                    // Checksum mismatch - show error dialog
+                    self.config.pending_dialogs.error_dialog = Some(ErrorDialogState {
+                        title: "Quickload Error".to_string(),
+                        message: "The current ROM doesn't match the savestate's ROM. Please load the correct ROM first.".to_string(),
+                    });
+                    return;
+                }
+            } else {
+                // No ROM loaded - show error dialog
+                self.config.pending_dialogs.error_dialog = Some(ErrorDialogState {
+                    title: "Quickload Error".to_string(),
+                    message: "No ROM is currently loaded. Please load a ROM first.".to_string(),
+                });
+                return;
+            }
 
-            // For quickload, we already have the ROM loaded, so just load the savestate
+            // ROM verified - load the savestate
             let _ = self
                 .to_emulator
-                .send(FrontendMessage::LoadSaveState(Box::new(context.savestate)));
+                .send(FrontendMessage::LoadSaveState(Box::new(savestate)));
         }
     }
 

@@ -54,8 +54,8 @@ fn render_renderer_settings(ui: &mut egui::Ui, config: &mut AppConfig) {
             config
                 .user_config
                 .previous_palette_name
-                .as_ref()
-                .unwrap_or(&"Default (2C02G)".to_string())
+                .as_deref()
+                .unwrap_or("Default (2C02G)")
         ));
         ui.small("Use the Palette viewer to load custom palette files.");
     });
