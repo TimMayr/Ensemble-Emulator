@@ -196,9 +196,22 @@ impl EguiApp {
             .to_emulator
             .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
 
+        // Read the ROM file and send the data to the emulator
+        let rom_data = match std::fs::read(&rom_path) {
+            Ok(data) => data,
+            Err(e) => {
+                eprintln!("Failed to read ROM file: {}", e);
+                return;
+            }
+        };
+        let rom_name = rom_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "Unknown".to_string());
+
         let _ = self
             .to_emulator
-            .send(FrontendMessage::LoadRom(rom_path.clone()));
+            .send(FrontendMessage::LoadRom((rom_data, rom_name)));
 
         self.config.user_config.previous_rom_path = Some(rom_path.clone());
 

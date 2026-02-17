@@ -264,7 +264,21 @@ impl EguiApp {
 
     fn handle_quickload(&mut self) {
         if let Some(path) = self.get_current_quicksave_path() {
-            let savestate = match savestate::try_load_state(&path) {
+            // Read the savestate file
+            let data = match std::fs::read(&path) {
+                Ok(data) => data,
+                Err(e) => {
+                    eprintln!("Failed to read quicksave file: {}", e);
+                    let _ = self
+                        .async_sender
+                        .send(AsyncFrontendMessage::SavestateLoadFailed(
+                            SavestateLoadError::FailedToLoadSavestate,
+                        ));
+                    return;
+                }
+            };
+
+            let savestate = match savestate::try_load_state_from_bytes(&data) {
                 Some(s) => s,
                 None => {
                     let _ = self

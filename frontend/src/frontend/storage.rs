@@ -184,7 +184,7 @@ mod native {
             Some(base.to_path_buf())
         }
 
-        fn key_to_path(&self, key: &str) -> Option<PathBuf> {
+        pub fn key_to_path(&self, key: &str) -> Option<PathBuf> {
             // Parse the category from the key prefix
             let (category, rest) = if let Some(rest) = key.strip_prefix("config/") {
                 (StorageCategory::Config, rest)
@@ -474,6 +474,16 @@ pub fn autosave_key(game_name: &str, timestamp: &str) -> String {
     format!("data/saves/{}/autosaves/autosave_{}.sav", game_name, timestamp)
 }
 
+/// Generate the prefix for listing autosaves for a game
+pub fn autosaves_prefix(game_name: &str) -> String {
+    format!("data/saves/{}/autosaves/", game_name)
+}
+
+/// Generate the prefix for listing quicksaves for a game
+pub fn quicksaves_prefix(game_name: &str) -> String {
+    format!("data/saves/{}/quicksaves/", game_name)
+}
+
 /// Generate a storage key for the application config
 pub fn config_key() -> String {
     "config/config.toml".to_string()
@@ -483,6 +493,162 @@ pub fn config_key() -> String {
 pub fn egui_state_key() -> String {
     "config/egui_state".to_string()
 }
+
+// ============================================================================
+// Synchronous Wrappers (Native Only)
+// ============================================================================
+//
+// These provide synchronous access to storage for code that can't be async,
+// such as startup config loading and shutdown config saving.
+
+#[cfg(not(target_arch = "wasm32"))]
+mod sync_wrappers {
+    use super::*;
+
+    /// Global storage instance for synchronous access
+    static STORAGE: std::sync::OnceLock<NativeStorage> = std::sync::OnceLock::new();
+
+    fn get_storage_instance() -> &'static NativeStorage {
+        STORAGE.get_or_init(NativeStorage::new)
+    }
+
+    /// Get the full filesystem path for a storage key (native only)
+    pub fn get_path_for_key(key: &str) -> Option<std::path::PathBuf> {
+        get_storage_instance().key_to_path(key)
+    }
+
+    /// Read data synchronously from storage
+    pub fn read_sync(key: &str) -> StorageResult<Vec<u8>> {
+        let storage = get_storage_instance();
+        let path = storage
+            .key_to_path(key)
+            .ok_or(StorageError::NotAvailable)?;
+
+        if !path.exists() {
+            return Err(StorageError::NotFound);
+        }
+
+        std::fs::read(&path).map_err(|e| StorageError::ReadError(e.to_string()))
+    }
+
+    /// Write data synchronously to storage
+    pub fn write_sync(key: &str, data: &[u8]) -> StorageResult<()> {
+        let storage = get_storage_instance();
+        let path = storage
+            .key_to_path(key)
+            .ok_or(StorageError::NotAvailable)?;
+
+        // Create parent directories
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| StorageError::WriteError(e.to_string()))?;
+        }
+
+        std::fs::write(&path, data).map_err(|e| StorageError::WriteError(e.to_string()))
+    }
+
+    /// Delete data synchronously from storage
+    pub fn delete_sync(key: &str) -> StorageResult<()> {
+        let storage = get_storage_instance();
+        let path = storage
+            .key_to_path(key)
+            .ok_or(StorageError::NotAvailable)?;
+
+        if path.exists() {
+            std::fs::remove_file(&path)
+                .map_err(|e| StorageError::DeleteError(e.to_string()))?;
+        }
+
+        Ok(())
+    }
+
+    /// Check if a key exists synchronously
+    pub fn exists_sync(key: &str) -> StorageResult<bool> {
+        let storage = get_storage_instance();
+        let path = storage
+            .key_to_path(key)
+            .ok_or(StorageError::NotAvailable)?;
+
+        Ok(path.exists())
+    }
+
+    /// List all keys with a given prefix synchronously
+    pub fn list_sync(prefix: &str) -> StorageResult<Vec<StorageMetadata>> {
+        let storage = get_storage_instance();
+        let base_path = storage
+            .key_to_path(prefix)
+            .ok_or(StorageError::NotAvailable)?;
+
+        if !base_path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut results = Vec::new();
+
+        if base_path.is_dir() {
+            collect_files_sync(&base_path, prefix, &mut results)?;
+        } else if base_path.is_file() {
+            if let Ok(metadata) = std::fs::metadata(&base_path) {
+                results.push(StorageMetadata {
+                    key: prefix.to_string(),
+                    size: Some(metadata.len()),
+                    modified: metadata
+                        .modified()
+                        .ok()
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs()),
+                });
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Get the display path for a key
+    pub fn get_display_path(key: &str) -> String {
+        get_storage_instance().get_display_path(key)
+    }
+
+    fn collect_files_sync(
+        dir: &std::path::PathBuf,
+        prefix: &str,
+        results: &mut Vec<StorageMetadata>,
+    ) -> StorageResult<()> {
+        let entries = std::fs::read_dir(dir)
+            .map_err(|e| StorageError::ReadError(e.to_string()))?;
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            let key = if prefix.ends_with('/') {
+                format!("{}{}", prefix, name)
+            } else {
+                format!("{}/{}", prefix, name)
+            };
+
+            if path.is_file() {
+                if let Ok(metadata) = entry.metadata() {
+                    results.push(StorageMetadata {
+                        key,
+                        size: Some(metadata.len()),
+                        modified: metadata
+                            .modified()
+                            .ok()
+                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                            .map(|d| d.as_secs()),
+                    });
+                }
+            } else if path.is_dir() {
+                collect_files_sync(&path, &key, results)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use sync_wrappers::*;
 
 // ============================================================================
 // Migration Notes

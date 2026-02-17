@@ -16,7 +16,7 @@ use std::{fs, thread};
 use crossbeam_channel::{bounded, Receiver};
 use directories::ProjectDirs;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
-use ensemble_lockstep::emulation::screen_renderer::{create_renderer, parse_palette_from_file};
+use ensemble_lockstep::emulation::screen_renderer::create_renderer;
 use serde::{Deserialize, Serialize};
 
 use crate::frontend::egui::config::{
@@ -311,8 +311,15 @@ impl From<&PersistentConfig> for AppConfig {
             keybindings: value.keybindings.clone(),
         };
 
-        this.view_config.palette_rgb_data =
-            parse_palette_from_file(value.user_config.previous_palette_path.clone(), None);
+        // Load palette from the previous path if available
+        this.view_config.palette_rgb_data = if let Some(ref path) = value.user_config.previous_palette_path {
+            match std::fs::read(path) {
+                Ok(data) => ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&data),
+                Err(_) => ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&[]),
+            }
+        } else {
+            ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&[])
+        };
 
         this
     }
@@ -371,7 +378,15 @@ impl From<&PersistentViewConfig> for ViewConfig {
         // If renderer was persisted, use it; otherwise create a default
         let renderer = create_renderer(Some(config.renderer.as_str()));
 
-        let palette = parse_palette_from_file(config.palette_rgb_data.clone(), None);
+        // Load palette from the persisted path if available
+        let palette = if let Some(ref path) = config.palette_rgb_data {
+            match std::fs::read(path) {
+                Ok(data) => ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&data),
+                Err(_) => ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&[]),
+            }
+        } else {
+            ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&[])
+        };
 
         Self {
             debug_active_palette: config.debug_active_palette,

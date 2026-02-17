@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use ensemble_lockstep::emulation::rom::RomFile;
 use ensemble_lockstep::emulation::savestate::SaveState;

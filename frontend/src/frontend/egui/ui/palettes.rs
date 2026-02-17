@@ -94,7 +94,15 @@ pub fn render_palettes(
                 let sender = async_sender.clone();
 
                 std::thread::spawn(move || {
-                    let palette = parse_palette_from_file(None, path.clone());
+                    // Load palette from the previous path if available, otherwise use default
+                    let palette = if let Some(ref path) = path {
+                        match std::fs::read(path) {
+                            Ok(data) => ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&data),
+                            Err(_) => ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&[]),
+                        }
+                    } else {
+                        ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&[])
+                    };
                     let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette, path));
                 });
             }

@@ -155,7 +155,7 @@ pub fn spawn_palette_picker(
             // Read the file contents from the handle
             let data = handle.read().await;
             let palette = ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(
-                data,
+                &data,
             );
             let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette, None));
         }
