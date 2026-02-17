@@ -6,7 +6,7 @@ use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, OpenBus, Ram};
-use crate::emulation::rom::{RomFile, RomFileConvertible};
+use crate::emulation::rom::RomFile;
 use crate::emulation::savestate::PpuState;
 
 pub const PATTERN_TABLE_WIDTH: usize = 256 + 16; // 16*8*2 + 16px gap
@@ -1048,8 +1048,7 @@ impl Ppu {
         }
     }
 
-    pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
-        let rom_file = rom_get.as_rom_file();
+    pub fn load_rom(&mut self, rom_file: &RomFile) {
         let chr_rom = rom_file.get_chr_rom();
 
         if let Some(chr_rom) = chr_rom {

@@ -139,8 +139,9 @@ impl ChannelEmulator {
                     self.nes.ppu.borrow_mut().mem_init(address, data)
                 }
                 FrontendMessage::WriteCpu(address, data) => self.nes.cpu.memory.init(address, data),
-                FrontendMessage::LoadRom(path) => {
-                    self.nes.load_rom(&path);
+                FrontendMessage::LoadRom((data, name)) => {
+                    let loadable = (&data[..], name);
+                    self.nes.load_rom(&loadable);
                     let _ = self
                         .to_frontend
                         .send(EmulatorMessage::RomLoaded(self.nes.rom_file.clone()));

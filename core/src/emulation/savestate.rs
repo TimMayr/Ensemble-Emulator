@@ -1,5 +1,4 @@
 use std::collections::VecDeque;
-use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
@@ -199,12 +198,6 @@ pub struct SaveState {
     pub cycle: u8,
     pub ppu_cycle_counter: u8,
     pub cpu_cycle_counter: u8,
-}
-
-/// Try to load a savestate from a file path, returning None on error
-pub fn try_load_state(path: &PathBuf) -> Option<SaveState> {
-    let encoded = std::fs::read(path).ok()?;
-    try_load_state_from_bytes(&encoded)
 }
 
 /// Try to load a savestate from raw bytes, returning None on error

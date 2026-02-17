@@ -1,20 +1,10 @@
-use std::path::PathBuf;
-
 use crate::emulation::rom::{ParseError, RomBuilder, RomFile, RomParser};
 
 #[derive(Debug)]
 pub struct ArchaicInes;
 
 impl RomParser for ArchaicInes {
-    fn parse(&self, rom: &[u8], path: Option<PathBuf>) -> Result<RomFile, ParseError> {
-        let name = path.and_then(|p| {
-            if let Ok(p) = p.canonicalize() {
-                p.file_name().map(|f| f.to_string_lossy().to_string())
-            } else {
-                None
-            }
-        });
-
+    fn parse(&self, rom: &[u8], name: Option<String>) -> Result<RomFile, ParseError> {
         let prg_rom_size = rom[4] as u32 * 16 * 1024;
         let chr_rom_size = rom[5] as u32 * 8 * 1024;
 

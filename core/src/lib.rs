@@ -1,3 +1,4 @@
+#![feature(ascii_char)]
 extern crate core;
 pub mod emulation;
 #[cfg(test)]

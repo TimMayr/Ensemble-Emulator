@@ -1,16 +1,15 @@
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::ops::{Deref, RangeInclusive};
-use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp};
-use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::mem::Memory;
 use crate::emulation::ppu::Ppu;
-use crate::emulation::rom::{RomFile, RomFileConvertible};
+use crate::emulation::rom::RomFile;
 use crate::emulation::savestate::{CpuState, PpuState, SaveState};
 use crate::trace::TraceLog;
 
@@ -70,11 +69,9 @@ impl Nes {
                     continue;
                 }
                 Ok(res) => {
-                    self.flush_trace_log();
                     return Ok(res);
                 }
                 Err(err) => {
-                    self.flush_trace_log();
                     panic!("{}", err)
                 }
             };
@@ -86,31 +83,6 @@ impl Nes {
             self.cpu.get_memory_debug(range.clone()),
             self.ppu.borrow().get_memory_debug(range.clone()),
         ]
-    }
-
-    pub fn set_trace_log_path(&mut self, path: Option<PathBuf>) {
-        if path.is_none() {
-            self.trace_log = None;
-            return;
-        }
-
-        let path = path.unwrap();
-
-        if self.trace_log.is_none() {
-            self.trace_log = Some(TraceLog::new(path.clone()));
-        }
-
-        if let Some(ref mut trace) = self.trace_log {
-            trace.output = path;
-        }
-    }
-
-    fn flush_trace_log(&mut self) {
-        if let Some(ref mut trace) = self.trace_log
-            && let Err(e) = trace.flush()
-        {
-            println!("{e}");
-        }
     }
 
     #[inline]
@@ -137,8 +109,11 @@ impl Nes {
         self.ppu.borrow_mut().reset();
     }
 
-    pub fn load_rom<T: RomFileConvertible + Debug>(&mut self, rom_get: &T) {
-        let rom_file = rom_get.as_rom_file();
+    pub fn load_rom<T>(&mut self, rom_get: &T)
+    where
+        for<'a> &'a T: Into<RomFile>,
+    {
+        let rom_file = rom_get.into();
         self.cpu.load_rom(&rom_file);
         self.ppu.borrow_mut().load_rom(&rom_file);
         self.rom_file = Some(rom_file);
@@ -273,6 +248,8 @@ impl Nes {
 
         res
     }
+
+    pub fn enable_trace(&mut self) { self.trace_log = Some(TraceLog::default()) }
 }
 
 impl Default for Nes {

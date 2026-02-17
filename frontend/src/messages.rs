@@ -27,7 +27,7 @@ pub enum FrontendMessage {
     /// Request to step one frame
     StepFrame,
     RequestDebugData(EmulatorFetchable),
-    LoadRom(PathBuf),
+    LoadRom((Vec<u8>, String)),
     WritePpu(u16, u8),
     WriteCpu(u16, u8),
     CreateSaveState(SaveType),

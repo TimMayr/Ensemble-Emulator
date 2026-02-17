@@ -12,9 +12,9 @@ use crate::emulation::mem::{Memory, Ram};
 use crate::emulation::nes::ExecutionFinishedType;
 use crate::emulation::nes::ExecutionFinishedType::CycleCompleted;
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OPCODES_MAP, OPCODES_TABLE, OpCode, get_opcode};
+use crate::emulation::opcode::{get_opcode, OpCode, OPCODES_MAP, OPCODES_TABLE};
 use crate::emulation::ppu::Ppu;
-use crate::emulation::rom::{RomFile, RomFileConvertible};
+use crate::emulation::rom::RomFile;
 use crate::emulation::savestate::CpuState;
 use crate::util;
 
@@ -1481,8 +1481,8 @@ impl Cpu {
         }
     }
 
-    pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
-        let rom_file = rom_get.as_rom_file();
+    pub fn load_rom(&mut self, rom_file: &RomFile)
+    {
         let prg_rom = rom_file.get_prg_rom();
 
         if rom_file.prg_memory.prg_rom_size > (16 * 1024) {
