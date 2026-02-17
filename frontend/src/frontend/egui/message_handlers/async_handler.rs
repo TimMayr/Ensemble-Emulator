@@ -64,6 +64,7 @@ impl EguiApp {
                 util::spawn_rom_picker_for_savestate(
                     &self.async_sender,
                     context,
+                    self.config.user_config.previous_rom_dir.as_deref(),
                 );
             }
             AsyncFrontendMessage::RomSelectedForSavestate(context, rom) => {
@@ -83,6 +84,7 @@ impl EguiApp {
                 util::spawn_rom_picker_for_savestate(
                     &self.async_sender,
                     context,
+                    self.config.user_config.previous_rom_dir.as_deref(),
                 );
             }
             AsyncFrontendMessage::SavestateLoadFailed(error) => {
@@ -105,6 +107,10 @@ impl EguiApp {
                         .to_emulator
                         .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
                     let _ = self.to_emulator.send(FrontendMessage::PowerOff);
+                    // Save directory for next file picker
+                    if let Some(ref dir) = rom.directory {
+                        self.config.user_config.previous_rom_dir = Some(dir.clone());
+                    }
                     self.load_rom(rom.data, rom.name);
                     let _ = self.to_emulator.send(FrontendMessage::Power);
                     self.config.console_config.is_powered = true;
@@ -198,6 +204,11 @@ impl EguiApp {
         context: &SavestateLoadContext,
         rom: LoadedRom,
     ) {
+        // Save directory for next file picker
+        if let Some(ref dir) = rom.directory {
+            self.config.user_config.previous_rom_dir = Some(dir.clone());
+        }
+        
         let checksum = util::compute_data_checksum(&rom.data);
         if checksum == context.savestate.rom_file.data_checksum {
             self.load_savestate_with_rom(context, rom.data, rom.name);

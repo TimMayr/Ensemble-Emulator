@@ -73,12 +73,13 @@ pub fn render_palettes(
     egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
             if ui.button("Load Palette").clicked() {
-                spawn_palette_picker(async_sender);
+                spawn_palette_picker(async_sender, config.user_config.previous_palette_dir.as_deref());
             }
 
             if ui.button("Save Palette").clicked() {
                 spawn_save_dialog(
                     Some(async_sender),
+                    config.user_config.previous_palette_dir.as_deref(),
                     FileType::Palette,
                     Box::new(config.view_config.palette_rgb_data),
                 );

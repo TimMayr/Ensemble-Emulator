@@ -32,10 +32,10 @@ fn get_rom_name(state: &RomSelectionDialogState) -> String {
 pub fn render_dialogs(
     ctx: &egui::Context,
     dialogs: &mut PendingDialogs,
-    _user_config: &UserConfig,
+    user_config: &UserConfig,
     sender: &Sender<AsyncFrontendMessage>,
 ) {
-    render_rom_selection_dialog(ctx, dialogs, sender);
+    render_rom_selection_dialog(ctx, dialogs, user_config, sender);
     render_matching_rom_dialog(ctx, dialogs, sender);
     render_checksum_mismatch_dialog(ctx, dialogs, sender);
     render_error_dialog(ctx, dialogs);
@@ -45,6 +45,7 @@ pub fn render_dialogs(
 fn render_rom_selection_dialog(
     ctx: &egui::Context,
     dialogs: &mut PendingDialogs,
+    user_config: &UserConfig,
     sender: &Sender<AsyncFrontendMessage>,
 ) {
     let Some(ref state) = dialogs.rom_selection_dialog else {
@@ -76,7 +77,7 @@ fn render_rom_selection_dialog(
 
     if close {
         if spawn_picker {
-            util::spawn_rom_picker_for_savestate(&sender, context);
+            util::spawn_rom_picker_for_savestate(&sender, context, user_config.previous_rom_dir.as_deref());
         }
         dialogs.rom_selection_dialog = None;
     }

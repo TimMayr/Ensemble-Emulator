@@ -418,10 +418,16 @@ impl From<PersistentEmulatorFetchable> for EmulatorFetchable {
 pub struct PersistentUserConfig {
     /// Last loaded palette filename (display only)
     pub previous_palette_name: Option<String>,
+    /// Last loaded palette directory (for file picker initial directory)
+    pub previous_palette_dir: Option<String>,
     /// Last loaded ROM filename (display only)
     pub previous_rom_name: Option<String>,
+    /// Last loaded ROM directory (for file picker initial directory)
+    pub previous_rom_dir: Option<String>,
     /// Last loaded savestate filename (display only)
     pub previous_savestate_name: Option<String>,
+    /// Last loaded savestate directory (for file picker initial directory)
+    pub previous_savestate_dir: Option<String>,
     pub pattern_edit_color: u8,
 }
 
@@ -429,8 +435,11 @@ impl From<&UserConfig> for PersistentUserConfig {
     fn from(config: &UserConfig) -> Self {
         Self {
             previous_palette_name: config.previous_palette_name.clone(),
+            previous_palette_dir: config.previous_palette_dir.clone(),
             previous_rom_name: config.previous_rom_name.clone(),
+            previous_rom_dir: config.previous_rom_dir.clone(),
             previous_savestate_name: config.previous_savestate_name.clone(),
+            previous_savestate_dir: config.previous_savestate_dir.clone(),
             pattern_edit_color: config.pattern_edit_color,
         }
     }
@@ -440,8 +449,11 @@ impl From<&PersistentUserConfig> for UserConfig {
     fn from(config: &PersistentUserConfig) -> Self {
         Self {
             previous_palette_name: config.previous_palette_name.clone(),
+            previous_palette_dir: config.previous_palette_dir.clone(),
             previous_rom_name: config.previous_rom_name.clone(),
+            previous_rom_dir: config.previous_rom_dir.clone(),
             previous_savestate_name: config.previous_savestate_name.clone(),
+            previous_savestate_dir: config.previous_savestate_dir.clone(),
             pattern_edit_color: config.pattern_edit_color,
             loaded_rom: None,
         }

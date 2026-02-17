@@ -241,8 +241,11 @@ impl EguiApp {
                 context.savestate.clone(),
             )));
 
-        // Update config names
+        // Update config names and directories
         self.config.user_config.previous_savestate_name = Some(context.savestate_name.clone());
+        if let Some(ref dir) = context.savestate_dir {
+            self.config.user_config.previous_savestate_dir = Some(dir.clone());
+        }
     }
 
     pub(crate) fn create_auto_save(&self, savestate: Box<SaveState>) {
@@ -655,7 +658,8 @@ fn common_setup(
     let loaded_rom = rom.as_ref().and_then(|path| {
         let data = std::fs::read(path).ok()?;
         let name = path.file_name()?.to_string_lossy().to_string();
-        Some(LoadedRom { data, name })
+        let directory = path.parent().map(|p| p.to_string_lossy().to_string());
+        Some(LoadedRom { data, name, directory })
     });
     let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(loaded_rom));
 

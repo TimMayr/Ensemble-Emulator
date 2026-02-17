@@ -17,7 +17,7 @@ pub fn add_menu_bar(
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui.button("Load Rom").clicked() {
-                    spawn_rom_picker(async_sender);
+                    spawn_rom_picker(async_sender, config.user_config.previous_rom_dir.as_deref());
                 }
 
                 ui.menu_button("Savestates", |ui| {
@@ -28,7 +28,7 @@ pub fn add_menu_bar(
 
                     if ui.button("Load State").clicked() {
                         // Use the new multistep savestate loading flow
-                        spawn_savestate_picker(async_sender);
+                        spawn_savestate_picker(async_sender, config.user_config.previous_savestate_dir.as_deref());
                     }
                 });
             });

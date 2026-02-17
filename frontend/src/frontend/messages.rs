@@ -16,23 +16,27 @@ pub enum FrontendEvent {
 }
 
 /// Represents file data loaded from a file picker.
-/// Contains the raw bytes and the filename (without path).
+/// Contains the raw bytes, the filename, and optionally the directory.
 #[derive(Clone)]
 pub struct LoadedFile {
     /// Raw file data bytes
     pub data: Vec<u8>,
     /// Filename (without path, e.g. "game.nes")
     pub name: String,
+    /// Directory path (may be None on WASM)
+    pub directory: Option<String>,
 }
 
 /// Represents ROM data loaded from a file picker.
-/// Contains the raw bytes and the filename (without path).
+/// Contains the raw bytes, the filename, and optionally the directory.
 #[derive(Clone)]
 pub struct LoadedRom {
     /// Raw ROM data bytes
     pub data: Vec<u8>,
     /// ROM filename (without path, e.g. "game.nes")
     pub name: String,
+    /// Directory path (may be None on WASM)
+    pub directory: Option<String>,
 }
 
 /// Messages for async/deferred frontend operations.
@@ -106,4 +110,6 @@ pub struct SavestateLoadContext {
     pub savestate: SaveState,
     /// Savestate filename (without path)
     pub savestate_name: String,
+    /// Savestate directory (for file picker initial directory)
+    pub savestate_dir: Option<String>,
 }
