@@ -286,7 +286,7 @@ pub fn spawn_savestate_picker(
         if let Some(handle) = handle {
             // Read savestate data from the file handle
             let data = handle.read().await;
-            
+
             #[cfg(not(target_arch = "wasm32"))]
             let savestate_path = handle.path().to_path_buf();
             #[cfg(target_arch = "wasm32")]
@@ -353,7 +353,7 @@ pub fn spawn_rom_picker_for_savestate(
             let rom_path = handle.path().to_path_buf();
             #[cfg(target_arch = "wasm32")]
             let rom_path = PathBuf::from(handle.file_name());
-            
+
             let _ = sender.send(AsyncFrontendMessage::RomSelectedForSavestate(
                 context,
                 rom_path,
