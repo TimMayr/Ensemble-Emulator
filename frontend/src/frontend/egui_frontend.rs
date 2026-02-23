@@ -45,7 +45,7 @@ use crate::frontend::messages::LoadedRom;
 use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent, SavestateLoadContext};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::frontend::persistence::get_egui_storage_path;
-use crate::frontend::persistence::load_config;
+use crate::frontend::persistence::{load_config, PersistentConfig};
 use crate::frontend::storage::Storage;
 use crate::frontend::storage::StorageKey;
 use crate::frontend::{storage, util};
@@ -94,15 +94,13 @@ pub struct EguiApp {
 impl EguiApp {
     pub fn new(
         cc: &eframe::CreationContext<'_>,
+        loaded_config: Option<PersistentConfig>,
         channel_emu: ChannelEmulator,
         to_emulator: Sender<FrontendMessage>,
         from_emulator: Receiver<EmulatorMessage>,
         to_async: Sender<AsyncFrontendMessage>,
         from_async: Receiver<AsyncFrontendMessage>,
     ) -> Self {
-        // Load configuration from TOML file
-        let loaded_config = load_config();
-
         // Try to restore the tile tree from egui's storage, fall back to default
         let tree = cc
             .storage
@@ -610,10 +608,28 @@ impl eframe::App for EguiApp {
     }
 
     fn on_exit(&mut self, _gl: Option<&glow::Context>) {
-        // Save configuration to TOML file before exiting (synchronous to ensure completion)
-        let persistent_config = (&self.config).into();
-        if let Err(e) = crate::frontend::persistence::save_config(&persistent_config) {
-            eprintln!("Failed to save configuration: {}", e);
+        // Save configuration before exiting
+        let persistent_config: crate::frontend::persistence::PersistentConfig =
+            (&self.config).into();
+        // On native, block on the async save to ensure it completes before exit.
+        // On WASM, fire-and-forget since we can't block the browser thread.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let rt = tokio::runtime::Handle::current();
+            if let Err(e) = rt.block_on(crate::frontend::persistence::save_config(
+                &persistent_config,
+            )) {
+                eprintln!("Failed to save configuration: {}", e);
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            util::spawn_async(async move {
+                if let Err(e) = crate::frontend::persistence::save_config(&persistent_config).await
+                {
+                    eprintln!("Failed to save configuration: {}", e);
+                }
+            });
         }
 
         let savestate = self.channel_emu.nes.save_state();
@@ -730,6 +746,9 @@ async fn run_internal(
         Receiver<AsyncFrontendMessage>,
     ),
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Load configuration before starting eframe (we're in an async context)
+    let loaded_config = load_config().await;
+
     // Configure eframe options
     // Disable vsync to allow uncapped frame rates - emulator handles its own timing
     let options = eframe::NativeOptions {
@@ -756,7 +775,7 @@ async fn run_internal(
             cc.egui_ctx.set_style(style);
             cc.egui_ctx.set_theme(egui::Theme::Dark);
             Ok(Box::new(EguiApp::new(
-                cc, res.1, res.2, res.3, res.4, res.5,
+                cc, loaded_config, res.1, res.2, res.3, res.4, res.5,
             )))
         }),
     )?;
@@ -790,6 +809,9 @@ fn run_internal_wasm(
 
         document.body().unwrap().append_child(&canvas).unwrap();
 
+        // Load configuration before starting eframe (we're in an async context)
+        let loaded_config = load_config().await;
+
         // Configure eframe options
         // Disable vsync to allow uncapped frame rates - emulator handles its own timing
         let options = eframe::WebOptions {
@@ -808,7 +830,7 @@ fn run_internal_wasm(
                     cc.egui_ctx.set_style(style);
                     cc.egui_ctx.set_theme(egui::Theme::Dark);
                     Ok(Box::new(EguiApp::new(
-                        cc, res.0, res.1, res.2, res.3, res.4,
+                        cc, loaded_config, res.0, res.1, res.2, res.3, res.4,
                     )))
                 }),
             )

@@ -233,45 +233,38 @@ impl EguiApp {
         // Try to find a matching ROM by scanning available ROM storage.
         // Only scan if savestate_dir is set (cleared after first scan attempt to prevent loops).
         if context.savestate_dir.is_some() {
+            let sender = self.async_sender.clone();
+            let context_clone = context.clone();
+
+            // On native, resolve the ROM directory from the storage key
             #[cfg(not(target_arch = "wasm32"))]
-            let dir = self
+            let rom_dir = self
                 .config
                 .user_config
                 .previous_rom_dir
                 .as_ref()
                 .and_then(storage::get_path_for_key)
                 .map(|d| d.to_string_lossy().to_string());
-
-            // On native, only proceed if we have a directory to scan
-            #[cfg(not(target_arch = "wasm32"))]
-            let should_scan = dir.is_some();
             #[cfg(target_arch = "wasm32")]
-            let should_scan = true;
+            let rom_dir: Option<String> = None;
 
-            if should_scan {
-                let sender = self.async_sender.clone();
-                let context_clone = context.clone();
-                util::spawn_async(async move {
-                    #[cfg(not(target_arch = "wasm32"))]
-                    let result = dir.and_then(|d| find_matching_rom_in_directory(&d, &context_clone));
-                    #[cfg(target_arch = "wasm32")]
-                    let result = find_matching_rom_in_storage(&context_clone).await;
+            util::spawn_async(async move {
+                let result = find_matching_rom(&context_clone, rom_dir).await;
 
-                    if let Some(rom) = result {
-                        let _ = sender.send(AsyncFrontendMessage::ShowMatchingRomDialog(
-                            context_clone,
-                            rom,
-                        ));
-                    } else {
-                        // No match found - show ROM selection dialog
-                        // Clear savestate_dir to prevent re-scanning
-                        let mut context_clone = context_clone;
-                        context_clone.savestate_dir = None;
-                        let _ = sender.send(AsyncFrontendMessage::SavestateLoaded(context_clone));
-                    }
-                });
-                return;
-            }
+                if let Some(rom) = result {
+                    let _ = sender.send(AsyncFrontendMessage::ShowMatchingRomDialog(
+                        context_clone,
+                        rom,
+                    ));
+                } else {
+                    // No match found - show ROM selection dialog
+                    // Clear savestate_dir to prevent re-scanning
+                    let mut context_clone = context_clone;
+                    context_clone.savestate_dir = None;
+                    let _ = sender.send(AsyncFrontendMessage::SavestateLoaded(context_clone));
+                }
+            });
+            return;
         }
 
         // Fallback: show ROM selection dialog directly
@@ -444,10 +437,7 @@ impl EguiApp {
             // List saves asynchronously
             let sender = self.async_sender.clone();
             util::spawn_async(async move {
-                #[cfg(not(target_arch = "wasm32"))]
-                let entries = list_save_entries(&display_name);
-                #[cfg(target_arch = "wasm32")]
-                let entries = list_save_entries_async(&display_name).await;
+                let entries = list_save_entries(&display_name).await;
                 let _ = sender.send(AsyncFrontendMessage::SaveBrowserLoaded(entries));
             });
         }
@@ -525,10 +515,72 @@ impl EguiApp {
     }
 }
 
-/// Try to find a ROM in the given directory whose checksum matches the savestate's expected ROM.
+/// Try to find a matching ROM by first checking the storage cache (works on both native and WASM),
+/// then falling back to scanning the filesystem directory on native.
 ///
-/// Scans the directory for .nes files. If the savestate knows the ROM's filename,
-/// that file is checked first. Then all other .nes files are checked.
+/// On native, `rom_dir` should be the resolved filesystem path of the user's ROM directory.
+/// On WASM, `rom_dir` is ignored (always None) and only the IndexedDB cache is searched.
+async fn find_matching_rom(
+    context: &SavestateLoadContext,
+    rom_dir: Option<String>,
+) -> Option<LoadedRom> {
+    let expected_checksum = &context.savestate.rom_file.data_checksum;
+    let storage_impl = storage::get_storage();
+
+    // First, try the storage ROM cache (works on both platforms)
+    // Direct lookup by filename if the savestate knows it
+    if let Some(ref rom_name) = context.savestate.rom_file.name {
+        let direct_key = storage::rom_cache_key(rom_name);
+        if let Ok(data) = storage_impl.get(&direct_key).await {
+            let checksum = util::compute_data_checksum(&data);
+            if &checksum == expected_checksum {
+                return Some(LoadedRom {
+                    data,
+                    name: rom_name.clone(),
+                    directory: storage::roms_prefix(),
+                });
+            }
+        }
+    }
+
+    // Scan all cached ROMs in storage
+    let rom_prefix = storage::roms_prefix();
+    if let Ok(entries) = storage_impl.list(&rom_prefix).await {
+        for entry in entries {
+            if let Ok(data) = storage_impl.get(&entry.key).await {
+                let checksum = util::compute_data_checksum(&data);
+                if &checksum == expected_checksum {
+                    let name = entry
+                        .key
+                        .sub_path
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or("unknown.nes")
+                        .to_string();
+                    return Some(LoadedRom {
+                        data,
+                        name,
+                        directory: storage::roms_prefix(),
+                    });
+                }
+            }
+        }
+    }
+
+    // On native, also scan the filesystem directory as a fallback
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(dir) = rom_dir {
+        if let Some(rom) = find_matching_rom_in_directory(&dir, context) {
+            return Some(rom);
+        }
+    }
+    // Suppress unused variable warning on WASM
+    let _ = rom_dir;
+
+    None
+}
+
+/// Scan a native filesystem directory for a matching ROM (native only).
 #[cfg(not(target_arch = "wasm32"))]
 fn find_matching_rom_in_directory(dir: &str, context: &SavestateLoadContext) -> Option<LoadedRom> {
     use std::path::Path;
@@ -591,57 +643,6 @@ fn find_matching_rom_in_directory(dir: &str, context: &SavestateLoadContext) -> 
     None
 }
 
-/// Try to find a ROM in the IndexedDB cache whose checksum matches the savestate's expected ROM.
-///
-/// Scans all cached ROMs in IndexedDB. If the savestate knows the ROM's filename,
-/// that file is checked first for efficiency.
-#[cfg(target_arch = "wasm32")]
-async fn find_matching_rom_in_storage(context: &SavestateLoadContext) -> Option<LoadedRom> {
-    let expected_checksum = &context.savestate.rom_file.data_checksum;
-    let storage_impl = storage::get_storage();
-
-    // If the savestate knows the ROM filename, try a direct lookup first
-    if let Some(ref rom_name) = context.savestate.rom_file.name {
-        let direct_key = storage::rom_cache_key(rom_name);
-        if let Ok(data) = storage_impl.get(&direct_key).await {
-            let checksum = util::compute_data_checksum(&data);
-            if &checksum == expected_checksum {
-                return Some(LoadedRom {
-                    data,
-                    name: rom_name.clone(),
-                    directory: storage::roms_prefix(),
-                });
-            }
-        }
-    }
-
-    // Scan all cached ROMs
-    let rom_prefix = storage::roms_prefix();
-    if let Ok(entries) = storage_impl.list(&rom_prefix).await {
-        for entry in entries {
-            if let Ok(data) = storage_impl.get(&entry.key).await {
-                let checksum = util::compute_data_checksum(&data);
-                if &checksum == expected_checksum {
-                    let name = entry
-                        .key
-                        .sub_path
-                        .rsplit('/')
-                        .next()
-                        .unwrap_or("unknown.nes")
-                        .to_string();
-                    return Some(LoadedRom {
-                        data,
-                        name,
-                        directory: storage::roms_prefix(),
-                    });
-                }
-            }
-        }
-    }
-
-    None
-}
-
 /// Wrapper for raw bytes that implements ToBytes for the save dialog export.
 struct ExportableData(Vec<u8>);
 
@@ -649,43 +650,8 @@ impl ToBytes for ExportableData {
     fn to_bytes(&self, _format: Option<String>) -> Vec<u8> { self.0.clone() }
 }
 
-/// List save entries for a game from storage (native, synchronous).
-#[cfg(not(target_arch = "wasm32"))]
-fn list_save_entries(game_name: &str) -> Vec<SaveEntry> {
-    let mut entries = Vec::new();
-
-    // List quicksaves
-    let qs_prefix = storage::quicksaves_prefix(game_name);
-    if let Ok(qs_entries) = storage::list_sync(&qs_prefix) {
-        for entry in qs_entries {
-            if entry.key.sub_path.ends_with(".sav") {
-                if let Some(save_entry) = parse_save_entry(entry.key, SaveEntryType::Quicksave) {
-                    entries.push(save_entry);
-                }
-            }
-        }
-    }
-
-    // List autosaves
-    let as_prefix = storage::autosaves_prefix(game_name);
-    if let Ok(as_entries) = storage::list_sync(&as_prefix) {
-        for entry in as_entries {
-            if entry.key.sub_path.ends_with(".sav") {
-                if let Some(save_entry) = parse_save_entry(entry.key, SaveEntryType::Autosave) {
-                    entries.push(save_entry);
-                }
-            }
-        }
-    }
-
-    // Sort by timestamp descending (newest first)
-    entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
-    entries
-}
-
-/// List save entries for a game from storage (WASM, asynchronous).
-#[cfg(target_arch = "wasm32")]
-async fn list_save_entries_async(game_name: &str) -> Vec<SaveEntry> {
+/// List save entries for a game from storage asynchronously.
+async fn list_save_entries(game_name: &str) -> Vec<SaveEntry> {
     let mut entries = Vec::new();
     let storage_impl = storage::get_storage();
 
