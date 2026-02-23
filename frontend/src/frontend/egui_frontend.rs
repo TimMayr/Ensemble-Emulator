@@ -14,6 +14,7 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::fmt::{Debug, Formatter};
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -36,11 +37,15 @@ use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
     compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
 };
-use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_save_browser, render_savestate_dialogs};
-use crate::frontend::messages::{
-    AsyncFrontendMessage, FrontendEvent, LoadedRom, SavestateLoadContext,
+use crate::frontend::egui::ui::{
+    add_menu_bar, add_status_bar, render_save_browser, render_savestate_dialogs,
 };
-use crate::frontend::persistence::{get_egui_storage_path, load_config};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::frontend::messages::LoadedRom;
+use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent, SavestateLoadContext};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::frontend::persistence::get_egui_storage_path;
+use crate::frontend::persistence::load_config;
 #[cfg(target_arch = "wasm32")]
 use crate::frontend::storage::Storage;
 use crate::frontend::storage::StorageKey;
@@ -350,7 +355,7 @@ impl EguiApp {
 
     /// Find the newest quicksave key from a list of storage entries.
     /// Shared logic between native sync and WASM async paths.
-    fn find_newest_quicksave(
+    pub(crate) fn find_newest_quicksave(
         entries: Vec<storage::StorageMetadata>,
     ) -> Option<StorageKey> {
         let mut quicksave_key: Option<(StorageKey, chrono::NaiveDateTime, u8)> = None;
@@ -366,24 +371,20 @@ impl EguiApp {
 
             let time_version = stem.split_once('_')?.1;
 
-            let (timestamp, version) =
-                if time_version.chars().filter(|c| *c == '_').count() > 1 {
-                    time_version.rsplit_once('_')?
-                } else {
-                    (time_version, "0")
-                };
+            let (timestamp, version) = if time_version.chars().filter(|c| *c == '_').count() > 1 {
+                time_version.rsplit_once('_')?
+            } else {
+                (time_version, "0")
+            };
 
-            let time =
-                chrono::NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d_%H-%M-%S");
+            let time = chrono::NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d_%H-%M-%S");
 
             let version = version.parse::<u8>().unwrap_or(0);
 
             if let Ok(time) = time {
                 let should_update = match &quicksave_key {
                     None => true,
-                    Some(current) => {
-                        current.1 < time || (current.1 == time && current.2 < version)
-                    }
+                    Some(current) => current.1 < time || (current.1 == time && current.2 < version),
                 };
 
                 if should_update {
@@ -556,11 +557,7 @@ impl EguiApp {
 
     /// Render the save browser dialog if open
     fn render_save_browser_impl(&mut self, ctx: &Context) {
-        render_save_browser(
-            ctx,
-            &mut self.config.pending_dialogs,
-            &self.async_sender,
-        );
+        render_save_browser(ctx, &mut self.config.pending_dialogs, &self.async_sender);
     }
 
     /// Check if a periodic autosave should be triggered based on elapsed time

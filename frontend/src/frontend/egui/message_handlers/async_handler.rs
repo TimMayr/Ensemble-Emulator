@@ -7,6 +7,7 @@ use egui::Context;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use ensemble_lockstep::emulation::savestate;
 use ensemble_lockstep::emulation::screen_renderer::RgbPalette;
+use ensemble_lockstep::util::ToBytes;
 
 use crate::frontend::egui::config::{
     ChecksumMismatchDialogState, ErrorDialogState, MatchingRomDialogState, RomSelectionDialogState,
@@ -45,7 +46,11 @@ impl EguiApp {
                 self.config.user_config.previous_palette_dir = Some(loaded.directory);
                 self.handle_palette_loaded(ctx, loaded.palette);
             }
-            AsyncFrontendMessage::FileSaveCompleted { error, directory, file_type } => {
+            AsyncFrontendMessage::FileSaveCompleted {
+                error,
+                directory,
+                file_type,
+            } => {
                 if let Some(e) = error {
                     eprintln!("File save error: {}", e);
                 }
@@ -123,8 +128,7 @@ impl EguiApp {
                     let _ = self.to_emulator.send(FrontendMessage::PowerOff);
 
                     // Save directory for next file picker
-                    self.config.user_config.previous_rom_dir =
-                        Some(rom.directory);
+                    self.config.user_config.previous_rom_dir = Some(rom.directory);
 
                     self.load_rom(rom.data, rom.name);
                     let _ = self.to_emulator.send(FrontendMessage::Power);
@@ -252,8 +256,7 @@ impl EguiApp {
                         // Clear savestate_dir to prevent re-scanning
                         let mut context_clone = context_clone;
                         context_clone.savestate_dir = None;
-                        let _ =
-                            sender.send(AsyncFrontendMessage::SavestateLoaded(context_clone));
+                        let _ = sender.send(AsyncFrontendMessage::SavestateLoaded(context_clone));
                     }
                 });
                 return;
@@ -403,7 +406,12 @@ impl EguiApp {
         #[cfg(target_arch = "wasm32")]
         {
             // On WASM, we need to do everything async
-            let rom_info = self.config.user_config.loaded_rom.as_ref().map(|r| r.data_checksum);
+            let rom_info = self
+                .config
+                .user_config
+                .loaded_rom
+                .as_ref()
+                .map(|r| r.data_checksum);
             let rom_name = self.config.user_config.previous_rom_name.clone();
             let sender = self.async_sender.clone();
             let to_emulator = self.to_emulator.clone();
@@ -527,7 +535,12 @@ impl EguiApp {
         // Verify a ROM is loaded and its checksum matches
         let sender = self.async_sender.clone();
         let to_emulator = self.to_emulator.clone();
-        let loaded_rom_checksum = self.config.user_config.loaded_rom.as_ref().map(|r| r.data_checksum);
+        let loaded_rom_checksum = self
+            .config
+            .user_config
+            .loaded_rom
+            .as_ref()
+            .map(|r| r.data_checksum);
 
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -539,13 +552,15 @@ impl EguiApp {
                                 // Verify checksum
                                 if let Some(checksum) = loaded_rom_checksum {
                                     if checksum != savestate.rom_file.data_checksum {
-                                        let _ = sender.send(AsyncFrontendMessage::SavestateLoadFailed(
-                                            SavestateLoadError::FailedToLoadSavestate,
-                                        ));
+                                        let _ =
+                                            sender.send(AsyncFrontendMessage::SavestateLoadFailed(
+                                                SavestateLoadError::FailedToLoadSavestate,
+                                            ));
                                         return;
                                     }
                                 }
-                                let _ = to_emulator.send(FrontendMessage::LoadSaveState(Box::new(savestate)));
+                                let _ = to_emulator
+                                    .send(FrontendMessage::LoadSaveState(Box::new(savestate)));
                             }
                             None => {
                                 let _ = sender.send(AsyncFrontendMessage::SavestateLoadFailed(
@@ -569,26 +584,25 @@ impl EguiApp {
             wasm_bindgen_futures::spawn_local(async move {
                 let storage_impl = storage::get_storage();
                 match storage_impl.get(&key).await {
-                    Ok(data) => {
-                        match savestate::try_load_state_from_bytes(&data) {
-                            Some(savestate) => {
-                                if let Some(checksum) = loaded_rom_checksum {
-                                    if checksum != savestate.rom_file.data_checksum {
-                                        let _ = sender.send(AsyncFrontendMessage::SavestateLoadFailed(
-                                            SavestateLoadError::FailedToLoadSavestate,
-                                        ));
-                                        return;
-                                    }
+                    Ok(data) => match savestate::try_load_state_from_bytes(&data) {
+                        Some(savestate) => {
+                            if let Some(checksum) = loaded_rom_checksum {
+                                if checksum != savestate.rom_file.data_checksum {
+                                    let _ = sender.send(AsyncFrontendMessage::SavestateLoadFailed(
+                                        SavestateLoadError::FailedToLoadSavestate,
+                                    ));
+                                    return;
                                 }
-                                let _ = to_emulator.send(FrontendMessage::LoadSaveState(Box::new(savestate)));
                             }
-                            None => {
-                                let _ = sender.send(AsyncFrontendMessage::SavestateLoadFailed(
-                                    SavestateLoadError::FailedToLoadSavestate,
-                                ));
-                            }
+                            let _ = to_emulator
+                                .send(FrontendMessage::LoadSaveState(Box::new(savestate)));
                         }
-                    }
+                        None => {
+                            let _ = sender.send(AsyncFrontendMessage::SavestateLoadFailed(
+                                SavestateLoadError::FailedToLoadSavestate,
+                            ));
+                        }
+                    },
                     Err(e) => {
                         eprintln!("Failed to read save: {}", e);
                         let _ = sender.send(AsyncFrontendMessage::SavestateLoadFailed(
@@ -654,11 +668,9 @@ impl EguiApp {
 /// Scans the directory for .nes files. If the savestate knows the ROM's filename,
 /// that file is checked first. Then all other .nes files are checked.
 #[cfg(not(target_arch = "wasm32"))]
-fn find_matching_rom_in_directory(
-    dir: &str,
-    context: &SavestateLoadContext,
-) -> Option<LoadedRom> {
+fn find_matching_rom_in_directory(dir: &str, context: &SavestateLoadContext) -> Option<LoadedRom> {
     use std::path::Path;
+
     use crate::frontend::storage::{StorageCategory, StorageKey};
 
     let dir_path = Path::new(dir);
@@ -722,9 +734,7 @@ fn find_matching_rom_in_directory(
 /// Scans all cached ROMs in IndexedDB. If the savestate knows the ROM's filename,
 /// that file is checked first for efficiency.
 #[cfg(target_arch = "wasm32")]
-async fn find_matching_rom_in_storage(
-    context: &SavestateLoadContext,
-) -> Option<LoadedRom> {
+async fn find_matching_rom_in_storage(context: &SavestateLoadContext) -> Option<LoadedRom> {
     let expected_checksum = &context.savestate.rom_file.data_checksum;
     let storage_impl = storage::get_storage();
 
@@ -750,7 +760,9 @@ async fn find_matching_rom_in_storage(
             if let Ok(data) = storage_impl.get(&entry.key).await {
                 let checksum = util::compute_data_checksum(&data);
                 if &checksum == expected_checksum {
-                    let name = entry.key.sub_path
+                    let name = entry
+                        .key
+                        .sub_path
                         .rsplit('/')
                         .next()
                         .unwrap_or("unknown.nes")
@@ -771,10 +783,8 @@ async fn find_matching_rom_in_storage(
 /// Wrapper for raw bytes that implements ToBytes for the save dialog export.
 struct ExportableData(Vec<u8>);
 
-impl ensemble_lockstep::util::ToBytes for ExportableData {
-    fn to_bytes(&self, _format: Option<String>) -> Vec<u8> {
-        self.0.clone()
-    }
+impl ToBytes for ExportableData {
+    fn to_bytes(&self, _format: Option<String>) -> Vec<u8> { self.0.clone() }
 }
 
 /// List save entries for a game from storage (native, synchronous).
