@@ -574,8 +574,6 @@ async fn find_matching_rom(
             return Some(rom);
         }
     }
-    // Suppress unused variable warning on WASM
-    let _ = rom_dir;
 
     None
 }
