@@ -82,11 +82,7 @@ impl std::error::Error for StorageError {}
 #[derive(Debug, Clone)]
 pub struct StorageMetadata {
     /// The key/path of the item
-    pub key: String,
-    /// Size in bytes (if available)
-    pub size: Option<u64>,
-    /// Last modified timestamp (if available)
-    pub modified: Option<u64>,
+    pub key: StorageKey,
 }
 
 /// Storage categories for organizing data
@@ -101,6 +97,12 @@ pub enum StorageCategory {
     Data,
     /// Cached data that can be regenerated (thumbnails, compiled shaders)
     Cache,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StorageKey {
+    pub category: StorageCategory,
+    pub sub_path: String,
 }
 
 impl StorageCategory {
@@ -124,22 +126,22 @@ impl StorageCategory {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait Storage: Send + Sync {
     /// Get data by key
-    async fn get(&self, key: &str) -> StorageResult<Vec<u8>>;
+    async fn get(&self, key: &StorageKey) -> StorageResult<Vec<u8>>;
 
     /// Set data for a key
-    async fn set(&self, key: &str, data: Vec<u8>) -> StorageResult<()>;
+    async fn set(&self, key: &StorageKey, data: Vec<u8>) -> StorageResult<()>;
 
     /// Delete data by key
-    async fn delete(&self, key: &str) -> StorageResult<()>;
+    async fn delete(&self, key: &StorageKey) -> StorageResult<()>;
 
     /// Check if a key exists
-    async fn exists(&self, key: &str) -> StorageResult<bool>;
+    async fn exists(&self, key: &StorageKey) -> StorageResult<bool>;
 
     /// List all keys with a given prefix
-    async fn list(&self, prefix: &str) -> StorageResult<Vec<StorageMetadata>>;
+    async fn list(&self, prefix: &StorageKey) -> StorageResult<Vec<StorageMetadata>>;
 
     /// Get the full path/URL for a key (for display purposes)
-    fn get_display_path(&self, key: &str) -> String;
+    fn get_display_path(&self, key: &StorageKey) -> String;
 }
 
 // ============================================================================
@@ -148,11 +150,16 @@ pub trait Storage: Send + Sync {
 
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
-    use super::*;
-    use directories::ProjectDirs;
     use std::io::{Read, Write};
     use std::path::PathBuf;
     use std::sync::OnceLock;
+
+    use async_trait::async_trait;
+    use directories::ProjectDirs;
+
+    use crate::frontend::storage::{
+        Storage, StorageCategory, StorageError, StorageKey, StorageMetadata, StorageResult,
+    };
 
     const APP_QUALIFIER: &str = "com";
     const APP_ORGANIZATION: &str = "Lightsong";
@@ -170,11 +177,9 @@ mod native {
     pub struct NativeStorage;
 
     impl NativeStorage {
-        pub fn new() -> Self {
-            NativeStorage
-        }
+        pub fn new() -> Self { NativeStorage }
 
-        fn get_base_dir(&self, category: StorageCategory) -> Option<PathBuf> {
+        fn get_base_dir(&self, category: &StorageCategory) -> Option<PathBuf> {
             let dirs = get_project_dirs()?;
             let base = match category {
                 StorageCategory::Config => dirs.config_dir(),
@@ -184,37 +189,23 @@ mod native {
             Some(base.to_path_buf())
         }
 
-        pub fn key_to_path(&self, key: &str) -> Option<PathBuf> {
-            // Parse the category from the key prefix
-            let (category, rest) = if let Some(rest) = key.strip_prefix("config/") {
-                (StorageCategory::Config, rest)
-            } else if let Some(rest) = key.strip_prefix("data/") {
-                (StorageCategory::Data, rest)
-            } else if let Some(rest) = key.strip_prefix("cache/") {
-                (StorageCategory::Cache, rest)
-            } else {
-                // Default to data category
-                (StorageCategory::Data, key)
-            };
-
-            let base = self.get_base_dir(category)?;
-            Some(base.join(rest))
+        pub fn key_to_path(&self, key: &StorageKey) -> Option<PathBuf> {
+            let base = self.get_base_dir(&key.category)?;
+            Some(base.join(key.sub_path.clone()))
         }
     }
 
     #[async_trait]
     impl Storage for NativeStorage {
-        async fn get(&self, key: &str) -> StorageResult<Vec<u8>> {
-            let path = self
-                .key_to_path(key)
-                .ok_or(StorageError::NotAvailable)?;
+        async fn get(&self, key: &StorageKey) -> StorageResult<Vec<u8>> {
+            let path = self.key_to_path(key).ok_or(StorageError::NotAvailable)?;
 
             if !path.exists() {
                 return Err(StorageError::NotFound);
             }
 
-            let mut file = std::fs::File::open(&path)
-                .map_err(|e| StorageError::ReadError(e.to_string()))?;
+            let mut file =
+                std::fs::File::open(&path).map_err(|e| StorageError::ReadError(e.to_string()))?;
 
             let mut data = Vec::new();
             file.read_to_end(&mut data)
@@ -223,10 +214,8 @@ mod native {
             Ok(data)
         }
 
-        async fn set(&self, key: &str, data: Vec<u8>) -> StorageResult<()> {
-            let path = self
-                .key_to_path(key)
-                .ok_or(StorageError::NotAvailable)?;
+        async fn set(&self, key: &StorageKey, data: Vec<u8>) -> StorageResult<()> {
+            let path = self.key_to_path(key).ok_or(StorageError::NotAvailable)?;
 
             // Create parent directories
             if let Some(parent) = path.parent() {
@@ -243,10 +232,8 @@ mod native {
             Ok(())
         }
 
-        async fn delete(&self, key: &str) -> StorageResult<()> {
-            let path = self
-                .key_to_path(key)
-                .ok_or(StorageError::NotAvailable)?;
+        async fn delete(&self, key: &StorageKey) -> StorageResult<()> {
+            let path = self.key_to_path(key).ok_or(StorageError::NotAvailable)?;
 
             if path.exists() {
                 std::fs::remove_file(&path)
@@ -256,18 +243,14 @@ mod native {
             Ok(())
         }
 
-        async fn exists(&self, key: &str) -> StorageResult<bool> {
-            let path = self
-                .key_to_path(key)
-                .ok_or(StorageError::NotAvailable)?;
+        async fn exists(&self, key: &StorageKey) -> StorageResult<bool> {
+            let path = self.key_to_path(key).ok_or(StorageError::NotAvailable)?;
 
             Ok(path.exists())
         }
 
-        async fn list(&self, prefix: &str) -> StorageResult<Vec<StorageMetadata>> {
-            let base_path = self
-                .key_to_path(prefix)
-                .ok_or(StorageError::NotAvailable)?;
+        async fn list(&self, prefix: &StorageKey) -> StorageResult<Vec<StorageMetadata>> {
+            let base_path = self.key_to_path(prefix).ok_or(StorageError::NotAvailable)?;
 
             if !base_path.exists() {
                 return Ok(Vec::new());
@@ -278,59 +261,48 @@ mod native {
             if base_path.is_dir() {
                 Self::collect_files(&base_path, prefix, &mut results)?;
             } else if base_path.is_file() {
-                if let Ok(metadata) = std::fs::metadata(&base_path) {
-                    results.push(StorageMetadata {
-                        key: prefix.to_string(),
-                        size: Some(metadata.len()),
-                        modified: metadata
-                            .modified()
-                            .ok()
-                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                            .map(|d| d.as_secs()),
-                    });
-                }
+                results.push(StorageMetadata {
+                    key: prefix.clone(),
+                });
             }
 
             Ok(results)
         }
 
-        fn get_display_path(&self, key: &str) -> String {
+        fn get_display_path(&self, key: &StorageKey) -> String {
             self.key_to_path(key)
                 .map(|p| p.display().to_string())
-                .unwrap_or_else(|| key.to_string())
+                .unwrap_or_else(|| key.sub_path.to_string())
         }
     }
 
     impl NativeStorage {
         fn collect_files(
             dir: &PathBuf,
-            prefix: &str,
+            prefix: &StorageKey,
             results: &mut Vec<StorageMetadata>,
         ) -> StorageResult<()> {
-            let entries = std::fs::read_dir(dir)
-                .map_err(|e| StorageError::ReadError(e.to_string()))?;
+            let entries =
+                std::fs::read_dir(dir).map_err(|e| StorageError::ReadError(e.to_string()))?;
 
             for entry in entries.flatten() {
                 let path = entry.path();
                 let name = entry.file_name().to_string_lossy().to_string();
-                let key = if prefix.ends_with('/') {
-                    format!("{}{}", prefix, name)
+                let sub = if prefix.sub_path.ends_with('/') {
+                    format!("{}{}", prefix.sub_path, name)
                 } else {
-                    format!("{}/{}", prefix, name)
+                    format!("{}/{}", prefix.sub_path, name)
+                };
+
+                let key = StorageKey {
+                    category: prefix.category,
+                    sub_path: sub,
                 };
 
                 if path.is_file() {
-                    if let Ok(metadata) = entry.metadata() {
-                        results.push(StorageMetadata {
-                            key,
-                            size: Some(metadata.len()),
-                            modified: metadata
-                                .modified()
-                                .ok()
-                                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                                .map(|d| d.as_secs()),
-                        });
-                    }
+                    results.push(StorageMetadata {
+                        key,
+                    });
                 } else if path.is_dir() {
                     Self::collect_files(&path, &key, results)?;
                 }
@@ -370,9 +342,7 @@ mod wasm {
     pub struct WasmStorage;
 
     impl WasmStorage {
-        pub fn new() -> Self {
-            WasmStorage
-        }
+        pub fn new() -> Self { WasmStorage }
     }
 
     // Note: The actual implementation requires the indexed_db_futures crate.
@@ -444,54 +414,75 @@ mod wasm {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use native::NativeStorage;
-
 #[cfg(target_arch = "wasm32")]
 pub use wasm::WasmStorage;
 
 /// Get the platform-appropriate storage implementation
 #[cfg(not(target_arch = "wasm32"))]
-pub fn get_storage() -> impl Storage {
-    NativeStorage::new()
-}
+pub fn get_storage() -> impl Storage { NativeStorage::new() }
 
 /// Get the platform-appropriate storage implementation
 #[cfg(target_arch = "wasm32")]
-pub fn get_storage() -> impl Storage {
-    WasmStorage::new()
-}
+pub fn get_storage() -> impl Storage { WasmStorage::new() }
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
 
 /// Generate a storage key for a quicksave
-pub fn quicksave_key(game_name: &str, timestamp: &str) -> String {
-    format!("data/saves/{}/quicksaves/quicksave_{}.sav", game_name, timestamp)
+pub fn quicksave_key(game_name: &str, timestamp: &str) -> StorageKey {
+    let sub = format!("saves/{}/quicksaves/quicksave_{}.sav", game_name, timestamp);
+
+    StorageKey {
+        category: StorageCategory::Data,
+        sub_path: sub,
+    }
 }
 
 /// Generate a storage key for an autosave
-pub fn autosave_key(game_name: &str, timestamp: &str) -> String {
-    format!("data/saves/{}/autosaves/autosave_{}.sav", game_name, timestamp)
+pub fn autosave_key(game_name: &str, timestamp: &str) -> StorageKey {
+    let sub = format!("saves/{}/autosaves/autosaves_{}.sav", game_name, timestamp);
+
+    StorageKey {
+        category: StorageCategory::Data,
+        sub_path: sub,
+    }
 }
 
 /// Generate the prefix for listing autosaves for a game
-pub fn autosaves_prefix(game_name: &str) -> String {
-    format!("data/saves/{}/autosaves/", game_name)
+pub fn autosaves_prefix(game_name: &str) -> StorageKey {
+    let sub = format!("saves/{}/autosaves/", game_name);
+
+    StorageKey {
+        category: StorageCategory::Data,
+        sub_path: sub,
+    }
 }
 
 /// Generate the prefix for listing quicksaves for a game
-pub fn quicksaves_prefix(game_name: &str) -> String {
-    format!("data/saves/{}/quicksaves/", game_name)
+pub fn quicksaves_prefix(game_name: &str) -> StorageKey {
+    let sub = format!("saves/{}/quicksaves/", game_name);
+
+    StorageKey {
+        category: StorageCategory::Data,
+        sub_path: sub,
+    }
 }
 
 /// Generate a storage key for the application config
-pub fn config_key() -> String {
-    "config/config.toml".to_string()
+pub fn config_key() -> StorageKey {
+    StorageKey {
+        category: StorageCategory::Config,
+        sub_path: "config/config.toml".to_string(),
+    }
 }
 
 /// Generate a storage key for egui state
-pub fn egui_state_key() -> String {
-    "config/egui_state".to_string()
+pub fn egui_state_key() -> StorageKey {
+    StorageKey {
+        category: StorageCategory::Config,
+        sub_path: "egui_state".to_string(),
+    }
 }
 
 // ============================================================================
@@ -503,26 +494,24 @@ pub fn egui_state_key() -> String {
 
 #[cfg(not(target_arch = "wasm32"))]
 mod sync_wrappers {
-    use super::*;
+    use crate::frontend::storage::{
+        NativeStorage, Storage, StorageError, StorageKey, StorageMetadata, StorageResult,
+    };
 
     /// Global storage instance for synchronous access
     static STORAGE: std::sync::OnceLock<NativeStorage> = std::sync::OnceLock::new();
 
-    fn get_storage_instance() -> &'static NativeStorage {
-        STORAGE.get_or_init(NativeStorage::new)
-    }
+    fn get_storage_instance() -> &'static NativeStorage { STORAGE.get_or_init(NativeStorage::new) }
 
     /// Get the full filesystem path for a storage key (native only)
-    pub fn get_path_for_key(key: &str) -> Option<std::path::PathBuf> {
+    pub fn get_path_for_key(key: &StorageKey) -> Option<std::path::PathBuf> {
         get_storage_instance().key_to_path(key)
     }
 
     /// Read data synchronously from storage
-    pub fn read_sync(key: &str) -> StorageResult<Vec<u8>> {
+    pub fn read_sync(key: &StorageKey) -> StorageResult<Vec<u8>> {
         let storage = get_storage_instance();
-        let path = storage
-            .key_to_path(key)
-            .ok_or(StorageError::NotAvailable)?;
+        let path = storage.key_to_path(key).ok_or(StorageError::NotAvailable)?;
 
         if !path.exists() {
             return Err(StorageError::NotFound);
@@ -532,48 +521,40 @@ mod sync_wrappers {
     }
 
     /// Write data synchronously to storage
-    pub fn write_sync(key: &str, data: &[u8]) -> StorageResult<()> {
+    pub fn write_sync(key: &StorageKey, data: &[u8]) -> StorageResult<()> {
         let storage = get_storage_instance();
-        let path = storage
-            .key_to_path(key)
-            .ok_or(StorageError::NotAvailable)?;
+        let path = storage.key_to_path(key).ok_or(StorageError::NotAvailable)?;
 
         // Create parent directories
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| StorageError::WriteError(e.to_string()))?;
+            std::fs::create_dir_all(parent).map_err(|e| StorageError::WriteError(e.to_string()))?;
         }
 
         std::fs::write(&path, data).map_err(|e| StorageError::WriteError(e.to_string()))
     }
 
     /// Delete data synchronously from storage
-    pub fn delete_sync(key: &str) -> StorageResult<()> {
+    pub fn delete_sync(key: &StorageKey) -> StorageResult<()> {
         let storage = get_storage_instance();
-        let path = storage
-            .key_to_path(key)
-            .ok_or(StorageError::NotAvailable)?;
+        let path = storage.key_to_path(key).ok_or(StorageError::NotAvailable)?;
 
         if path.exists() {
-            std::fs::remove_file(&path)
-                .map_err(|e| StorageError::DeleteError(e.to_string()))?;
+            std::fs::remove_file(&path).map_err(|e| StorageError::DeleteError(e.to_string()))?;
         }
 
         Ok(())
     }
 
     /// Check if a key exists synchronously
-    pub fn exists_sync(key: &str) -> StorageResult<bool> {
+    pub fn exists_sync(key: &StorageKey) -> StorageResult<bool> {
         let storage = get_storage_instance();
-        let path = storage
-            .key_to_path(key)
-            .ok_or(StorageError::NotAvailable)?;
+        let path = storage.key_to_path(key).ok_or(StorageError::NotAvailable)?;
 
         Ok(path.exists())
     }
 
     /// List all keys with a given prefix synchronously
-    pub fn list_sync(prefix: &str) -> StorageResult<Vec<StorageMetadata>> {
+    pub fn list_sync(prefix: &StorageKey) -> StorageResult<Vec<StorageMetadata>> {
         let storage = get_storage_instance();
         let base_path = storage
             .key_to_path(prefix)
@@ -588,56 +569,44 @@ mod sync_wrappers {
         if base_path.is_dir() {
             collect_files_sync(&base_path, prefix, &mut results)?;
         } else if base_path.is_file() {
-            if let Ok(metadata) = std::fs::metadata(&base_path) {
-                results.push(StorageMetadata {
-                    key: prefix.to_string(),
-                    size: Some(metadata.len()),
-                    modified: metadata
-                        .modified()
-                        .ok()
-                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                        .map(|d| d.as_secs()),
-                });
-            }
+            results.push(StorageMetadata {
+                key: prefix.clone(),
+            });
         }
 
         Ok(results)
     }
 
     /// Get the display path for a key
-    pub fn get_display_path(key: &str) -> String {
+    pub fn get_display_path(key: &StorageKey) -> String {
         get_storage_instance().get_display_path(key)
     }
 
     fn collect_files_sync(
         dir: &std::path::Path,
-        prefix: &str,
+        prefix: &StorageKey,
         results: &mut Vec<StorageMetadata>,
     ) -> StorageResult<()> {
-        let entries = std::fs::read_dir(dir)
-            .map_err(|e| StorageError::ReadError(e.to_string()))?;
+        let entries = std::fs::read_dir(dir).map_err(|e| StorageError::ReadError(e.to_string()))?;
 
         for entry in entries.flatten() {
             let path = entry.path();
             let name = entry.file_name().to_string_lossy().to_string();
-            let key = if prefix.ends_with('/') {
-                format!("{}{}", prefix, name)
+            let sub = if prefix.sub_path.ends_with('/') {
+                format!("{}{}", prefix.sub_path, name)
             } else {
-                format!("{}/{}", prefix, name)
+                format!("{}/{}", prefix.sub_path, name)
+            };
+
+            let key = StorageKey {
+                category: prefix.category,
+                sub_path: sub,
             };
 
             if path.is_file() {
-                if let Ok(metadata) = entry.metadata() {
-                    results.push(StorageMetadata {
-                        key,
-                        size: Some(metadata.len()),
-                        modified: metadata
-                            .modified()
-                            .ok()
-                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                            .map(|d| d.as_secs()),
-                    });
-                }
+                results.push(StorageMetadata {
+                    key,
+                });
             } else if path.is_dir() {
                 collect_files_sync(&path, &key, results)?;
             }
@@ -649,7 +618,6 @@ mod sync_wrappers {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use sync_wrappers::*;
-
 // ============================================================================
 // Migration Notes
 // ============================================================================

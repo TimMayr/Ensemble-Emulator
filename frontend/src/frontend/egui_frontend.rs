@@ -20,7 +20,6 @@ use std::time::{Duration, Instant};
 
 
 use crossbeam_channel::{Receiver, Sender};
-
 use eframe::glow;
 use egui::{Context, Style, ViewportCommand, Visuals};
 use ensemble_lockstep::emulation::nes::Nes;
@@ -39,11 +38,9 @@ use crate::frontend::egui::tiles::{
 };
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
 use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent, SavestateLoadContext};
-use crate::frontend::persistence::{
-    get_egui_storage_path, load_config,
-};
-use crate::frontend::storage;
-use crate::frontend::util;
+use crate::frontend::persistence::{get_egui_storage_path, load_config};
+use crate::frontend::{storage, util};
+use crate::frontend::storage::StorageKey;
 use crate::messages::{EmulatorMessage, FrontendMessage, SaveType};
 
 /// Key used for storing egui_tiles tree state in egui's persistence
@@ -279,19 +276,19 @@ impl EguiApp {
                 // Filter to only .sav files and collect with their modified times
                 let mut autosaves: Vec<_> = entries
                     .into_iter()
-                    .filter(|e| e.key.ends_with(".sav"))
-                    .filter_map(|e| Some((e.key, e.modified?)))
+                    .filter(|e| e.key.sub_path.ends_with(".sav"))
+                    .filter_map(|e| Some(e.key))
                     .collect();
 
                 // If we have at least the limit, delete oldest to make room
                 // (use >= to maintain exactly MAX_AUTOSAVES_PER_GAME after the new save)
                 if autosaves.len() >= MAX_AUTOSAVES_PER_GAME {
                     // Sort by modification time (oldest first)
-                    autosaves.sort_by_key(|a| a.1);
+                    autosaves.sort_by_key(|a| a.sub_path.clone());
 
                     // Delete enough files to get back under the limit
                     let to_delete = autosaves.len() - MAX_AUTOSAVES_PER_GAME + 1;
-                    for (key, _) in autosaves.into_iter().take(to_delete) {
+                    for key in autosaves.into_iter().take(to_delete) {
                         let _ = storage::delete_sync(&key);
                     }
                 }
@@ -299,7 +296,7 @@ impl EguiApp {
         });
     }
 
-    pub(crate) fn get_current_quicksave_key(&self) -> Option<String> {
+    pub(crate) fn get_current_quicksave_key(&self) -> Option<StorageKey> {
         if let Some(rom) = &self.config.user_config.loaded_rom
             && let Some(prev_name) = &self.config.user_config.previous_rom_name
         {
@@ -309,15 +306,15 @@ impl EguiApp {
 
             // List all quicksaves using storage
             if let Ok(entries) = storage::list_sync(&prefix) {
-                let mut quicksave_key: Option<(String, chrono::NaiveDateTime, u8)> = None;
+                let mut quicksave_key: Option<(StorageKey, chrono::NaiveDateTime, u8)> = None;
 
                 for entry in entries {
-                    if !entry.key.ends_with(".sav") {
+                    if !entry.key.sub_path.ends_with(".sav") {
                         continue;
                     }
 
                     // Extract filename from the key
-                    let filename = entry.key.rsplit('/').next()?;
+                    let filename = entry.key.sub_path.rsplit('/').next()?;
                     let stem = filename.strip_suffix(".sav")?;
 
                     let time_version = stem.split_once('_')?.1;
@@ -343,7 +340,7 @@ impl EguiApp {
                         };
 
                         if should_update {
-                            quicksave_key = Some((entry.key.clone(), time, version));
+                            quicksave_key = Some((entry.key, time, version));
                         }
                     }
                 }
@@ -646,7 +643,7 @@ fn common_setup(
     Receiver<AsyncFrontendMessage>,
 ) {
     use crate::frontend::messages::LoadedRom;
-    
+
     // Create the emulator instance
     let console = Nes::default();
 
@@ -659,7 +656,11 @@ fn common_setup(
         let data = std::fs::read(path).ok()?;
         let name = path.file_name()?.to_string_lossy().to_string();
         let directory = path.parent().map(|p| p.to_string_lossy().to_string());
-        Some(LoadedRom { data, name, directory })
+        Some(LoadedRom {
+            data,
+            name,
+            directory,
+        })
     });
     let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(loaded_rom));
 
@@ -695,13 +696,7 @@ fn common_setup_wasm() -> (
     // No ROM loaded at startup in WASM - user will pick via file dialog
     let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(None));
 
-    (
-        channel_emu,
-        tx_to_emu,
-        rx_from_emu,
-        to_frontend,
-        from_async,
-    )
+    (channel_emu, tx_to_emu, rx_from_emu, to_frontend, from_async)
 }
 
 /// Run the egui frontend.
@@ -778,8 +773,8 @@ fn run_internal_wasm(
         Receiver<AsyncFrontendMessage>,
     ),
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use wasm_bindgen::JsCast;
     use eframe::web_sys;
+    use wasm_bindgen::JsCast;
     use web_sys::HtmlCanvasElement;
 
     wasm_bindgen_futures::spawn_local(async {
