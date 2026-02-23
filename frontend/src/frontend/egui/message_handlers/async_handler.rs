@@ -197,27 +197,37 @@ impl EguiApp {
     }
 
     fn handle_savestate_loaded(&mut self, context: Box<SavestateLoadContext>) {
-        // On native, try to find a matching ROM in the savestate's directory
+        // On native, try to find a matching ROM in the last-used ROM directory.
+        // Only scan if savestate_dir is set (cleared after first scan attempt to prevent loops).
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(ref dir) = context.savestate_dir {
-            let sender = self.async_sender.clone();
-            let context_clone = context.clone();
-            let dir = dir.clone();
-            std::thread::spawn(move || {
-                if let Some(rom) = find_matching_rom_in_directory(&dir, &context_clone) {
-                    let _ = sender.send(AsyncFrontendMessage::ShowMatchingRomDialog(
-                        context_clone,
-                        rom,
-                    ));
-                } else {
-                    // No match found - show ROM selection dialog
-                    // Clear savestate_dir to prevent re-scanning
-                    let mut ctx = *context_clone;
-                    ctx.savestate_dir = None;
-                    let _ = sender.send(AsyncFrontendMessage::SavestateLoaded(Box::new(ctx)));
-                }
-            });
-            return;
+        if context.savestate_dir.is_some() {
+            if let Some(dir) = self
+                .config
+                .user_config
+                .previous_rom_dir
+                .as_ref()
+                .and_then(storage::get_path_for_key)
+            {
+                let dir = dir.to_string_lossy().to_string();
+                let sender = self.async_sender.clone();
+                let context_clone = context.clone();
+                std::thread::spawn(move || {
+                    if let Some(rom) = find_matching_rom_in_directory(&dir, &context_clone) {
+                        let _ = sender.send(AsyncFrontendMessage::ShowMatchingRomDialog(
+                            context_clone,
+                            rom,
+                        ));
+                    } else {
+                        // No match found - show ROM selection dialog
+                        // Clear savestate_dir to prevent re-scanning
+                        let mut ctx = *context_clone;
+                        ctx.savestate_dir = None;
+                        let _ =
+                            sender.send(AsyncFrontendMessage::SavestateLoaded(Box::new(ctx)));
+                    }
+                });
+                return;
+            }
         }
 
         // Fallback: show ROM selection dialog directly
