@@ -24,7 +24,7 @@ use crate::frontend::egui::config::{
 };
 use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::storage;
-use crate::frontend::storage::StorageKey;
+use crate::frontend::storage::{Storage, StorageKey};
 
 /// Application identifier used for directory paths
 const APP_QUALIFIER: &str = "com";
@@ -430,6 +430,12 @@ pub struct PersistentUserConfig {
     pub previous_savestate_name: Option<String>,
     /// Last loaded savestate directory (for file picker initial directory)
     pub previous_savestate_dir: Option<StorageKey>,
+    /// Last saved palette directory (for file picker initial directory)
+    #[serde(default)]
+    pub previous_palette_save_dir: Option<StorageKey>,
+    /// Last saved savestate directory (for file picker initial directory)
+    #[serde(default)]
+    pub previous_savestate_save_dir: Option<StorageKey>,
     pub pattern_edit_color: u8,
 }
 
@@ -442,6 +448,8 @@ impl From<&UserConfig> for PersistentUserConfig {
             previous_rom_dir: config.previous_rom_dir.clone(),
             previous_savestate_name: config.previous_savestate_name.clone(),
             previous_savestate_dir: config.previous_savestate_dir.clone(),
+            previous_palette_save_dir: config.previous_palette_save_dir.clone(),
+            previous_savestate_save_dir: config.previous_savestate_save_dir.clone(),
             pattern_edit_color: config.pattern_edit_color,
         }
     }
@@ -456,6 +464,8 @@ impl From<&PersistentUserConfig> for UserConfig {
             previous_rom_dir: config.previous_rom_dir.clone(),
             previous_savestate_name: config.previous_savestate_name.clone(),
             previous_savestate_dir: config.previous_savestate_dir.clone(),
+            previous_palette_save_dir: config.previous_palette_save_dir.clone(),
+            previous_savestate_save_dir: config.previous_savestate_save_dir.clone(),
             pattern_edit_color: config.pattern_edit_color,
             loaded_rom: None,
         }
@@ -593,21 +603,21 @@ impl From<&PersistentConsoleConfig> for ConsoleConfig {
     }
 }
 
-/// Load configuration from the config file.
+/// Load configuration from the config file asynchronously.
 ///
 /// Returns `None` if:
-/// - The config directory cannot be determined
 /// - The config file doesn't exist (first run)
 /// - The config file cannot be read or parsed
 ///
 /// Parsing errors are logged to stderr but not treated as fatal,
 /// allowing the application to start with default config if the
 /// config file is malformed.
-pub fn load_config() -> Option<PersistentConfig> {
+pub async fn load_config() -> Option<PersistentConfig> {
     let key = storage::config_key();
+    let storage_impl = storage::get_storage();
 
     // Check if config exists using storage
-    match storage::exists_sync(&key) {
+    match storage_impl.exists(&key).await {
         Ok(false) => return None,
         Err(e) => {
             eprintln!("Failed to check if config exists: {}", e);
@@ -616,7 +626,7 @@ pub fn load_config() -> Option<PersistentConfig> {
         Ok(true) => {}
     }
 
-    let contents = match storage::read_sync(&key) {
+    let contents = match storage_impl.get(&key).await {
         Ok(data) => match String::from_utf8(data) {
             Ok(s) => s,
             Err(e) => {
@@ -639,27 +649,20 @@ pub fn load_config() -> Option<PersistentConfig> {
     }
 }
 
-/// Save configuration to the config file
-pub fn save_config(config: &PersistentConfig) -> Result<(), String> {
+/// Save configuration to the config file asynchronously
+pub async fn save_config(config: &PersistentConfig) -> Result<(), String> {
     let key = storage::config_key();
+    let storage_impl = storage::get_storage();
 
     let toml_string =
         toml::to_string_pretty(config).map_err(|e| format!("Failed to serialize config: {}", e))?;
 
-    storage::write_sync(&key, toml_string.as_bytes())
+    storage_impl
+        .set(&key, toml_string.as_bytes().to_vec())
+        .await
         .map_err(|e| format!("Failed to write config: {}", e))?;
 
     Ok(())
-}
-
-/// Save configuration asynchronously to avoid blocking the UI thread
-pub fn save_config_async(config: PersistentConfig) -> Receiver<Result<(), String>> {
-    let (tx, rx) = bounded(1);
-    thread::spawn(move || {
-        let result = save_config(&config);
-        let _ = tx.send(result);
-    });
-    rx
 }
 
 // ============================================================================

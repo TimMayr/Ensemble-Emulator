@@ -7,8 +7,8 @@ use ensemble_lockstep::util::ToBytes;
 use rfd::{AsyncFileDialog, FileHandle};
 use sha2::{Digest, Sha256};
 
-use crate::frontend::messages::{AsyncFrontendMessage, LoadedRom, SavestateLoadContext};
-use crate::frontend::storage::{get_storage, Storage, StorageCategory, StorageKey};
+use crate::frontend::messages::{AsyncFrontendMessage, LoadedPalette, LoadedRom, SavestateLoadContext};
+use crate::frontend::storage::{self, get_storage, Storage, StorageCategory, StorageKey};
 
 /// Enum to represent errors that can occur during savestate loading UI flow
 pub enum SavestateLoadError {
@@ -169,7 +169,16 @@ pub fn spawn_palette_picker(sender: &Sender<AsyncFrontendMessage>, dir: Option<&
             // Read the file contents from the handle
             let data = handle.read().await;
             let palette = parse_palette_from_bytes(&data);
-            let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette));
+            let directory = get_file_directory(&handle)
+                .map(|f| StorageKey::from(&f))
+                .unwrap_or(StorageKey {
+                    category: StorageCategory::Cache,
+                    sub_path: "upload_cache/palettes/".to_string(),
+                });
+            let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(LoadedPalette {
+                palette,
+                directory,
+            }));
         }
     });
 }
@@ -191,8 +200,13 @@ pub fn spawn_rom_picker(sender: &Sender<AsyncFrontendMessage>, dir: Option<&Stor
                 .map(|f| StorageKey::from(&f))
                 .unwrap_or(StorageKey {
                     category: StorageCategory::Cache,
-                    sub_path: "upload_cache/palettes/".to_string(),
+                    sub_path: "upload_cache/roms/".to_string(),
                 });
+
+            // Cache ROM in storage for later access (ROM matching, etc.)
+            let cache_key = storage::rom_cache_key(&name);
+            let _ = get_storage().set(&cache_key, data.clone()).await;
+
             let _ = sender.send(AsyncFrontendMessage::LoadRom(Some(LoadedRom {
                 data,
                 name,
@@ -224,14 +238,47 @@ pub fn spawn_save_dialog(
             let filename = handle.file_name();
             let format = get_extension(&filename);
 
+            // If no extension was specified, use the default for this file type
+            let format = format.or_else(|| {
+                let ext = file_type.get_default_extension();
+                if ext.is_empty() { None } else { Some(ext.to_string()) }
+            });
+
+            // Capture directory from the save handle
+            let save_dir = get_file_directory(&handle)
+                .map(|f| StorageKey::from(&f));
+
             // Write data using the file handle
             let bytes = data.to_bytes(format);
+
+            // On native, if the filename had no extension, write to a path with the
+            // default extension appended so the file on disk gets the correct name.
+            #[cfg(not(target_arch = "wasm32"))]
+            let result = {
+                if get_extension(&filename).is_none() {
+                    let ext = file_type.get_default_extension();
+                    if !ext.is_empty() {
+                        let path = handle.path().with_extension(ext);
+                        std::fs::write(&path, &bytes).map_err(std::io::Error::from)
+                    } else {
+                        handle.write(&bytes).await
+                    }
+                } else {
+                    handle.write(&bytes).await
+                }
+            };
+
+            #[cfg(target_arch = "wasm32")]
             let result = handle.write(&bytes).await;
 
             // Notify completion if a sender was provided
             let error = result.err().map(|e| format!("Failed to write file: {}", e));
             if let Some(sender) = sender {
-                let _ = sender.send(AsyncFrontendMessage::FileSaveCompleted(error));
+                let _ = sender.send(AsyncFrontendMessage::FileSaveCompleted {
+                    error,
+                    directory: save_dir,
+                    file_type,
+                });
             }
         }
     });
@@ -303,6 +350,10 @@ pub fn spawn_savestate_picker(sender: &Sender<AsyncFrontendMessage>, dir: Option
             let savestate_name = handle.file_name();
             let savestate_dir = get_file_directory(&handle);
 
+            // Cache savestate in storage for later access
+            let cache_key = storage::uploaded_savestate_key(&savestate_name);
+            let _ = get_storage().set(&cache_key, data.clone()).await;
+
             // Try to parse the savestate from the data
             let savestate = match savestate::try_load_state_from_bytes(&data) {
                 Some(s) => s,
@@ -350,6 +401,10 @@ pub fn spawn_rom_picker_for_savestate(
                 sub_path: "upload_cache/roms/".to_string()
             });
 
+            // Cache ROM in storage for later access (ROM matching, etc.)
+            let cache_key = storage::rom_cache_key(&name);
+            let _ = get_storage().set(&cache_key, data.clone()).await;
+
             let _ = sender.send(AsyncFrontendMessage::RomSelectedForSavestate(
                 context,
                 LoadedRom {
@@ -383,7 +438,7 @@ pub fn short_hash_hex(hash: &[u8; 32]) -> String {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn spawn_async<F: Future<Output = ()> + 'static>(f: F) { wasm_bindgen_futures::spawn_local(f); }
+pub fn spawn_async<F: Future<Output = ()> + 'static>(f: F) { wasm_bindgen_futures::spawn_local(f); }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn spawn_async<F: Future<Output = ()> + Send + 'static>(f: F) { tokio::spawn(f); }
+pub fn spawn_async<F: Future<Output = ()> + Send + 'static>(f: F) { tokio::spawn(f); }

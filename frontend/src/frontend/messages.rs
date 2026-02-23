@@ -1,7 +1,7 @@
 use ensemble_lockstep::emulation::savestate::SaveState;
 use ensemble_lockstep::emulation::screen_renderer::RgbPalette;
 use crate::frontend::storage::StorageKey;
-use crate::frontend::util::SavestateLoadError;
+use crate::frontend::util::{FileType, SavestateLoadError};
 use crate::messages::ControllerEvent;
 
 /// Visual/frontend-only events that are processed synchronously via a deque.
@@ -51,8 +51,8 @@ pub struct LoadedPalette {
 /// operations without directly sending FrontendMessages to the emulator.
 /// This consolidates all emulator communication logic in one place.
 pub enum AsyncFrontendMessage {
-    /// Palette file was loaded asynchronously - includes the parsed palette data
-    PaletteLoaded(RgbPalette),
+    /// Palette file was loaded asynchronously - includes the parsed palette data and directory
+    PaletteLoaded(LoadedPalette),
     /// User has selected a savestate file, now need to verify/select ROM
     SavestateLoaded(Box<SavestateLoadContext>),
     /// Show dialog asking if user wants to load the found matching ROM (native only - we found a ROM in same dir)
@@ -73,12 +73,24 @@ pub enum AsyncFrontendMessage {
     SavestateLoadFailed(SavestateLoadError),
     /// An error occurred while verifying the ROM
     RomVerificationFailed(Box<SavestateLoadContext>, SavestateLoadError),
-    /// File save completed (success or error message)
-    FileSaveCompleted(Option<String>),
+    /// File save completed (success or error message, with directory and file type for persistence)
+    FileSaveCompleted {
+        error: Option<String>,
+        directory: Option<StorageKey>,
+        file_type: FileType,
+    },
     Quickload,
     Quicksave,
     /// Load a ROM - contains ROM data if provided, None triggers file picker
     LoadRom(Option<LoadedRom>),
+    /// Open the save browser dialog (triggers async listing of saves)
+    OpenSaveBrowser,
+    /// Save browser has finished loading entries
+    SaveBrowserLoaded(Vec<crate::frontend::egui::config::SaveEntry>),
+    /// Load a specific save from the browser by its storage key
+    LoadSaveFromBrowser(StorageKey),
+    /// Export a specific save from the browser to a file on disk
+    ExportSaveFromBrowser(StorageKey),
 
     // =========================================================================
     // Consolidated emulator operations
