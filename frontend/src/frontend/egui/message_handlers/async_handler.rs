@@ -854,7 +854,7 @@ fn parse_save_entry(key: storage::StorageKey, save_type: SaveEntryType) -> Optio
     let stem = filename.strip_suffix(".sav")?;
 
     // Split into prefix and timestamp: "quicksave_2024-01-15_14-30-00" or with version suffix
-    let (prefix, rest) = stem.split_once('_')?;
+    let (_prefix, rest) = stem.split_once('_')?;
 
     // Try to extract timestamp - handle optional version suffix
     let (timestamp_str, _version) = if rest.chars().filter(|c| *c == '_').count() > 1 {
@@ -863,17 +863,19 @@ fn parse_save_entry(key: storage::StorageKey, save_type: SaveEntryType) -> Optio
         (rest, "0")
     };
 
-    // Format display name
-    let display_name = match save_type {
-        SaveEntryType::Quicksave => format!("Quicksave ({})", prefix),
-        SaveEntryType::Autosave => format!("Autosave ({})", prefix),
+    // Parse the timestamp: "2024-01-15_14-30-00" → "2024/01/15 14:30:00"
+    let timestamp = if let Some((date, time)) = timestamp_str.split_once('_') {
+        // Date: 2024-01-15 → 2024/01/15
+        let date_display = date.replacen('-', "/", 2);
+        // Time: 14-30-00 → 14:30:00
+        let time_display = time.replacen('-', ":", 2);
+        format!("{} {}", date_display, time_display)
+    } else {
+        timestamp_str.to_string()
     };
 
-    // Format timestamp for display
-    let timestamp = timestamp_str
-        .replace('_', " ")
-        .replacen('-', "/", 2)
-        .replacen('-', ":", 2);
+    // Display name uses the timestamp for uniqueness
+    let display_name = format!("{}", save_type);
 
     Some(SaveEntry {
         key,

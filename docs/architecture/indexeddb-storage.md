@@ -538,13 +538,23 @@ Option A is simpler since config is just TOML text (<2 KB), and egui already has
 
 > Implemented in `frontend/src/frontend/egui/message_handlers/async_handler.rs`
 
-### ❌ Phase 5: Save Browser UI — NOT STARTED
-- [ ] Save listing dialog/panel (egui window listing quick/auto saves from IndexedDB)
-- [ ] Export/download functionality (read from IndexedDB, write to host filesystem via `rfd`)
-- [ ] Menu integration (`File → Savestates → Load Quick/Auto Save...` and `Export Save...`)
-- [ ] `SaveBrowserState` in `PendingDialogs` (or new `Pane` variant)
+### ✅ Phase 5: Save Browser UI — COMPLETE
+- [x] Save listing dialog/panel (egui window listing quick/auto saves from storage)
+- [x] Export/download functionality (read from storage, write to host filesystem via `rfd`)
+- [x] Menu integration (`File → Savestates → Browse Saves...`, gated on ROM loaded)
+- [x] `SaveBrowserState` in `PendingDialogs`
+- [x] `SaveEntry`/`SaveEntryType` data types for quicksaves and autosaves
+- [x] Filter toggles for quicksaves/autosaves
+- [x] Load and Export buttons per entry
+- [x] ROM checksum verification before loading
+- [x] Close button available during loading state
 
-> See §2.7 and §2.8 above for detailed design. This is the only remaining phase.
+> Implemented in:
+> - `frontend/src/frontend/egui/ui/save_browser.rs` (UI rendering)
+> - `frontend/src/frontend/egui/config.rs` (SaveBrowserState, SaveEntry, SaveEntryType)
+> - `frontend/src/frontend/messages.rs` (OpenSaveBrowser, SaveBrowserLoaded, LoadSaveFromBrowser, ExportSaveFromBrowser)
+> - `frontend/src/frontend/egui/message_handlers/async_handler.rs` (handlers, list_save_entries, parse_save_entry, ExportableData)
+> - `frontend/src/frontend/egui/ui/menu_bar.rs` ("Browse Saves..." menu item)
 
 ---
 

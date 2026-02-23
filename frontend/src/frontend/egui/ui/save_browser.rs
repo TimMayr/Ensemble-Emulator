@@ -43,66 +43,65 @@ pub fn render_save_browser(
             if state.loading {
                 ui.spinner();
                 ui.label("Loading saves...");
-                return;
-            }
-
-            // Filter entries
-            let filtered: Vec<_> = state
-                .entries
-                .iter()
-                .filter(|e| match e.save_type {
-                    SaveEntryType::Quicksave => state.show_quicksaves,
-                    SaveEntryType::Autosave => state.show_autosaves,
-                })
-                .collect();
-
-            if filtered.is_empty() {
-                ui.label("No saves found.");
             } else {
-                ui.label(format!("{} save(s) found", filtered.len()));
-                ui.add_space(4.0);
+                // Filter entries
+                let filtered: Vec<_> = state
+                    .entries
+                    .iter()
+                    .filter(|e| match e.save_type {
+                        SaveEntryType::Quicksave => state.show_quicksaves,
+                        SaveEntryType::Autosave => state.show_autosaves,
+                    })
+                    .collect();
 
-                // Scrollable save list
-                egui::ScrollArea::vertical()
-                    .max_height(300.0)
-                    .show(ui, |ui| {
-                        for entry in &filtered {
-                            ui.horizontal(|ui| {
-                                // Type badge
-                                let badge = match entry.save_type {
-                                    SaveEntryType::Quicksave => "⚡",
-                                    SaveEntryType::Autosave => "🔄",
-                                };
+                if filtered.is_empty() {
+                    ui.label("No saves found.");
+                } else {
+                    ui.label(format!("{} save(s) found", filtered.len()));
+                    ui.add_space(4.0);
 
-                                ui.label(badge);
+                    // Scrollable save list
+                    egui::ScrollArea::vertical()
+                        .max_height(300.0)
+                        .show(ui, |ui| {
+                            for entry in &filtered {
+                                ui.horizontal(|ui| {
+                                    // Type badge
+                                    let badge = match entry.save_type {
+                                        SaveEntryType::Quicksave => "⚡",
+                                        SaveEntryType::Autosave => "🔄",
+                                    };
 
-                                // Name and timestamp
-                                ui.vertical(|ui| {
-                                    ui.label(
-                                        egui::RichText::new(&entry.display_name).strong(),
-                                    );
-                                    ui.label(
-                                        egui::RichText::new(&entry.timestamp)
-                                            .small()
-                                            .color(ui.visuals().weak_text_color()),
+                                    ui.label(badge);
+
+                                    // Name and timestamp
+                                    ui.vertical(|ui| {
+                                        ui.label(
+                                            egui::RichText::new(&entry.display_name).strong(),
+                                        );
+                                        ui.label(
+                                            egui::RichText::new(&entry.timestamp)
+                                                .small()
+                                                .color(ui.visuals().weak_text_color()),
+                                        );
+                                    });
+
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            if ui.button("Export").clicked() {
+                                                export_key = Some(entry.key.clone());
+                                            }
+                                            if ui.button("Load").clicked() {
+                                                load_key = Some(entry.key.clone());
+                                            }
+                                        },
                                     );
                                 });
-
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        if ui.button("Export").clicked() {
-                                            export_key = Some(entry.key.clone());
-                                        }
-                                        if ui.button("Load").clicked() {
-                                            load_key = Some(entry.key.clone());
-                                        }
-                                    },
-                                );
-                            });
-                            ui.separator();
-                        }
-                    });
+                                ui.separator();
+                            }
+                        });
+                }
             }
 
             ui.add_space(8.0);
