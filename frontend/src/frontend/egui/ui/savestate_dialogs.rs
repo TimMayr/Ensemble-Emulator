@@ -77,7 +77,11 @@ fn render_rom_selection_dialog(
 
     if close {
         if spawn_picker {
-            util::spawn_rom_picker_for_savestate(&sender, context, user_config.previous_rom_dir.as_deref());
+            util::spawn_rom_picker_for_savestate(
+                &sender,
+                context,
+                user_config.previous_rom_dir.as_ref(),
+            );
         }
         dialogs.rom_selection_dialog = None;
     }

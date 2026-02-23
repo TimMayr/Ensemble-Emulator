@@ -37,10 +37,12 @@ use crate::frontend::egui::tiles::{
     compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
 };
 use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
-use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent, SavestateLoadContext};
+use crate::frontend::messages::{
+    AsyncFrontendMessage, FrontendEvent, LoadedRom, SavestateLoadContext,
+};
 use crate::frontend::persistence::{get_egui_storage_path, load_config};
-use crate::frontend::{storage, util};
 use crate::frontend::storage::StorageKey;
+use crate::frontend::{storage, util};
 use crate::messages::{EmulatorMessage, FrontendMessage, SaveType};
 
 /// Key used for storing egui_tiles tree state in egui's persistence
@@ -241,7 +243,7 @@ impl EguiApp {
         // Update config names and directories
         self.config.user_config.previous_savestate_name = Some(context.savestate_name.clone());
         if let Some(ref dir) = context.savestate_dir {
-            self.config.user_config.previous_savestate_dir = Some(dir.clone());
+            self.config.user_config.previous_savestate_dir = Some(StorageKey::from(dir));
         }
     }
 
@@ -632,7 +634,7 @@ impl Debug for EguiApp {
 
 /// Native: common setup with PathBuf for command-line ROM loading
 #[cfg(not(target_arch = "wasm32"))]
-fn common_setup(
+fn native_setup(
     rom: Option<PathBuf>,
 ) -> (
     Option<PathBuf>,
@@ -642,8 +644,6 @@ fn common_setup(
     Sender<AsyncFrontendMessage>,
     Receiver<AsyncFrontendMessage>,
 ) {
-    use crate::frontend::messages::LoadedRom;
-
     // Create the emulator instance
     let console = Nes::default();
 
@@ -655,7 +655,12 @@ fn common_setup(
     let loaded_rom = rom.as_ref().and_then(|path| {
         let data = std::fs::read(path).ok()?;
         let name = path.file_name()?.to_string_lossy().to_string();
-        let directory = path.parent().map(|p| p.to_string_lossy().to_string());
+        let directory = path
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .map(|f| StorageKey::from(&f))
+            .unwrap();
+
         Some(LoadedRom {
             data,
             name,
@@ -679,7 +684,7 @@ fn common_setup(
 
 /// WASM: common setup without filesystem access
 #[cfg(target_arch = "wasm32")]
-fn common_setup_wasm() -> (
+fn wasm_setup() -> (
     ChannelEmulator,
     Sender<FrontendMessage>,
     Receiver<EmulatorMessage>,
@@ -703,23 +708,21 @@ fn common_setup_wasm() -> (
 ///
 /// Uses `RendererKind` for runtime-switchable rendering.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn run(
-    rom: Option<PathBuf>,
-    _palette: Option<PathBuf>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let res = common_setup(rom);
+pub fn run(rom: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
+    let res = native_setup(rom);
     run_internal(res)
 }
 
 /// Run the egui frontend for WASM.
 #[cfg(target_arch = "wasm32")]
 pub fn run_wasm() -> Result<(), Box<dyn std::error::Error>> {
-    let res = common_setup_wasm();
+    let res = wasm_setup();
     run_internal_wasm(res)
 }
 
+#[tokio::main]
 #[cfg(not(target_arch = "wasm32"))]
-fn run_internal(
+async fn run_internal(
     res: (
         Option<PathBuf>,
         ChannelEmulator,

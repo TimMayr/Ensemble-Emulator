@@ -4,14 +4,13 @@
 //! frame updates, debug data, and savestate operations.
 
 use egui::{Context, ViewportCommand};
-use ensemble_lockstep::emulation::ppu::{EmulatorFetchable, PaletteData, TILE_COUNT, TileData};
+use ensemble_lockstep::emulation::ppu::{EmulatorFetchable, PaletteData, TileData, TILE_COUNT};
 use ensemble_lockstep::emulation::savestate::SaveState;
 use ensemble_lockstep::util::ToBytes;
 
 use crate::frontend::egui_frontend::EguiApp;
-use crate::frontend::storage;
-use crate::frontend::util;
 use crate::frontend::util::FileType;
+use crate::frontend::{storage, util};
 use crate::messages::{EmulatorMessage, SaveType};
 
 /// Trait for handling emulator messages.
@@ -38,7 +37,8 @@ impl EguiApp {
             EmulatorMessage::FrameReady(frame) => {
                 self.emu_textures.current_frame = Some(frame);
                 self.fps_counter.update();
-                self.emu_textures.update_emulator_texture(ctx, &mut self.config.view_config.renderer);
+                self.emu_textures
+                    .update_emulator_texture(ctx, &mut self.config.view_config.renderer);
             }
             EmulatorMessage::DebugData(data) => {
                 self.handle_debug_data(ctx, data);
@@ -122,7 +122,7 @@ impl EguiApp {
             SaveType::Manual => {
                 util::spawn_save_dialog(
                     Some(&self.async_sender),
-                    self.config.user_config.previous_savestate_dir.as_deref(),
+                    self.config.user_config.previous_savestate_dir.as_ref(),
                     FileType::Savestate,
                     savestate,
                 );

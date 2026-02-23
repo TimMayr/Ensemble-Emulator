@@ -1,6 +1,6 @@
 use crossbeam_channel::Sender;
 use ensemble_lockstep::emulation::ppu::PALETTE_RAM_START_ADDRESS;
-use ensemble_lockstep::emulation::screen_renderer::{RgbColor};
+use ensemble_lockstep::emulation::screen_renderer::{parse_palette_from_bytes, RgbColor};
 use ensemble_lockstep::util::Hashable;
 
 use crate::frontend::egui::config::AppConfig;
@@ -73,13 +73,13 @@ pub fn render_palettes(
     egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
             if ui.button("Load Palette").clicked() {
-                spawn_palette_picker(async_sender, config.user_config.previous_palette_dir.as_deref());
+                spawn_palette_picker(async_sender, config.user_config.previous_palette_dir.as_ref());
             }
 
             if ui.button("Save Palette").clicked() {
                 spawn_save_dialog(
                     Some(async_sender),
-                    config.user_config.previous_palette_dir.as_deref(),
+                    config.user_config.previous_palette_dir.as_ref(),
                     FileType::Palette,
                     Box::new(config.view_config.palette_rgb_data),
                 );
@@ -90,7 +90,7 @@ pub fn render_palettes(
 
                 std::thread::spawn(move || {
                     // Reset to default palette
-                    let palette = ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(&[]);
+                    let palette = parse_palette_from_bytes(&[]);
                     let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette));
                 });
             }

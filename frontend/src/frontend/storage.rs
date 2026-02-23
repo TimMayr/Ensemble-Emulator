@@ -36,7 +36,11 @@
 //!
 //! This module uses IndexedDB for WASM to support save states and other binary data.
 
+use std::fmt::Display;
+use std::path::PathBuf;
+
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 /// Type alias for async storage results
 pub type StorageResult<T> = Result<T, StorageError>;
@@ -61,7 +65,7 @@ pub enum StorageError {
     IndexedDbError(String),
 }
 
-impl std::fmt::Display for StorageError {
+impl Display for StorageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             StorageError::NotFound => write!(f, "Key not found"),
@@ -89,7 +93,7 @@ pub struct StorageMetadata {
 ///
 /// These categories help organize data and may map to different directories
 /// on native platforms or different IndexedDB object stores on WASM.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StorageCategory {
     /// Application configuration (config.toml, keybindings, etc.)
     Config,
@@ -97,12 +101,50 @@ pub enum StorageCategory {
     Data,
     /// Cached data that can be regenerated (thumbnails, compiled shaders)
     Cache,
+    /// Data not managed by Ensemble, that still needs to be addressed via storage keys
+    Root,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageKey {
     pub category: StorageCategory,
     pub sub_path: String,
+}
+
+impl Display for StorageKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            format!("{}/{}", self.category.prefix(), self.sub_path)
+        )
+    }
+}
+
+impl From<&String> for StorageKey {
+    fn from(value: &String) -> Self {
+        let (prefix, mut sub) = value.split_once("/").unzip();
+        let valid_prefixes = [
+            StorageCategory::Config,
+            StorageCategory::Data,
+            StorageCategory::Cache,
+        ];
+
+        let category = if let Some(prefix) = prefix {
+            valid_prefixes
+                .iter()
+                .find(|p| p.prefix() == prefix)
+                .unwrap_or(&StorageCategory::Root)
+        } else {
+            sub = Some(value.as_str());
+            &StorageCategory::Root
+        };
+
+        StorageKey {
+            category: *category,
+            sub_path: sub.unwrap_or("").to_string(),
+        }
+    }
 }
 
 impl StorageCategory {
@@ -112,6 +154,7 @@ impl StorageCategory {
             StorageCategory::Config => "config",
             StorageCategory::Data => "data",
             StorageCategory::Cache => "cache",
+            StorageCategory::Root => "/",
         }
     }
 }
@@ -142,6 +185,8 @@ pub trait Storage: Send + Sync {
 
     /// Get the full path/URL for a key (for display purposes)
     fn get_display_path(&self, key: &StorageKey) -> String;
+    fn key_to_path_opt(&self, key: Option<&StorageKey>) -> Option<PathBuf>;
+    fn key_to_path(&self, key: &StorageKey) -> Option<PathBuf>;
 }
 
 // ============================================================================
@@ -151,7 +196,7 @@ pub trait Storage: Send + Sync {
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
     use std::io::{Read, Write};
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::sync::OnceLock;
 
     use async_trait::async_trait;
@@ -185,13 +230,9 @@ mod native {
                 StorageCategory::Config => dirs.config_dir(),
                 StorageCategory::Data => dirs.data_dir(),
                 StorageCategory::Cache => dirs.cache_dir(),
+                StorageCategory::Root => Path::new("/"),
             };
             Some(base.to_path_buf())
-        }
-
-        pub fn key_to_path(&self, key: &StorageKey) -> Option<PathBuf> {
-            let base = self.get_base_dir(&key.category)?;
-            Some(base.join(key.sub_path.clone()))
         }
     }
 
@@ -273,6 +314,19 @@ mod native {
             self.key_to_path(key)
                 .map(|p| p.display().to_string())
                 .unwrap_or_else(|| key.sub_path.to_string())
+        }
+
+        fn key_to_path_opt(&self, key: Option<&StorageKey>) -> Option<PathBuf> {
+            if let Some(key) = key {
+                self.key_to_path(key)
+            } else {
+                None
+            }
+        }
+
+        fn key_to_path(&self, key: &StorageKey) -> Option<PathBuf> {
+            let base = self.get_base_dir(&key.category)?;
+            Some(base.join(key.sub_path.clone()))
         }
     }
 

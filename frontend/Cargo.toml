@@ -23,7 +23,7 @@ chrono = { version = "0.4.43", features = ["serde", "now"] }
 sha2 = { version = "0.11.0-rc.5" }
 serde = { version = "1.0.228", features = ["derive", "alloc", "rc"] }
 toml = { version = "1.0.2", features = ["fast_hash"] }
-tokio = { version = "1.49.0", features = ["rt"] }
+tokio = { version = "1.49.0", features = ["rt", "rt-multi-thread", "macros"] }
 async-trait = {version = "0.1.89"}
 
 ensemble-lockstep = { path = "../core" }

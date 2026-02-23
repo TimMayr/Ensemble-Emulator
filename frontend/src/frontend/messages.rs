@@ -1,5 +1,6 @@
 use ensemble_lockstep::emulation::savestate::SaveState;
 use ensemble_lockstep::emulation::screen_renderer::RgbPalette;
+use crate::frontend::storage::StorageKey;
 use crate::frontend::util::SavestateLoadError;
 use crate::messages::ControllerEvent;
 
@@ -36,7 +37,12 @@ pub struct LoadedRom {
     /// ROM filename (without path, e.g. "game.nes")
     pub name: String,
     /// Directory path (may be None on WASM)
-    pub directory: Option<String>,
+    pub directory: StorageKey,
+}
+
+pub struct LoadedPalette {
+    pub palette: RgbPalette,
+    pub directory: StorageKey
 }
 
 /// Messages for async/deferred frontend operations.

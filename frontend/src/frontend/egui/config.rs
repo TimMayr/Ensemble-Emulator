@@ -7,6 +7,7 @@ use ensemble_lockstep::emulation::screen_renderer::{create_renderer, RgbPalette,
 
 use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::messages::{LoadedRom, SavestateLoadContext};
+use crate::frontend::storage::StorageKey;
 
 /// View configuration for the emulator frontend.
 ///
@@ -113,15 +114,15 @@ pub struct UserConfig {
     /// Last loaded palette filename (display only, for persistence)
     pub previous_palette_name: Option<String>,
     /// Last loaded palette directory (for file picker initial directory)
-    pub previous_palette_dir: Option<String>,
+    pub previous_palette_dir: Option<StorageKey>,
     /// Last loaded ROM filename (display only, for persistence)
     pub previous_rom_name: Option<String>,
     /// Last loaded ROM directory (for file picker initial directory)
-    pub previous_rom_dir: Option<String>,
+    pub previous_rom_dir: Option<StorageKey>,
     /// Last loaded savestate filename (display only, for persistence)
     pub previous_savestate_name: Option<String>,
     /// Last loaded savestate directory (for file picker initial directory)
-    pub previous_savestate_dir: Option<String>,
+    pub previous_savestate_dir: Option<StorageKey>,
     pub pattern_edit_color: u8,
     pub loaded_rom: Option<RomFile>,
 }

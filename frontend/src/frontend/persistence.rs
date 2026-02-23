@@ -18,11 +18,13 @@ use directories::ProjectDirs;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use ensemble_lockstep::emulation::screen_renderer::{create_renderer, RgbPalette};
 use serde::{Deserialize, Serialize};
+
 use crate::frontend::egui::config::{
     AppConfig, AppSpeed, ConsoleConfig, DebugSpeed, SpeedConfig, UserConfig, ViewConfig,
 };
 use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::storage;
+use crate::frontend::storage::StorageKey;
 
 /// Application identifier used for directory paths
 const APP_QUALIFIER: &str = "com";
@@ -216,19 +218,19 @@ fn extract(f: &OsStr) -> String {
 fn append_to_filename(path: &Path, suffix: &str, strip_chars: usize) -> PathBuf {
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
     let ext = path.extension().map(|e| e.to_string_lossy().to_string());
-    
+
     // Strip the specified number of characters from the end of the stem
     let trimmed_stem = if strip_chars > 0 && stem.len() >= strip_chars {
         &stem[..stem.len() - strip_chars]
     } else {
         &stem
     };
-    
+
     let new_filename = match ext {
         Some(e) => format!("{}{}.{}", trimmed_stem, suffix, e),
         None => format!("{}{}", trimmed_stem, suffix),
     };
-    
+
     path.with_file_name(new_filename)
 }
 
@@ -419,15 +421,15 @@ pub struct PersistentUserConfig {
     /// Last loaded palette filename (display only)
     pub previous_palette_name: Option<String>,
     /// Last loaded palette directory (for file picker initial directory)
-    pub previous_palette_dir: Option<String>,
+    pub previous_palette_dir: Option<StorageKey>,
     /// Last loaded ROM filename (display only)
     pub previous_rom_name: Option<String>,
     /// Last loaded ROM directory (for file picker initial directory)
-    pub previous_rom_dir: Option<String>,
+    pub previous_rom_dir: Option<StorageKey>,
     /// Last loaded savestate filename (display only)
     pub previous_savestate_name: Option<String>,
     /// Last loaded savestate directory (for file picker initial directory)
-    pub previous_savestate_dir: Option<String>,
+    pub previous_savestate_dir: Option<StorageKey>,
     pub pattern_edit_color: u8,
 }
 

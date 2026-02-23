@@ -2,11 +2,13 @@ use std::future::Future;
 
 use crossbeam_channel::Sender;
 use ensemble_lockstep::emulation::savestate;
+use ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes;
 use ensemble_lockstep::util::ToBytes;
 use rfd::{AsyncFileDialog, FileHandle};
 use sha2::{Digest, Sha256};
 
 use crate::frontend::messages::{AsyncFrontendMessage, LoadedRom, SavestateLoadContext};
+use crate::frontend::storage::{get_storage, Storage, StorageCategory, StorageKey};
 
 /// Enum to represent errors that can occur during savestate loading UI flow
 pub enum SavestateLoadError {
@@ -20,7 +22,10 @@ pub enum SavestateLoadError {
 /// On native, this uses the file's path. On WASM, returns None.
 #[cfg(not(target_arch = "wasm32"))]
 fn get_file_directory(handle: &FileHandle) -> Option<String> {
-    handle.path().parent().map(|p| p.to_string_lossy().to_string())
+    handle
+        .path()
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -81,30 +86,30 @@ impl AsU32 for egui::Color32 {
 
 /// Pick a file using the async file dialog.
 /// The directory hint is used to set the initial directory if provided.
-pub async fn pick_file(file_type: FileType, directory: Option<&str>) -> Option<FileHandle> {
+pub async fn pick_file(file_type: FileType, directory: Option<&StorageKey>) -> Option<FileHandle> {
     let mut dialog = AsyncFileDialog::new()
         .add_filetype_filter(file_type)
         .add_filetype_filter(FileType::All);
-    
-    if let Some(dir) = directory {
+
+    if let Some(dir) = get_storage().key_to_path_opt(directory) {
         dialog = dialog.set_directory(dir);
     }
-    
+
     dialog.pick_file().await
 }
 
 /// Save a file using the async file dialog.
 /// The directory hint is used to set the initial directory if provided.
-pub async fn save_file(file_type: FileType, directory: Option<&str>) -> Option<FileHandle> {
+pub async fn save_file(file_type: FileType, directory: Option<&StorageKey>) -> Option<FileHandle> {
     let mut dialog = AsyncFileDialog::new()
         .add_filetype_filter(file_type)
         .add_filetype_filter(FileType::All)
         .set_can_create_directories(true);
-    
-    if let Some(dir) = directory {
+
+    if let Some(dir) = get_storage().key_to_path_opt(directory) {
         dialog = dialog.set_directory(dir);
     }
-    
+
     dialog.save_file().await
 }
 
@@ -155,42 +160,51 @@ impl AddFilter for AsyncFileDialog {
 /// # Arguments
 /// * `sender` - Channel to send the loaded palette back to the UI thread
 /// * `directory` - Optional directory hint for the file picker
-pub fn spawn_palette_picker(sender: &Sender<AsyncFrontendMessage>, directory: Option<&str>) {
+pub fn spawn_palette_picker(sender: &Sender<AsyncFrontendMessage>, dir: Option<&StorageKey>) {
     let sender = sender.clone();
-    let dir = directory.map(|s| s.to_string());
+    let dir = dir.cloned();
+
     spawn_async(async move {
-        if let Some(handle) = pick_file(FileType::Palette, dir.as_deref()).await {
+        if let Some(handle) = pick_file(FileType::Palette, dir.as_ref()).await {
             // Read the file contents from the handle
             let data = handle.read().await;
-            let palette = ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes(
-                &data,
-            );
+            let palette = parse_palette_from_bytes(&data);
             let _ = sender.send(AsyncFrontendMessage::PaletteLoaded(palette));
         }
     });
 }
 
 /// Spawn a file picker for ROM files that loads the ROM data asynchronously.
-/// 
+///
 /// # Arguments
 /// * `sender` - Channel to send the loaded ROM back to the UI thread
 /// * `directory` - Optional directory hint for the file picker
-pub fn spawn_rom_picker(sender: &Sender<AsyncFrontendMessage>, directory: Option<&str>) {
+pub fn spawn_rom_picker(sender: &Sender<AsyncFrontendMessage>, dir: Option<&StorageKey>) {
     let sender = sender.clone();
-    let dir = directory.map(|s| s.to_string());
+    let dir = dir.cloned();
+
     spawn_async(async move {
-        if let Some(handle) = pick_file(FileType::Rom, dir.as_deref()).await {
+        if let Some(handle) = pick_file(FileType::Rom, dir.as_ref()).await {
             let data = handle.read().await;
             let name = handle.file_name();
-            let directory = get_file_directory(&handle);
-            let _ = sender.send(AsyncFrontendMessage::LoadRom(Some(LoadedRom { data, name, directory })));
+            let directory = get_file_directory(&handle)
+                .map(|f| StorageKey::from(&f))
+                .unwrap_or(StorageKey {
+                    category: StorageCategory::Cache,
+                    sub_path: "upload_cache/palettes/".to_string(),
+                });
+            let _ = sender.send(AsyncFrontendMessage::LoadRom(Some(LoadedRom {
+                data,
+                name,
+                directory,
+            })));
         }
     });
 }
 
 /// Spawn a save dialog for a file asynchronously.
 /// The file is written after the user selects a path.
-/// 
+///
 /// # Arguments
 /// * `sender` - Optional channel to notify completion
 /// * `directory` - Optional directory hint for the file picker
@@ -198,14 +212,14 @@ pub fn spawn_rom_picker(sender: &Sender<AsyncFrontendMessage>, directory: Option
 /// * `data` - Data to write to the file
 pub fn spawn_save_dialog(
     sender: Option<&Sender<AsyncFrontendMessage>>,
-    directory: Option<&str>,
+    dir: Option<&StorageKey>,
     file_type: FileType,
     data: Box<dyn ToBytes + Send>,
 ) {
     let sender = sender.cloned();
-    let dir = directory.map(|s| s.to_string());
+    let dir = dir.cloned();
     spawn_async(async move {
-        if let Some(handle) = save_file(file_type, dir.as_deref()).await {
+        if let Some(handle) = save_file(file_type, dir.as_ref()).await {
             // Get filename for format detection
             let filename = handle.file_name();
             let format = get_extension(&filename);
@@ -272,16 +286,16 @@ pub fn compute_data_checksum(data: &[u8]) -> [u8; 32] {
 
 /// Spawn the initial savestate file picker asynchronously.
 /// After the savestate is loaded, it will prompt for ROM selection.
-/// 
+///
 /// # Arguments
 /// * `sender` - Channel to send the loaded savestate back to the UI thread
 /// * `directory` - Optional directory hint for the file picker
-pub fn spawn_savestate_picker(sender: &Sender<AsyncFrontendMessage>, directory: Option<&str>) {
+pub fn spawn_savestate_picker(sender: &Sender<AsyncFrontendMessage>, dir: Option<&StorageKey>) {
     let sender = sender.clone();
-    let dir = directory.map(|s| s.to_string());
+    let dir = dir.cloned();
 
     spawn_async(async move {
-        let handle = pick_file(FileType::Savestate, dir.as_deref()).await;
+        let handle = pick_file(FileType::Savestate, dir.as_ref()).await;
 
         if let Some(handle) = handle {
             // Read savestate data from the file handle
@@ -313,7 +327,7 @@ pub fn spawn_savestate_picker(sender: &Sender<AsyncFrontendMessage>, directory: 
 }
 
 /// Spawn a file picker to select a ROM for a savestate
-/// 
+///
 /// # Arguments
 /// * `sender` - Channel to send the loaded ROM back to the UI thread
 /// * `context` - Savestate context for the ROM selection
@@ -321,22 +335,28 @@ pub fn spawn_savestate_picker(sender: &Sender<AsyncFrontendMessage>, directory: 
 pub fn spawn_rom_picker_for_savestate(
     sender: &Sender<AsyncFrontendMessage>,
     context: Box<SavestateLoadContext>,
-    directory: Option<&str>,
+    directory: Option<&StorageKey>,
 ) {
     let sender = sender.clone();
-    let dir = directory.map(|s| s.to_string());
-
+    let dir = directory.cloned();
     spawn_async(async move {
-        let handle = pick_file(FileType::Rom, dir.as_deref()).await;
+        let handle = pick_file(FileType::Rom, dir.as_ref()).await;
 
         if let Some(handle) = handle {
             let data = handle.read().await;
             let name = handle.file_name();
-            let directory = get_file_directory(&handle);
+            let directory = get_file_directory(&handle).map(|f| StorageKey::from(&f)).unwrap_or(StorageKey {
+                category: StorageCategory::Cache,
+                sub_path: "upload_cache/roms/".to_string()
+            });
 
             let _ = sender.send(AsyncFrontendMessage::RomSelectedForSavestate(
                 context,
-                LoadedRom { data, name, directory },
+                LoadedRom {
+                    data,
+                    name,
+                    directory,
+                },
             ));
         }
     });

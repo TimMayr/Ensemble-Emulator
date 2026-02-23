@@ -7,14 +7,15 @@ use egui::Context;
 use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
 use ensemble_lockstep::emulation::savestate;
 use ensemble_lockstep::emulation::screen_renderer::RgbPalette;
+
 use crate::frontend::egui::config::{
     ChecksumMismatchDialogState, ErrorDialogState, MatchingRomDialogState, RomSelectionDialogState,
 };
 use crate::frontend::egui_frontend::EguiApp;
 use crate::frontend::messages::{AsyncFrontendMessage, LoadedRom, SavestateLoadContext};
-use crate::frontend::storage;
-use crate::frontend::util;
+use crate::frontend::storage::StorageKey;
 use crate::frontend::util::SavestateLoadError;
+use crate::frontend::{storage, util};
 use crate::messages::{FrontendMessage, SaveType};
 
 /// Trait for handling async frontend messages.
@@ -64,7 +65,7 @@ impl EguiApp {
                 util::spawn_rom_picker_for_savestate(
                     &self.async_sender,
                     context,
-                    self.config.user_config.previous_rom_dir.as_deref(),
+                    self.config.user_config.previous_rom_dir.as_ref(),
                 );
             }
             AsyncFrontendMessage::RomSelectedForSavestate(context, rom) => {
@@ -84,7 +85,7 @@ impl EguiApp {
                 util::spawn_rom_picker_for_savestate(
                     &self.async_sender,
                     context,
-                    self.config.user_config.previous_rom_dir.as_deref(),
+                    self.config.user_config.previous_rom_dir.as_ref(),
                 );
             }
             AsyncFrontendMessage::SavestateLoadFailed(error) => {
@@ -107,10 +108,11 @@ impl EguiApp {
                         .to_emulator
                         .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
                     let _ = self.to_emulator.send(FrontendMessage::PowerOff);
+
                     // Save directory for next file picker
-                    if let Some(ref dir) = rom.directory {
-                        self.config.user_config.previous_rom_dir = Some(dir.clone());
-                    }
+                    self.config.user_config.previous_rom_dir =
+                        Some(StorageKey::from(rom.directory));
+
                     self.load_rom(rom.data, rom.name);
                     let _ = self.to_emulator.send(FrontendMessage::Power);
                     self.config.console_config.is_powered = true;
@@ -179,16 +181,13 @@ impl EguiApp {
         }
     }
 
-    fn handle_palette_loaded(
-        &mut self,
-        ctx: &Context,
-        palette: RgbPalette,
-    ) {
+    fn handle_palette_loaded(&mut self, ctx: &Context, palette: RgbPalette) {
         self.config.view_config.palette_rgb_data = palette;
         // Update the renderer's palette
         self.config.view_config.renderer.set_palette(palette);
         // Re-render the current frame with the new palette
-        self.emu_textures.update_emulator_texture(ctx, &mut self.config.view_config.renderer);
+        self.emu_textures
+            .update_emulator_texture(ctx, &mut self.config.view_config.renderer);
         if self.is_tile_viewer_visible() {
             self.emu_textures.update_tile_textures(
                 ctx,
@@ -205,10 +204,8 @@ impl EguiApp {
         rom: LoadedRom,
     ) {
         // Save directory for next file picker
-        if let Some(ref dir) = rom.directory {
-            self.config.user_config.previous_rom_dir = Some(dir.clone());
-        }
-        
+        self.config.user_config.previous_rom_dir = Some(StorageKey::from(rom.directory.clone()));
+
         let checksum = util::compute_data_checksum(&rom.data);
         if checksum == context.savestate.rom_file.data_checksum {
             self.load_savestate_with_rom(context, rom.data, rom.name);
@@ -317,7 +314,8 @@ impl EguiApp {
         // Update the renderer's palette
         self.config.view_config.renderer.set_palette(palette);
         // Re-render the current frame with the new palette
-        self.emu_textures.update_emulator_texture(ctx, &mut self.config.view_config.renderer);
+        self.emu_textures
+            .update_emulator_texture(ctx, &mut self.config.view_config.renderer);
         if self.is_tile_viewer_visible() {
             self.emu_textures.update_tile_textures(
                 ctx,
