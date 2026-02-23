@@ -238,12 +238,37 @@ pub fn spawn_save_dialog(
             let filename = handle.file_name();
             let format = get_extension(&filename);
 
+            // If no extension was specified, use the default for this file type
+            let format = format.or_else(|| {
+                let ext = file_type.get_default_extension();
+                if ext.is_empty() { None } else { Some(ext.to_string()) }
+            });
+
             // Capture directory from the save handle
             let save_dir = get_file_directory(&handle)
                 .map(|f| StorageKey::from(&f));
 
             // Write data using the file handle
             let bytes = data.to_bytes(format);
+
+            // On native, if the filename had no extension, write to a path with the
+            // default extension appended so the file on disk gets the correct name.
+            #[cfg(not(target_arch = "wasm32"))]
+            let result = {
+                if get_extension(&filename).is_none() {
+                    let ext = file_type.get_default_extension();
+                    if !ext.is_empty() {
+                        let path = handle.path().with_extension(ext);
+                        std::fs::write(&path, &bytes).map_err(std::io::Error::from)
+                    } else {
+                        handle.write(&bytes).await
+                    }
+                } else {
+                    handle.write(&bytes).await
+                }
+            };
+
+            #[cfg(target_arch = "wasm32")]
             let result = handle.write(&bytes).await;
 
             // Notify completion if a sender was provided
