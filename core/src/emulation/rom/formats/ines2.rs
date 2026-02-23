@@ -1,20 +1,10 @@
-use std::path::PathBuf;
-
 use crate::emulation::rom::{ParseError, RomBuilder, RomFile, RomParser};
 
 #[derive(Debug)]
 pub struct Ines2;
 
 impl RomParser for Ines2 {
-    fn parse(&self, rom: &[u8], path: Option<PathBuf>) -> Result<RomFile, ParseError> {
-        let name = path.and_then(|p| {
-            if let Ok(p) = p.canonicalize() {
-                p.file_name().map(|f| f.to_string_lossy().to_string())
-            } else {
-                None
-            }
-        });
-
+    fn parse(&self, rom: &[u8], name: Option<String>) -> Result<RomFile, ParseError> {
         let prg_rom_size_lsb = rom[4] as u16;
         let prg_rom_size_msb = (rom[9] & 0xF) as u16;
 

@@ -1,11 +1,8 @@
 use std::fmt::{Debug, Formatter};
-use std::fs::File;
-use std::io::Read;
-use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::util::{Hashable, ToBytes, compute_hash};
+use crate::util::{compute_hash, Hashable, ToBytes};
 
 /// Trait for rendering palette indices to RGB colors.
 ///
@@ -125,12 +122,12 @@ pub struct RgbPalette {
 }
 
 impl Default for RgbPalette {
-    fn default() -> Self { parse_palette_from_file(None, None) }
+    fn default() -> Self { parse_palette_from_bytes(DEFAULT_PALETTE) }
 }
 
 static DEFAULT_PALETTE: &[u8] = include_bytes!("../../../core/assets/2C02G_wiki.pal");
 
-pub fn parse_palette_from_bytes(bytes: Vec<u8>) -> RgbPalette {
+pub fn parse_palette_from_bytes(bytes: &[u8]) -> RgbPalette {
     let mut colors: [[RgbColor; 64]; 8] = [[RgbColor::default(); 64]; 8];
 
     for (palette_index, palette) in colors.iter_mut().enumerate() {
@@ -161,27 +158,6 @@ pub fn parse_palette_from_bytes(bytes: Vec<u8>) -> RgbPalette {
     RgbPalette {
         colors,
     }
-}
-
-pub fn parse_palette_from_file(path: Option<PathBuf>, fallback: Option<PathBuf>) -> RgbPalette {
-    let path = path.or(fallback);
-
-    let data = if let Some(path) = path {
-        if let Ok(ref mut file) = File::open(path) {
-            let mut data = Vec::new();
-            if file.read_to_end(&mut data).is_ok() {
-                data.into_boxed_slice()
-            } else {
-                DEFAULT_PALETTE.into()
-            }
-        } else {
-            DEFAULT_PALETTE.into()
-        }
-    } else {
-        DEFAULT_PALETTE.into()
-    };
-
-    parse_palette_from_bytes(data.to_vec())
 }
 
 impl ToBytes for RgbPalette {
