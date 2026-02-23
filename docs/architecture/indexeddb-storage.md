@@ -419,27 +419,16 @@ wasm_bindgen_futures::spawn_local(async move {
 **Autosave cleanup:**
 Same pattern — use `spawn_local` with async storage calls instead of sync wrappers.
 
-### 2.6 WASM Sync Wrapper Strategy
+### 2.6 WASM Sync Wrapper Strategy — IMPLEMENTED
 
-Several existing code paths use `storage::read_sync()` / `storage::write_sync()` which are native-only. Two strategies:
+Strategy A (cfg-gated async alternatives) was implemented. The call sites that needed WASM alternatives:
 
-**Strategy A: cfg-gated async alternatives** (Recommended)
-- Keep sync wrappers for native (they work perfectly and are simpler)
-- On WASM, use `spawn_local` + message passing for each call site
-- Only ~5 call sites need WASM alternatives
-
-**Strategy B: Make everything async**
-- Convert all storage callers to async
-- Too invasive — requires restructuring most of the message handler logic
-
-**Strategy A is recommended.** The call sites that need WASM alternatives:
-
-1. `handle_quicksave` (write savestate) → `spawn_local` + async `storage.set()`
-2. `handle_quickload` (read savestate) → `spawn_local` + async `storage.get()` + new message
-3. `create_auto_save` (write autosave) → `spawn_local` + async `storage.set()`
-4. `cleanup_old_autosaves_async` (list + delete) → already async pattern, just use storage trait
-5. `get_current_quicksave_key` (list quicksaves) → needs async refactor or pre-cached list
-6. `load_config` / `save_config` → already works via egui persistence on WASM; may not need IndexedDB
+1. ✅ `handle_quicksave` (write savestate) → `spawn_local` + async `storage.set()`
+2. ✅ `handle_quickload` (read savestate) → `spawn_local` + full async flow (no new message variant needed)
+3. ✅ `create_auto_save` (write autosave) → `spawn_local` + async `storage.set()`
+4. ✅ `cleanup_old_autosaves_async` (list + delete) → `spawn_local` + async `storage.list()`/`delete()`
+5. ✅ `get_current_quicksave_key` (list quicksaves) → extracted shared `find_newest_quicksave()`, WASM quickload does the listing inline
+6. ℹ️ `load_config` / `save_config` → not changed; egui persistence on WASM uses localStorage, which is sufficient for config
 
 ### 2.7 Export Saves to File (WASM-specific UI)
 
@@ -510,30 +499,52 @@ Option A is simpler since config is just TOML text (<2 KB), and egui already has
 
 ---
 
-## 4. Implementation Order
+## 4. Implementation Status
 
-1. **Phase 1: Core WasmStorage** (~1 session)
-   - Implement `WasmStorage` CRUD operations using rexie
-   - Add required WASM dependencies (`js-sys`)
-   - Verify with config persistence or a simple test
+### ✅ Phase 1: Core WasmStorage — COMPLETE
+- [x] Full `WasmStorage` CRUD implementation using rexie (`get`, `set`, `delete`, `exists`, `list`)
+- [x] Added `js-sys` dependency for `Uint8Array` conversion
+- [x] `KeyRange::bound()` for prefix queries in `list()`
+- [x] Database: `"ensemble_emulator"`, store: `"storage"`, version 1
 
-2. **Phase 2: File Caching on Upload** (~0.5 session)
-   - Cache ROMs to `data/roms/<name>` on upload
-   - Cache savestates to `data/uploads/savestates/<name>` on upload
+> Implemented in `frontend/src/frontend/storage.rs` (wasm module, lines 374–518)
 
-3. **Phase 3: WASM Quick/Auto Saves** (~0.5 session)
-   - Async quicksave/quickload paths for WASM
-   - Async autosave write + cleanup for WASM
-   - Add `QuickloadData` message variant
+### ✅ Phase 2: File Caching on Upload — COMPLETE
+- [x] ROMs cached to `data/roms/<name>` via `rom_cache_key()` in `spawn_rom_picker` and `spawn_rom_picker_for_savestate`
+- [x] Savestates cached to `data/uploads/savestates/<name>` via `uploaded_savestate_key()` in `spawn_savestate_picker`
+- [x] Helper functions: `rom_cache_key()`, `roms_prefix()`, `uploaded_savestate_key()`
+- [x] Palettes excluded by design
 
-4. **Phase 4: ROM Matching on WASM** (~0.5 session)
-   - Implement `find_matching_rom_in_storage` for WASM
-   - Wire into `handle_savestate_loaded` behind `#[cfg(target_arch = "wasm32")]`
+> Implemented in `frontend/src/frontend/util.rs` (caching calls) and `frontend/src/frontend/storage.rs` (key helpers)
 
-5. **Phase 5: Save Browser UI** (~1 session)
-   - Save listing dialog/panel
-   - Export/download functionality
-   - Menu integration
+### ✅ Phase 3: WASM Quick/Auto Saves — COMPLETE
+- [x] `handle_quicksave`: cfg-gated `spawn_local` + `storage.set()` for WASM
+- [x] `create_auto_save`: cfg-gated `spawn_local` + `storage.set()` for WASM
+- [x] `cleanup_old_autosaves_async`: cfg-gated `spawn_local` + `storage.list()`/`delete()` for WASM
+- [x] `handle_quickload`: full async flow on WASM (list → find newest → read → verify → load)
+- [x] Extracted shared `find_newest_quicksave()` used by both native and WASM paths
+
+> **Note**: The original plan mentioned adding a `QuickloadData` message variant, but the implementation used a simpler approach: the WASM quickload does the full flow in `spawn_local` and sends `LoadSaveState` directly to the emulator, avoiding a new message variant.
+
+> Implemented in:
+> - `frontend/src/frontend/egui/message_handlers/emulator_handler.rs` (quicksave)
+> - `frontend/src/frontend/egui_frontend.rs` (autosave, cleanup, find_newest_quicksave)
+> - `frontend/src/frontend/egui/message_handlers/async_handler.rs` (quickload)
+
+### ✅ Phase 4: ROM Matching on WASM — COMPLETE
+- [x] `find_matching_rom_in_storage()` async function scans IndexedDB ROM cache
+- [x] Direct filename lookup first (fast path), then full scan by SHA256 checksum
+- [x] Wired into `handle_savestate_loaded` with `#[cfg(target_arch = "wasm32")]`
+
+> Implemented in `frontend/src/frontend/egui/message_handlers/async_handler.rs`
+
+### ❌ Phase 5: Save Browser UI — NOT STARTED
+- [ ] Save listing dialog/panel (egui window listing quick/auto saves from IndexedDB)
+- [ ] Export/download functionality (read from IndexedDB, write to host filesystem via `rfd`)
+- [ ] Menu integration (`File → Savestates → Load Quick/Auto Save...` and `Export Save...`)
+- [ ] `SaveBrowserState` in `PendingDialogs` (or new `Pane` variant)
+
+> See §2.7 and §2.8 above for detailed design. This is the only remaining phase.
 
 ---
 
