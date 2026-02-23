@@ -430,6 +430,12 @@ pub struct PersistentUserConfig {
     pub previous_savestate_name: Option<String>,
     /// Last loaded savestate directory (for file picker initial directory)
     pub previous_savestate_dir: Option<StorageKey>,
+    /// Last saved palette directory (for file picker initial directory)
+    #[serde(default)]
+    pub previous_palette_save_dir: Option<StorageKey>,
+    /// Last saved savestate directory (for file picker initial directory)
+    #[serde(default)]
+    pub previous_savestate_save_dir: Option<StorageKey>,
     pub pattern_edit_color: u8,
 }
 
@@ -442,6 +448,8 @@ impl From<&UserConfig> for PersistentUserConfig {
             previous_rom_dir: config.previous_rom_dir.clone(),
             previous_savestate_name: config.previous_savestate_name.clone(),
             previous_savestate_dir: config.previous_savestate_dir.clone(),
+            previous_palette_save_dir: config.previous_palette_save_dir.clone(),
+            previous_savestate_save_dir: config.previous_savestate_save_dir.clone(),
             pattern_edit_color: config.pattern_edit_color,
         }
     }
@@ -456,6 +464,8 @@ impl From<&PersistentUserConfig> for UserConfig {
             previous_rom_dir: config.previous_rom_dir.clone(),
             previous_savestate_name: config.previous_savestate_name.clone(),
             previous_savestate_dir: config.previous_savestate_dir.clone(),
+            previous_palette_save_dir: config.previous_palette_save_dir.clone(),
+            previous_savestate_save_dir: config.previous_savestate_save_dir.clone(),
             pattern_edit_color: config.pattern_edit_color,
             loaded_rom: None,
         }

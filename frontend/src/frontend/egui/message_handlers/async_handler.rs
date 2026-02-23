@@ -42,9 +42,21 @@ impl EguiApp {
                 self.config.user_config.previous_palette_dir = Some(loaded.directory);
                 self.handle_palette_loaded(ctx, loaded.palette);
             }
-            AsyncFrontendMessage::FileSaveCompleted(error) => {
+            AsyncFrontendMessage::FileSaveCompleted { error, directory, file_type } => {
                 if let Some(e) = error {
                     eprintln!("File save error: {}", e);
+                }
+                if let Some(dir) = directory {
+                    match file_type {
+                        util::FileType::Palette => {
+                            self.config.user_config.previous_palette_save_dir = Some(dir);
+                        }
+                        util::FileType::Savestate => {
+                            self.config.user_config.previous_savestate_save_dir = Some(dir);
+                        }
+                        // Rom and All don't use save dialogs
+                        _ => {}
+                    }
                 }
             }
             AsyncFrontendMessage::SavestateLoaded(context) => {

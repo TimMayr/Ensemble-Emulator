@@ -1,7 +1,7 @@
 use ensemble_lockstep::emulation::savestate::SaveState;
 use ensemble_lockstep::emulation::screen_renderer::RgbPalette;
 use crate::frontend::storage::StorageKey;
-use crate::frontend::util::SavestateLoadError;
+use crate::frontend::util::{FileType, SavestateLoadError};
 use crate::messages::ControllerEvent;
 
 /// Visual/frontend-only events that are processed synchronously via a deque.
@@ -73,8 +73,12 @@ pub enum AsyncFrontendMessage {
     SavestateLoadFailed(SavestateLoadError),
     /// An error occurred while verifying the ROM
     RomVerificationFailed(Box<SavestateLoadContext>, SavestateLoadError),
-    /// File save completed (success or error message)
-    FileSaveCompleted(Option<String>),
+    /// File save completed (success or error message, with directory and file type for persistence)
+    FileSaveCompleted {
+        error: Option<String>,
+        directory: Option<StorageKey>,
+        file_type: FileType,
+    },
     Quickload,
     Quicksave,
     /// Load a ROM - contains ROM data if provided, None triggers file picker

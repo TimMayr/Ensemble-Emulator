@@ -123,6 +123,10 @@ pub struct UserConfig {
     pub previous_savestate_name: Option<String>,
     /// Last loaded savestate directory (for file picker initial directory)
     pub previous_savestate_dir: Option<StorageKey>,
+    /// Last saved palette directory (for file picker initial directory)
+    pub previous_palette_save_dir: Option<StorageKey>,
+    /// Last saved savestate directory (for file picker initial directory)
+    pub previous_savestate_save_dir: Option<StorageKey>,
     pub pattern_edit_color: u8,
     pub loaded_rom: Option<RomFile>,
 }

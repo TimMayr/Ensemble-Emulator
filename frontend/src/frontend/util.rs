@@ -233,6 +233,10 @@ pub fn spawn_save_dialog(
             let filename = handle.file_name();
             let format = get_extension(&filename);
 
+            // Capture directory from the save handle
+            let save_dir = get_file_directory(&handle)
+                .map(|f| StorageKey::from(&f));
+
             // Write data using the file handle
             let bytes = data.to_bytes(format);
             let result = handle.write(&bytes).await;
@@ -240,7 +244,11 @@ pub fn spawn_save_dialog(
             // Notify completion if a sender was provided
             let error = result.err().map(|e| format!("Failed to write file: {}", e));
             if let Some(sender) = sender {
-                let _ = sender.send(AsyncFrontendMessage::FileSaveCompleted(error));
+                let _ = sender.send(AsyncFrontendMessage::FileSaveCompleted {
+                    error,
+                    directory: save_dir,
+                    file_type,
+                });
             }
         }
     });

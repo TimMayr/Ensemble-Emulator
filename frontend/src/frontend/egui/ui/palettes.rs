@@ -80,7 +80,7 @@ pub fn render_palettes(
             if ui.button("Save Palette").clicked() {
                 spawn_save_dialog(
                     Some(async_sender),
-                    config.user_config.previous_palette_dir.as_ref(),
+                    config.user_config.previous_palette_save_dir.as_ref(),
                     FileType::Palette,
                     Box::new(config.view_config.palette_rgb_data),
                 );

@@ -122,7 +122,7 @@ impl EguiApp {
             SaveType::Manual => {
                 util::spawn_save_dialog(
                     Some(&self.async_sender),
-                    self.config.user_config.previous_savestate_dir.as_ref(),
+                    self.config.user_config.previous_savestate_save_dir.as_ref(),
                     FileType::Savestate,
                     savestate,
                 );
