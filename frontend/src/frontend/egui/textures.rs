@@ -1,4 +1,4 @@
-use std::time::Instant;
+use web_time::Instant;
 
 use egui::{ColorImage, Context, TextureHandle, TextureOptions};
 use ensemble_core::emulation::ppu::{

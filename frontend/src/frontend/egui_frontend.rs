@@ -16,7 +16,8 @@ use std::collections::VecDeque;
 use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 
 use crossbeam_channel::{Receiver, Sender};
 use eframe::glow;

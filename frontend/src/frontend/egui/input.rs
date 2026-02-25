@@ -1,4 +1,4 @@
-use std::time::Instant;
+use web_time::Instant;
 
 use crossbeam_channel::Sender;
 use egui::Context;
