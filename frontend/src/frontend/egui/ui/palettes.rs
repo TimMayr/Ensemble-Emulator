@@ -1,6 +1,6 @@
 use crossbeam_channel::Sender;
+use ensemble_core::emulation::palette_util::{RgbColor, parse_palette_from_bytes};
 use ensemble_core::emulation::ppu::PALETTE_RAM_START_ADDRESS;
-use ensemble_core::emulation::screen_renderer::{RgbColor, parse_palette_from_bytes};
 use ensemble_core::util::Hashable;
 
 use crate::frontend::egui::config::AppConfig;

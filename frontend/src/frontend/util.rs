@@ -1,8 +1,8 @@
 use std::future::Future;
 
 use crossbeam_channel::Sender;
+use ensemble_core::emulation::palette_util::parse_palette_from_bytes;
 use ensemble_core::emulation::savestate;
-use ensemble_core::emulation::screen_renderer::parse_palette_from_bytes;
 use ensemble_core::util::ToBytes;
 use rfd::{AsyncFileDialog, FileHandle};
 use sha2::{Digest, Sha256};

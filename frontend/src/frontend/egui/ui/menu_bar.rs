@@ -33,11 +33,10 @@ pub fn add_menu_bar(
                         );
                     }
 
-                    ui.separator();
-
                     if config.user_config.loaded_rom.is_some()
                         && ui.button("Browse Saves...").clicked()
                     {
+                        ui.separator();
                         let _ = async_sender.send(AsyncFrontendMessage::OpenSaveBrowser);
                         ui.close();
                     }

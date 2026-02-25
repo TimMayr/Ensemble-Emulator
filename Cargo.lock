@@ -806,7 +806,6 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
- "serde",
  "wasm-bindgen",
  "windows-link 0.2.1",
 ]
@@ -1355,7 +1354,6 @@ dependencies = [
 name = "ensemble-core"
 version = "0.1.0"
 dependencies = [
- "inventory",
  "postcard",
  "serde",
  "serde_json",
@@ -1367,7 +1365,6 @@ name = "ensemble-default-renderers"
 version = "0.1.0"
 dependencies = [
  "ensemble-core",
- "inventory",
  "serde",
  "serde-big-array",
 ]
@@ -1396,6 +1393,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+ "web-time",
 ]
 
 [[package]]
@@ -2187,15 +2185,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "inventory"
-version = "0.3.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "009ae045c87e7082cb72dab0ccd01ae075dd00141ddc108f43a0ea150a9e7227"
-dependencies = [
- "rustversion",
 ]
 
 [[package]]

@@ -15,14 +15,16 @@ use std::{fs, thread};
 
 use crossbeam_channel::{Receiver, bounded};
 use directories::ProjectDirs;
+use ensemble_core::emulation::palette_util::RgbPalette;
 use ensemble_core::emulation::ppu::EmulatorFetchable;
-use ensemble_core::emulation::screen_renderer::{RgbPalette, create_renderer};
+use ensemble_core::emulation::screen_renderer::create_renderer;
 use serde::{Deserialize, Serialize};
 
 use crate::frontend::egui::config::{
     AppConfig, AppSpeed, ConsoleConfig, DebugSpeed, SpeedConfig, UserConfig, ViewConfig,
 };
 use crate::frontend::egui::keybindings::KeybindingsConfig;
+use crate::frontend::egui_frontend::get_all_renderers;
 use crate::frontend::storage;
 use crate::frontend::storage::{Storage, StorageKey};
 
@@ -355,7 +357,7 @@ impl From<&ViewConfig> for PersistentViewConfig {
                 .map(|f| f.into())
                 .collect(),
             debug_active_palette: config.debug_active_palette,
-            renderer: config.renderer.get_name().to_string(),
+            renderer: config.renderer.get_display_name().to_string(),
         }
     }
 }
@@ -363,7 +365,7 @@ impl From<&ViewConfig> for PersistentViewConfig {
 impl From<&PersistentViewConfig> for ViewConfig {
     fn from(config: &PersistentViewConfig) -> Self {
         // If renderer was persisted, use it; otherwise create a default
-        let renderer = create_renderer(Some(config.renderer.as_str()));
+        let renderer = create_renderer(Some(config.renderer.as_str()), get_all_renderers());
 
         Self {
             debug_active_palette: config.debug_active_palette,
