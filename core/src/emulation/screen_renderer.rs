@@ -54,6 +54,7 @@ impl ScreenRenderer for NoneRenderer {
     fn get_height(&self) -> usize { 1 }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 inventory::submit! {
     RendererRegistration {
 
@@ -66,12 +67,44 @@ pub struct RendererRegistration {
     pub factory: fn() -> Box<dyn ScreenRenderer>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 inventory::collect!(RendererRegistration);
+
+// On WASM, inventory's linker-based collection doesn't work.
+// Use an explicit registry that's populated at startup instead.
+#[cfg(target_arch = "wasm32")]
+mod wasm_registry {
+    use super::RendererRegistration;
+    use std::sync::OnceLock;
+
+    static REGISTRATIONS: OnceLock<Vec<RendererRegistration>> = OnceLock::new();
+
+    pub fn register(registrations: Vec<RendererRegistration>) {
+        let _ = REGISTRATIONS.set(registrations);
+    }
+
+    pub fn iter() -> impl Iterator<Item = &'static RendererRegistration> {
+        REGISTRATIONS.get().into_iter().flat_map(|v| v.iter())
+    }
+}
+
+/// Register renderer implementations for WASM.
+///
+/// On WASM, the `inventory` crate's linker-based collection doesn't work.
+/// Call this at startup with all renderer registrations (including NoneRenderer).
+#[cfg(target_arch = "wasm32")]
+pub fn register_renderers(mut registrations: Vec<RendererRegistration>) {
+    // Always include the built-in NoneRenderer
+    registrations.push(RendererRegistration {
+        name: "None",
+        factory: || Box::new(NoneRenderer::new()),
+    });
+    wasm_registry::register(registrations);
+}
 
 pub fn create_renderer(name: Option<&str>) -> Box<dyn ScreenRenderer> {
     if let Some(name) = name {
-        inventory::iter::<RendererRegistration>
-            .into_iter()
+        all_registrations()
             .find(|r| r.name == name)
             .map(|r| (r.factory)())
             .unwrap_or_else(|| Box::new(NoneRenderer::new()))
@@ -81,14 +114,23 @@ pub fn create_renderer(name: Option<&str>) -> Box<dyn ScreenRenderer> {
 }
 
 pub fn get_all_renderers() -> Vec<&'static str> {
-    let mut renderers: Vec<&'static str> = inventory::iter::<RendererRegistration>
-        .into_iter()
+    let mut renderers: Vec<&'static str> = all_registrations()
         .map(|r| r.name)
         .collect::<Vec<&'static str>>();
 
     renderers.sort();
 
     renderers
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn all_registrations() -> impl Iterator<Item = &'static RendererRegistration> {
+    inventory::iter::<RendererRegistration>.into_iter()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn all_registrations() -> impl Iterator<Item = &'static RendererRegistration> {
+    wasm_registry::iter()
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize, Default)]

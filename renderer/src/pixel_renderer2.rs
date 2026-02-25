@@ -109,6 +109,7 @@ impl ScreenRenderer for LookupPaletteRenderer2 {
     fn get_height(&self) -> usize { TOTAL_OUTPUT_HEIGHT }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 inventory::submit! {
     RendererRegistration {
         name: NAME,
