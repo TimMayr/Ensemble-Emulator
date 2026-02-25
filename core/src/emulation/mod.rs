@@ -6,3 +6,4 @@ pub mod ppu;
 pub mod rom;
 pub mod savestate;
 pub mod screen_renderer;
+pub mod palette_util;

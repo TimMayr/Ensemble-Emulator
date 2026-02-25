@@ -1,10 +1,10 @@
-use web_time::Instant;
-
 use egui::{ColorImage, Context, TextureHandle, TextureOptions};
+use ensemble_core::emulation::palette_util::{RgbColor, RgbPalette};
 use ensemble_core::emulation::ppu::{
     NametableData, PALETTE_COUNT, PaletteData, TILE_COUNT, TILE_SIZE, TileData,
 };
-use ensemble_core::emulation::screen_renderer::{RgbColor, RgbPalette, ScreenRenderer};
+use ensemble_core::emulation::screen_renderer::ScreenRenderer;
+use web_time::Instant;
 
 /// Texture storage and management for the emulator display
 #[derive(Eq, PartialEq, Clone)]

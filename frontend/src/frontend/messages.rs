@@ -1,5 +1,5 @@
+use ensemble_core::emulation::palette_util::RgbPalette;
 use ensemble_core::emulation::savestate::SaveState;
-use ensemble_core::emulation::screen_renderer::RgbPalette;
 
 use crate::frontend::storage::StorageKey;
 use crate::frontend::util::{FileType, SavestateLoadError};

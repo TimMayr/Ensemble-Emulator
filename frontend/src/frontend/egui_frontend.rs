@@ -17,15 +17,20 @@ use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Duration;
-use web_time::Instant;
 
 use crossbeam_channel::{Receiver, Sender};
 use eframe::glow;
 use egui::{Context, Style, ViewportCommand, Visuals};
+use ensemble_core::declare_renderers;
 use ensemble_core::emulation::nes::Nes;
 use ensemble_core::emulation::ppu::{EmulatorFetchable, PaletteData, TILE_COUNT, TileData};
 use ensemble_core::emulation::savestate::SaveState;
+use ensemble_core::emulation::screen_renderer::{
+    NoneRenderer, RendererRegistration, ScreenRenderer,
+};
 use ensemble_core::util::ToBytes;
+use ensemble_default_renderers::LookupPaletteRenderer;
+use web_time::Instant;
 
 use crate::channel_emu::ChannelEmulator;
 use crate::frontend::egui::config::{AppConfig, AppSpeed};
@@ -55,6 +60,8 @@ const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
 /// Maximum number of autosaves to keep per game
 const MAX_AUTOSAVES_PER_GAME: usize = 1024;
+
+declare_renderers!(LookupPaletteRenderer, NoneRenderer);
 
 /// Shared deque for frontend events that can be pushed from UI components
 pub type FrontendEventQueue = Rc<RefCell<VecDeque<FrontendEvent>>>;

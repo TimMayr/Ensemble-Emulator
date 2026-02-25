@@ -1,10 +1,9 @@
 //! Options pane rendering
 
-use ensemble_core::emulation::screen_renderer::{
-    ScreenRenderer, create_renderer, get_all_renderers,
-};
+use ensemble_core::emulation::screen_renderer::ScreenRenderer;
 
 use crate::frontend::egui::config::{AppConfig, AppSpeed, DebugSpeed};
+use crate::frontend::egui_frontend::get_all_renderers;
 
 /// Render the options panel
 pub fn render_options(ui: &mut egui::Ui, config: &mut AppConfig) {
@@ -22,24 +21,27 @@ fn render_renderer_settings(ui: &mut egui::Ui, config: &mut AppConfig) {
         // Display the renderer type name
         ui.label(format!(
             "Current Renderer: {}",
-            config.view_config.renderer.get_name()
+            config.view_config.renderer.get_display_name()
         ));
 
         ui.separator();
 
         // Renderer selection dropdown
         ui.label("Select Renderer:");
-        let current_id = config.view_config.renderer.get_name().to_string();
+        let current_id = config.view_config.renderer.get_display_name().to_string();
         egui::ComboBox::from_id_salt("renderer_selector")
-            .selected_text(config.view_config.renderer.get_name())
+            .selected_text(config.view_config.renderer.get_display_name())
             .show_ui(ui, |ui| {
                 for variant in get_all_renderers() {
-                    let selected = variant == current_id;
-                    if ui.selectable_label(selected, variant).clicked() {
+                    let selected = variant.key == current_id;
+                    if ui
+                        .selectable_label(selected, variant.display_name)
+                        .clicked()
+                    {
                         // Transfer the current palette to the new renderer
                         // Note: This copies the palette (~1.5KB), but this is an infrequent UI operation
                         let palette = config.view_config.palette_rgb_data;
-                        let mut renderer: Box<dyn ScreenRenderer> = create_renderer(Some(variant));
+                        let mut renderer: Box<dyn ScreenRenderer> = (variant.factory)();
                         renderer.set_palette(palette);
                         config.view_config.renderer = renderer;
                     }

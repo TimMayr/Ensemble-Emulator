@@ -1,4 +1,5 @@
 use std::time::Duration;
+
 use web_time::Instant;
 
 /// FPS counter that tracks frame times over the last second

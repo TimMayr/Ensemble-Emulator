@@ -1,9 +1,7 @@
 use std::fmt::{Debug, Formatter};
-
+use ensemble_core::emulation::palette_util::{RgbColor, RgbPalette};
 use ensemble_core::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
-use ensemble_core::emulation::screen_renderer::{
-    RendererRegistration, RgbColor, RgbPalette, ScreenRenderer,
-};
+use ensemble_core::emulation::screen_renderer::ScreenRenderer;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
@@ -65,8 +63,6 @@ pub struct LookupPaletteRenderer {
     image: Vec<RgbColor>,
 }
 
-const NAME: &str = "LookupPaletteRenderer";
-
 impl Default for LookupPaletteRenderer {
     fn default() -> Self { Self::new() }
 }
@@ -82,8 +78,9 @@ impl LookupPaletteRenderer {
 }
 
 impl Debug for LookupPaletteRenderer {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { f.write_str(self.get_name()) }
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { f.write_str(self.get_display_name()) }
 }
+
 
 impl ScreenRenderer for LookupPaletteRenderer {
     fn buffer_to_image(&mut self, buffer: &[u16]) -> &[RgbColor] {
@@ -102,16 +99,11 @@ impl ScreenRenderer for LookupPaletteRenderer {
 
     fn set_palette(&mut self, rgb_palette: RgbPalette) { self.palette = rgb_palette.into(); }
 
-    fn get_name(&self) -> &str { NAME }
-
     fn get_width(&self) -> usize { TOTAL_OUTPUT_WIDTH }
 
     fn get_height(&self) -> usize { TOTAL_OUTPUT_HEIGHT }
-}
 
-inventory::submit! {
-    RendererRegistration {
-        name: NAME,
-        factory: || Box::new(LookupPaletteRenderer::new()),
-    }
+    fn get_id(&self) -> &'static str { "PaletteLookup" }
+
+    fn get_display_name(&self) -> &'static str { "Palette Lookup Renderer" }
 }

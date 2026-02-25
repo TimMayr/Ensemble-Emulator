@@ -1,11 +1,13 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 
+use ensemble_core::emulation::palette_util::RgbPalette;
 use ensemble_core::emulation::ppu::EmulatorFetchable;
 use ensemble_core::emulation::rom::RomFile;
-use ensemble_core::emulation::screen_renderer::{RgbPalette, ScreenRenderer, create_renderer};
+use ensemble_core::emulation::screen_renderer::{ScreenRenderer, create_renderer};
 
 use crate::frontend::egui::keybindings::KeybindingsConfig;
+use crate::frontend::egui_frontend::get_all_renderers;
 use crate::frontend::messages::{LoadedRom, SavestateLoadContext};
 use crate::frontend::storage::StorageKey;
 
@@ -33,7 +35,7 @@ impl Default for ViewConfig {
             show_pattern_table: false,
             show_nametable: false,
             required_debug_fetches: HashSet::new(),
-            renderer: create_renderer(Some("LookupPaletteRenderer")),
+            renderer: create_renderer(Some("PaletteLookup"), get_all_renderers()),
             palette_rgb_data: RgbPalette::default(),
             debug_active_palette: 0,
         }

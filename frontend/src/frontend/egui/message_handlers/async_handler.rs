@@ -4,9 +4,9 @@
 //! savestate loading workflows, and other deferred operations.
 
 use egui::Context;
+use ensemble_core::emulation::palette_util::RgbPalette;
 use ensemble_core::emulation::ppu::EmulatorFetchable;
 use ensemble_core::emulation::savestate;
-use ensemble_core::emulation::screen_renderer::RgbPalette;
 use ensemble_core::util::ToBytes;
 
 use crate::frontend::egui::config::{
