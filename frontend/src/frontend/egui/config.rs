@@ -44,6 +44,7 @@ impl Default for ViewConfig {
 ///
 /// Note: `Eq` and `PartialEq` are not derived because `PendingDialogs` contains
 /// `SavestateLoadContext` which includes `SaveState`, which is not trivially comparable.
+#[derive(Default)]
 pub struct AppConfig {
     pub view_config: ViewConfig,
     pub speed_config: SpeedConfig,
@@ -51,19 +52,6 @@ pub struct AppConfig {
     pub console_config: ConsoleConfig,
     pub pending_dialogs: PendingDialogs,
     pub keybindings: KeybindingsConfig,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            view_config: ViewConfig::default(),
-            speed_config: SpeedConfig::default(),
-            user_config: UserConfig::default(),
-            console_config: ConsoleConfig::default(),
-            pending_dialogs: PendingDialogs::default(),
-            keybindings: KeybindingsConfig::default(),
-        }
-    }
 }
 
 /// Pending dialog states for multi-step operations

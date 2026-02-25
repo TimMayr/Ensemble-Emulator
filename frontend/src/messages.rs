@@ -11,7 +11,7 @@ use ensemble_core::emulation::savestate::SaveState;
 ///
 /// The message-based architecture provides clean separation between the frontend
 /// and emulation logic, enabling future threading and remote control features.
-
+///
 /// Messages sent from the frontend to the emulator
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum FrontendMessage {

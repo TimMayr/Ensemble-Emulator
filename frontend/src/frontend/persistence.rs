@@ -281,7 +281,7 @@ pub fn read_from_cache_dir(filename: &str) -> Option<Receiver<AsyncFileResult>> 
 /// Persistent configuration structure that can be serialized to TOML.
 ///
 /// Uses `RendererKind` for runtime-switchable renderer persistence.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PersistentConfig {
     pub user_config: PersistentUserConfig,
     pub view_config: PersistentViewConfig,
@@ -289,18 +289,6 @@ pub struct PersistentConfig {
     pub console_config: PersistentConsoleConfig,
     #[serde(default)]
     pub keybindings: KeybindingsConfig,
-}
-
-impl Default for PersistentConfig {
-    fn default() -> Self {
-        Self {
-            user_config: PersistentUserConfig::default(),
-            view_config: PersistentViewConfig::default(),
-            speed_config: PersistentSpeedConfig::default(),
-            console_config: PersistentConsoleConfig::default(),
-            keybindings: KeybindingsConfig::default(),
-        }
-    }
 }
 
 impl From<&AppConfig> for PersistentConfig {

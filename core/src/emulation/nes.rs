@@ -125,20 +125,16 @@ impl Nes {
             PpuState::from(ppu_ref.deref())
         };
 
-        if let Some(rom) = &self.rom_file {
-            Some(SaveState {
-                cpu: CpuState::from(&self.cpu),
-                ppu: ppu_state,
-                cycle: self.cpu_cycle_counter,
-                total_cycles: self.total_cycles,
-                rom_file: rom.clone(),
-                version: 1,
-                ppu_cycle_counter: self.ppu_cycle_counter,
-                cpu_cycle_counter: self.cpu_cycle_counter,
-            })
-        } else {
-            None
-        }
+        self.rom_file.as_ref().map(|rom| SaveState {
+            cpu: CpuState::from(&self.cpu),
+            ppu: ppu_state,
+            cycle: self.cpu_cycle_counter,
+            total_cycles: self.total_cycles,
+            rom_file: rom.clone(),
+            version: 1,
+            ppu_cycle_counter: self.ppu_cycle_counter,
+            cpu_cycle_counter: self.cpu_cycle_counter,
+        })
     }
 
     pub fn load_state(&mut self, state: SaveState) {

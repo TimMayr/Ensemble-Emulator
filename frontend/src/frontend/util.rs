@@ -264,7 +264,7 @@ pub fn spawn_save_dialog(
                     let ext = file_type.get_default_extension();
                     if !ext.is_empty() {
                         let path = handle.path().with_extension(ext);
-                        std::fs::write(&path, &bytes).map_err(std::io::Error::from)
+                        std::fs::write(&path, &bytes)
                     } else {
                         handle.write(&bytes).await
                     }

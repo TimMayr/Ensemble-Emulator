@@ -26,6 +26,10 @@ pub struct NoneRenderer {
     image: [RgbColor; 1],
 }
 
+impl Default for NoneRenderer {
+    fn default() -> Self { Self::new() }
+}
+
 impl NoneRenderer {
     pub fn new() -> Self {
         NoneRenderer {

@@ -14,7 +14,6 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::fmt::{Debug, Formatter};
-#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -39,12 +38,10 @@ use crate::frontend::egui::tiles::{
 use crate::frontend::egui::ui::{
     add_menu_bar, add_status_bar, render_save_browser, render_savestate_dialogs,
 };
-#[cfg(not(target_arch = "wasm32"))]
-use crate::frontend::messages::LoadedRom;
-use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent, SavestateLoadContext};
-#[cfg(not(target_arch = "wasm32"))]
-use crate::frontend::persistence::get_egui_storage_path;
-use crate::frontend::persistence::{PersistentConfig, load_config};
+use crate::frontend::messages::{
+    AsyncFrontendMessage, FrontendEvent, LoadedRom, SavestateLoadContext,
+};
+use crate::frontend::persistence::{PersistentConfig, get_egui_storage_path, load_config};
 use crate::frontend::storage::{Storage, StorageKey};
 use crate::frontend::{storage, util};
 use crate::messages::{EmulatorMessage, FrontendMessage, SaveType};
@@ -607,8 +604,7 @@ impl eframe::App for EguiApp {
 
     fn on_exit(&mut self, _gl: Option<&glow::Context>) {
         // Save configuration before exiting
-        let persistent_config: crate::frontend::persistence::PersistentConfig =
-            (&self.config).into();
+        let persistent_config: PersistentConfig = (&self.config).into();
         // On native, block on the async save to ensure it completes before exit.
         // On WASM, fire-and-forget since we can't block the browser thread.
         #[cfg(not(target_arch = "wasm32"))]
@@ -644,76 +640,58 @@ impl Debug for EguiApp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { f.write_str("EguiApp") }
 }
 
-/// Native: common setup with PathBuf for command-line ROM loading
-#[cfg(not(target_arch = "wasm32"))]
-fn native_setup(
-    rom: Option<PathBuf>,
-) -> (
-    Option<PathBuf>,
-    ChannelEmulator,
-    Sender<FrontendMessage>,
-    Receiver<EmulatorMessage>,
-    Sender<AsyncFrontendMessage>,
-    Receiver<AsyncFrontendMessage>,
-) {
-    // Create the emulator instance
-    let console = Nes::default();
-
-    // Create channel-based emulator wrapper
-    let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
-    let (to_frontend, from_async) = crossbeam_channel::unbounded();
-
-    // Setup Emulator State via messages - read ROM file if provided
-    let loaded_rom = rom.as_ref().and_then(|path| {
-        let data = std::fs::read(path).ok()?;
-        let name = path.file_name()?.to_string_lossy().to_string();
-        let directory = path
-            .parent()
-            .map(|p| p.to_string_lossy().to_string())
-            .map(|f| StorageKey::from(&f))
-            .unwrap();
-
-        Some(LoadedRom {
-            data,
-            name,
-            directory,
-        })
-    });
-    let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(loaded_rom));
-
-    // Get the storage path for egui persistence
-    let storage_path = get_egui_storage_path();
-
-    (
-        storage_path,
-        channel_emu,
-        tx_to_emu,
-        rx_from_emu,
-        to_frontend,
-        from_async,
-    )
+struct SetupResponse {
+    emu: ChannelEmulator,
+    to_emu: Sender<FrontendMessage>,
+    from_emu: Receiver<EmulatorMessage>,
+    from_async: Receiver<AsyncFrontendMessage>,
+    async_sender: Sender<AsyncFrontendMessage>,
+    #[allow(dead_code)]
+    persistence_path: Option<PathBuf>,
 }
 
-/// WASM: common setup without filesystem access
-#[cfg(target_arch = "wasm32")]
-fn wasm_setup() -> (
-    ChannelEmulator,
-    Sender<FrontendMessage>,
-    Receiver<EmulatorMessage>,
-    Sender<AsyncFrontendMessage>,
-    Receiver<AsyncFrontendMessage>,
-) {
+/// Native: common setup with PathBuf for command-line ROM loading
+fn common_setup(rom: Option<PathBuf>) -> SetupResponse {
     // Create the emulator instance
     let console = Nes::default();
 
     // Create channel-based emulator wrapper
-    let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
-    let (to_frontend, from_async) = crossbeam_channel::unbounded();
+    let (emu, to_emu, from_emu) = ChannelEmulator::new(console);
+    let (async_sender, from_async) = crossbeam_channel::unbounded();
 
-    // No ROM loaded at startup in WASM - user will pick via file dialog
-    let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(None));
+    if rom.is_some() {
+        // Setup Emulator State via messages - read ROM file if provided
+        let loaded_rom = rom.as_ref().and_then(|path| {
+            let data = std::fs::read(path).ok()?;
+            let name = path.file_name()?.to_string_lossy().to_string();
+            let directory = path
+                .parent()
+                .map(|p| p.to_string_lossy().to_string())
+                .map(|f| StorageKey::from(&f))
+                .unwrap();
 
-    (channel_emu, tx_to_emu, rx_from_emu, to_frontend, from_async)
+            Some(LoadedRom {
+                data,
+                name,
+                directory,
+            })
+        });
+        let _ = async_sender.send(AsyncFrontendMessage::LoadRom(loaded_rom));
+    } else {
+        let _ = async_sender.send(AsyncFrontendMessage::LoadRom(None));
+    }
+
+    // Get the storage path for egui persistence
+    let persistence_path = get_egui_storage_path();
+
+    SetupResponse {
+        persistence_path,
+        emu,
+        to_emu,
+        from_emu,
+        async_sender,
+        from_async,
+    }
 }
 
 /// Run the egui frontend.
@@ -721,29 +699,20 @@ fn wasm_setup() -> (
 /// Uses `RendererKind` for runtime-switchable rendering.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn run(rom: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
-    let res = native_setup(rom);
+    let res = common_setup(rom);
     run_internal(res)
 }
 
 /// Run the egui frontend for WASM.
 #[cfg(target_arch = "wasm32")]
-pub fn run_wasm() -> Result<(), Box<dyn std::error::Error>> {
-    let res = wasm_setup();
+pub fn run(_: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
+    let res = common_setup(None);
     run_internal_wasm(res)
 }
 
 #[tokio::main]
 #[cfg(not(target_arch = "wasm32"))]
-async fn run_internal(
-    res: (
-        Option<PathBuf>,
-        ChannelEmulator,
-        Sender<FrontendMessage>,
-        Receiver<EmulatorMessage>,
-        Sender<AsyncFrontendMessage>,
-        Receiver<AsyncFrontendMessage>,
-    ),
-) -> Result<(), Box<dyn std::error::Error>> {
+async fn run_internal(res: SetupResponse) -> Result<(), Box<dyn std::error::Error>> {
     // Load configuration before starting eframe (we're in an async context)
     let loaded_config = load_config().await;
 
@@ -756,7 +725,7 @@ async fn run_internal(
             .with_app_id("ensemble-emulator"),
         vsync: false, // Disable vsync for uncapped performance
         // Enable persistence with custom storage path
-        persistence_path: res.0,
+        persistence_path: res.persistence_path,
         renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
@@ -775,11 +744,11 @@ async fn run_internal(
             Ok(Box::new(EguiApp::new(
                 cc,
                 loaded_config,
-                res.1,
-                res.2,
-                res.3,
-                res.4,
-                res.5,
+                res.emu,
+                res.to_emu,
+                res.from_emu,
+                res.async_sender,
+                res.from_async,
             )))
         }),
     )?;
@@ -788,15 +757,7 @@ async fn run_internal(
 }
 
 #[cfg(target_arch = "wasm32")]
-fn run_internal_wasm(
-    res: (
-        ChannelEmulator,
-        Sender<FrontendMessage>,
-        Receiver<EmulatorMessage>,
-        Sender<AsyncFrontendMessage>,
-        Receiver<AsyncFrontendMessage>,
-    ),
-) -> Result<(), Box<dyn std::error::Error>> {
+fn run_internal_wasm(res: SetupResponse) -> Result<(), Box<dyn std::error::Error>> {
     use eframe::web_sys;
     use wasm_bindgen::JsCast;
     use web_sys::HtmlCanvasElement;
@@ -836,11 +797,11 @@ fn run_internal_wasm(
                     Ok(Box::new(EguiApp::new(
                         cc,
                         loaded_config,
-                        res.0,
-                        res.1,
-                        res.2,
-                        res.3,
-                        res.4,
+                        res.emu,
+                        res.to_emu,
+                        res.from_emu,
+                        res.async_sender,
+                        res.from_async,
                     )))
                 }),
             )

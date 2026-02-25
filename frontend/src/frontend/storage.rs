@@ -113,11 +113,7 @@ pub struct StorageKey {
 
 impl Display for StorageKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            format!("{}/{}", self.category.prefix(), self.sub_path)
-        )
+        write!(f, "{}/{}", self.category.prefix(), self.sub_path)
     }
 }
 
@@ -220,6 +216,10 @@ mod native {
 
     /// Native file system storage implementation
     pub struct NativeStorage;
+
+    impl Default for NativeStorage {
+        fn default() -> Self { Self::new() }
+    }
 
     impl NativeStorage {
         pub fn new() -> Self { NativeStorage }
@@ -403,6 +403,10 @@ mod wasm {
         fn key_string(key: &StorageKey) -> String {
             format!("{}/{}", key.category.prefix(), key.sub_path)
         }
+    }
+
+    impl Default for WasmStorage {
+        fn default() -> Self { Self::new() }
     }
 
     /// Open the IndexedDB database, creating the object store if needed.

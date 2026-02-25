@@ -139,8 +139,8 @@ impl RomFile {
         hasher.update(data);
         let hash: [u8; 32] = hasher.finalize().into();
 
-        let rom_type = RomFile::get_rom_type(&data);
-        let mut rom_file = rom_type.parse(&data, name).expect("Error loading Rom");
+        let rom_type = RomFile::get_rom_type(data);
+        let mut rom_file = rom_type.parse(data, name).expect("Error loading Rom");
         rom_file.data = data.to_vec();
         rom_file.data_checksum = hash;
         rom_file
@@ -232,13 +232,10 @@ impl From<&String> for RomFile {
         use std::fs::File;
         use std::io::Read;
 
-        let data = File::open(path)
-            .unwrap()
-            .bytes()
-            .map(|b| b.unwrap())
-            .collect::<Vec<u8>>();
+        let mut data = Vec::new();
+        File::open(path).unwrap().read_to_end(&mut data).unwrap();
 
-        RomFile::load(&data[..], Some(path.clone()))
+        RomFile::load(&data, Some(path.clone()))
     }
 }
 

@@ -460,13 +460,13 @@ impl EguiApp {
             match storage_impl.get(&key).await {
                 Ok(data) => match savestate::try_load_state_from_bytes(&data) {
                     Some(savestate) => {
-                        if let Some(checksum) = loaded_rom_checksum {
-                            if checksum != savestate.rom_file.data_checksum {
-                                let _ = sender.send(AsyncFrontendMessage::SavestateLoadFailed(
-                                    SavestateLoadError::FailedToLoadSavestate,
-                                ));
-                                return;
-                            }
+                        if let Some(checksum) = loaded_rom_checksum
+                            && checksum != savestate.rom_file.data_checksum
+                        {
+                            let _ = sender.send(AsyncFrontendMessage::SavestateLoadFailed(
+                                SavestateLoadError::FailedToLoadSavestate,
+                            ));
+                            return;
                         }
                         let _ =
                             to_emulator.send(FrontendMessage::LoadSaveState(Box::new(savestate)));
@@ -522,7 +522,7 @@ impl EguiApp {
 /// On WASM, `rom_dir` is ignored (always None) and only the IndexedDB cache is searched.
 async fn find_matching_rom(
     context: &SavestateLoadContext,
-    rom_dir: Option<String>,
+    #[allow(unused)] rom_dir: Option<String>,
 ) -> Option<LoadedRom> {
     let expected_checksum = &context.savestate.rom_file.data_checksum;
     let storage_impl = storage::get_storage();
@@ -569,10 +569,10 @@ async fn find_matching_rom(
 
     // On native, also scan the filesystem directory as a fallback
     #[cfg(not(target_arch = "wasm32"))]
-    if let Some(dir) = rom_dir {
-        if let Some(rom) = find_matching_rom_in_directory(&dir, context) {
-            return Some(rom);
-        }
+    if let Some(dir) = rom_dir
+        && let Some(rom) = find_matching_rom_in_directory(&dir, context)
+    {
+        return Some(rom);
     }
 
     None
@@ -595,19 +595,19 @@ fn find_matching_rom_in_directory(dir: &str, context: &SavestateLoadContext) -> 
     // If the savestate knows the ROM filename, try that first
     if let Some(ref rom_name) = context.savestate.rom_file.name {
         let rom_path = dir_path.join(rom_name);
-        if rom_path.is_file() {
-            if let Ok(data) = std::fs::read(&rom_path) {
-                let checksum = util::compute_data_checksum(&data);
-                if &checksum == expected_checksum {
-                    return Some(LoadedRom {
-                        data,
-                        name: rom_name.clone(),
-                        directory: StorageKey {
-                            category: StorageCategory::Root,
-                            sub_path: dir.to_string(),
-                        },
-                    });
-                }
+        if rom_path.is_file()
+            && let Ok(data) = std::fs::read(&rom_path)
+        {
+            let checksum = util::compute_data_checksum(&data);
+            if &checksum == expected_checksum {
+                return Some(LoadedRom {
+                    data,
+                    name: rom_name.clone(),
+                    directory: StorageKey {
+                        category: StorageCategory::Root,
+                        sub_path: dir.to_string(),
+                    },
+                });
             }
         }
     }
@@ -616,24 +616,22 @@ fn find_matching_rom_in_directory(dir: &str, context: &SavestateLoadContext) -> 
     let entries = std::fs::read_dir(dir_path).ok()?;
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_file() {
-            if let Some(ext) = path.extension() {
-                if ext.eq_ignore_ascii_case("nes") {
-                    if let Ok(data) = std::fs::read(&path) {
-                        let checksum = util::compute_data_checksum(&data);
-                        if &checksum == expected_checksum {
-                            let name = entry.file_name().to_string_lossy().to_string();
-                            return Some(LoadedRom {
-                                data,
-                                name,
-                                directory: StorageKey {
-                                    category: StorageCategory::Root,
-                                    sub_path: dir.to_string(),
-                                },
-                            });
-                        }
-                    }
-                }
+        if path.is_file()
+            && let Some(ext) = path.extension()
+            && ext.eq_ignore_ascii_case("nes")
+            && let Ok(data) = std::fs::read(&path)
+        {
+            let checksum = util::compute_data_checksum(&data);
+            if &checksum == expected_checksum {
+                let name = entry.file_name().to_string_lossy().to_string();
+                return Some(LoadedRom {
+                    data,
+                    name,
+                    directory: StorageKey {
+                        category: StorageCategory::Root,
+                        sub_path: dir.to_string(),
+                    },
+                });
             }
         }
     }
@@ -657,10 +655,10 @@ async fn list_save_entries(game_name: &str) -> Vec<SaveEntry> {
     let qs_prefix = storage::quicksaves_prefix(game_name);
     if let Ok(qs_entries) = storage_impl.list(&qs_prefix).await {
         for entry in qs_entries {
-            if entry.key.sub_path.ends_with(".sav") {
-                if let Some(save_entry) = parse_save_entry(entry.key, SaveEntryType::Quicksave) {
-                    entries.push(save_entry);
-                }
+            if entry.key.sub_path.ends_with(".sav")
+                && let Some(save_entry) = parse_save_entry(entry.key, SaveEntryType::Quicksave)
+            {
+                entries.push(save_entry);
             }
         }
     }
@@ -669,10 +667,10 @@ async fn list_save_entries(game_name: &str) -> Vec<SaveEntry> {
     let as_prefix = storage::autosaves_prefix(game_name);
     if let Ok(as_entries) = storage_impl.list(&as_prefix).await {
         for entry in as_entries {
-            if entry.key.sub_path.ends_with(".sav") {
-                if let Some(save_entry) = parse_save_entry(entry.key, SaveEntryType::Autosave) {
-                    entries.push(save_entry);
-                }
+            if entry.key.sub_path.ends_with(".sav")
+                && let Some(save_entry) = parse_save_entry(entry.key, SaveEntryType::Autosave)
+            {
+                entries.push(save_entry);
             }
         }
     }
