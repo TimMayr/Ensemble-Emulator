@@ -373,11 +373,11 @@ mod native {
 
 #[cfg(target_arch = "wasm32")]
 mod wasm {
-    use super::*;
-
-    use rexie::{Rexie, TransactionMode, KeyRange};
-    use wasm_bindgen::JsValue;
     use js_sys::Uint8Array;
+    use rexie::{KeyRange, Rexie, TransactionMode};
+    use wasm_bindgen::JsValue;
+
+    use super::*;
 
     const DB_NAME: &str = "ensemble_emulator";
     const DB_VERSION: u32 = 1;
@@ -419,14 +419,19 @@ mod wasm {
     impl Storage for WasmStorage {
         async fn get(&self, key: &StorageKey) -> StorageResult<Vec<u8>> {
             let db = open_db().await?;
-            let tx = db.transaction(&[STORE_NAME], TransactionMode::ReadOnly)
+            let tx = db
+                .transaction(&[STORE_NAME], TransactionMode::ReadOnly)
                 .map_err(|e| StorageError::ReadError(e.to_string()))?;
-            let store = tx.store(STORE_NAME)
+            let store = tx
+                .store(STORE_NAME)
                 .map_err(|e| StorageError::ReadError(e.to_string()))?;
 
             let key_js = JsValue::from_str(&Self::key_string(key));
-            match store.get(key_js).await
-                .map_err(|e| StorageError::ReadError(e.to_string()))? {
+            match store
+                .get(key_js)
+                .await
+                .map_err(|e| StorageError::ReadError(e.to_string()))?
+            {
                 Some(val) => {
                     let array = Uint8Array::new(&val);
                     Ok(array.to_vec())
@@ -437,52 +442,68 @@ mod wasm {
 
         async fn set(&self, key: &StorageKey, data: Vec<u8>) -> StorageResult<()> {
             let db = open_db().await?;
-            let tx = db.transaction(&[STORE_NAME], TransactionMode::ReadWrite)
+            let tx = db
+                .transaction(&[STORE_NAME], TransactionMode::ReadWrite)
                 .map_err(|e| StorageError::WriteError(e.to_string()))?;
-            let store = tx.store(STORE_NAME)
+            let store = tx
+                .store(STORE_NAME)
                 .map_err(|e| StorageError::WriteError(e.to_string()))?;
 
             let key_js = JsValue::from_str(&Self::key_string(key));
             let value_js: JsValue = Uint8Array::from(data.as_slice()).into();
-            store.put(&value_js, Some(&key_js)).await
+            store
+                .put(&value_js, Some(&key_js))
+                .await
                 .map_err(|e| StorageError::WriteError(e.to_string()))?;
-            tx.done().await
+            tx.done()
+                .await
                 .map_err(|e| StorageError::WriteError(e.to_string()))?;
             Ok(())
         }
 
         async fn delete(&self, key: &StorageKey) -> StorageResult<()> {
             let db = open_db().await?;
-            let tx = db.transaction(&[STORE_NAME], TransactionMode::ReadWrite)
+            let tx = db
+                .transaction(&[STORE_NAME], TransactionMode::ReadWrite)
                 .map_err(|e| StorageError::DeleteError(e.to_string()))?;
-            let store = tx.store(STORE_NAME)
+            let store = tx
+                .store(STORE_NAME)
                 .map_err(|e| StorageError::DeleteError(e.to_string()))?;
 
             let key_js = JsValue::from_str(&Self::key_string(key));
-            store.delete(key_js).await
+            store
+                .delete(key_js)
+                .await
                 .map_err(|e| StorageError::DeleteError(e.to_string()))?;
-            tx.done().await
+            tx.done()
+                .await
                 .map_err(|e| StorageError::DeleteError(e.to_string()))?;
             Ok(())
         }
 
         async fn exists(&self, key: &StorageKey) -> StorageResult<bool> {
             let db = open_db().await?;
-            let tx = db.transaction(&[STORE_NAME], TransactionMode::ReadOnly)
+            let tx = db
+                .transaction(&[STORE_NAME], TransactionMode::ReadOnly)
                 .map_err(|e| StorageError::ReadError(e.to_string()))?;
-            let store = tx.store(STORE_NAME)
+            let store = tx
+                .store(STORE_NAME)
                 .map_err(|e| StorageError::ReadError(e.to_string()))?;
 
             let key_js = JsValue::from_str(&Self::key_string(key));
-            store.key_exists(key_js).await
+            store
+                .key_exists(key_js)
+                .await
                 .map_err(|e| StorageError::ReadError(e.to_string()))
         }
 
         async fn list(&self, prefix: &StorageKey) -> StorageResult<Vec<StorageMetadata>> {
             let db = open_db().await?;
-            let tx = db.transaction(&[STORE_NAME], TransactionMode::ReadOnly)
+            let tx = db
+                .transaction(&[STORE_NAME], TransactionMode::ReadOnly)
                 .map_err(|e| StorageError::ReadError(e.to_string()))?;
-            let store = tx.store(STORE_NAME)
+            let store = tx
+                .store(STORE_NAME)
                 .map_err(|e| StorageError::ReadError(e.to_string()))?;
 
             let prefix_str = Self::key_string(prefix);
@@ -491,13 +512,18 @@ mod wasm {
             let range = KeyRange::bound(&lower, &upper, Some(false), Some(false))
                 .map_err(|e| StorageError::ReadError(format!("{:?}", e)))?;
 
-            let keys = store.get_all_keys(Some(range), None).await
+            let keys = store
+                .get_all_keys(Some(range), None)
+                .await
                 .map_err(|e| StorageError::ReadError(e.to_string()))?;
 
-            Ok(keys.into_iter()
-                .filter_map(|k| k.as_string().map(|s| StorageMetadata {
-                    key: StorageKey::from(&s),
-                }))
+            Ok(keys
+                .into_iter()
+                .filter_map(|k| {
+                    k.as_string().map(|s| StorageMetadata {
+                        key: StorageKey::from(&s),
+                    })
+                })
                 .collect())
         }
 

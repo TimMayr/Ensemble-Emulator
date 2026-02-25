@@ -1,5 +1,6 @@
-use ensemble_lockstep::emulation::savestate::SaveState;
-use ensemble_lockstep::emulation::screen_renderer::RgbPalette;
+use ensemble_core::emulation::savestate::SaveState;
+use ensemble_core::emulation::screen_renderer::RgbPalette;
+
 use crate::frontend::storage::StorageKey;
 use crate::frontend::util::{FileType, SavestateLoadError};
 use crate::messages::ControllerEvent;
@@ -42,7 +43,7 @@ pub struct LoadedRom {
 
 pub struct LoadedPalette {
     pub palette: RgbPalette,
-    pub directory: StorageKey
+    pub directory: StorageKey,
 }
 
 /// Messages for async/deferred frontend operations.

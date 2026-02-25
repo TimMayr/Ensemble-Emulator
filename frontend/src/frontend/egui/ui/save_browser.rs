@@ -76,9 +76,7 @@ pub fn render_save_browser(
 
                                     // Name and timestamp
                                     ui.vertical(|ui| {
-                                        ui.label(
-                                            egui::RichText::new(&entry.display_name).strong(),
-                                        );
+                                        ui.label(egui::RichText::new(&entry.display_name).strong());
                                         ui.label(
                                             egui::RichText::new(&entry.timestamp)
                                                 .small()

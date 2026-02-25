@@ -210,7 +210,7 @@ pub fn try_load_state_from_bytes(encoded: &[u8]) -> Option<SaveState> {
         return None;
     }
 
-     let format = encoded[MAGIC.len()];
+    let format = encoded[MAGIC.len()];
     let payload = &encoded[MAGIC.len() + 1..];
 
     match format {

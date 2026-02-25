@@ -13,10 +13,10 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::{fs, thread};
 
-use crossbeam_channel::{bounded, Receiver};
+use crossbeam_channel::{Receiver, bounded};
 use directories::ProjectDirs;
-use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
-use ensemble_lockstep::emulation::screen_renderer::{create_renderer, RgbPalette};
+use ensemble_core::emulation::ppu::EmulatorFetchable;
+use ensemble_core::emulation::screen_renderer::{RgbPalette, create_renderer};
 use serde::{Deserialize, Serialize};
 
 use crate::frontend::egui::config::{

@@ -19,14 +19,13 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-
 use crossbeam_channel::{Receiver, Sender};
 use eframe::glow;
 use egui::{Context, Style, ViewportCommand, Visuals};
-use ensemble_lockstep::emulation::nes::Nes;
-use ensemble_lockstep::emulation::ppu::{EmulatorFetchable, PaletteData, TileData, TILE_COUNT};
-use ensemble_lockstep::emulation::savestate::SaveState;
-use ensemble_lockstep::util::ToBytes;
+use ensemble_core::emulation::nes::Nes;
+use ensemble_core::emulation::ppu::{EmulatorFetchable, PaletteData, TILE_COUNT, TileData};
+use ensemble_core::emulation::savestate::SaveState;
+use ensemble_core::util::ToBytes;
 
 use crate::channel_emu::ChannelEmulator;
 use crate::frontend::egui::config::{AppConfig, AppSpeed};
@@ -35,7 +34,7 @@ use crate::frontend::egui::input::handle_keyboard_input;
 use crate::frontend::egui::message_handlers::{AsyncMessageHandler, EmulatorMessageHandler};
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
-    compute_required_fetches_from_tree, create_tree, Pane, TreeBehavior,
+    Pane, TreeBehavior, compute_required_fetches_from_tree, create_tree,
 };
 use crate::frontend::egui::ui::{
     add_menu_bar, add_status_bar, render_save_browser, render_savestate_dialogs,
@@ -45,9 +44,8 @@ use crate::frontend::messages::LoadedRom;
 use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent, SavestateLoadContext};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::frontend::persistence::get_egui_storage_path;
-use crate::frontend::persistence::{load_config, PersistentConfig};
-use crate::frontend::storage::Storage;
-use crate::frontend::storage::StorageKey;
+use crate::frontend::persistence::{PersistentConfig, load_config};
+use crate::frontend::storage::{Storage, StorageKey};
 use crate::frontend::{storage, util};
 use crate::messages::{EmulatorMessage, FrontendMessage, SaveType};
 
@@ -344,13 +342,13 @@ impl EguiApp {
 
     /// Check if the pattern tables pane is visible
     fn is_pattern_tables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{find_pane, Pane};
+        use crate::frontend::egui::tiles::{Pane, find_pane};
         find_pane(&self.tree.tiles, &Pane::PatternTables).is_some()
     }
 
     /// Check if the nametables pane is visible
     fn is_nametables_visible(&self) -> bool {
-        use crate::frontend::egui::tiles::{find_pane, Pane};
+        use crate::frontend::egui::tiles::{Pane, find_pane};
         find_pane(&self.tree.tiles, &Pane::Nametables).is_some()
     }
 
@@ -775,7 +773,13 @@ async fn run_internal(
             cc.egui_ctx.set_style(style);
             cc.egui_ctx.set_theme(egui::Theme::Dark);
             Ok(Box::new(EguiApp::new(
-                cc, loaded_config, res.1, res.2, res.3, res.4, res.5,
+                cc,
+                loaded_config,
+                res.1,
+                res.2,
+                res.3,
+                res.4,
+                res.5,
             )))
         }),
     )?;
@@ -830,7 +834,13 @@ fn run_internal_wasm(
                     cc.egui_ctx.set_style(style);
                     cc.egui_ctx.set_theme(egui::Theme::Dark);
                     Ok(Box::new(EguiApp::new(
-                        cc, loaded_config, res.0, res.1, res.2, res.3, res.4,
+                        cc,
+                        loaded_config,
+                        res.0,
+                        res.1,
+                        res.2,
+                        res.3,
+                        res.4,
                     )))
                 }),
             )

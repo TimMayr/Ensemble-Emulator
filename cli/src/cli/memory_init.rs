@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::path::Path;
 
-use ensemble_lockstep::emulation::nes::Nes;
+use ensemble_core::emulation::nes::Nes;
 
 /// Represents a memory initialization operation
 #[derive(Debug, Clone)]

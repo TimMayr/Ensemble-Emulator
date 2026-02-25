@@ -22,8 +22,9 @@ use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
+use ensemble_core::emulation::screen_renderer::RgbColor;
 use image::{ImageBuffer, Rgba, RgbaImage};
-use ensemble_lockstep::emulation::screen_renderer::RgbColor;
+
 use crate::cli::args::VideoFormat;
 
 // =============================================================================

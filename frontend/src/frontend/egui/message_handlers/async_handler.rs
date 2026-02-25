@@ -4,10 +4,10 @@
 //! savestate loading workflows, and other deferred operations.
 
 use egui::Context;
-use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
-use ensemble_lockstep::emulation::savestate;
-use ensemble_lockstep::emulation::screen_renderer::RgbPalette;
-use ensemble_lockstep::util::ToBytes;
+use ensemble_core::emulation::ppu::EmulatorFetchable;
+use ensemble_core::emulation::savestate;
+use ensemble_core::emulation::screen_renderer::RgbPalette;
+use ensemble_core::util::ToBytes;
 
 use crate::frontend::egui::config::{
     ChecksumMismatchDialogState, ErrorDialogState, MatchingRomDialogState, RomSelectionDialogState,
@@ -468,8 +468,8 @@ impl EguiApp {
                                 return;
                             }
                         }
-                        let _ = to_emulator
-                            .send(FrontendMessage::LoadSaveState(Box::new(savestate)));
+                        let _ =
+                            to_emulator.send(FrontendMessage::LoadSaveState(Box::new(savestate)));
                     }
                     None => {
                         let _ = sender.send(AsyncFrontendMessage::SavestateLoadFailed(

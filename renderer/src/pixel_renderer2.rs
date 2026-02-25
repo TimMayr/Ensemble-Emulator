@@ -1,11 +1,11 @@
 use std::fmt::{Debug, Formatter};
 
-use ensemble_lockstep::emulation::screen_renderer::{
+use ensemble_core::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+use ensemble_core::emulation::screen_renderer::{
     RendererRegistration, RgbColor, RgbPalette, ScreenRenderer,
 };
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
-use ensemble_lockstep::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 
 /// Number of colors in the NES palette (64 base colors)
 const PALETTE_COLORS: usize = 64;
@@ -103,15 +103,10 @@ impl ScreenRenderer for LookupPaletteRenderer2 {
     fn set_palette(&mut self, rgb_palette: RgbPalette) { self.palette = rgb_palette.into(); }
 
     fn get_name(&self) -> &str { NAME }
-    
-    
-    fn get_width(&self) -> usize {
-        TOTAL_OUTPUT_WIDTH
-    }
 
-    fn get_height(&self) -> usize {
-        TOTAL_OUTPUT_HEIGHT
-    }
+    fn get_width(&self) -> usize { TOTAL_OUTPUT_WIDTH }
+
+    fn get_height(&self) -> usize { TOTAL_OUTPUT_HEIGHT }
 }
 
 inventory::submit! {

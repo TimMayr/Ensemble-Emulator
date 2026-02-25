@@ -1,7 +1,7 @@
 use crossbeam_channel::Sender;
-use ensemble_lockstep::emulation::ppu::PALETTE_RAM_START_ADDRESS;
-use ensemble_lockstep::emulation::screen_renderer::{parse_palette_from_bytes, RgbColor};
-use ensemble_lockstep::util::Hashable;
+use ensemble_core::emulation::ppu::PALETTE_RAM_START_ADDRESS;
+use ensemble_core::emulation::screen_renderer::{RgbColor, parse_palette_from_bytes};
+use ensemble_core::util::Hashable;
 
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
@@ -74,7 +74,10 @@ pub fn render_palettes(
     egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
             if ui.button("Load Palette").clicked() {
-                spawn_palette_picker(async_sender, config.user_config.previous_palette_dir.as_ref());
+                spawn_palette_picker(
+                    async_sender,
+                    config.user_config.previous_palette_dir.as_ref(),
+                );
             }
 
             if ui.button("Save Palette").clicked() {

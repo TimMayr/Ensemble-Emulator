@@ -1,14 +1,16 @@
 use std::future::Future;
 
 use crossbeam_channel::Sender;
-use ensemble_lockstep::emulation::savestate;
-use ensemble_lockstep::emulation::screen_renderer::parse_palette_from_bytes;
-use ensemble_lockstep::util::ToBytes;
+use ensemble_core::emulation::savestate;
+use ensemble_core::emulation::screen_renderer::parse_palette_from_bytes;
+use ensemble_core::util::ToBytes;
 use rfd::{AsyncFileDialog, FileHandle};
 use sha2::{Digest, Sha256};
 
-use crate::frontend::messages::{AsyncFrontendMessage, LoadedPalette, LoadedRom, SavestateLoadContext};
-use crate::frontend::storage::{self, get_storage, Storage, StorageCategory, StorageKey};
+use crate::frontend::messages::{
+    AsyncFrontendMessage, LoadedPalette, LoadedRom, SavestateLoadContext,
+};
+use crate::frontend::storage::{self, Storage, StorageCategory, StorageKey, get_storage};
 
 /// Enum to represent errors that can occur during savestate loading UI flow
 pub enum SavestateLoadError {
@@ -241,12 +243,15 @@ pub fn spawn_save_dialog(
             // If no extension was specified, use the default for this file type
             let format = format.or_else(|| {
                 let ext = file_type.get_default_extension();
-                if ext.is_empty() { None } else { Some(ext.to_string()) }
+                if ext.is_empty() {
+                    None
+                } else {
+                    Some(ext.to_string())
+                }
             });
 
             // Capture directory from the save handle
-            let save_dir = get_file_directory(&handle)
-                .map(|f| StorageKey::from(&f));
+            let save_dir = get_file_directory(&handle).map(|f| StorageKey::from(&f));
 
             // Write data using the file handle
             let bytes = data.to_bytes(format);
@@ -396,10 +401,12 @@ pub fn spawn_rom_picker_for_savestate(
         if let Some(handle) = handle {
             let data = handle.read().await;
             let name = handle.file_name();
-            let directory = get_file_directory(&handle).map(|f| StorageKey::from(&f)).unwrap_or(StorageKey {
-                category: StorageCategory::Cache,
-                sub_path: "upload_cache/roms/".to_string()
-            });
+            let directory = get_file_directory(&handle)
+                .map(|f| StorageKey::from(&f))
+                .unwrap_or(StorageKey {
+                    category: StorageCategory::Cache,
+                    sub_path: "upload_cache/roms/".to_string(),
+                });
 
             // Cache ROM in storage for later access (ROM matching, etc.)
             let cache_key = storage::rom_cache_key(&name);

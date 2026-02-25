@@ -3,7 +3,7 @@
 //! This module contains common widget patterns that are used across
 //! multiple UI components to reduce code duplication.
 
-use ensemble_lockstep::emulation::screen_renderer::RgbColor;
+use ensemble_core::emulation::screen_renderer::RgbColor;
 
 /// Draw a colored cell with hover highlighting using RgbColor.
 ///

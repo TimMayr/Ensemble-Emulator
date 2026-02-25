@@ -2,7 +2,7 @@ use std::fmt::{Debug, Formatter};
 
 use serde::{Deserialize, Serialize};
 
-use crate::util::{compute_hash, Hashable, ToBytes};
+use crate::util::{Hashable, ToBytes, compute_hash};
 
 /// Trait for rendering palette indices to RGB colors.
 ///

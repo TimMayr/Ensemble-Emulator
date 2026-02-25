@@ -1,8 +1,9 @@
 use crossbeam_channel::Sender;
 use eframe::epaint::TextureHandle;
 use egui::Ui;
-use ensemble_lockstep::emulation::ppu::TileData;
-use ensemble_lockstep::emulation::screen_renderer::RgbColor;
+use ensemble_core::emulation::ppu::TileData;
+use ensemble_core::emulation::screen_renderer::RgbColor;
+
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::ui::widgets::{PainterGridConfig, image_cell};
 use crate::frontend::messages::AsyncFrontendMessage;

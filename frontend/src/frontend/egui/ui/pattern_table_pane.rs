@@ -2,7 +2,6 @@
 
 use crossbeam_channel::Sender;
 
-
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::ui::draw_pattern_table;

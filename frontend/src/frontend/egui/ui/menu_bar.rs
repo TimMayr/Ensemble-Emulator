@@ -1,7 +1,6 @@
 use crossbeam_channel::Sender;
 use egui::Context;
 
-
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::tiles::{Pane, add_pane_if_missing};
 use crate::frontend::messages::AsyncFrontendMessage;
@@ -28,12 +27,16 @@ pub fn add_menu_bar(
 
                     if ui.button("Load State").clicked() {
                         // Use the new multistep savestate loading flow
-                        spawn_savestate_picker(async_sender, config.user_config.previous_savestate_dir.as_ref());
+                        spawn_savestate_picker(
+                            async_sender,
+                            config.user_config.previous_savestate_dir.as_ref(),
+                        );
                     }
 
                     ui.separator();
 
-                    if config.user_config.loaded_rom.is_some() && ui.button("Browse Saves...").clicked()
+                    if config.user_config.loaded_rom.is_some()
+                        && ui.button("Browse Saves...").clicked()
                     {
                         let _ = async_sender.send(AsyncFrontendMessage::OpenSaveBrowser);
                         ui.close();

@@ -1,14 +1,14 @@
 [package]
-name = "ensemble-gown"
+name = "ensemble-default-renderers"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "ensemble_gown"
+name = "ensemble_default_renderers"
 path = "src/lib.rs"
 
 [dependencies]
-ensemble-lockstep = { path = "../core" }
+ensemble-core = { path = "../core" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde-big-array = {version = "0.5.1"}
 inventory = {version = "0.3.21"}

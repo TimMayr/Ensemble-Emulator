@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 
-use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
-use ensemble_lockstep::emulation::rom::RomFile;
-use ensemble_lockstep::emulation::screen_renderer::{create_renderer, RgbPalette, ScreenRenderer};
+use ensemble_core::emulation::ppu::EmulatorFetchable;
+use ensemble_core::emulation::rom::RomFile;
+use ensemble_core::emulation::screen_renderer::{RgbPalette, ScreenRenderer, create_renderer};
 
 use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::messages::{LoadedRom, SavestateLoadContext};

@@ -1,7 +1,7 @@
 //! Options pane rendering
 
-use ensemble_lockstep::emulation::screen_renderer::{
-    create_renderer, get_all_renderers, ScreenRenderer,
+use ensemble_core::emulation::screen_renderer::{
+    ScreenRenderer, create_renderer, get_all_renderers,
 };
 
 use crate::frontend::egui::config::{AppConfig, AppSpeed, DebugSpeed};

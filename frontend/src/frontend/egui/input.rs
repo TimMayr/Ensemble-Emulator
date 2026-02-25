@@ -3,7 +3,6 @@ use std::time::Instant;
 use crossbeam_channel::Sender;
 use egui::Context;
 
-
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::keybindings::Binding;
 use crate::frontend::messages::AsyncFrontendMessage;

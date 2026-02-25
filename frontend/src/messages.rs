@@ -1,6 +1,6 @@
-use ensemble_lockstep::emulation::ppu::EmulatorFetchable;
-use ensemble_lockstep::emulation::rom::RomFile;
-use ensemble_lockstep::emulation::savestate::SaveState;
+use ensemble_core::emulation::ppu::EmulatorFetchable;
+use ensemble_core::emulation::rom::RomFile;
+use ensemble_core::emulation::savestate::SaveState;
 
 /// Message types for communication between the frontend and emulator.
 ///
