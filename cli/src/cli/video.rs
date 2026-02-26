@@ -22,9 +22,8 @@ use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
-use ensemble_core::emulation::screen_renderer::RgbColor;
 use image::{ImageBuffer, Rgba, RgbaImage};
-
+use monsoon_core::emulation::palette_util::RgbColor;
 use crate::cli::args::VideoFormat;
 
 // =============================================================================

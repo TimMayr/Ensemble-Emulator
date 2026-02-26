@@ -15,9 +15,9 @@ use std::{fs, thread};
 
 use crossbeam_channel::{Receiver, bounded};
 use directories::ProjectDirs;
-use ensemble_core::emulation::palette_util::RgbPalette;
-use ensemble_core::emulation::ppu::EmulatorFetchable;
-use ensemble_core::emulation::screen_renderer::create_renderer;
+use monsoon_core::emulation::palette_util::RgbPalette;
+use monsoon_core::emulation::ppu::EmulatorFetchable;
+use monsoon_core::emulation::screen_renderer::create_renderer;
 use serde::{Deserialize, Serialize};
 
 use crate::frontend::egui::config::{
@@ -31,7 +31,7 @@ use crate::frontend::storage::{Storage, StorageKey};
 /// Application identifier used for directory paths
 const APP_QUALIFIER: &str = "com";
 const APP_ORGANIZATION: &str = "Lightsong";
-const APP_NAME: &str = "EnsembleEmulator";
+const APP_NAME: &str = "MonsoonEmulator";
 
 /// Singleton for project directories.
 ///

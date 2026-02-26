@@ -1,5 +1,5 @@
-use ensemble_core::emulation::palette_util::RgbPalette;
-use ensemble_core::emulation::savestate::SaveState;
+use monsoon_core::emulation::palette_util::RgbPalette;
+use monsoon_core::emulation::savestate::SaveState;
 
 use crate::frontend::storage::StorageKey;
 use crate::frontend::util::{FileType, SavestateLoadError};

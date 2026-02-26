@@ -2,9 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 use crossbeam_channel::{Receiver, Sender};
-use ensemble_core::emulation::nes::{ExecutionFinishedType, Nes};
-use ensemble_core::emulation::ppu::{EmulatorFetchable, PaletteData};
-use ensemble_core::util::Hashable;
+use monsoon_core::emulation::nes::{ExecutionFinishedType, Nes};
+use monsoon_core::emulation::ppu::{EmulatorFetchable, PaletteData};
+use monsoon_core::util::Hashable;
 
 use crate::messages::{ControllerEvent, EmulatorMessage, FrontendMessage, SaveType};
 

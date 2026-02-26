@@ -1,10 +1,10 @@
 [package]
-name = "ensemble-cli"
+name = "monsoon-cli"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "ensemble_cli"
+name = "monsoon_cli"
 path = "src/lib.rs"
 
 [[bin]]
@@ -19,5 +19,5 @@ clap = { version = "4.5.54", features = ["derive", "cargo", "env", "string", "un
 toml = {version = "1.0.2", features = ["fast_hash"]}
 image = {version = "0.25.9"}
 
-ensemble-core = { path = "../core" }
+monsoon-core = { path = "../core" }
 

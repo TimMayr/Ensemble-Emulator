@@ -7,7 +7,7 @@
 
 use std::process::ExitCode;
 
-use ensemble_choreo::cli::{parse_args, run_headless, validate_args};
+use monsoon_cli::cli::{parse_args, run_headless, validate_args};
 // =============================================================================
 // Exit Codes (as documented in CLI_INTERFACE.md)
 // =============================================================================

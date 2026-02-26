@@ -101,7 +101,7 @@ pub enum StorageCategory {
     Data,
     /// Cached data that can be regenerated (thumbnails, compiled shaders)
     Cache,
-    /// Data not managed by Ensemble, that still needs to be addressed via storage keys
+    /// Data not managed by Monsoon, that still needs to be addressed via storage keys
     Root,
 }
 
@@ -204,7 +204,7 @@ mod native {
 
     const APP_QUALIFIER: &str = "com";
     const APP_ORGANIZATION: &str = "Lightsong";
-    const APP_NAME: &str = "EnsembleEmulator";
+    const APP_NAME: &str = "MonsoonEmulator";
 
     static PROJECT_DIRS: OnceLock<Option<ProjectDirs>> = OnceLock::new();
 
@@ -379,7 +379,7 @@ mod wasm {
 
     use super::*;
 
-    const DB_NAME: &str = "ensemble_emulator";
+    const DB_NAME: &str = "monsoon_emulator";
     const DB_VERSION: u32 = 1;
     const STORE_NAME: &str = "storage";
 
@@ -390,7 +390,7 @@ mod wasm {
     ///
     /// # Database Structure
     ///
-    /// - Database name: "ensemble_emulator"
+    /// - Database name: "monsoon_emulator"
     /// - Object store: "storage" (key-value pairs where key is the StorageKey path string)
     /// - Values are stored as Uint8Array (raw bytes)
     /// - Prefix queries use KeyRange::bound() on the primary key for efficient listing
@@ -532,7 +532,7 @@ mod wasm {
         }
 
         fn get_display_path(&self, key: &StorageKey) -> String {
-            format!("indexeddb://ensemble_emulator/{}", Self::key_string(key))
+            format!("indexeddb://monsoon_emulator/{}", Self::key_string(key))
         }
 
         fn key_to_path_opt(&self, _key: Option<&StorageKey>) -> Option<PathBuf> {

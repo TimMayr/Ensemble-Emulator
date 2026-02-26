@@ -1,6 +1,6 @@
-use ensemble_core::emulation::ppu::EmulatorFetchable;
-use ensemble_core::emulation::rom::RomFile;
-use ensemble_core::emulation::savestate::SaveState;
+use monsoon_core::emulation::ppu::EmulatorFetchable;
+use monsoon_core::emulation::rom::RomFile;
+use monsoon_core::emulation::savestate::SaveState;
 
 /// Message types for communication between the frontend and emulator.
 ///

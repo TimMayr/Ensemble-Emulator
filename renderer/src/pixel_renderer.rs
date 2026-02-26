@@ -1,8 +1,8 @@
 use std::fmt::{Debug, Formatter};
 
-use ensemble_core::emulation::palette_util::{RgbColor, RgbPalette};
-use ensemble_core::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
-use ensemble_core::emulation::screen_renderer::ScreenRenderer;
+use monsoon_core::emulation::palette_util::{RgbColor, RgbPalette};
+use monsoon_core::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+use monsoon_core::emulation::screen_renderer::ScreenRenderer;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
@@ -52,7 +52,7 @@ impl From<RgbPalette> for FlatPalette {
 /// # Usage
 ///
 /// ```ignore
-/// use ensemble_gown::LookupPaletteRenderer;
+/// use monsoon_default_renderers::LookupPaletteRenderer;
 /// impl Default for LookupPaletteRenderer {
 /// let mut renderer = LookupPaletteRenderer::default();
 /// renderer.set_palette(my_palette);

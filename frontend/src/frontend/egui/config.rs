@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 
-use ensemble_core::emulation::palette_util::RgbPalette;
-use ensemble_core::emulation::ppu::EmulatorFetchable;
-use ensemble_core::emulation::rom::RomFile;
-use ensemble_core::emulation::screen_renderer::{ScreenRenderer, create_renderer};
+use monsoon_core::emulation::palette_util::RgbPalette;
+use monsoon_core::emulation::ppu::EmulatorFetchable;
+use monsoon_core::emulation::rom::RomFile;
+use monsoon_core::emulation::screen_renderer::{ScreenRenderer, create_renderer};
 
 use crate::frontend::egui::keybindings::KeybindingsConfig;
 use crate::frontend::egui_frontend::get_all_renderers;

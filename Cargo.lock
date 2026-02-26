@@ -1338,65 +1338,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
 
 [[package]]
-name = "ensemble-cli"
-version = "0.1.0"
-dependencies = [
- "clap",
- "ensemble-core",
- "image",
- "postcard",
- "serde",
- "serde_json",
- "toml",
-]
-
-[[package]]
-name = "ensemble-core"
-version = "0.1.0"
-dependencies = [
- "postcard",
- "serde",
- "serde_json",
- "sha2",
-]
-
-[[package]]
-name = "ensemble-default-renderers"
-version = "0.1.0"
-dependencies = [
- "ensemble-core",
- "serde",
- "serde-big-array",
-]
-
-[[package]]
-name = "ensemble-frontend"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "clap",
- "crossbeam-channel",
- "directories",
- "eframe",
- "egui",
- "egui_tiles",
- "ensemble-core",
- "ensemble-default-renderers",
- "js-sys",
- "rexie",
- "rfd",
- "serde",
- "sha2",
- "tokio",
- "toml",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "web-time",
-]
-
-[[package]]
 name = "enumflags2"
 version = "0.7.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2436,6 +2377,65 @@ checksum = "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
 dependencies = [
  "adler2",
  "simd-adler32",
+]
+
+[[package]]
+name = "monsoon-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "image",
+ "monsoon-core",
+ "postcard",
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
+name = "monsoon-core"
+version = "0.1.0"
+dependencies = [
+ "postcard",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "monsoon-default-renderers"
+version = "0.1.0"
+dependencies = [
+ "monsoon-core",
+ "serde",
+ "serde-big-array",
+]
+
+[[package]]
+name = "monsoon-frontend"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "clap",
+ "crossbeam-channel",
+ "directories",
+ "eframe",
+ "egui",
+ "egui_tiles",
+ "js-sys",
+ "monsoon-core",
+ "monsoon-default-renderers",
+ "rexie",
+ "rfd",
+ "serde",
+ "sha2",
+ "tokio",
+ "toml",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "web-time",
 ]
 
 [[package]]

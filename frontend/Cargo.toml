@@ -1,10 +1,10 @@
 [package]
-name = "ensemble-frontend"
+name = "monsoon-frontend"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "ensemble_frontend"
+name = "monsoon_frontend"
 path = "src/lib.rs"
 
 [[bin]]
@@ -26,12 +26,12 @@ serde = { version = "1.0.228", features = ["derive", "alloc", "rc"] }
 toml = { version = "1.0.2", features = ["fast_hash"] }
 async-trait = { version = "0.1.89" }
 
-ensemble-core = { path = "../core" }
-ensemble-default-renderers = { path = "../renderer", optional = true }
+monsoon-core = { path = "../core" }
+monsoon-default-renderers = { path = "../renderer", optional = true }
 
 [features]
 default = ["default_renderers"]
-default_renderers = ["ensemble-default-renderers"]
+default_renderers = ["monsoon-default-renderers"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros"] }

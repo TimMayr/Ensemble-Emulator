@@ -3,7 +3,7 @@
 //! This module contains common widget patterns that are used across
 //! multiple UI components to reduce code duplication.
 
-use ensemble_core::emulation::palette_util::RgbColor;
+use monsoon_core::emulation::palette_util::RgbColor;
 
 /// Draw a colored cell with hover highlighting using RgbColor.
 ///

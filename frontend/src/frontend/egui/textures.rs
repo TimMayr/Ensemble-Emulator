@@ -1,9 +1,9 @@
 use egui::{ColorImage, Context, TextureHandle, TextureOptions};
-use ensemble_core::emulation::palette_util::{RgbColor, RgbPalette};
-use ensemble_core::emulation::ppu::{
+use monsoon_core::emulation::palette_util::{RgbColor, RgbPalette};
+use monsoon_core::emulation::ppu::{
     NametableData, PALETTE_COUNT, PaletteData, TILE_COUNT, TILE_SIZE, TileData,
 };
-use ensemble_core::emulation::screen_renderer::ScreenRenderer;
+use monsoon_core::emulation::screen_renderer::ScreenRenderer;
 use web_time::Instant;
 
 /// Texture storage and management for the emulator display

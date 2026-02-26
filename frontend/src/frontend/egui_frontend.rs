@@ -21,15 +21,15 @@ use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
 use eframe::glow;
 use egui::{Context, Style, ViewportCommand, Visuals};
-use ensemble_core::declare_renderers;
-use ensemble_core::emulation::nes::Nes;
-use ensemble_core::emulation::ppu::{EmulatorFetchable, PaletteData, TILE_COUNT, TileData};
-use ensemble_core::emulation::savestate::SaveState;
-use ensemble_core::emulation::screen_renderer::{
+use monsoon_core::declare_renderers;
+use monsoon_core::emulation::nes::Nes;
+use monsoon_core::emulation::ppu::{EmulatorFetchable, PaletteData, TILE_COUNT, TileData};
+use monsoon_core::emulation::savestate::SaveState;
+use monsoon_core::emulation::screen_renderer::{
     NoneRenderer, RendererRegistration, ScreenRenderer,
 };
-use ensemble_core::util::ToBytes;
-use ensemble_default_renderers::LookupPaletteRenderer;
+use monsoon_core::util::ToBytes;
+use monsoon_default_renderers::LookupPaletteRenderer;
 use web_time::Instant;
 
 use crate::channel_emu::ChannelEmulator;
@@ -210,9 +210,9 @@ impl EguiApp {
         // Extract stem for window title
         let stem = name.rsplit_once('.').map(|(s, _)| s).unwrap_or(&name);
         let window_title = if stem.is_empty() {
-            "Ensemble".to_string()
+            "Monsoon".to_string()
         } else {
-            format!("Ensemble - {}", stem)
+            format!("Monsoon - {}", stem)
         };
 
         self.config.user_config.previous_rom_name = Some(name);
@@ -729,8 +729,8 @@ async fn run_internal(res: SetupResponse) -> Result<(), Box<dyn std::error::Erro
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1024.0, 768.0])
-            .with_title("Ensemble")
-            .with_app_id("ensemble-emulator"),
+            .with_title("Monsoon")
+            .with_app_id("monsoon-emulator"),
         vsync: false, // Disable vsync for uncapped performance
         // Enable persistence with custom storage path
         persistence_path: res.persistence_path,
@@ -740,7 +740,7 @@ async fn run_internal(res: SetupResponse) -> Result<(), Box<dyn std::error::Erro
 
     // Run the application
     eframe::run_native(
-        "Ensemble",
+        "Monsoon",
         options,
         Box::new(move |cc| {
             let style = Style {

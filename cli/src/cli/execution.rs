@@ -13,9 +13,9 @@
 use std::io::{Read, Write};
 use std::path::PathBuf;
 
-use ensemble_core::emulation::nes::{MASTER_CYCLES_PER_FRAME, Nes};
-use ensemble_core::emulation::savestate::{SaveState, try_load_state};
-use ensemble_core::emulation::screen_renderer::RgbColor;
+use monsoon_core::emulation::nes::{MASTER_CYCLES_PER_FRAME, Nes};
+use monsoon_core::emulation::palette_util::RgbColor;
+use monsoon_core::emulation::savestate::{SaveState, try_load_state};
 
 use crate::cli::args::parse_hex_u8;
 // =============================================================================

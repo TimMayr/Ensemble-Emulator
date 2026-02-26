@@ -1,6 +1,6 @@
 //! Options pane rendering
 
-use ensemble_core::emulation::screen_renderer::ScreenRenderer;
+use monsoon_core::emulation::screen_renderer::ScreenRenderer;
 
 use crate::frontend::egui::config::{AppConfig, AppSpeed, DebugSpeed};
 use crate::frontend::egui_frontend::get_all_renderers;

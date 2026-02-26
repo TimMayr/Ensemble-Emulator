@@ -10,10 +10,10 @@
 use std::path::Path;
 use std::time::Instant;
 
-use ensemble_core::emulation::nes::Nes;
-use ensemble_core::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
-use ensemble_core::emulation::rom::RomFile;
-use ensemble_core::emulation::screen_renderer::RgbColor;
+use monsoon_core::emulation::nes::Nes;
+use monsoon_core::emulation::palette_util::RgbColor;
+use monsoon_core::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+use monsoon_core::emulation::rom::RomFile;
 
 use crate::cli::{
     CliArgs, ExecutionConfig, ExecutionEngine, ExecutionResult, FpsConfig, MemoryDump, MemoryInit,

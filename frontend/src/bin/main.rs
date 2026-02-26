@@ -4,7 +4,7 @@ use clap::value_parser;
 
 #[cfg(feature = "default_renderers")]
 mod renderers {
-    extern crate ensemble_default_renderers;
+    extern crate monsoon_default_renderers;
 }
 
 const EXIT_SUCCESS: u8 = 0;
@@ -17,9 +17,9 @@ const EXIT_GENERAL_ERROR: u8 = 1;
 use std::path::PathBuf;
 
 use clap::Parser;
-use ensemble_frontend::frontend::egui_frontend;
+use monsoon_frontend::frontend::egui_frontend;
 #[derive(Parser, Debug, Clone, Default)]
-#[command(name = "Ensemble-Emulator - Ballroom")]
+#[command(name = "Monsoon-Emulator - Ballroom")]
 #[command(version, about, long_about = None)]
 pub struct CliArgs {
     /// Path to ROM file
