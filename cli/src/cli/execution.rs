@@ -664,16 +664,16 @@ impl ExecutionEngine {
         let start_cycles = self.emu.total_cycles;
 
         // Run frame by frame for stop condition checking
-        loop {
+        let result = loop {
             // Run one frame
             match self.emu.step_frame() {
                 Ok(_) => {}
                 Err(e) => {
-                    return Ok(ExecutionResult {
+                    break ExecutionResult {
                         stop_reason: StopReason::Error(e),
                         total_cycles: self.emu.total_cycles - start_cycles,
                         total_frames: self.frame_count,
-                    });
+                    };
                 }
             }
 
@@ -690,22 +690,27 @@ impl ExecutionEngine {
                 self.config
                     .check_conditions(&self.emu, cycles_run, self.frame_count)
             {
-                return Ok(ExecutionResult {
+                break ExecutionResult {
                     stop_reason: reason,
                     total_cycles: cycles_run,
                     total_frames: self.frame_count,
-                });
+                };
             }
 
             // Check max cycles
             if self.emu.total_cycles >= max_cycles {
-                return Ok(ExecutionResult {
+                break ExecutionResult {
                     stop_reason: StopReason::Completed,
                     total_cycles: cycles_run,
                     total_frames: self.frame_count,
-                });
+                };
             }
-        }
+        };
+
+        // Write trace log to file if configured
+        self.write_trace_log()?;
+
+        Ok(result)
     }
 
     /// Run execution with streaming video export.
@@ -814,6 +819,7 @@ impl ExecutionEngine {
                 self.config
                     .check_conditions(&self.emu, cycles_run, self.frame_count)
             {
+                self.write_trace_log()?;
                 return Ok(ExecutionResult {
                     stop_reason: reason,
                     total_cycles: cycles_run,
@@ -823,6 +829,7 @@ impl ExecutionEngine {
 
             // Check max cycles
             if self.emu.total_cycles >= max_cycles {
+                self.write_trace_log()?;
                 return Ok(ExecutionResult {
                     stop_reason: StopReason::Completed,
                     total_cycles: cycles_run,
@@ -843,6 +850,17 @@ impl ExecutionEngine {
 
     /// Get mutable reference to the emulator
     pub fn emulator_mut(&mut self) -> &mut Nes { &mut self.emu }
+
+    /// Write trace log to the configured file path, if tracing was enabled.
+    fn write_trace_log(&self) -> Result<(), String> {
+        if let Some(ref path) = self.config.trace_path {
+            if let Some(ref trace) = self.emu.trace_log {
+                std::fs::write(path, &trace.log)
+                    .map_err(|e| format!("Failed to write trace log to {}: {}", path.display(), e))?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Default for ExecutionEngine {

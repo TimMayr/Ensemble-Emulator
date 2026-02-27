@@ -34,6 +34,13 @@ pub const NES_WIDTH: u32 = TOTAL_OUTPUT_WIDTH as u32;
 /// which require u32 dimensions rather than usize.
 pub const NES_HEIGHT: u32 = TOTAL_OUTPUT_HEIGHT as u32;
 
+/// Bitmask for extracting the 6-bit color index from a palette index
+const COLOR_INDEX_MASK: usize = 0x3F;
+/// Number of bits to shift right to extract emphasis bits
+const EMPHASIS_SHIFT: usize = 6;
+/// Bitmask for extracting the 3-bit emphasis value
+const EMPHASIS_MASK: usize = 0x07;
+
 /// Convert palette indices (u16) to RGB colors using the default NES palette.
 ///
 /// Each u16 value encodes: bits 0-5 = color index (0-63), bits 6-8 = emphasis bits.
@@ -42,8 +49,8 @@ pub fn palette_indices_to_rgb(indices: &[u16]) -> Vec<RgbColor> {
     indices
         .iter()
         .map(|&idx| {
-            let color = (idx as usize) & 0x3F;
-            let emphasis = ((idx as usize) >> 6) & 0x07;
+            let color = (idx as usize) & COLOR_INDEX_MASK;
+            let emphasis = ((idx as usize) >> EMPHASIS_SHIFT) & EMPHASIS_MASK;
             palette.colors[emphasis][color]
         })
         .collect()
