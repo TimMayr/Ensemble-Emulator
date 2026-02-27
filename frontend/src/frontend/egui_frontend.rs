@@ -618,11 +618,13 @@ impl eframe::App for EguiApp {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let rt = tokio::runtime::Handle::current();
-            if let Err(e) = rt.block_on(crate::frontend::persistence::save_config(
-                &persistent_config,
-            )) {
-                eprintln!("Failed to save configuration: {}", e);
-            }
+            tokio::task::block_in_place(|| {
+                if let Err(e) = rt.block_on(crate::frontend::persistence::save_config(
+                    &persistent_config,
+                )) {
+                    eprintln!("Failed to save configuration: {}", e);
+                }
+            });
         }
         #[cfg(target_arch = "wasm32")]
         {
