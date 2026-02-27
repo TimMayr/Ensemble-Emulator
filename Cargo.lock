@@ -2386,6 +2386,7 @@ dependencies = [
  "clap",
  "image",
  "monsoon-core",
+ "monsoon-default-renderers",
  "postcard",
  "serde",
  "serde_json",
