@@ -2,7 +2,7 @@
 
 Headless command-line interface for the Monsoon NES emulator.
 
-A CLI application for running NES ROMs without a GUI, useful for scripted/batch emulation, automated testing, and screenshot capture. It is part of the [Monsoon Emulator](https://github.com/EmIsGreat/Monsoon-Emulator) workspace.
+A CLI application for running NES ROMs without a GUI, useful for scripted/batch emulation, automated testing, and screenshot capture. It is part of the [Monsoon Emulator](https://github.com/EmIsGreat/Monsoon-Emulator) project.
 
 ## Features
 

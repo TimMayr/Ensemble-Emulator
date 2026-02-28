@@ -2,7 +2,7 @@
 
 Native GUI frontend for the Monsoon NES emulator, built with [egui](https://github.com/emilk/egui).
 
-A desktop (and web) application for playing NES games with a full graphical interface. It is part of the [Monsoon Emulator](https://github.com/EmIsGreat/Monsoon-Emulator) workspace.
+A desktop (and web) application for playing NES games with a full graphical interface. It is part of the [Monsoon Emulator](https://github.com/EmIsGreat/Monsoon-Emulator) project.
 
 ## Features
 
@@ -28,8 +28,13 @@ cargo run -- --rom path/to/game.nes
 
 The frontend supports WebAssembly builds for running in a web browser:
 
+### Build
 ```bash
 cargo build -p monsoon-frontend --target wasm32-unknown-unknown
+```
+### Serve
+```bash
+trunk serve
 ```
 
 ## License

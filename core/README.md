@@ -2,7 +2,7 @@
 
 Core NES emulation library — cycle-accurate MOS 6502 CPU, 2C02 PPU, memory subsystem, ROM parsing, and save states.
 
-This is the primary crate for anyone wanting to embed NES emulation in their own project. It is part of the [Monsoon Emulator](https://github.com/EmIsGreat/Monsoon-Emulator) workspace.
+This is the primary crate for anyone wanting to embed NES emulation in their own project. It is part of the [Monsoon Emulator](https://github.com/EmIsGreat/Monsoon-Emulator) project.
 
 ## Public API Modules
 
