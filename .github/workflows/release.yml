@@ -99,26 +99,52 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@nightly
 
-      - name: Publish monsoon-core
-        run: cargo publish -p monsoon-core --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || echo "::warning::monsoon-core publish failed or already published"
+      - name: Publish crates to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          publish_crate() {
+            local crate="$1"
+            echo "Publishing $crate..."
+            OUTPUT=$(cargo publish -p "$crate" --token "$CARGO_REGISTRY_TOKEN" 2>&1) && {
+              echo "✅ $crate published successfully"
+              return 0
+            }
+            if echo "$OUTPUT" | grep -q "already uploaded"; then
+              echo "::warning::$crate is already published at this version, skipping"
+              return 0
+            fi
+            echo "::error::Failed to publish $crate: $OUTPUT"
+            return 1
+          }
 
-      - name: Wait for crates.io index
-        run: sleep 30
+          wait_for_crate() {
+            local crate="$1"
+            local version="$2"
+            echo "Waiting for $crate@$version to appear on crates.io..."
+            for i in $(seq 1 10); do
+              if cargo search "$crate" 2>/dev/null | grep -q "\"$version\""; then
+                echo "✅ $crate@$version is available on crates.io"
+                return 0
+              fi
+              echo "  Attempt $i/10: not yet available, waiting 15s..."
+              sleep 15
+            done
+            echo "::warning::Timed out waiting for $crate@$version, proceeding anyway"
+          }
 
-      - name: Publish monsoon-default-renderers
-        run: cargo publish -p monsoon-default-renderers --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || echo "::warning::monsoon-default-renderers publish failed or already published"
+          VERSION=$(grep -m1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
 
-      - name: Wait for crates.io index
-        run: sleep 30
+          publish_crate monsoon-core
+          wait_for_crate monsoon-core "$VERSION"
 
-      - name: Publish monsoon-cli
-        run: cargo publish -p monsoon-cli --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || echo "::warning::monsoon-cli publish failed or already published"
+          publish_crate monsoon-default-renderers
+          wait_for_crate monsoon-default-renderers "$VERSION"
 
-      - name: Wait for crates.io index
-        run: sleep 30
+          publish_crate monsoon-cli
+          wait_for_crate monsoon-cli "$VERSION"
 
-      - name: Publish monsoon-frontend
-        run: cargo publish -p monsoon-frontend --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || echo "::warning::monsoon-frontend publish failed or already published"
+          publish_crate monsoon-frontend
 
   deploy-web:
     runs-on: ubuntu-latest
