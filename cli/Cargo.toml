@@ -1,7 +1,12 @@
 [package]
 name = "monsoon-cli"
-version = "0.1.0"
-edition = "2024"
+description = "Headless command-line interface for the Monsoon NES emulator"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [lib]
 name = "monsoon_cli"
@@ -19,6 +24,5 @@ clap = { version = "4.5.54", features = ["derive", "cargo", "env", "string", "un
 toml = {version = "1.0.2", features = ["fast_hash"]}
 image = {version = "0.25.9"}
 
-monsoon-core = { path = "../core" }
-monsoon-default-renderers = { path = "../renderer" }
-
+monsoon-core = { workspace = true }
+monsoon-default-renderers = { workspace = true }

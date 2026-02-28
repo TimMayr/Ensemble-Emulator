@@ -11,7 +11,7 @@
 //! - Suitable for exposing as a crate API
 
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use monsoon_core::emulation::nes::{MASTER_CYCLES_PER_FRAME, Nes};
 use monsoon_core::emulation::savestate::{SaveState, try_load_state_from_bytes};
@@ -212,11 +212,11 @@ impl StopCondition {
             StopCondition::Cycles(target) => cycles >= *target,
             StopCondition::Frames(target) => frames >= *target,
             StopCondition::PcEquals(addr) | StopCondition::Breakpoint(addr) => {
-                emu.cpu.program_counter == *addr
+                emu.program_counter() == *addr
             }
             StopCondition::Opcode(op) => {
-                if let Some(current) = emu.cpu.current_opcode
-                    && current.opcode == *op
+                if let Some(opcode) = emu.current_opcode_byte()
+                    && opcode == *op
                 {
                     return true;
                 }
@@ -259,13 +259,13 @@ impl StopCondition {
                     mem_val != *value
                 }
             }
-            StopCondition::OnHalt => emu.cpu.is_halted,
+            StopCondition::OnHalt => emu.is_halted(),
             StopCondition::MemoryWatch {
                 addr,
                 access_type,
             } => {
                 // Check if CPU accessed this address
-                if let Some(last_access) = emu.cpu.last_memory_access {
+                if let Some(last_access) = emu.last_memory_access() {
                     let (access_addr, was_read) = last_access;
                     if access_addr == *addr {
                         match access_type {
@@ -290,7 +290,7 @@ impl StopCondition {
             StopCondition::PcEquals(addr) | StopCondition::Breakpoint(addr) => {
                 StopReason::PcReached(*addr)
             }
-            StopCondition::Opcode(_) => StopReason::PcReached(emu.cpu.program_counter),
+            StopCondition::Opcode(_) => StopReason::PcReached(emu.program_counter()),
             StopCondition::MemoryEquals {
                 addr, ..
             }
@@ -310,8 +310,7 @@ impl StopCondition {
                 access_type,
             } => {
                 let was_read = emu
-                    .cpu
-                    .last_memory_access
+                    .last_memory_access()
                     .map(|(_, was_read)| was_read)
                     .unwrap_or(true);
                 StopReason::MemoryWatchpoint {
@@ -591,7 +590,7 @@ impl ExecutionEngine {
     }
 
     /// Load ROM from path
-    pub fn load_rom(&mut self, path: &PathBuf) -> Result<(), String> {
+    pub fn load_rom(&mut self, path: &Path) -> Result<(), String> {
         let path_str = path.to_string_lossy().to_string();
         self.emu.load_rom(&path_str);
         Ok(())
@@ -611,10 +610,12 @@ impl ExecutionEngine {
         if let Some(ref source) = self.savestate_config.load_from {
             let state = match source {
                 SavestateSource::File(path) => {
-                    let data = std::fs::read(path)
-                        .map_err(|e| format!("Failed to read savestate from {}: {}", path.display(), e))?;
-                    try_load_state_from_bytes(&data)
-                        .ok_or_else(|| format!("Failed to load savestate from {}", path.display()))?
+                    let data = std::fs::read(path).map_err(|e| {
+                        format!("Failed to read savestate from {}: {}", path.display(), e)
+                    })?;
+                    try_load_state_from_bytes(&data).ok_or_else(|| {
+                        format!("Failed to load savestate from {}", path.display())
+                    })?
                 }
                 SavestateSource::Stdin => {
                     let mut buffer = Vec::new();
@@ -633,7 +634,9 @@ impl ExecutionEngine {
     /// Save savestate based on configuration
     pub fn save_savestate(&self) -> Result<(), String> {
         if let Some(ref dest) = self.savestate_config.save_to {
-            let state = self.emu.save_state()
+            let state = self
+                .emu
+                .save_state()
                 .ok_or_else(|| "No ROM loaded, cannot save state".to_string())?;
             let encoded = encode_savestate(&state, self.savestate_config.format)?;
 
@@ -767,13 +770,11 @@ impl ExecutionEngine {
                 // Calculate target cycle for this capture relative to frame start
                 // Using (capture_idx + 1) * MASTER_CYCLES_PER_FRAME / captures_per_frame
                 // ensures the final capture always aligns with the frame boundary
-                let ppu = self.emu.ppu.borrow();
-                let odd_frame_offset = if ppu.even_frame && ppu.is_rendering() {
+                let odd_frame_offset = if self.emu.is_even_frame() && self.emu.is_rendering() {
                     2
                 } else {
                     -2
                 };
-                drop(ppu);
 
                 let base = (capture_idx + 1) as u128 * MASTER_CYCLES_PER_FRAME as u128;
 
@@ -854,11 +855,11 @@ impl ExecutionEngine {
 
     /// Write trace log to the configured file path, if tracing was enabled.
     fn write_trace_log(&self) -> Result<(), String> {
-        if let Some(ref path) = self.config.trace_path {
-            if let Some(ref trace) = self.emu.trace_log {
-                std::fs::write(path, &trace.log)
-                    .map_err(|e| format!("Failed to write trace log to {}: {}", path.display(), e))?;
-            }
+        if let Some(ref path) = self.config.trace_path
+            && let Some(trace) = self.emu.trace_log()
+        {
+            std::fs::write(path, &trace.log)
+                .map_err(|e| format!("Failed to write trace log to {}: {}", path.display(), e))?;
         }
         Ok(())
     }

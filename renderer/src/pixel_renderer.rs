@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Formatter};
 
 use monsoon_core::emulation::palette_util::{RgbColor, RgbPalette};
-use monsoon_core::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+use monsoon_core::emulation::ppu_util::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use monsoon_core::emulation::screen_renderer::ScreenRenderer;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
@@ -46,17 +46,27 @@ impl From<RgbPalette> for FlatPalette {
 
 /// Lookup table-based palette renderer.
 ///
-/// This renderer uses a precomputed lookup table for fast color conversion.
-/// It is the default renderer for the NES emulator.
+/// This renderer pre-computes a flat 512-entry lookup table mapping each
+/// possible 9-bit NES palette index (6 color bits + 3 emphasis bits) to
+/// an [`RgbColor`]. Rendering is a simple O(1) array lookup per pixel,
+/// making this the fastest available renderer.
 ///
-/// # Usage
+/// # Example
 ///
-/// ```ignore
+/// ```rust,no_run
+/// use monsoon_core::emulation::palette_util::RgbPalette;
+/// use monsoon_core::emulation::screen_renderer::ScreenRenderer;
 /// use monsoon_default_renderers::LookupPaletteRenderer;
-/// impl Default for LookupPaletteRenderer {
+///
 /// let mut renderer = LookupPaletteRenderer::default();
-/// renderer.set_palette(my_palette);
-/// let rgb_colors = renderer.buffer_to_image(&pixel_indices);
+///
+/// // Optionally load a custom palette
+/// let palette = RgbPalette::default();
+/// renderer.set_palette(palette);
+///
+/// // Convert a pixel buffer to RGB
+/// # let pixel_buffer: &[u16] = &[];
+/// let rgb = renderer.buffer_to_image(pixel_buffer);
 /// ```
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LookupPaletteRenderer {

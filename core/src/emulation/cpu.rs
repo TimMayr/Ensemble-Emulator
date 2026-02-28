@@ -20,9 +20,7 @@ use crate::util;
 
 pub const INTERNAL_RAM_MEMORY_RANGE: RangeInclusive<u16> = 0x0..=0x1FFF;
 pub const INTERNAL_RAM_SIZE: u16 = 0x800;
-pub const STACK_START: u8 = 0xFF;
 pub const STACK_START_ADDRESS: u16 = 0x0100;
-
 pub const NEGATIVE_BIT: u8 = 0x80;
 pub const CARRY_BIT: u8 = 0x1;
 pub const ZERO_BIT: u8 = 0x2;

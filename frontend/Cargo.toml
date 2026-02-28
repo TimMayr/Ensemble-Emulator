@@ -1,7 +1,12 @@
 [package]
 name = "monsoon-frontend"
-version = "0.1.0"
-edition = "2024"
+description = "Native GUI frontend for the Monsoon NES emulator, built with egui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [lib]
 name = "monsoon_frontend"
@@ -26,8 +31,8 @@ serde = { version = "1.0.228", features = ["derive", "alloc", "rc"] }
 toml = { version = "1.0.2", features = ["fast_hash"] }
 async-trait = { version = "0.1.89" }
 
-monsoon-core = { path = "../core" }
-monsoon-default-renderers = { path = "../renderer", optional = true }
+monsoon-core = { workspace = true }
+monsoon-default-renderers = { workspace = true, optional = true }
 
 [features]
 default = ["default_renderers"]

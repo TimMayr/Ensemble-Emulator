@@ -12,7 +12,7 @@ use std::time::Instant;
 
 use monsoon_core::emulation::nes::Nes;
 use monsoon_core::emulation::palette_util::RgbColor;
-use monsoon_core::emulation::ppu::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+use monsoon_core::emulation::ppu_util::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
 use monsoon_core::emulation::rom::RomFile;
 use monsoon_core::emulation::screen_renderer::{ScreenRenderer, create_renderer};
 
@@ -172,9 +172,9 @@ fn handle_rom_info(args: &CliArgs) -> Result<(), String> {
 /// Print ROM information to stdout.
 pub fn print_rom_info(rom_path: &Path) -> Result<(), String> {
     let path_str = rom_path.to_string_lossy().to_string();
-    let data = std::fs::read(rom_path)
-        .map_err(|e| format!("Failed to read ROM file: {}", e))?;
-    let rom = RomFile::load(&data, Some(path_str));
+    let data = std::fs::read(rom_path).map_err(|e| format!("Failed to read ROM file: {}", e))?;
+    let rom =
+        RomFile::load(&data, Some(path_str)).map_err(|e| format!("Failed to parse ROM: {}", e))?;
 
     println!("ROM Information:");
     println!("  File: {}", rom_path.display());
@@ -443,7 +443,11 @@ fn save_single_screenshot(frame: &[RgbColor], args: &CliArgs) -> Result<(), Stri
 }
 
 /// Save screenshot to file from buffered frames
-pub fn save_screenshot(frames: &[Vec<u16>], renderer: &mut Box<dyn ScreenRenderer>, args: &CliArgs) -> Result<(), String> {
+pub fn save_screenshot(
+    frames: &[Vec<u16>],
+    renderer: &mut Box<dyn ScreenRenderer>,
+    args: &CliArgs,
+) -> Result<(), String> {
     if let Some(ref screenshot_path) = args.video.screenshot {
         if frames.is_empty() {
             eprintln!("Warning: No frames to screenshot");
@@ -482,7 +486,11 @@ pub fn save_screenshot(frames: &[Vec<u16>], renderer: &mut Box<dyn ScreenRendere
 // =============================================================================
 
 /// Save recorded frames to video file
-pub fn save_video(frames: &[Vec<u16>], renderer: &mut Box<dyn ScreenRenderer>, args: &CliArgs) -> Result<(), String> {
+pub fn save_video(
+    frames: &[Vec<u16>],
+    renderer: &mut Box<dyn ScreenRenderer>,
+    args: &CliArgs,
+) -> Result<(), String> {
     if let Some(ref video_path) = args.video.video_path {
         // Check if format requires FFmpeg and warn if not available
         if args.video.video_format == VideoFormat::Mp4 && !is_ffmpeg_available() {
@@ -611,27 +619,19 @@ fn create_ppu_dump(emu: &Nes, range: &str) -> Result<MemoryDump, String> {
 
 /// Create an OAM memory dump from the emulator
 fn create_oam_dump(emu: &Nes) -> MemoryDump {
-    let mem = emu.ppu.borrow().oam.get_memory_debug(None);
+    let mem = emu.get_oam_debug();
     MemoryDump::oam(mem)
 }
 
 /// Create a nametables memory dump from the emulator
 fn create_nametables_dump(emu: &Nes) -> MemoryDump {
-    let mem = emu
-        .ppu
-        .borrow()
-        .memory
-        .get_memory_debug(Some(0x2000..=0x2FFF));
+    let mem = emu.get_memory_debug(Some(0x2000..=0x2FFF))[1].to_vec();
     MemoryDump::nametables(mem)
 }
 
 /// Create a palette RAM memory dump from the emulator
 fn create_palette_dump(emu: &Nes) -> MemoryDump {
     // Palette RAM is at PPU addresses $3F00-$3F1F (32 bytes)
-    let mem = emu
-        .ppu
-        .borrow()
-        .memory
-        .get_memory_debug(Some(0x3F00..=0x3F1F));
+    let mem = emu.get_memory_debug(Some(0x3F00..=0x3F1F))[1].to_vec();
     MemoryDump::palette_ram(mem)
 }
