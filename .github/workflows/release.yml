@@ -51,11 +51,11 @@ jobs:
         run: |
           mkdir -p artifacts
           if [ "${{ runner.os }}" = "Windows" ]; then
-            cp target/release/cli.exe "artifacts/monsoon-cli-${{ matrix.target }}.exe"
-            cp target/release/frontend.exe "artifacts/monsoon-frontend-${{ matrix.target }}.exe"
+            cp target/full_release/cli.exe "artifacts/monsoon-cli-${{ matrix.target }}.exe"
+            cp target/full_release/frontend.exe "artifacts/monsoon-frontend-${{ matrix.target }}.exe"
           else
-            cp target/release/cli "artifacts/monsoon-cli-${{ matrix.target }}"
-            cp target/release/frontend "artifacts/monsoon-frontend-${{ matrix.target }}"
+            cp target/full_release/cli "artifacts/monsoon-cli-${{ matrix.target }}"
+            cp target/full_release/frontend "artifacts/monsoon-frontend-${{ matrix.target }}"
           fi
 
       - name: Upload artifacts
@@ -65,7 +65,9 @@ jobs:
           path: artifacts/
 
   release:
-    needs: build
+    needs:
+      - build
+      - publish-crates
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -106,7 +108,7 @@ jobs:
           publish_crate() {
             local crate="$1"
             echo "Publishing $crate..."
-            OUTPUT=$(cargo publish -p "$crate" --token "$CARGO_REGISTRY_TOKEN" 2>&1) && {
+            OUTPUT=$(cargo publish -p "$crate" 2>&1) && {
               echo "✅ $crate published successfully"
               return 0
             }
@@ -132,6 +134,9 @@ jobs:
             done
             echo "::warning::Timed out waiting for $crate@$version, proceeding anyway"
           }
+
+          echo "Login in to crates.io"
+          echo $CARGO_REGISTRY_TOKEN | cargo login
 
           VERSION=$(grep -m1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
 
@@ -170,12 +175,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-wasm-
 
+      - name: Install binaryen
+        run: sudo apt-get update && sudo apt-get install -y binaryen
+
+      - name: Install wasm-bindgen-cli
+        run: cargo install --locked wasm-bindgen-cli
+
       - name: Install trunk
         run: cargo install --locked trunk
 
       - name: Build frontend with trunk
         working-directory: frontend
-        run: trunk build --profile full_release
+        run: trunk build --cargo-profile full_release
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
