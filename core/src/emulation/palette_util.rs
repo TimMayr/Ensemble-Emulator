@@ -30,11 +30,11 @@ use crate::util::{Hashable, ToBytes, compute_hash};
 /// ```
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize, Default)]
 pub struct RgbColor {
-    /// Red channel (0–255).
+    /// Red channel (0-255).
     pub r: u8,
-    /// Green channel (0–255).
+    /// Green channel (0-255).
     pub g: u8,
-    /// Blue channel (0–255).
+    /// Blue channel (0-255).
     pub b: u8,
 }
 
@@ -67,8 +67,8 @@ impl From<(u8, u8, u8)> for RgbColor {
 /// The palette contains 64 base colors × 8 emphasis combinations = 512 total
 /// entries. Index as `colors[emphasis][color_index]` where:
 ///
-/// - `emphasis` is a 3-bit value (0–7) from the PPU mask register bits 5–7.
-/// - `color_index` is a 6-bit value (0–63) from the PPU output.
+/// - `emphasis` is a 3-bit value (0-7) from the PPU mask register bits 5-7.
+/// - `color_index` is a 6-bit value (0-63) from the PPU output.
 ///
 /// Use [`RgbPalette::default()`] to get the built-in 2C02G palette, or
 /// [`parse_palette_from_bytes()`] to load a custom `.pal` file.

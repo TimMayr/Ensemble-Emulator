@@ -46,9 +46,9 @@ pub struct CpuState {
     pub y_register: u8,
     /// Processor status flags (NV-BDIZC).
     pub processor_status: u8,
-    /// Internal RAM snapshot (2 KB, addresses `$0000`–`$07FF`).
+    /// Internal RAM snapshot (2 KB, addresses `$0000`-`$07FF`).
     pub internal_ram: Vec<u8>,
-    /// PRG RAM snapshot if present (up to 8 KB, addresses `$6000`–`$7FFF`).
+    /// PRG RAM snapshot if present (up to 8 KB, addresses `$6000`-`$7FFF`).
     pub prg_ram: Vec<u8>,
     /// Full memory dump for tracing/debug (not serialized to reduce size).
     #[serde(skip)]
@@ -201,16 +201,16 @@ pub struct PpuState {
     /// Next background tile attribute byte.
     #[doc(hidden)]
     pub bg_next_tile_attribute: u8,
-    /// Fine X scroll (0–7).
+    /// Fine X scroll (0-7).
     pub fine_x_scroll: u8,
     /// Whether the current frame is an even frame.
     pub even_frame: bool,
     /// Reset signal state.
     #[doc(hidden)]
     pub reset_signal: bool,
-    /// Current dot position within the scanline (0–340).
+    /// Current dot position within the scanline (0-340).
     pub dot: u16,
-    /// Current scanline (0–261).
+    /// Current scanline (0-261).
     pub scanline: u16,
     /// Next background tile ID.
     #[doc(hidden)]

@@ -51,8 +51,8 @@ use crate::emulation::palette_util::{RgbColor, RgbPalette};
 pub trait ScreenRenderer: Debug {
     /// Converts a buffer of palette indices to RGB colors.
     ///
-    /// The input `buffer` contains 16-bit values where bits 0–5 are the NES
-    /// color index and bits 6–8 are emphasis bits. The returned slice must
+    /// The input `buffer` contains 16-bit values where bits 0-5 are the NES
+    /// color index and bits 6-8 are emphasis bits. The returned slice must
     /// have the same length as `buffer`.
     ///
     /// The returned reference is valid until the next call to this method.

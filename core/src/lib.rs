@@ -51,8 +51,8 @@
 //! [`Nes::get_pixel_buffer`] returns a `Vec<u16>` of palette indices, **not** RGB values.
 //! Each entry encodes:
 //!
-//! - **Bits 0–5**: NES color index (0–63)
-//! - **Bits 6–8**: Emphasis bits from the PPU mask register
+//! - **Bits 0-5**: NES color index (0-63)
+//! - **Bits 6-8**: Emphasis bits from the PPU mask register
 //!
 //! Use a [`ScreenRenderer`] implementation (e.g., `LookupPaletteRenderer` from the
 //! `monsoon-default-renderers` crate) to convert these indices to RGB colors.

@@ -44,7 +44,7 @@ impl From<RgbPalette> for FlatPalette {
     }
 }
 
-/// Lookup table–based palette renderer.
+/// Lookup table-based palette renderer.
 ///
 /// This renderer pre-computes a flat 512-entry lookup table mapping each
 /// possible 9-bit NES palette index (6 color bits + 3 emphasis bits) to

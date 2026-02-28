@@ -244,7 +244,7 @@ impl RomFile {
     /// Extracts the PRG ROM region as a read-only [`Memory`] device.
     ///
     /// This is used internally to populate the CPU memory map at addresses
-    /// `$8000`–`$FFFF`.
+    /// `$8000`-`$FFFF`.
     pub fn get_prg_rom(&self) -> Memory {
         let mut rom = Rom::new(self.prg_memory.prg_rom_size as usize);
 
@@ -292,7 +292,7 @@ impl RomFile {
 
     /// Extracts the PRG RAM region as a writable [`Memory`] device.
     ///
-    /// This is mapped at CPU addresses `$6000`–`$7FFF` and may be
+    /// This is mapped at CPU addresses `$6000`-`$7FFF` and may be
     /// battery-backed for save data.
     pub fn get_prg_ram(&self) -> Memory {
         let mut ram = Ram::new(self.prg_memory.prg_ram_size as usize);

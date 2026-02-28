@@ -73,10 +73,10 @@ pub struct Nes {
     /// Optional CPU instruction trace logger for debugging.
     #[doc(hidden)]
     pub trace_log: Option<TraceLog>,
-    /// Internal CPU clock divider counter (0–12).
+    /// Internal CPU clock divider counter (0-12).
     #[doc(hidden)]
     pub cpu_cycle_counter: u8,
-    /// Internal PPU clock divider counter (0–4).
+    /// Internal PPU clock divider counter (0-4).
     #[doc(hidden)]
     pub ppu_cycle_counter: u8,
 }
@@ -85,8 +85,8 @@ impl Nes {
     /// Returns the current pixel buffer as a vector of 16-bit palette indices.
     ///
     /// Each value encodes:
-    /// - **Bits 0–5**: NES color index (0–63 from the system palette).
-    /// - **Bits 6–8**: Emphasis bits (R, G, B emphasis from the PPU mask register).
+    /// - **Bits 0-5**: NES color index (0-63 from the system palette).
+    /// - **Bits 6-8**: Emphasis bits (R, G, B emphasis from the PPU mask register).
     ///
     /// The buffer has dimensions [`TOTAL_OUTPUT_WIDTH`](crate::emulation::ppu::TOTAL_OUTPUT_WIDTH)
     /// × [`TOTAL_OUTPUT_HEIGHT`](crate::emulation::ppu::TOTAL_OUTPUT_HEIGHT) (256 × 240) pixels,
@@ -97,10 +97,10 @@ impl Nes {
     #[inline]
     pub fn get_pixel_buffer(&self) -> Vec<u16> { self.ppu.borrow().pixel_buffer.clone() }
 
-    /// Powers on the emulator, initializing the CPU–PPU connection.
+    /// Powers on the emulator, initializing the CPU-PPU connection.
     ///
     /// This sets up memory-mapped PPU registers in the CPU address space
-    /// (addresses `$2000`–`$3FFF`) and performs the CPU reset sequence.
+    /// (addresses `$2000`-`$3FFF`) and performs the CPU reset sequence.
     /// Must be called after [`load_rom()`](Nes::load_rom) and before any
     /// execution methods.
     pub fn power(&mut self) {
