@@ -7,9 +7,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
-
 use serde::Deserialize;
-
 use crate::cli::args::BuiltinPalette;
 use crate::cli::{CliArgs, OutputFormat, SavestateFormat, VideoExportMode, VideoFormat};
 
@@ -131,6 +129,8 @@ pub struct VideoConfig {
     /// Video export mode: "accurate" or "smooth"
     pub video_mode: Option<String>,
     pub video_scale: Option<String>,
+    /// Screen renderer ID (e.g., "PaletteLookup")
+    pub renderer: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -318,6 +318,10 @@ impl ConfigFile {
         {
             cli.video.video_mode =
                 VideoExportMode::from_str(mode).unwrap_or(VideoExportMode::Accurate);
+        }
+        // Renderer option
+        if cli.video.renderer.is_none() {
+            cli.video.renderer = self.video.renderer.clone();
         }
 
         // Execution options
