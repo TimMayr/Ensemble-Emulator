@@ -178,7 +178,7 @@ jobs:
 
       - name: Build frontend with trunk
         working-directory: frontend
-        run: trunk build --profile full_release
+        run: trunk build --cargo-profile full_release
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
