@@ -6,65 +6,34 @@ use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, OpenBus, Ram};
-use crate::emulation::rom::{RomFile, RomFileConvertible};
+// Re-import public constants/types from ppu_util so internal code can use them
+// with short names.
+pub use crate::emulation::ppu_util::{
+    EmulatorFetchable, NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, NametableData,
+    PALETTE_RAM_START_ADDRESS, PaletteData, TILE_SIZE, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
+    TileData,
+};
+use crate::emulation::rom::RomFile;
 use crate::emulation::savestate::PpuState;
-use crate::palettes::parse_palette_from_file;
 
-pub const PATTERN_TABLE_WIDTH: usize = 256 + 16; // 16*8*2 + 16px gap
-pub const PATTERN_TABLE_HEIGHT: usize = 128; // 16*8
-
-// Nametable display: 4 nametables of 32x30 tiles (8px each) arranged 2x2
-pub const NAMETABLE_WIDTH: usize = 512; // 32*8*2
-pub const NAMETABLE_HEIGHT: usize = 480; // 30*8*2
-
-pub const SPRITE_COUNT: usize = 64;
-pub const SPRITE_WIDTH: usize = 8;
-
-pub const TOTAL_OUTPUT_WIDTH: usize = 256;
-pub const TOTAL_OUTPUT_HEIGHT: usize = 240;
-
-pub const TILE_COUNT: usize = 512;
-pub const PALETTE_COUNT: usize = 8;
-pub const NAMETABLE_COUNT: usize = 4;
-pub const NAMETABLE_ROWS: usize = 30;
-pub const NAMETABLE_COLS: usize = 32;
 pub const PATTERN_TABLE_SIZE: usize = 256;
-
 pub const VBLANK_NMI_BIT: u8 = 0x80;
 pub const VRAM_ADDR_INC_BIT: u8 = 0x4;
-pub const UPPER_BYTE: u16 = 0xFF00;
-pub const LOWER_BYTE: u16 = 0x00FF;
-pub const BIT_14: u16 = 0x2000;
 pub const BACKGROUND_RENDER_BIT: u8 = 0x8;
 pub const SPRITE_RENDER_BIT: u8 = 0x10;
 pub const VRAM_ADDR_COARSE_X_SCROLL_MASK: u16 = 0x1F;
 pub const VRAM_ADDR_COARSE_Y_SCROLL_MASK: u16 = 0x3E0;
 pub const VRAM_ADDR_FINE_Y_SCROLL_MASK: u16 = 0x7000;
-pub const VRAM_ADDR_NAMETABLE_X_BIT: u16 = 0x400;
-pub const VRAM_ADDR_NAMETABLE_Y_BIT: u16 = 0x800;
-pub const FINE_Y_SCROLL_WIDTH: u8 = 0x7;
-pub const COARSE_SCROLL_WIDTH: u8 = 0x1F;
-pub const DOTS_PER_FRAME: u128 = 89342;
-pub const PALETTE_RAM_START_ADDRESS: u16 = 0x3F00;
 pub const PALETTE_RAM_END_INDEX: u16 = 0x3FFF;
 pub const PALETTE_RAM_SIZE: u16 = 0x20;
 pub const VRAM_SIZE: usize = 0x800;
 pub const DOTS_PER_SCANLINE: u16 = 340;
 /// Number of dots in one scanline including dot 0 (341 total: dots 0-340)
 pub const DOTS_IN_SCANLINE: u16 = DOTS_PER_SCANLINE + 1;
-pub const SCANLINES_PER_FRAME: u16 = 261;
 pub const OPEN_BUS_DECAY_DELAY: u32 = 420_000;
 pub const SPRITE_OVERFLOW_FLAG: u8 = 0b0010_0000;
-
-pub const TILES_PER_ROW: usize = 16;
-pub const TILE_SIZE: usize = 8;
 pub const BYTES_PER_TILE: usize = 16; // 8 low plane + 8 high plane
 pub const TABLE_BYTES: usize = 0x1000; // 256 tiles * 16 bytes
-
-// Optional: space 2 tiles (16px) between the two pattern tables for
-// readability.
-pub const TABLE_GAP_TILES: usize = 2;
-pub const TABLE_GAP_PX: usize = TABLE_GAP_TILES * TILE_SIZE;
 pub const VBL_START_SCANLINE: u16 = 241;
 pub const VISIBLE_SCANLINES: u16 = 239;
 pub const PRE_RENDER_SCANLINE: u16 = 261;
@@ -74,7 +43,6 @@ pub const NAMETABLE_SIZE: u16 = 0x400;
 pub const ATTRIBUTE_TABLE_BASE_ADDRESS: u16 = 0x23C0;
 
 pub const SCREEN_RENDER_WIDTH: usize = 256;
-pub const SCREEN_RENDER_HEIGHT: usize = 220;
 
 pub struct Ppu {
     pub dot_counter: u128,
@@ -93,7 +61,7 @@ pub struct Ppu {
     pub fine_x_scroll: u8,
     pub even_frame: bool,
     pub reset_signal: bool,
-    pub pixel_buffer: Vec<RgbColor>,
+    pub pixel_buffer: Vec<u16>,
     pub vbl_reset_counter: Cell<u8>,
     pub vbl_clear_scheduled: Cell<Option<u8>>,
     pub scanline: u16,
@@ -122,7 +90,6 @@ pub struct Ppu {
     pub current_sprite_tile_id: u8,
     pub oam_fetch: u8,
     pub log: String,
-    pub rgb_palette: RgbPalette,
 }
 
 impl Default for Ppu {
@@ -151,7 +118,7 @@ impl Ppu {
             t_register: 0,
             even_frame: false,
             reset_signal: false,
-            pixel_buffer: vec![(0, 0, 0); TOTAL_OUTPUT_HEIGHT * TOTAL_OUTPUT_WIDTH],
+            pixel_buffer: vec![0; TOTAL_OUTPUT_HEIGHT * TOTAL_OUTPUT_WIDTH],
             vbl_reset_counter: 0.into(),
             vbl_clear_scheduled: None.into(),
             scanline: 0,
@@ -177,7 +144,6 @@ impl Ppu {
             current_sprite_tile_id: 0,
             oam_fetch: 0,
             log: "".to_string(),
-            rgb_palette: Default::default(),
         }
     }
 
@@ -380,7 +346,7 @@ impl Ppu {
 
                     self.pixel_buffer
                         [self.scanline as usize * SCREEN_RENDER_WIDTH + (self.dot - 1) as usize] =
-                        self.rgb_palette.colors[0][pixel_color as usize];
+                        (pixel_color as u16) | ((self.get_emph_bits() as u16) << 6);
                 }
 
                 self.shift_bg_shifters();
@@ -453,6 +419,9 @@ impl Ppu {
 
         is_frame_end || res
     }
+
+    #[inline]
+    pub fn get_emph_bits(&self) -> u8 { self.get_mask_register() >> 5 }
 
     #[inline]
     pub fn sprite_fetch(&mut self) {
@@ -1048,8 +1017,7 @@ impl Ppu {
         }
     }
 
-    pub fn load_rom<T: RomFileConvertible>(&mut self, rom_get: &T) {
-        let rom_file = rom_get.as_rom_file();
+    pub fn load_rom(&mut self, rom_file: &RomFile) {
         let chr_rom = rom_file.get_chr_rom();
 
         if let Some(chr_rom) = chr_rom {
@@ -1068,7 +1036,7 @@ impl Ppu {
     pub fn reset(&mut self) { self.reset_signal = false; }
 
     #[inline]
-    pub fn get_pixel_buffer(&self) -> &Vec<RgbColor> { &self.pixel_buffer }
+    pub fn get_pixel_buffer(&self) -> &Vec<u16> { &self.pixel_buffer }
 
     pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
         self.memory.get_memory_debug(range)
@@ -1149,7 +1117,7 @@ impl Ppu {
             even_frame: state.even_frame,
             reset_signal: state.reset_signal,
             // Initialize pixel buffer fresh - it's not saved in savestate
-            pixel_buffer: vec![(0, 0, 0); TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT],
+            pixel_buffer: vec![0; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT],
             vbl_reset_counter: Cell::new(state.vbl_reset_counter),
             vbl_clear_scheduled: Cell::new(state.vbl_clear_scheduled),
             scanline: state.scanline,
@@ -1175,7 +1143,6 @@ impl Ppu {
             current_sprite_y: 0,
             sprite_fifo: [SpriteFifo::default(); 8],
             log: "".to_string(),
-            rgb_palette: Default::default(),
         };
 
         // Load ROM first to set up memory mapping (CHR ROM and nametables)
@@ -1283,60 +1250,14 @@ impl Display for SpriteFifo {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct RgbPalette {
-    pub colors: [[RgbColor; 64]; 8],
-}
-
-impl Default for RgbPalette {
-    fn default() -> Self { parse_palette_from_file(None, None) }
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub enum EmulatorFetchable {
-    Palettes(Option<Box<PaletteData>>),
-    Tiles(Option<Box<[TileData; TILE_COUNT]>>),
-    Nametables(Option<Box<NametableData>>),
-}
-
-impl EmulatorFetchable {
-    #[inline]
-    pub fn get_empty(emulator_fetchable: &EmulatorFetchable) -> EmulatorFetchable {
-        match emulator_fetchable {
-            EmulatorFetchable::Palettes(_) => EmulatorFetchable::Palettes(None),
-            EmulatorFetchable::Tiles(_) => EmulatorFetchable::Tiles(None),
-            EmulatorFetchable::Nametables(_) => EmulatorFetchable::Nametables(None),
-        }
-    }
-
-    /// Returns true if this fetchable should only be fetched when the emulator
-    /// notifies that the data has changed (passive), rather than on a regular
-    /// interval (active).
-    ///
-    /// Passive fetches reduce CPU overhead for data that rarely changes.
-    #[inline]
-    pub fn is_passive(&self) -> bool {
-        matches!(
-            self,
-            EmulatorFetchable::Palettes(_) | EmulatorFetchable::Tiles(_)
-        )
-    }
-}
-
-/// RGB color represented as a tuple of (R, G, B) bytes.
-/// This is more memory-efficient than u32 ARGB (3 bytes vs 4 bytes per pixel).
-pub type RgbColor = (u8, u8, u8);
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct PaletteData {
-    pub colors: [[u8; 4]; 8],
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct NametableData {
-    pub tiles: [[u16; NAMETABLE_ROWS * NAMETABLE_COLS]; NAMETABLE_COUNT],
-    pub palettes: [[u8; 64]; NAMETABLE_COUNT],
-}
+// #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+// pub struct RgbPalette {
+//     pub colors: [[RgbColor; 64]; 8],
+// }
+//
+// impl Default for RgbPalette {
+//     fn default() -> Self { parse_palette_from_file(None, None) }
+// }
 
 // #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 // pub struct SpriteViewerData {
@@ -1361,10 +1282,3 @@ pub struct NametableData {
 //     pub flip_x: bool,
 //     pub flip_y: bool,
 // }
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Default)]
-pub struct TileData {
-    pub address: u16,
-    pub plane_0: u64,
-    pub plane_1: u64,
-}

@@ -1,14 +1,24 @@
 [package]
-name = "lockstep-ensemble"
-version = "0.1.0"
-edition = "2024"
+name = "monsoon-core"
+description = "Core NES emulation library — cycle-accurate MOS 6502 CPU, 2C02 PPU, memory subsystem, ROM parsing, and save states"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+exclude = [
+    "tests/**",
+    "src/tests/**"
+]
 
 [lib]
-name = "lockstep_ensemble"
+name = "monsoon_core"
 path = "src/lib.rs"
 
 [dependencies]
 serde = {version = "1.0.228", features = ["derive", "alloc", "rc"]}
 serde_json = { version = "1.0.149" }
-bincode = { version = "2.0.1", features = ["serde"] }
+postcard = { version = "1.1.3", features = ["use-std"] }
 sha2 = {version = "0.11.0-rc.5"}

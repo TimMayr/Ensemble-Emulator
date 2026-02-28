@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crossbeam_channel::Sender;
 use egui::WidgetText;
 use egui_tiles::{Behavior, SimplificationOptions, TileId, Tiles, UiResponse};
-use lockstep_ensemble::emulation::ppu::EmulatorFetchable;
+use monsoon_core::emulation::ppu_util::EmulatorFetchable;
 use serde::{Deserialize, Serialize};
 
 use crate::channel_emu::{ChannelEmulator, FETCH_DEPS};
@@ -57,7 +57,7 @@ impl Pane {
     }
 }
 
-/// Behavior implementation for the tile tree
+/// Behavior implementation for the tile tree.
 pub struct TreeBehavior<'a> {
     pub config: &'a mut AppConfig,
     pub emu_textures: &'a EmuTextures,

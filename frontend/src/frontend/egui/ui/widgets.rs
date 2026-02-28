@@ -3,7 +3,7 @@
 //! This module contains common widget patterns that are used across
 //! multiple UI components to reduce code duplication.
 
-use lockstep_ensemble::emulation::ppu::RgbColor;
+use monsoon_core::emulation::palette_util::RgbColor;
 
 /// Draw a colored cell with hover highlighting using RgbColor.
 ///
@@ -32,7 +32,7 @@ pub fn color_cell_rgb(
     painter.rect_filled(
         rect,
         0.0,
-        egui::Color32::from_rgb(color.0, color.1, color.2),
+        egui::Color32::from_rgb(color.r, color.g, color.b),
     );
 
     if response.hovered() {

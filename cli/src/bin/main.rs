@@ -7,7 +7,7 @@
 
 use std::process::ExitCode;
 
-use choreo_ensemble::cli::{parse_args, run_headless, validate_args};
+use monsoon_cli::cli::{parse_args, run_headless, validate_args};
 // =============================================================================
 // Exit Codes (as documented in CLI_INTERFACE.md)
 // =============================================================================
@@ -32,6 +32,12 @@ fn main() -> ExitCode {
             return ExitCode::from(EXIT_INVALID_ARGS);
         }
     };
+
+    // Skip full validation for list-renderers (it doesn't need ROM etc.)
+    if args.video.list_renderers {
+        let _ = run_headless(&args);
+        return ExitCode::from(EXIT_SUCCESS);
+    }
 
     if let Err(e) = validate_args(&args) {
         eprintln!("Invalid arguments: {}", e);

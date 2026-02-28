@@ -16,9 +16,6 @@ use crate::cli::{CliArgs, OutputFormat, SavestateFormat, VideoExportMode, VideoF
 /// Default video FPS string value (1x multiplier)
 pub const DEFAULT_VIDEO_FPS: &str = "1x";
 
-/// NES NTSC framerate: 39375000 / 655171 ≈ 60.098814
-pub const NES_NTSC_FPS: f64 = 39375000.0 / 655171.0;
-
 /// TOML configuration file structure
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -134,6 +131,8 @@ pub struct VideoConfig {
     /// Video export mode: "accurate" or "smooth"
     pub video_mode: Option<String>,
     pub video_scale: Option<String>,
+    /// Screen renderer ID (e.g., "PaletteLookup")
+    pub renderer: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -321,6 +320,10 @@ impl ConfigFile {
         {
             cli.video.video_mode =
                 VideoExportMode::from_str(mode).unwrap_or(VideoExportMode::Accurate);
+        }
+        // Renderer option
+        if cli.video.renderer.is_none() {
+            cli.video.renderer = self.video.renderer.clone();
         }
 
         // Execution options

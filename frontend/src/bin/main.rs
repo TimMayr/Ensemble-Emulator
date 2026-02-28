@@ -2,6 +2,11 @@ use std::process::ExitCode;
 
 use clap::value_parser;
 
+#[cfg(feature = "default_renderers")]
+mod renderers {
+    extern crate monsoon_default_renderers;
+}
+
 const EXIT_SUCCESS: u8 = 0;
 const EXIT_GENERAL_ERROR: u8 = 1;
 // const EXIT_ROM_LOAD_FAILED: u8 = 3;  // Reserved for future use
@@ -11,37 +16,16 @@ const EXIT_GENERAL_ERROR: u8 = 1;
 
 use std::path::PathBuf;
 
-use ballroom_ensemble::frontend::egui_frontend;
-use clap::{Parser, ValueEnum};
-
+use clap::Parser;
+use monsoon_frontend::frontend::egui_frontend;
 #[derive(Parser, Debug, Clone, Default)]
-#[command(name = "Ensemble-Emulator - Ballroom")]
+#[command(name = "Monsoon-Emulator - Ballroom")]
 #[command(version, about, long_about = None)]
 pub struct CliArgs {
     /// Path to ROM file
     #[arg(short, long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath
     )]
     pub rom: Option<PathBuf>,
-
-    /// Path to .pal RGB palette file
-    #[arg(short, long, value_parser = value_parser!(PathBuf), value_hint = clap::ValueHint::FilePath
-    )]
-    pub palette: Option<PathBuf>,
-
-    /// Use built-in palette by name (2C02G, composite)
-    #[arg(long)]
-    pub palette_builtin: Option<BuiltinPalette>,
-}
-
-/// Built-in palette options
-#[derive(Debug, Clone, Copy, ValueEnum, Default)]
-pub enum BuiltinPalette {
-    /// Standard 2C02G palette (default)
-    #[default]
-    #[value(name = "2C02G")]
-    Nes2C02G,
-    /// NTSC composite simulation
-    Composite,
 }
 
 fn main() -> ExitCode {
@@ -66,5 +50,7 @@ fn main() -> ExitCode {
 // =============================================================================
 
 fn run_gui(args: &CliArgs) -> Result<(), String> {
-    egui_frontend::run(args.rom.clone(), args.palette.clone()).map_err(|e| e.to_string())
+    // Renderer type is selected at runtime via RendererKind
+    // The frontend uses RendererKind which can be switched dynamically
+    egui_frontend::run(args.rom.clone()).map_err(|e| e.to_string())
 }

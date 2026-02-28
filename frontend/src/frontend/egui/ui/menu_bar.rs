@@ -16,7 +16,7 @@ pub fn add_menu_bar(
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui.button("Load Rom").clicked() {
-                    spawn_rom_picker(async_sender, config.user_config.previous_rom_path.as_ref());
+                    spawn_rom_picker(async_sender, config.user_config.previous_rom_dir.as_ref());
                 }
 
                 ui.menu_button("Savestates", |ui| {
@@ -29,9 +29,16 @@ pub fn add_menu_bar(
                         // Use the new multistep savestate loading flow
                         spawn_savestate_picker(
                             async_sender,
-                            config.user_config.previous_savestate_path.as_ref(),
-                            config.user_config.previous_rom_path.clone(),
+                            config.user_config.previous_savestate_dir.as_ref(),
                         );
+                    }
+
+                    if config.user_config.loaded_rom.is_some()
+                        && ui.button("Browse Saves...").clicked()
+                    {
+                        ui.separator();
+                        let _ = async_sender.send(AsyncFrontendMessage::OpenSaveBrowser);
+                        ui.close();
                     }
                 });
             });
@@ -41,16 +48,10 @@ pub fn add_menu_bar(
                 }
                 if ui.button("Power cycle").clicked() {
                     let _ = async_sender.send(AsyncFrontendMessage::PowerOff);
-                    if let Some(p) = config.user_config.previous_rom_path.clone() {
-                        let _ = async_sender.send(AsyncFrontendMessage::LoadRom(Some(p)));
-                    }
                     let _ = async_sender.send(AsyncFrontendMessage::PowerOn);
                 }
                 if !config.console_config.is_powered {
                     if ui.button("Power On").clicked() {
-                        if let Some(p) = config.user_config.previous_rom_path.clone() {
-                            let _ = async_sender.send(AsyncFrontendMessage::LoadRom(Some(p)));
-                        }
                         let _ = async_sender.send(AsyncFrontendMessage::PowerOn);
                     }
                 } else if ui.button("Power Off").clicked() {

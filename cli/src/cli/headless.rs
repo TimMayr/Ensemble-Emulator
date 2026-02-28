@@ -10,9 +10,11 @@
 use std::path::Path;
 use std::time::Instant;
 
-use lockstep_ensemble::emulation::nes::Nes;
-use lockstep_ensemble::emulation::ppu::RgbColor;
-use lockstep_ensemble::emulation::rom::RomFile;
+use monsoon_core::emulation::nes::Nes;
+use monsoon_core::emulation::palette_util::RgbColor;
+use monsoon_core::emulation::ppu_util::{TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH};
+use monsoon_core::emulation::rom::RomFile;
+use monsoon_core::emulation::screen_renderer::{ScreenRenderer, create_renderer};
 
 use crate::cli::{
     CliArgs, ExecutionConfig, ExecutionEngine, ExecutionResult, FpsConfig, MemoryDump, MemoryInit,
@@ -20,12 +22,37 @@ use crate::cli::{
     VideoFormat, VideoResolution, apply_memory_init, apply_memory_init_config, is_ffmpeg_available,
     parse_memory_range,
 };
+
 // =============================================================================
 // NES Constants
 // =============================================================================
 
-pub const NES_WIDTH: u32 = 256;
-pub const NES_HEIGHT: u32 = 240;
+/// NES output width in pixels (256). Re-exported from core as u32 for image library APIs
+/// which require u32 dimensions rather than usize.
+pub const NES_WIDTH: u32 = TOTAL_OUTPUT_WIDTH as u32;
+
+/// NES output height in pixels (240). Re-exported from core as u32 for image library APIs
+/// which require u32 dimensions rather than usize.
+pub const NES_HEIGHT: u32 = TOTAL_OUTPUT_HEIGHT as u32;
+
+/// Create a screen renderer based on CLI arguments.
+///
+/// Uses the `--renderer` argument to select a renderer by ID.
+/// Falls back to "PaletteLookup" if no renderer is specified.
+pub fn create_renderer_from_args(args: &CliArgs) -> Box<dyn ScreenRenderer> {
+    let renderer_name = args.video.renderer.as_deref().unwrap_or("PaletteLookup");
+    let renderers = crate::get_all_renderers();
+    create_renderer(Some(renderer_name), renderers)
+}
+
+/// List all available renderers and print them to stdout.
+pub fn list_renderers() {
+    let renderers = crate::get_all_renderers();
+    println!("Available renderers:");
+    for reg in &renderers {
+        println!("  {} - {}", reg.key, reg.display_name);
+    }
+}
 
 // =============================================================================
 // Main Headless Entry Point
@@ -35,12 +62,25 @@ pub const NES_HEIGHT: u32 = 240;
 ///
 /// This is the main entry point for headless CLI execution.
 pub fn run_headless(args: &CliArgs) -> Result<(), String> {
+    // Handle renderer listing (exits early)
+    if args.video.list_renderers {
+        list_renderers();
+        return Ok(());
+    }
+
     // Handle ROM info display (exits early)
     if args.rom.rom_info {
         return handle_rom_info(args);
     }
 
     let start = Instant::now();
+
+    // Create the screen renderer based on CLI args
+    let mut renderer = create_renderer_from_args(args);
+
+    if args.verbose {
+        eprintln!("Using renderer: {}", renderer.get_display_name());
+    }
 
     // Build execution and savestate configs from CLI args
     let exec_config = ExecutionConfig::from_cli_args(args);
@@ -78,7 +118,7 @@ pub fn run_headless(args: &CliArgs) -> Result<(), String> {
     let use_streaming = args.video.video_path.is_some();
 
     let result = if use_streaming {
-        run_with_streaming_video(&mut engine, args)?
+        run_with_streaming_video(&mut engine, &mut renderer, args)?
     } else {
         // Standard buffered mode
         engine.run()?
@@ -100,12 +140,12 @@ pub fn run_headless(args: &CliArgs) -> Result<(), String> {
 
     // Save screenshot (only if we have frames - in buffered mode)
     if !use_streaming {
-        save_screenshot(&engine.frames, args)?;
+        save_screenshot(&engine.frames, &mut renderer, args)?;
     }
 
     // Video was already saved in streaming mode, skip in buffered mode if already done
     if !use_streaming {
-        save_video(&engine.frames, args)?;
+        save_video(&engine.frames, &mut renderer, args)?;
     }
 
     // Check for error stop reason
@@ -132,7 +172,9 @@ fn handle_rom_info(args: &CliArgs) -> Result<(), String> {
 /// Print ROM information to stdout.
 pub fn print_rom_info(rom_path: &Path) -> Result<(), String> {
     let path_str = rom_path.to_string_lossy().to_string();
-    let rom = RomFile::load(&path_str);
+    let data = std::fs::read(rom_path).map_err(|e| format!("Failed to read ROM file: {}", e))?;
+    let rom =
+        RomFile::load(&data, Some(path_str)).map_err(|e| format!("Failed to parse ROM: {}", e))?;
 
     println!("ROM Information:");
     println!("  File: {}", rom_path.display());
@@ -237,6 +279,7 @@ pub fn apply_memory_initialization(emu: &mut Nes, args: &CliArgs) -> Result<(), 
 /// memory usage for long recordings.
 fn run_with_streaming_video(
     engine: &mut ExecutionEngine,
+    renderer: &mut Box<dyn ScreenRenderer>,
     args: &CliArgs,
 ) -> Result<ExecutionResult, String> {
     let video_path = args.video.video_path.as_ref().unwrap();
@@ -285,7 +328,7 @@ fn run_with_streaming_video(
     .map_err(|e| format!("Failed to create video encoder: {}", e))?;
 
     // Run with streaming video export
-    let result = engine.run_with_video_encoder(&mut encoder)?;
+    let result = engine.run_with_video_encoder(&mut encoder, renderer)?;
 
     // Finalize encoder
     encoder
@@ -299,7 +342,8 @@ fn run_with_streaming_video(
     // Handle screenshot in streaming mode (save last frame)
     if args.video.screenshot.is_some() {
         let last_frame = engine.emulator().get_pixel_buffer();
-        save_single_screenshot(&last_frame, args)?;
+        let rgb_frame = renderer.buffer_to_image(&last_frame);
+        save_single_screenshot(rgb_frame, args)?;
     }
 
     Ok(result)
@@ -384,8 +428,8 @@ fn print_video_info(
 fn save_single_screenshot(frame: &[RgbColor], args: &CliArgs) -> Result<(), String> {
     if let Some(ref screenshot_path) = args.video.screenshot {
         let img: image::RgbaImage = image::ImageBuffer::from_fn(NES_WIDTH, NES_HEIGHT, |x, y| {
-            let (r, g, b) = frame[(y * NES_WIDTH + x) as usize];
-            image::Rgba([r, g, b, 255])
+            let color = frame[(y * NES_WIDTH + x) as usize];
+            image::Rgba([color.r, color.g, color.b, 255])
         });
 
         img.save(screenshot_path)
@@ -399,7 +443,11 @@ fn save_single_screenshot(frame: &[RgbColor], args: &CliArgs) -> Result<(), Stri
 }
 
 /// Save screenshot to file from buffered frames
-pub fn save_screenshot(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String> {
+pub fn save_screenshot(
+    frames: &[Vec<u16>],
+    renderer: &mut Box<dyn ScreenRenderer>,
+    args: &CliArgs,
+) -> Result<(), String> {
     if let Some(ref screenshot_path) = args.video.screenshot {
         if frames.is_empty() {
             eprintln!("Warning: No frames to screenshot");
@@ -408,13 +456,14 @@ pub fn save_screenshot(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), S
 
         // Use the last frame for screenshot
         let frame = frames.last().unwrap();
+        let rgb_frame = renderer.buffer_to_image(frame);
 
         if !args.quiet {
             eprintln!("Saving screenshot to {}...", screenshot_path.display());
         }
 
         // Convert RgbColor to RGB bytes for PNG
-        let rgb_data: Vec<u8> = frame.iter().flat_map(|&(r, g, b)| [r, g, b]).collect();
+        let rgb_data: Vec<u8> = rgb_frame.iter().flat_map(|c| [c.r, c.g, c.b]).collect();
 
         // Create PNG using image crate
         let img: image::ImageBuffer<image::Rgb<u8>, Vec<u8>> =
@@ -437,7 +486,11 @@ pub fn save_screenshot(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), S
 // =============================================================================
 
 /// Save recorded frames to video file
-pub fn save_video(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String> {
+pub fn save_video(
+    frames: &[Vec<u16>],
+    renderer: &mut Box<dyn ScreenRenderer>,
+    args: &CliArgs,
+) -> Result<(), String> {
     if let Some(ref video_path) = args.video.video_path {
         // Check if format requires FFmpeg and warn if not available
         if args.video.video_format == VideoFormat::Mp4 && !is_ffmpeg_available() {
@@ -491,7 +544,8 @@ pub fn save_video(frames: &[Vec<RgbColor>], args: &CliArgs) -> Result<(), String
         .map_err(|e| format!("Failed to create video encoder: {}", e))?;
 
         for frame in frames {
-            encoder.write_frame(frame).map_err(|e| e.to_string())?;
+            let rgb_frame = renderer.buffer_to_image(frame);
+            encoder.write_frame(rgb_frame).map_err(|e| e.to_string())?;
         }
 
         encoder.finish().map_err(|e| e.to_string())?;
@@ -565,27 +619,19 @@ fn create_ppu_dump(emu: &Nes, range: &str) -> Result<MemoryDump, String> {
 
 /// Create an OAM memory dump from the emulator
 fn create_oam_dump(emu: &Nes) -> MemoryDump {
-    let mem = emu.ppu.borrow().oam.get_memory_debug(None);
+    let mem = emu.get_oam_debug();
     MemoryDump::oam(mem)
 }
 
 /// Create a nametables memory dump from the emulator
 fn create_nametables_dump(emu: &Nes) -> MemoryDump {
-    let mem = emu
-        .ppu
-        .borrow()
-        .memory
-        .get_memory_debug(Some(0x2000..=0x2FFF));
+    let mem = emu.get_memory_debug(Some(0x2000..=0x2FFF))[1].to_vec();
     MemoryDump::nametables(mem)
 }
 
 /// Create a palette RAM memory dump from the emulator
 fn create_palette_dump(emu: &Nes) -> MemoryDump {
     // Palette RAM is at PPU addresses $3F00-$3F1F (32 bytes)
-    let mem = emu
-        .ppu
-        .borrow()
-        .memory
-        .get_memory_debug(Some(0x3F00..=0x3F1F));
+    let mem = emu.get_memory_debug(Some(0x3F00..=0x3F1F))[1].to_vec();
     MemoryDump::palette_ram(mem)
 }

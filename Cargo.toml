@@ -1,7 +1,21 @@
+cargo-features = ["profile-rustflags"]
+
 [workspace]
-members = ["core", "frontend", "cli"]
-default-members = ["core", "frontend"]
+members = ["core", "frontend", "cli", "renderer"]
+default-members = ["frontend"]
 resolver = "3"
+
+[workspace.package]
+version = "0.1.2"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/EmIsGreat/Monsoon-Emulator"
+keywords = ["nes", "emulator", "nintendo"]
+categories = ["emulators", "game-development"]
+
+[workspace.dependencies]
+monsoon-core = { version = "0.1.2", path = "core" }
+monsoon-default-renderers = { version = "0.1.2", path = "renderer" }
 
 [profile.release]
 strip = true
@@ -12,6 +26,10 @@ incremental = true
 inherits = "release"
 lto = true
 codegen-units = 1
+
+[profile.max_performance]
+inherits = "full_release"
+rustflags = ["-C", "target-cpu=native"]
 
 [profile.profiling]
 inherits = "release"

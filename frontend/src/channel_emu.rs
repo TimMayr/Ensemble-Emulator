@@ -2,9 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 use crossbeam_channel::{Receiver, Sender};
-use lockstep_ensemble::emulation::nes::{ExecutionFinishedType, Nes};
-use lockstep_ensemble::emulation::ppu::{EmulatorFetchable, PaletteData};
-use lockstep_ensemble::util::Hashable;
+use monsoon_core::emulation::nes::{ExecutionFinishedType, Nes};
+use monsoon_core::emulation::ppu_util::{EmulatorFetchable, PaletteData};
+use monsoon_core::util::Hashable;
 
 use crate::messages::{ControllerEvent, EmulatorMessage, FrontendMessage, SaveType};
 
@@ -99,10 +99,12 @@ impl ChannelEmulator {
             match msg {
                 FrontendMessage::Quit => {
                     let state = self.nes.save_state();
-                    let _ = self.to_frontend.send(EmulatorMessage::SaveState(
-                        Box::new(state),
-                        SaveType::Autosave,
-                    ));
+                    if let Some(state) = state {
+                        let _ = self.to_frontend.send(EmulatorMessage::SaveState(
+                            Box::new(state),
+                            SaveType::Autosave,
+                        ));
+                    }
                     let _ = self.to_frontend.send(EmulatorMessage::Stopped);
                     return Err("Quit requested".to_string());
                 }
@@ -118,30 +120,26 @@ impl ChannelEmulator {
                 }
                 FrontendMessage::RequestDebugData(fetchable) => match fetchable {
                     EmulatorFetchable::Palettes(_) => {
-                        let _ = self.to_frontend.send(EmulatorMessage::DebugData(
-                            self.nes.ppu.borrow().get_palettes_debug(),
-                        ));
+                        let _ = self
+                            .to_frontend
+                            .send(EmulatorMessage::DebugData(self.nes.get_palettes_debug()));
                     }
                     EmulatorFetchable::Tiles(_) => {
-                        let _ = self.to_frontend.send(EmulatorMessage::DebugData(
-                            self.nes.ppu.borrow().get_tiles_debug(),
-                        ));
+                        let _ = self
+                            .to_frontend
+                            .send(EmulatorMessage::DebugData(self.nes.get_tiles_debug()));
                     }
                     EmulatorFetchable::Nametables(_) => {
-                        let _ = self.to_frontend.send(EmulatorMessage::DebugData(
-                            self.nes.ppu.borrow().get_nametable_debug(),
-                        ));
+                        let _ = self
+                            .to_frontend
+                            .send(EmulatorMessage::DebugData(self.nes.get_nametable_debug()));
                     }
                 },
-                FrontendMessage::SetPalette(p) => {
-                    self.nes.ppu.borrow_mut().rgb_palette = *p;
-                }
-                FrontendMessage::WritePpu(address, data) => {
-                    self.nes.ppu.borrow_mut().mem_init(address, data)
-                }
-                FrontendMessage::WriteCpu(address, data) => self.nes.cpu.memory.init(address, data),
-                FrontendMessage::LoadRom(path) => {
-                    self.nes.load_rom(&path);
+                FrontendMessage::WritePpu(address, data) => self.nes.ppu_mem_init(address, data),
+                FrontendMessage::WriteCpu(address, data) => self.nes.cpu_mem_init(address, data),
+                FrontendMessage::LoadRom((data, name)) => {
+                    let loadable = (&data[..], name);
+                    self.nes.load_rom(&loadable);
                     let _ = self
                         .to_frontend
                         .send(EmulatorMessage::RomLoaded(self.nes.rom_file.clone()));
@@ -153,9 +151,11 @@ impl ChannelEmulator {
                 FrontendMessage::CreateSaveState(t) => {
                     if self.nes.rom_file.is_some() {
                         let state = self.nes.save_state();
-                        let _ = self
-                            .to_frontend
-                            .send(EmulatorMessage::SaveState(Box::new(state), t));
+                        if let Some(state) = state {
+                            let _ = self
+                                .to_frontend
+                                .send(EmulatorMessage::SaveState(Box::new(state), t));
+                        }
                     }
                 }
                 FrontendMessage::LoadSaveState(s) => self.nes.load_state(*s),
@@ -199,9 +199,7 @@ impl ChannelEmulator {
     /// textures when data actually changes, rather than on a regular interval.
     fn check_debug_data_changed(&mut self) {
         // Check palette data (32 bytes, cheap comparison)
-        if let EmulatorFetchable::Palettes(Some(current_palette)) =
-            self.nes.ppu.borrow().get_palettes_debug()
-        {
+        if let EmulatorFetchable::Palettes(Some(current_palette)) = self.nes.get_palettes_debug() {
             let current = *current_palette; // Copy the PaletteData (it's 32 bytes)
             let palette_changed = match &self.last_palette_data {
                 Some(last) => *last != current,
@@ -220,11 +218,7 @@ impl ChannelEmulator {
 
         // Check tile/pattern table data using a fast hash of raw PPU memory
         // Pattern tables occupy 0x0000-0x1FFF (8KB) in PPU address space
-        let pattern_table_memory = self
-            .nes
-            .ppu
-            .borrow()
-            .get_memory_debug(Some(0x0000..=0x1FFF));
+        let pattern_table_memory = self.nes.get_memory_debug(Some(0x0000..=0x1FFF))[1].to_vec();
         let current_hash = &pattern_table_memory.hash();
 
         let tiles_changed = match self.last_pattern_table_hash {
@@ -235,9 +229,9 @@ impl ChannelEmulator {
         if tiles_changed {
             self.last_pattern_table_hash = Some(*current_hash);
             // Send the actual tile data directly to avoid a round-trip request
-            let _ = self.to_frontend.send(EmulatorMessage::DebugData(
-                self.nes.ppu.borrow().get_tiles_debug(),
-            ));
+            let _ = self
+                .to_frontend
+                .send(EmulatorMessage::DebugData(self.nes.get_tiles_debug()));
         }
     }
 

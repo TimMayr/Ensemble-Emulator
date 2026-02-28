@@ -1,33 +1,33 @@
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
-use std::path::PathBuf;
 
 use crate::emulation::nes::Nes;
 
 #[test]
 fn nestest() {
     let mut emu = Nes::default();
-    emu.set_trace_log_path(Some(PathBuf::from("./tests/outputs/nestest_headless.log")));
-
+    emu.enable_trace();
     emu.load_rom(&String::from("./tests/nes-test-roms/nestest_headless.nes"));
     emu.power();
     emu.run().expect("Error running test");
 
-    let file1 = File::open("./tests/outputs/nestest_headless.log").expect("Error running test");
-    let file2 = File::open("./tests/outputs-compare/nestest_headless_good.log")
-        .expect("Error running test");
+    let log = emu
+        .trace_log
+        .unwrap()
+        .log
+        .lines()
+        .map(|s| s.to_string())
+        .take(8980)
+        .collect::<Vec<String>>();
 
-    let lines1: Vec<_> = io::BufReader::new(file1)
+    let file = File::open("./tests/outputs-compare/nestest_headless_good.log")
+        .expect("Error running test");
+    let lines = io::BufReader::new(file)
         .lines()
         .take(8980)
-        .collect::<Result<_, _>>()
-        .expect("Error running test");
-    let lines2: Vec<_> = io::BufReader::new(file2)
-        .lines()
-        .take(8980)
-        .collect::<Result<_, _>>()
+        .collect::<Result<Vec<_>, _>>()
         .expect("Error running test");
 
-    assert_eq!(lines1, lines2);
+    assert_eq!(log, lines);
 }

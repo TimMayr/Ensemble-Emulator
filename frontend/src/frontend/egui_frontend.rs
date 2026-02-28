@@ -14,19 +14,23 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::fmt::{Debug, Formatter};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crossbeam_channel::{Receiver, Sender};
+use eframe::glow;
 use egui::{Context, Style, ViewportCommand, Visuals};
-use lockstep_ensemble::emulation::nes::Nes;
-use lockstep_ensemble::emulation::ppu::{
-    EmulatorFetchable, PaletteData, RgbPalette, TILE_COUNT, TileData,
+use monsoon_core::declare_renderers;
+use monsoon_core::emulation::nes::Nes;
+use monsoon_core::emulation::ppu_util::{EmulatorFetchable, PaletteData, TILE_COUNT, TileData};
+use monsoon_core::emulation::savestate::SaveState;
+use monsoon_core::emulation::screen_renderer::{
+    NoneRenderer, RendererRegistration, ScreenRenderer,
 };
-use lockstep_ensemble::emulation::savestate::SaveState;
-use lockstep_ensemble::palettes::parse_palette_from_file;
-use lockstep_ensemble::util::ToBytes;
+use monsoon_core::util::ToBytes;
+use monsoon_default_renderers::LookupPaletteRenderer;
+use web_time::Instant;
 
 use crate::channel_emu::ChannelEmulator;
 use crate::frontend::egui::config::{AppConfig, AppSpeed};
@@ -37,12 +41,15 @@ use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::tiles::{
     Pane, TreeBehavior, compute_required_fetches_from_tree, create_tree,
 };
-use crate::frontend::egui::ui::{add_menu_bar, add_status_bar, render_savestate_dialogs};
-use crate::frontend::messages::{AsyncFrontendMessage, FrontendEvent, SavestateLoadContext};
-use crate::frontend::persistence::{
-    get_data_dir, get_data_file_path, get_egui_storage_path, load_config, write_file_async,
+use crate::frontend::egui::ui::{
+    add_menu_bar, add_status_bar, render_save_browser, render_savestate_dialogs,
 };
-use crate::frontend::util;
+use crate::frontend::messages::{
+    AsyncFrontendMessage, FrontendEvent, LoadedRom, SavestateLoadContext,
+};
+use crate::frontend::persistence::{PersistentConfig, get_egui_storage_path, load_config};
+use crate::frontend::storage::{Storage, StorageKey};
+use crate::frontend::{storage, util};
 use crate::messages::{EmulatorMessage, FrontendMessage, SaveType};
 
 /// Key used for storing egui_tiles tree state in egui's persistence
@@ -54,10 +61,15 @@ const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// Maximum number of autosaves to keep per game
 const MAX_AUTOSAVES_PER_GAME: usize = 1024;
 
+declare_renderers!(LookupPaletteRenderer, NoneRenderer);
+
 /// Shared deque for frontend events that can be pushed from UI components
 pub type FrontendEventQueue = Rc<RefCell<VecDeque<FrontendEvent>>>;
 
-/// Main egui application state
+/// Main egui application state.
+///
+/// Uses `RendererKind` for runtime-switchable rendering. The renderer can be
+/// changed at runtime by updating `config.view_config.renderer`.
 pub struct EguiApp {
     pub(crate) channel_emu: ChannelEmulator,
     pub(crate) to_emulator: Sender<FrontendMessage>,
@@ -85,16 +97,13 @@ pub struct EguiApp {
 impl EguiApp {
     pub fn new(
         cc: &eframe::CreationContext<'_>,
+        loaded_config: Option<PersistentConfig>,
         channel_emu: ChannelEmulator,
         to_emulator: Sender<FrontendMessage>,
         from_emulator: Receiver<EmulatorMessage>,
         to_async: Sender<AsyncFrontendMessage>,
         from_async: Receiver<AsyncFrontendMessage>,
-        rgb_palette: RgbPalette,
     ) -> Self {
-        // Load configuration from TOML file
-        let loaded_config = load_config();
-
         // Try to restore the tile tree from egui's storage, fall back to default
         let tree = cc
             .storage
@@ -108,7 +117,6 @@ impl EguiApp {
         if let Some(ref persistent_config) = loaded_config {
             config = persistent_config.into();
         }
-        config.view_config.palette_rgb_data = rgb_palette;
 
         Self {
             channel_emu,
@@ -190,32 +198,36 @@ impl EguiApp {
         }
     }
 
-    pub(crate) fn load_rom(&mut self, rom_path: PathBuf) {
+    pub(crate) fn load_rom(&mut self, data: Vec<u8>, name: String) {
         let _ = self
             .to_emulator
             .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
 
         let _ = self
             .to_emulator
-            .send(FrontendMessage::LoadRom(rom_path.clone()));
+            .send(FrontendMessage::LoadRom((data, name.clone())));
 
-        self.config.user_config.previous_rom_path = Some(rom_path.clone());
+        // Extract stem for window title
+        let stem = name.rsplit_once('.').map(|(s, _)| s).unwrap_or(&name);
+        let window_title = if stem.is_empty() {
+            "Monsoon".to_string()
+        } else {
+            format!("Monsoon - {}", stem)
+        };
+
+        self.config.user_config.previous_rom_name = Some(name);
 
         self.event_queue
             .borrow_mut()
-            .push_back(FrontendEvent::ChangeWindowTitle(
-                rom_path
-                    .file_stem()
-                    .map(|f| format!("Tensordance - {}", f.to_string_lossy()))
-                    .unwrap_or("Tensordance".to_string()),
-            ));
+            .push_back(FrontendEvent::ChangeWindowTitle(window_title));
     }
 
     /// Load a savestate after ROM has been verified/selected
     pub(crate) fn load_savestate_with_rom(
         &mut self,
         context: &SavestateLoadContext,
-        rom_path: &Path,
+        rom_data: Vec<u8>,
+        rom_name: String,
     ) {
         if self.config.user_config.loaded_rom.is_some() {
             let _ = self
@@ -225,7 +237,7 @@ impl EguiApp {
 
         // First power off, load ROM, power on
         let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-        self.load_rom(rom_path.to_path_buf());
+        self.load_rom(rom_data, rom_name);
         let _ = self.to_emulator.send(FrontendMessage::Power);
 
         // Then load the savestate
@@ -235,132 +247,102 @@ impl EguiApp {
                 context.savestate.clone(),
             )));
 
-        // Update config paths
-        self.config.user_config.previous_savestate_path = Some(context.savestate_path.clone());
+        // Update config names and directories
+        self.config.user_config.previous_savestate_name = Some(context.savestate_name.clone());
+        if let Some(ref dir) = context.savestate_dir {
+            self.config.user_config.previous_savestate_dir = Some(StorageKey::from(dir));
+        }
     }
 
     pub(crate) fn create_auto_save(&self, savestate: Box<SaveState>) {
         if let Some(rom) = &self.config.user_config.loaded_rom {
             let rom_hash = &rom.data_checksum;
-            let prev_path = &self.config.user_config.previous_rom_path;
-            if let Some(prev_path) = prev_path {
-                let display_name = util::rom_display_name(prev_path, rom_hash);
+            let prev_name = &self.config.user_config.previous_rom_name;
+            if let Some(prev_name) = prev_name {
+                let display_name = util::rom_display_name(prev_name, rom_hash);
+                let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+                let key = storage::autosave_key(&display_name, &timestamp);
 
-                let path = get_data_file_path(
-                    format!(
-                        "saves/{}/autosaves/autosave_{}.sav",
-                        display_name,
-                        chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
-                    )
-                    .as_str(),
-                );
+                // Write savestate using storage
+                let data = savestate.to_bytes(None);
+                util::spawn_async(async move {
+                    let storage = storage::get_storage();
+                    let _ = storage.set(&key, data).await;
+                });
 
-                if let Some(path) = path {
-                    let _ = write_file_async(path, savestate.to_bytes(None), false);
-
-                    // Clean up old autosaves asynchronously to avoid blocking the UI
-                    Self::cleanup_old_autosaves_async(display_name);
-                }
+                // Clean up old autosaves asynchronously to avoid blocking the UI
+                Self::cleanup_old_autosaves_async(display_name);
             }
         }
     }
 
     /// Remove the oldest autosaves if there are more than MAX_AUTOSAVES_PER_GAME.
-    /// Runs asynchronously in a background thread to avoid blocking the UI.
+    /// Runs asynchronously in a background thread (native) or spawn_local (WASM).
     fn cleanup_old_autosaves_async(display_name: String) {
-        std::thread::spawn(move || {
-            if let Some(data_dir) = get_data_dir() {
-                let autosaves_dir = data_dir.join("saves").join(&display_name).join("autosaves");
+        util::spawn_async(async move {
+            let prefix = storage::autosaves_prefix(&display_name);
+            let storage = storage::get_storage();
 
-                if let Ok(entries) = std::fs::read_dir(&autosaves_dir) {
-                    // Collect all autosave files with their modification times
-                    let mut autosaves: Vec<(PathBuf, std::time::SystemTime)> = entries
-                        .filter_map(|entry| entry.ok())
-                        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "sav"))
-                        .filter_map(|entry| {
-                            let path = entry.path();
-                            let modified = entry.metadata().ok()?.modified().ok()?;
-                            Some((path, modified))
-                        })
-                        .collect();
+            if let Ok(entries) = storage.list(&prefix).await {
+                let mut autosaves: Vec<_> = entries
+                    .into_iter()
+                    .filter(|e| e.key.sub_path.ends_with(".sav"))
+                    .map(|e| e.key)
+                    .collect();
 
-                    // If we have at least the limit, delete oldest to make room
-                    // (use >= to maintain exactly MAX_AUTOSAVES_PER_GAME after the new save)
-                    if autosaves.len() >= MAX_AUTOSAVES_PER_GAME {
-                        // Sort by modification time (oldest first)
-                        autosaves.sort_by_key(|a| a.1);
+                if autosaves.len() >= MAX_AUTOSAVES_PER_GAME {
+                    autosaves.sort_by_key(|a| a.sub_path.clone());
 
-                        // Delete enough files to get back under the limit
-                        let to_delete = autosaves.len() - MAX_AUTOSAVES_PER_GAME + 1;
-                        for (path, _) in autosaves.into_iter().take(to_delete) {
-                            let _ = std::fs::remove_file(path);
-                        }
+                    let to_delete = autosaves.len() - MAX_AUTOSAVES_PER_GAME + 1;
+                    for key in autosaves.into_iter().take(to_delete) {
+                        let _ = storage.delete(&key).await;
                     }
                 }
             }
         });
     }
 
-    pub(crate) fn get_current_quicksave_path(&self) -> Option<PathBuf> {
-        let data_dir = get_data_dir();
+    /// Find the newest quicksave key from a list of storage entries.
+    /// Shared logic between native sync and WASM async paths.
+    pub(crate) fn find_newest_quicksave(
+        entries: Vec<storage::StorageMetadata>,
+    ) -> Option<StorageKey> {
+        let mut quicksave_key: Option<(StorageKey, chrono::NaiveDateTime, u8)> = None;
 
-        if let Some(rom) = &self.config.user_config.loaded_rom
-            && let Some(prev_path) = &self.config.user_config.previous_rom_path
-            && let Some(data_dir) = data_dir
-            && data_dir.exists()
-        {
-            let rom_hash = &rom.data_checksum;
+        for entry in entries {
+            if !entry.key.sub_path.ends_with(".sav") {
+                continue;
+            }
 
-            let quicksave_dir = data_dir
-                .join("saves")
-                .join(util::rom_display_name(prev_path, rom_hash))
-                .join("quicksaves");
+            // Extract filename from the key
+            let filename = entry.key.sub_path.rsplit('/').next()?;
+            let stem = filename.strip_suffix(".sav")?;
 
-            if std::fs::create_dir_all(quicksave_dir.clone()).is_ok() {
-                let children = quicksave_dir.read_dir();
+            let time_version = stem.split_once('_')?.1;
 
-                let mut quicksave_path = None;
-                if let Ok(children) = children {
-                    for child in children.flatten() {
-                        let stem = child.path().file_stem()?.to_string_lossy().to_string();
+            let (timestamp, version) = if time_version.chars().filter(|c| *c == '_').count() > 1 {
+                time_version.rsplit_once('_')?
+            } else {
+                (time_version, "0")
+            };
 
-                        let time_version = stem.split_once('_')?.1;
+            let time = chrono::NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d_%H-%M-%S");
 
-                        let (timestamp, version) =
-                            if time_version.chars().filter(|c| *c == '_').count() > 1 {
-                                time_version.rsplit_once('_')?
-                            } else {
-                                (time_version, "0")
-                            };
+            let version = version.parse::<u8>().unwrap_or(0);
 
-                        let time =
-                            chrono::NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d_%H-%M-%S");
+            if let Ok(time) = time {
+                let should_update = match &quicksave_key {
+                    None => true,
+                    Some(current) => current.1 < time || (current.1 == time && current.2 < version),
+                };
 
-                        let version = version.parse::<u8>().unwrap_or(0);
-
-                        if let Ok(time) = time {
-                            if quicksave_path.is_none() {
-                                quicksave_path = Some((child.path(), time, version))
-                            }
-
-                            if let Some(path) = quicksave_path.clone() {
-                                if path.1 < time {
-                                    quicksave_path = Some((child.path(), time, version));
-                                }
-
-                                if path.1 == time && path.2 < version {
-                                    quicksave_path = Some((child.path(), time, version));
-                                }
-                            }
-                        }
-                    }
+                if should_update {
+                    quicksave_key = Some((entry.key, time, version));
                 }
-
-                return quicksave_path.map(|p| p.0);
             }
         }
 
-        None
+        quicksave_key.map(|p| p.0)
     }
 
     /// Check if the pattern tables pane is visible
@@ -522,6 +504,11 @@ impl EguiApp {
         );
     }
 
+    /// Render the save browser dialog if open
+    fn render_save_browser_impl(&mut self, ctx: &Context) {
+        render_save_browser(ctx, &mut self.config.pending_dialogs, &self.async_sender);
+    }
+
     /// Check if a periodic autosave should be triggered based on elapsed time
     fn check_periodic_autosave(&mut self) {
         // Only autosave if a ROM is loaded and console is powered
@@ -532,7 +519,7 @@ impl EguiApp {
             // Update timestamp first to prevent overlapping save operations
             self.last_autosave = Instant::now();
             let savestate = self.channel_emu.nes.save_state();
-            self.create_auto_save(Box::new(savestate));
+            self.create_auto_save(Box::new(savestate.unwrap()));
         }
     }
 
@@ -550,7 +537,7 @@ impl EguiApp {
             // Update timestamp first to prevent overlapping save operations
             self.last_autosave = Instant::now();
             let savestate = self.channel_emu.nes.save_state();
-            self.create_auto_save(Box::new(savestate));
+            self.create_auto_save(Box::new(savestate.unwrap()));
         }
 
         self.was_focused = is_focused;
@@ -611,6 +598,9 @@ impl eframe::App for EguiApp {
         // Render any pending savestate dialogs
         self.render_savestate_dialogs_impl(ctx);
 
+        // Render save browser dialog if open
+        self.render_save_browser_impl(ctx);
+
         // Request continuous repaint for animation
         ctx.request_repaint();
     }
@@ -620,15 +610,37 @@ impl eframe::App for EguiApp {
         eframe::set_value(storage, EGUI_TILES_TREE_KEY, &self.tree);
     }
 
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        // Save configuration to TOML file before exiting (synchronous to ensure completion)
-        let persistent_config = (&self.config).into();
-        if let Err(e) = crate::frontend::persistence::save_config(&persistent_config) {
-            eprintln!("Failed to save configuration: {}", e);
+    fn on_exit(&mut self, _gl: Option<&glow::Context>) {
+        // Save configuration before exiting
+        let persistent_config: PersistentConfig = (&self.config).into();
+        // On native, block on the async save to ensure it completes before exit.
+        // On WASM, fire-and-forget since we can't block the browser thread.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let rt = tokio::runtime::Handle::current();
+            tokio::task::block_in_place(|| {
+                if let Err(e) = rt.block_on(crate::frontend::persistence::save_config(
+                    &persistent_config,
+                )) {
+                    eprintln!("Failed to save configuration: {}", e);
+                }
+            });
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            util::spawn_async(async move {
+                if let Err(e) = crate::frontend::persistence::save_config(&persistent_config).await
+                {
+                    eprintln!("Failed to save configuration: {}", e);
+                }
+            });
         }
 
         let savestate = self.channel_emu.nes.save_state();
-        self.create_auto_save(Box::new(savestate));
+
+        if let Some(state) = savestate {
+            self.create_auto_save(Box::new(state));
+        }
 
         let _ = self.to_emulator.send(FrontendMessage::Quit);
     }
@@ -638,43 +650,99 @@ impl Debug for EguiApp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { f.write_str("EguiApp") }
 }
 
-/// Run the egui frontend
-pub fn run(
-    rom: Option<PathBuf>,
-    palette: Option<PathBuf>,
-) -> Result<(), Box<dyn std::error::Error>> {
+struct SetupResponse {
+    emu: ChannelEmulator,
+    to_emu: Sender<FrontendMessage>,
+    from_emu: Receiver<EmulatorMessage>,
+    from_async: Receiver<AsyncFrontendMessage>,
+    async_sender: Sender<AsyncFrontendMessage>,
+    #[allow(dead_code)]
+    persistence_path: Option<PathBuf>,
+}
+
+/// Native: common setup with PathBuf for command-line ROM loading
+fn common_setup(rom: Option<PathBuf>) -> SetupResponse {
     // Create the emulator instance
     let console = Nes::default();
 
-    let palette = parse_palette_from_file(palette, None);
-
     // Create channel-based emulator wrapper
-    let (channel_emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
-    let (to_frontend, from_async) = crossbeam_channel::unbounded();
+    let (emu, to_emu, from_emu) = ChannelEmulator::new(console);
+    let (async_sender, from_async) = crossbeam_channel::unbounded();
 
-    // Setup Emulator State via messages
-    let _ = to_frontend.send(AsyncFrontendMessage::LoadRom(rom));
-    let _ = tx_to_emu.send(FrontendMessage::SetPalette(Box::new(palette)));
+    if rom.is_some() {
+        // Setup Emulator State via messages - read ROM file if provided
+        let loaded_rom = rom.as_ref().and_then(|path| {
+            let data = std::fs::read(path).ok()?;
+            let name = path.file_name()?.to_string_lossy().to_string();
+            let directory = path
+                .parent()
+                .map(|p| p.to_string_lossy().to_string())
+                .map(|f| StorageKey::from(&f))
+                .unwrap();
+
+            Some(LoadedRom {
+                data,
+                name,
+                directory,
+            })
+        });
+        let _ = async_sender.send(AsyncFrontendMessage::LoadRom(loaded_rom));
+    } else {
+        let _ = async_sender.send(AsyncFrontendMessage::LoadRom(None));
+    }
 
     // Get the storage path for egui persistence
-    let storage_path = get_egui_storage_path();
+    let persistence_path = get_egui_storage_path();
+
+    SetupResponse {
+        persistence_path,
+        emu,
+        to_emu,
+        from_emu,
+        async_sender,
+        from_async,
+    }
+}
+
+/// Run the egui frontend.
+///
+/// Uses `RendererKind` for runtime-switchable rendering.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn run(rom: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
+    let res = common_setup(rom);
+    run_internal(res)
+}
+
+/// Run the egui frontend for WASM.
+#[cfg(target_arch = "wasm32")]
+pub fn run(_: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
+    let res = common_setup(None);
+    run_internal_wasm(res)
+}
+
+#[tokio::main]
+#[cfg(not(target_arch = "wasm32"))]
+async fn run_internal(res: SetupResponse) -> Result<(), Box<dyn std::error::Error>> {
+    // Load configuration before starting eframe (we're in an async context)
+    let loaded_config = load_config().await;
 
     // Configure eframe options
     // Disable vsync to allow uncapped frame rates - emulator handles its own timing
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1024.0, 768.0])
-            .with_title("Tensordance")
-            .with_app_id("tensordance"),
+            .with_title("Monsoon")
+            .with_app_id("monsoon-emulator"),
         vsync: false, // Disable vsync for uncapped performance
         // Enable persistence with custom storage path
-        persistence_path: storage_path,
+        persistence_path: res.persistence_path,
+        renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
 
     // Run the application
     eframe::run_native(
-        "Tensordance",
+        "Monsoon",
         options,
         Box::new(move |cc| {
             let style = Style {
@@ -685,15 +753,71 @@ pub fn run(
             cc.egui_ctx.set_theme(egui::Theme::Dark);
             Ok(Box::new(EguiApp::new(
                 cc,
-                channel_emu,
-                tx_to_emu,
-                rx_from_emu,
-                to_frontend,
-                from_async,
-                palette,
+                loaded_config,
+                res.emu,
+                res.to_emu,
+                res.from_emu,
+                res.async_sender,
+                res.from_async,
             )))
         }),
     )?;
+
+    Ok(())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn run_internal_wasm(res: SetupResponse) -> Result<(), Box<dyn std::error::Error>> {
+    use eframe::web_sys;
+    use wasm_bindgen::JsCast;
+    use web_sys::HtmlCanvasElement;
+
+    wasm_bindgen_futures::spawn_local(async {
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+
+        let canvas = document
+            .create_element("canvas")
+            .unwrap()
+            .dyn_into::<HtmlCanvasElement>()
+            .unwrap();
+
+        document.body().unwrap().append_child(&canvas).unwrap();
+
+        // Load configuration before starting eframe (we're in an async context)
+        let loaded_config = load_config().await;
+
+        // Configure eframe options
+        // Disable vsync to allow uncapped frame rates - emulator handles its own timing
+        let options = eframe::WebOptions {
+            ..Default::default()
+        };
+
+        eframe::WebRunner::new()
+            .start(
+                canvas,
+                options,
+                Box::new(move |cc| {
+                    let style = Style {
+                        visuals: Visuals::dark(),
+                        ..Default::default()
+                    };
+                    cc.egui_ctx.set_style(style);
+                    cc.egui_ctx.set_theme(egui::Theme::Dark);
+                    Ok(Box::new(EguiApp::new(
+                        cc,
+                        loaded_config,
+                        res.emu,
+                        res.to_emu,
+                        res.from_emu,
+                        res.async_sender,
+                        res.from_async,
+                    )))
+                }),
+            )
+            .await
+            .unwrap()
+    });
 
     Ok(())
 }

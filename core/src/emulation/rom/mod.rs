@@ -1,10 +1,15 @@
+//! ROM file parsing and metadata.
+//!
+//! This module provides types for loading and representing NES ROM files
+//! in the iNES, NES 2.0, and related formats. The main entry point is
+//! [`RomFile::load()`], which auto-detects the format and parses the ROM.
+//!
+//! For programmatic ROM construction (e.g., in tests), use [`RomBuilder`].
+
 mod formats;
 
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
-use std::fs::File;
-use std::io::Read;
-use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -16,9 +21,15 @@ use crate::emulation::rom::formats::ines::Ines;
 use crate::emulation::rom::formats::ines_07::Ines07;
 use crate::emulation::rom::formats::ines2::Ines2;
 
+/// Errors that can occur while parsing a ROM file.
 #[derive(Debug, Clone)]
 pub enum ParseError {
+    /// The sizes declared in the ROM header exceed the actual file length.
     SizeBiggerThanFile,
+    /// The ROM data is too short to contain a valid header (minimum 16 bytes).
+    InvalidHeader,
+    /// The ROM format is not recognized (missing `NES\x1A` magic bytes).
+    UnsupportedFormat,
 }
 
 impl Display for ParseError {
@@ -30,43 +41,97 @@ impl Display for ParseError {
                     "Rom sizes specified in header are larger than total rom size"
                 )
             }
+            ParseError::InvalidHeader => {
+                write!(f, "Rom data is too short to contain a valid header")
+            }
+            ParseError::UnsupportedFormat => {
+                write!(f, "Rom format is not recognized")
+            }
         }
     }
 }
 
 impl Error for ParseError {}
 
+/// Trait for ROM format parsers.
+///
+/// Each supported ROM format (iNES, NES 2.0, etc.) implements this trait.
+/// Users should not need to call parsers directly; use [`RomFile::load()`]
+/// instead, which auto-detects the format.
+#[doc(hidden)]
 pub trait RomParser: Debug {
-    fn parse(&self, rom: &[u8], file: Option<PathBuf>) -> Result<RomFile, ParseError>;
+    fn parse(&self, rom: &[u8], name: Option<String>) -> Result<RomFile, ParseError>;
 }
 
+/// A parsed NES ROM file.
+///
+/// Contains all metadata extracted from the ROM header (mapper number,
+/// memory sizes, mirroring, etc.) as well as the raw ROM data used for
+/// loading into the emulator's memory map.
+///
+/// # Loading a ROM
+///
+/// ```rust,no_run
+/// use monsoon_core::emulation::rom::RomFile;
+///
+/// # let raw_bytes: &[u8] = &[];
+/// let rom = RomFile::load(raw_bytes, Some("my_game.nes".to_string())).expect("invalid ROM");
+/// println!("Mapper: {}", rom.mapper_number);
+/// ```
+///
+/// # Constructing a ROM programmatically
+///
+/// Use [`RomBuilder`] for test scenarios where you need custom ROM metadata
+/// without providing actual ROM data.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct RomFile {
+    /// Human-readable name of the ROM (typically the file name).
     pub name: Option<String>,
+    /// PRG (program) memory sizes.
     pub prg_memory: PrgMemory,
+    /// CHR (character/graphics) memory sizes.
     pub chr_memory: ChrMemory,
+    /// iNES mapper number identifying the cartridge board hardware.
     pub mapper_number: u16,
+    /// Default expansion device identifier (NES 2.0).
     pub default_expansion_device: u8,
+    /// Number of miscellaneous ROM areas (NES 2.0).
     pub misc_rom_count: u8,
+    /// Extended console type (NES 2.0), if applicable.
     pub extended_console_type: Option<u8>,
+    /// VS System hardware type, if applicable.
     pub vs_system_hardware_type: Option<u8>,
+    /// VS System PPU type, if applicable.
     pub vs_system_ppu_type: Option<u8>,
+    /// CPU/PPU timing mode (0 = NTSC, 1 = PAL, 2 = Multi-region, 3 = Dendy).
     pub cpu_ppu_timing: u8,
+    /// Console type (0 = NES/Famicom, 1 = VS System, 2 = Playchoice-10, 3 = Extended).
     pub console_type: u8,
+    /// Nametable mirroring mode from header bit 0 (`true` = vertical, `false` = horizontal).
     pub hardwired_nametable_layout: bool,
+    /// Whether the cartridge contains battery-backed persistent memory.
     pub is_battery_backed: bool,
+    /// Whether a 512-byte trainer is present before PRG data.
     pub trainer_present: bool,
+    /// Whether the ROM uses alternative nametable layouts.
     pub alternative_nametables: bool,
+    /// Submapper number (NES 2.0).
     pub submapper_number: u8,
+    /// SHA-256 checksum of the raw ROM data.
     pub data_checksum: [u8; 32],
+    /// Raw ROM file bytes. Skipped during serialization to reduce save state size.
     #[serde(skip)]
     pub data: Vec<u8>,
 }
 
+/// PRG (program) memory size information from the ROM header.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct PrgMemory {
+    /// Size of PRG ROM in bytes.
     pub prg_rom_size: u32,
+    /// Size of PRG RAM (volatile) in bytes.
     pub prg_ram_size: u32,
+    /// Size of PRG NVRAM (non-volatile / battery-backed) in bytes.
     pub prg_nvram_size: u32,
 }
 
@@ -80,10 +145,14 @@ impl PrgMemory {
     }
 }
 
+/// CHR (character/graphics) memory size information from the ROM header.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct ChrMemory {
+    /// Size of CHR ROM in bytes.
     pub chr_rom_size: u32,
+    /// Size of CHR RAM (volatile) in bytes.
     pub chr_ram_size: u32,
+    /// Size of CHR NVRAM (non-volatile) in bytes.
     pub chr_nvram_size: u32,
 }
 
@@ -105,7 +174,12 @@ impl RomFile {
         arr[start..end].iter().all(|&x| x == 0)
     }
 
-    fn get_rom_type(rom: &[u8]) -> Box<dyn RomParser> {
+    fn get_rom_type(rom: &[u8]) -> Result<Box<dyn RomParser>, ParseError> {
+        // iNES and NES 2.0 headers are 16 bytes minimum
+        if rom.len() < 16 {
+            return Err(ParseError::InvalidHeader);
+        }
+
         if rom.starts_with(&[0x4E, 0x45, 0x53, 0x1A]) {
             let prg_rom_size_lsb = rom[4] as u16;
             let prg_rom_size_msb = (rom[9] & 0xF) as u16;
@@ -120,46 +194,57 @@ impl RomFile {
             if rom[7] & 0b00001100 == 8
                 && (prg_rom_size as usize + chr_rom_size as usize) < rom.len()
             {
-                return Box::new(Ines2);
+                return Ok(Box::new(Ines2));
             }
 
             if rom[7] & 0b00001100 == 4 {
-                return Box::new(ArchaicInes);
+                return Ok(Box::new(ArchaicInes));
             }
 
             if rom[7] & 0b00001100 == 0 && Self::range_all_zeros(rom, 12, 16) {
-                return Box::new(Ines);
+                return Ok(Box::new(Ines));
             }
 
-            return Box::new(Ines07);
+            return Ok(Box::new(Ines07));
         }
 
-        panic!("Romtype not yet implemented")
+        Err(ParseError::UnsupportedFormat)
     }
 
-    pub fn load(path: &String) -> RomFile {
-        let path = Path::new(&path);
-        let mut file = match File::open(path) {
-            Ok(file) => file,
-            Err(e) => panic!("Couldn't read file {}: {}", path.display(), e),
-        };
-
-        let mut rom: Vec<u8> = Vec::new();
-        file.read_to_end(&mut rom).expect("Couldn't read file");
-
+    /// Parses a ROM file from raw bytes.
+    ///
+    /// Auto-detects the ROM format (iNES, NES 2.0, archaic iNES, etc.)
+    /// from the header and extracts all metadata. The raw data is stored
+    /// in [`data`](RomFile::data) and a SHA-256 checksum is computed.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` — The complete ROM file as a byte slice.
+    /// * `name` — An optional human-readable name (e.g., the file name).
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ParseError`] if:
+    /// - The data is too short to contain a valid header ([`ParseError::InvalidHeader`]).
+    /// - The ROM format is not recognized ([`ParseError::UnsupportedFormat`]).
+    /// - The header declares sizes larger than the file ([`ParseError::SizeBiggerThanFile`]).
+    pub fn load(data: &[u8], name: Option<String>) -> Result<RomFile, ParseError> {
         let mut hasher = Sha256::new();
-        hasher.update(&rom);
+        hasher.update(data);
         let hash: [u8; 32] = hasher.finalize().into();
 
-        let rom_type = RomFile::get_rom_type(&rom);
-        let mut rom_file = rom_type
-            .parse(&rom, Some(PathBuf::from(path)))
-            .expect("Error loading Rom");
-        rom_file.data = rom;
+        let rom_type = RomFile::get_rom_type(data)?;
+        let mut rom_file = rom_type.parse(data, name)?;
+        rom_file.data = data.to_vec();
         rom_file.data_checksum = hash;
-        rom_file
+        Ok(rom_file)
     }
 
+    /// Extracts the PRG ROM region as a read-only [`Memory`] device.
+    ///
+    /// This is used internally to populate the CPU memory map at addresses
+    /// `$8000`-`$FFFF`.
+    #[doc(hidden)]
     pub fn get_prg_rom(&self) -> Memory {
         let mut rom = Rom::new(self.prg_memory.prg_rom_size as usize);
 
@@ -177,6 +262,11 @@ impl RomFile {
         Memory::Rom(rom)
     }
 
+    /// Extracts the CHR ROM region as a read-only [`Memory`] device, if present.
+    ///
+    /// Returns `None` when the ROM uses CHR RAM instead of CHR ROM
+    /// (i.e., `chr_rom_size == 0`).
+    #[doc(hidden)]
     pub fn get_chr_rom(&self) -> Option<Memory> {
         if self.chr_memory.chr_rom_size == 0 {
             return None;
@@ -201,6 +291,11 @@ impl RomFile {
         Some(Memory::Rom(rom))
     }
 
+    /// Extracts the PRG RAM region as a writable [`Memory`] device.
+    ///
+    /// This is mapped at CPU addresses `$6000`-`$7FFF` and may be
+    /// battery-backed for save data.
+    #[doc(hidden)]
     pub fn get_prg_ram(&self) -> Memory {
         let mut ram = Ram::new(self.prg_memory.prg_ram_size as usize);
 
@@ -219,6 +314,11 @@ impl RomFile {
         Memory::Ram(ram)
     }
 
+    /// Creates the nametable memory for the PPU based on the ROM's mirroring mode.
+    ///
+    /// Returns a [`Memory`] device configured for either horizontal or vertical
+    /// nametable mirroring, as specified by the ROM header.
+    #[doc(hidden)]
     pub fn get_nametable_memory(&self) -> Memory {
         let mirroring = match self.hardwired_nametable_layout {
             true => NametableArrangement::Vertical,
@@ -228,18 +328,55 @@ impl RomFile {
     }
 }
 
-impl From<&String> for RomFile {
-    fn from(path: &String) -> Self { RomFile::load(path) }
-}
-
 impl From<&RomFile> for RomFile {
     fn from(rom: &RomFile) -> Self { rom.clone() }
 }
 
-impl From<&PathBuf> for RomFile {
-    fn from(path: &PathBuf) -> Self { RomFile::load(&path.to_string_lossy().to_string()) }
+impl From<&[u8]> for RomFile {
+    fn from(data: &[u8]) -> Self { RomFile::load(data, None).expect("Failed to parse ROM data") }
 }
 
+impl From<&(&[u8], String)> for RomFile {
+    fn from((data, name): &(&[u8], String)) -> Self {
+        RomFile::load(data, Some(name.clone())).expect("Failed to parse ROM data")
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl From<&String> for RomFile {
+    fn from(path: &String) -> Self {
+        use std::fs::File;
+        use std::io::Read;
+
+        let mut data = Vec::new();
+        File::open(path)
+            .unwrap_or_else(|e| panic!("Failed to open ROM file '{}': {}", path, e))
+            .read_to_end(&mut data)
+            .unwrap_or_else(|e| panic!("Failed to read ROM file '{}': {}", path, e));
+
+        RomFile::load(&data, Some(path.clone())).expect("Failed to parse ROM data")
+    }
+}
+
+/// A builder for constructing [`RomFile`] instances programmatically.
+///
+/// This is primarily useful for testing when you need a ROM with specific
+/// metadata but no actual ROM data.
+///
+/// # Example
+///
+/// ```rust
+/// use monsoon_core::emulation::rom::RomBuilder;
+///
+/// let rom = RomBuilder::new()
+///     .prg_rom_size(32 * 1024)
+///     .chr_rom_size(8 * 1024)
+///     .mapper_number(0)
+///     .hardwired_nametable_layout(true) // vertical mirroring
+///     .build();
+///
+/// assert_eq!(rom.mapper_number, 0);
+/// ```
 pub struct RomBuilder {
     name: Option<String>,
     prg_rom_size: u32,
@@ -291,108 +428,133 @@ impl Default for RomBuilder {
 }
 
 impl RomBuilder {
+    /// Creates a new builder with default values (mapper 0, 8 KB PRG RAM,
+    /// all other sizes zero).
     pub fn new() -> Self { Self::default() }
 
+    /// Sets the PRG ROM size in bytes.
     pub fn prg_rom_size(mut self, size: u32) -> Self {
         self.prg_rom_size = size;
         self
     }
 
+    /// Sets the CHR ROM size in bytes.
     pub fn chr_rom_size(mut self, size: u32) -> Self {
         self.chr_rom_size = size;
         self
     }
 
+    /// Sets the iNES mapper number.
     pub fn mapper_number(mut self, number: u16) -> Self {
         self.mapper_number = number;
         self
     }
 
+    /// Sets the default expansion device (NES 2.0).
     pub fn default_expansion_device(mut self, device: u8) -> Self {
         self.default_expansion_device = device;
         self
     }
 
+    /// Sets the miscellaneous ROM count (NES 2.0).
     pub fn misc_rom_count(mut self, count: u8) -> Self {
         self.misc_rom_count = count;
         self
     }
 
+    /// Sets the extended console type (NES 2.0).
     pub fn extended_console_type(mut self, console_type: Option<u8>) -> Self {
         self.extended_console_type = console_type;
         self
     }
 
+    /// Sets the VS System hardware type.
     pub fn vs_system_hardware_type(mut self, hardware_type: Option<u8>) -> Self {
         self.vs_system_hardware_type = hardware_type;
         self
     }
 
+    /// Sets the VS System PPU type.
     pub fn vs_system_ppu_type(mut self, ppu_type: Option<u8>) -> Self {
         self.vs_system_ppu_type = ppu_type;
         self
     }
 
+    /// Sets the CPU/PPU timing mode (0 = NTSC, 1 = PAL, 2 = Multi, 3 = Dendy).
     pub fn cpu_ppu_timing(mut self, timing: u8) -> Self {
         self.cpu_ppu_timing = timing;
         self
     }
 
+    /// Sets the CHR NVRAM (non-volatile) size in bytes.
     pub fn chr_nvram_size(mut self, size: u32) -> Self {
         self.chr_nvram_size = size;
         self
     }
 
+    /// Sets the CHR RAM (volatile) size in bytes.
     pub fn chr_ram_size(mut self, size: u32) -> Self {
         self.chr_ram_size = size;
         self
     }
 
+    /// Sets the PRG NVRAM (non-volatile / battery-backed) size in bytes.
     pub fn prg_nvram_size(mut self, size: u32) -> Self {
         self.prg_nvram_size = size;
         self
     }
 
+    /// Sets the PRG RAM (volatile) size in bytes.
     pub fn prg_ram_size(mut self, size: u32) -> Self {
         self.prg_ram_size = size;
         self
     }
 
+    /// Sets the console type (0 = NES, 1 = VS System, 2 = Playchoice-10, 3 = Extended).
     pub fn console_type(mut self, console_type: u8) -> Self {
         self.console_type = console_type;
         self
     }
 
+    /// Sets the nametable mirroring (`true` = vertical, `false` = horizontal).
     pub fn hardwired_nametable_layout(mut self, value: bool) -> Self {
         self.hardwired_nametable_layout = value;
         self
     }
 
+    /// Sets whether the cartridge has battery-backed memory.
     pub fn battery_backed(mut self, value: bool) -> Self {
         self.is_battery_backed = value;
         self
     }
 
+    /// Sets whether a 512-byte trainer is present in the ROM.
     pub fn trainer_present(mut self, value: bool) -> Self {
         self.trainer_present = value;
         self
     }
 
+    /// Sets whether the ROM uses alternative nametable layouts.
     pub fn alternative_nametables(mut self, value: bool) -> Self {
         self.alternative_nametables = value;
         self
     }
 
+    /// Sets the submapper number (NES 2.0).
     pub fn submapper_number(mut self, number: u8) -> Self {
         self.submapper_number = number;
         self
     }
 
+    /// Sets the ROM name.
     pub fn name(mut self, value: Option<String>) -> Self {
         self.name = value;
         self
     }
 
+    /// Consumes the builder and produces a [`RomFile`].
+    ///
+    /// The resulting ROM will have an empty `data` field and a zeroed checksum.
     pub fn build(self) -> RomFile {
         RomFile {
             name: self.name,
@@ -415,20 +577,4 @@ impl RomBuilder {
             data: Vec::new(),
         }
     }
-}
-
-pub trait RomFileConvertible {
-    fn as_rom_file(&self) -> RomFile;
-}
-
-impl RomFileConvertible for String {
-    fn as_rom_file(&self) -> RomFile { RomFile::from(self) }
-}
-
-impl RomFileConvertible for RomFile {
-    fn as_rom_file(&self) -> RomFile { RomFile::from(self) }
-}
-
-impl RomFileConvertible for PathBuf {
-    fn as_rom_file(&self) -> RomFile { RomFile::from(self) }
 }

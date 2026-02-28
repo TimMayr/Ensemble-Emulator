@@ -188,7 +188,7 @@ pub use execution::{
     ExecutionConfig, ExecutionEngine, ExecutionResult, MemoryAccessType, SavestateConfig,
     SavestateDestination, SavestateSource, StopCondition, StopReason,
 };
-pub use headless::run_headless;
+pub use headless::{create_renderer_from_args, list_renderers, run_headless};
 pub use memory_init::{MemoryInit, MemoryInitConfig, apply_memory_init, apply_memory_init_config};
 pub use output::{
     InterpretedNametable, InterpretedNametables, InterpretedOam, MemoryDump, MemoryFormatter,
@@ -381,7 +381,7 @@ fn validate_memory_condition_syntax(cond: &Vec<String>) -> Result<(), CliError> 
 /// # Examples
 ///
 /// ```
-/// use lockstep::cli::parse_memory_range;
+/// use monsoon_cli::cli::parse_memory_range;
 ///
 /// assert_eq!(
 ///     parse_memory_range("0x0000-0x07FF").unwrap(),

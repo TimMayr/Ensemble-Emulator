@@ -1,7 +1,6 @@
-use std::time::Instant;
-
 use crossbeam_channel::Sender;
 use egui::Context;
+use web_time::Instant;
 
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::keybindings::Binding;

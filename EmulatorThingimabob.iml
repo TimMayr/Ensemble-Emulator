@@ -8,6 +8,8 @@
       <sourceFolder url="file://$MODULE_DIR$/ffi/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/frontend/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/cli/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/renderer/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc-util/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.idea/dictionaries" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/trace.etl.NGENPDB" />
@@ -19,6 +21,7 @@
       <excludeFolder url="file://$MODULE_DIR$/pally/.venv/bin" />
       <excludeFolder url="file://$MODULE_DIR$/pally/.venv/lib" />
       <excludeFolder url="file://$MODULE_DIR$/pally/.venv/share" />
+      <excludeFolder url="file://$MODULE_DIR$/frontend/dist" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

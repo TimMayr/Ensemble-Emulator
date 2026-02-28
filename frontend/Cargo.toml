@@ -1,28 +1,52 @@
 [package]
-name = "ballroom-ensemble"
-version = "0.1.0"
-edition = "2024"
+name = "monsoon-frontend"
+description = "Native GUI frontend for the Monsoon NES emulator, built with egui"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [lib]
-name = "ballroom_ensemble"
+name = "monsoon_frontend"
 path = "src/lib.rs"
 
 [[bin]]
-name = "ballroom"
+name = "frontend"
 path = "src/bin/main.rs"
 
 [dependencies]
-eframe = { version = "0.33.3", features = ["persistence", "accesskit", "serde"] }
+eframe = { version = "0.33.3", features = ["wgpu", "persistence"] }
 egui = { version = "0.33.3", features = ["accesskit", "persistence", "rayon"] }
 egui_tiles = { version = "0.14.1", features = ["serde"] }
 clap = { version = "4.5.54", features = ["derive", "cargo", "env", "string", "unicode", "wrap_help"] }
 crossbeam-channel = { version = "0.5.15" }
 rfd = { version = "0.17.2" }
 directories = { version = "6.0.0" }
-chrono = { version = "0.4.43", features = ["serde", "now"] }
-
+chrono = { version = "0.4.43", features = ["now"] }
+web-time = { version = "1.1.0" }
 sha2 = { version = "0.11.0-rc.5" }
 serde = { version = "1.0.228", features = ["derive", "alloc", "rc"] }
-toml = { version = "0.9.11", features = ["fast_hash"] }
+toml = { version = "1.0.2", features = ["fast_hash"] }
+async-trait = { version = "0.1.89" }
 
-lockstep-ensemble = { path = "../core" }
+monsoon-core = { workspace = true }
+monsoon-default-renderers = { workspace = true, optional = true }
+
+[features]
+default = ["default_renderers"]
+default_renderers = ["monsoon-default-renderers"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros"] }
+
+# Web-only dependencies
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+chrono = { version = "0.4.43", features = ["wasmbind"] }
+web-sys = { version = "0.3", features = ["Window", "Document", "HtmlCanvasElement"] }
+wasm-bindgen = "0.2.108"
+wasm-bindgen-futures = "0.4.58"
+rexie = { version = "0.6.2" }
+js-sys = "0.3"

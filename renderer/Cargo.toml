@@ -1,0 +1,19 @@
+[package]
+name = "monsoon-default-renderers"
+description = "Default screen renderer implementations for the Monsoon NES emulator"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lib]
+name = "monsoon_default_renderers"
+path = "src/lib.rs"
+
+[dependencies]
+monsoon-core = { workspace = true }
+serde = { version = "1.0.228", features = ["derive"] }
+serde-big-array = {version = "0.5.1"}
