@@ -436,9 +436,7 @@ impl Nes {
     pub fn program_counter(&self) -> u16 { self.cpu.program_counter }
 
     /// Returns the opcode byte of the instruction currently being executed.
-    pub fn current_opcode_byte(&self) -> Option<u8> {
-        self.cpu.current_opcode.map(|c| c.opcode)
-    }
+    pub fn current_opcode_byte(&self) -> Option<u8> { self.cpu.current_opcode.map(|c| c.opcode) }
 
     /// Returns `true` if the CPU has executed a halt (KIL) instruction.
     pub fn is_halted(&self) -> bool { self.cpu.is_halted }
@@ -470,9 +468,7 @@ impl Nes {
     }
 
     /// Returns OAM (sprite memory) contents for debugging.
-    pub fn get_oam_debug(&self) -> Vec<u8> {
-        self.ppu.borrow().oam.get_memory_debug(None)
-    }
+    pub fn get_oam_debug(&self) -> Vec<u8> { self.ppu.borrow().oam.get_memory_debug(None) }
 
     // --- Memory write methods ---
 
@@ -482,9 +478,7 @@ impl Nes {
     }
 
     /// Initializes CPU memory at the given address (for initialization/debugging).
-    pub fn cpu_mem_init(&mut self, addr: u16, data: u8) {
-        self.cpu.memory.init(addr, data);
-    }
+    pub fn cpu_mem_init(&mut self, addr: u16, data: u8) { self.cpu.memory.init(addr, data); }
 
     /// Writes a value to PPU memory at the given address (for initialization/debugging).
     pub fn ppu_mem_write(&self, addr: u16, value: u8) {
@@ -492,9 +486,7 @@ impl Nes {
     }
 
     /// Initializes PPU memory at the given address (for initialization/debugging).
-    pub fn ppu_mem_init(&self, addr: u16, data: u8) {
-        self.ppu.borrow_mut().mem_init(addr, data);
-    }
+    pub fn ppu_mem_init(&self, addr: u16, data: u8) { self.ppu.borrow_mut().mem_init(addr, data); }
 
     /// Writes a value to OAM (sprite memory) at the given address (for initialization/debugging).
     pub fn oam_write(&self, addr: u16, value: u8) {
@@ -502,9 +494,7 @@ impl Nes {
     }
 
     /// Returns a reference to the trace log, if tracing is enabled.
-    pub fn trace_log(&self) -> Option<&TraceLog> {
-        self.trace_log.as_ref()
-    }
+    pub fn trace_log(&self) -> Option<&TraceLog> { self.trace_log.as_ref() }
 }
 
 /// Describes why an emulation run finished.

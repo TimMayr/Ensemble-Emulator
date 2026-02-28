@@ -78,6 +78,7 @@
 
 #![feature(ascii_char)]
 extern crate core;
+#[allow(clippy::upper_case_acronyms)]
 pub mod emulation;
 #[cfg(test)]
 mod tests;

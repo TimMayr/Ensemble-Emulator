@@ -6,63 +6,34 @@ use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, OpenBus, Ram};
-use crate::emulation::rom::RomFile;
-use crate::emulation::savestate::PpuState;
-
 // Re-import public constants/types from ppu_util so internal code can use them
 // with short names.
 pub use crate::emulation::ppu_util::{
-    EmulatorFetchable, NametableData, PaletteData, TileData,
-    NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, PALETTE_COUNT,
-    PALETTE_RAM_START_ADDRESS, TILE_COUNT, TILE_SIZE, TOTAL_OUTPUT_HEIGHT,
-    TOTAL_OUTPUT_WIDTH,
+    EmulatorFetchable, NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, NametableData,
+    PALETTE_RAM_START_ADDRESS, PaletteData, TILE_SIZE, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
+    TileData,
 };
-
-pub const PATTERN_TABLE_WIDTH: usize = 256 + 16; // 16*8*2 + 16px gap
-pub const PATTERN_TABLE_HEIGHT: usize = 128; // 16*8
-
-// Nametable display: 4 nametables of 32x30 tiles (8px each) arranged 2x2
-pub const NAMETABLE_WIDTH: usize = 512; // 32*8*2
-pub const NAMETABLE_HEIGHT: usize = 480; // 30*8*2
-
-pub const SPRITE_COUNT: usize = 64;
-pub const SPRITE_WIDTH: usize = 8;
+use crate::emulation::rom::RomFile;
+use crate::emulation::savestate::PpuState;
 
 pub const PATTERN_TABLE_SIZE: usize = 256;
-
 pub const VBLANK_NMI_BIT: u8 = 0x80;
 pub const VRAM_ADDR_INC_BIT: u8 = 0x4;
-pub const UPPER_BYTE: u16 = 0xFF00;
-pub const LOWER_BYTE: u16 = 0x00FF;
-pub const BIT_14: u16 = 0x2000;
 pub const BACKGROUND_RENDER_BIT: u8 = 0x8;
 pub const SPRITE_RENDER_BIT: u8 = 0x10;
 pub const VRAM_ADDR_COARSE_X_SCROLL_MASK: u16 = 0x1F;
 pub const VRAM_ADDR_COARSE_Y_SCROLL_MASK: u16 = 0x3E0;
 pub const VRAM_ADDR_FINE_Y_SCROLL_MASK: u16 = 0x7000;
-pub const VRAM_ADDR_NAMETABLE_X_BIT: u16 = 0x400;
-pub const VRAM_ADDR_NAMETABLE_Y_BIT: u16 = 0x800;
-pub const FINE_Y_SCROLL_WIDTH: u8 = 0x7;
-pub const COARSE_SCROLL_WIDTH: u8 = 0x1F;
-pub const DOTS_PER_FRAME: u128 = 89342;
 pub const PALETTE_RAM_END_INDEX: u16 = 0x3FFF;
 pub const PALETTE_RAM_SIZE: u16 = 0x20;
 pub const VRAM_SIZE: usize = 0x800;
 pub const DOTS_PER_SCANLINE: u16 = 340;
 /// Number of dots in one scanline including dot 0 (341 total: dots 0-340)
 pub const DOTS_IN_SCANLINE: u16 = DOTS_PER_SCANLINE + 1;
-pub const SCANLINES_PER_FRAME: u16 = 261;
 pub const OPEN_BUS_DECAY_DELAY: u32 = 420_000;
 pub const SPRITE_OVERFLOW_FLAG: u8 = 0b0010_0000;
-
-pub const TILES_PER_ROW: usize = 16;
 pub const BYTES_PER_TILE: usize = 16; // 8 low plane + 8 high plane
 pub const TABLE_BYTES: usize = 0x1000; // 256 tiles * 16 bytes
-
-// Optional: space 2 tiles (16px) between the two pattern tables for
-// readability.
-pub const TABLE_GAP_TILES: usize = 2;
-pub const TABLE_GAP_PX: usize = TABLE_GAP_TILES * TILE_SIZE;
 pub const VBL_START_SCANLINE: u16 = 241;
 pub const VISIBLE_SCANLINES: u16 = 239;
 pub const PRE_RENDER_SCANLINE: u16 = 261;
@@ -72,7 +43,6 @@ pub const NAMETABLE_SIZE: u16 = 0x400;
 pub const ATTRIBUTE_TABLE_BASE_ADDRESS: u16 = 0x23C0;
 
 pub const SCREEN_RENDER_WIDTH: usize = 256;
-pub const SCREEN_RENDER_HEIGHT: usize = 220;
 
 pub struct Ppu {
     pub dot_counter: u128,
@@ -1262,12 +1232,12 @@ impl Ppu {
 }
 
 #[derive(Debug, Copy, Clone, Default)]
-pub(crate) struct SpriteFifo {
-    pub(crate) shifter_pattern_lo: u8,
-    pub(crate) shifter_pattern_hi: u8,
-    pub(crate) down_counter: u8,
-    pub(crate) attribute: u8,
-    pub(crate) is_counting: bool,
+pub struct SpriteFifo {
+    pub shifter_pattern_lo: u8,
+    pub shifter_pattern_hi: u8,
+    pub down_counter: u8,
+    pub attribute: u8,
+    pub is_counting: bool,
 }
 
 impl Display for SpriteFifo {

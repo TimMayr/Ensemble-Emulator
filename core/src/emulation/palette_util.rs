@@ -82,7 +82,7 @@ impl Default for RgbPalette {
     fn default() -> Self { parse_palette_from_bytes(DEFAULT_PALETTE) }
 }
 
-static DEFAULT_PALETTE: &[u8] = include_bytes!("../../../core/assets/2C02G_wiki.pal");
+static DEFAULT_PALETTE: &[u8] = include_bytes!("../../assets/2C02G_wiki.pal");
 
 /// Parses a `.pal` palette file from raw bytes into an [`RgbPalette`].
 ///

@@ -11,7 +11,7 @@
 //! - Suitable for exposing as a crate API
 
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use monsoon_core::emulation::nes::{MASTER_CYCLES_PER_FRAME, Nes};
 use monsoon_core::emulation::savestate::{SaveState, try_load_state_from_bytes};
@@ -119,7 +119,7 @@ impl StopCondition {
             if let Ok(cond) = cond {
                 res.push(cond)
             } else if let Err(cond) = cond {
-                return Err(cond);
+                return Err(cond)
             }
         }
 
@@ -590,7 +590,7 @@ impl ExecutionEngine {
     }
 
     /// Load ROM from path
-    pub fn load_rom(&mut self, path: &PathBuf) -> Result<(), String> {
+    pub fn load_rom(&mut self, path: &Path) -> Result<(), String> {
         let path_str = path.to_string_lossy().to_string();
         self.emu.load_rom(&path_str);
         Ok(())
@@ -855,12 +855,11 @@ impl ExecutionEngine {
 
     /// Write trace log to the configured file path, if tracing was enabled.
     fn write_trace_log(&self) -> Result<(), String> {
-        if let Some(ref path) = self.config.trace_path {
-            if let Some(ref trace) = self.emu.trace_log() {
-                std::fs::write(path, &trace.log).map_err(|e| {
-                    format!("Failed to write trace log to {}: {}", path.display(), e)
-                })?;
-            }
+        if let Some(ref path) = self.config.trace_path
+            && let Some(trace) = self.emu.trace_log()
+        {
+            std::fs::write(path, &trace.log)
+                .map_err(|e| format!("Failed to write trace log to {}: {}", path.display(), e))?;
         }
         Ok(())
     }

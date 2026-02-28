@@ -7,10 +7,6 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
-include = [
-    "assets/2C02G_wiki.pal",
-    "src/**",
-]
 
 [lib]
 name = "monsoon_core"

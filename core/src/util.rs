@@ -6,16 +6,6 @@
 use crate::emulation::cpu::UPPER_BYTE;
 use crate::emulation::mem::{Memory, MemoryDevice};
 use crate::emulation::savestate::{BINARY_FORMAT_VERSION, JSON_FORMAT_VERSION, MAGIC, SaveState};
-
-/// Returns `true` if adding `offset` to `base` crosses a 256-byte page boundary.
-///
-/// This is used by the 6502 CPU to detect page crossings for addressing
-/// modes that add an unsigned offset.
-#[inline(always)]
-pub(crate) fn crosses_page_boundary_u8(base: u16, offset: u8) -> bool {
-    (base & UPPER_BYTE) != ((base + offset as u16) & UPPER_BYTE)
-}
-
 /// Returns `true` if adding a signed `offset` to `base` crosses a 256-byte page boundary.
 ///
 /// This is used by the 6502 CPU for relative branch offset calculations.
