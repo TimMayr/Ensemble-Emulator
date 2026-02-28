@@ -119,7 +119,7 @@ impl StopCondition {
             if let Ok(cond) = cond {
                 res.push(cond)
             } else if let Err(cond) = cond {
-                return Err(cond)
+                return Err(cond);
             }
         }
 
