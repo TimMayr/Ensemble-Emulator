@@ -1248,7 +1248,7 @@ impl Ppu {
             SpriteMode::TALL
         };
 
-        let base_pattern_table = ((self.ctrl_register & 0b1_0000) as u16)<<4;
+        let base_pattern_table = ((self.ctrl_register & 0b1000) as u16)<<5;
 
         let mut sprites = SpriteData {
             sprites: [Sprite::default(); 64],
