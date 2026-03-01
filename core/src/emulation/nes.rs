@@ -1,8 +1,9 @@
-use std::cell::RefCell;
 use std::fmt::Debug;
 use std::ops::{Deref, RangeInclusive};
-use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
+
+use parking_lot::Mutex;
 
 use crate::emulation::cpu::{Cpu, MicroOp};
 use crate::emulation::mem::Memory;
@@ -61,9 +62,9 @@ pub const MASTER_CYCLES_PER_FRAME: u32 = 357366;
 pub struct Nes {
     /// The MOS 6502 CPU instance.
     pub(crate) cpu: Cpu,
-    /// The 2C02 PPU instance, wrapped in `Rc<RefCell<_>>` because the CPU
+    /// The 2C02 PPU instance, wrapped in `Arc<Mutex<_>>` because the CPU
     /// and PPU share access (e.g., through memory-mapped PPU registers).
-    pub(crate) ppu: Rc<RefCell<Ppu>>,
+    pub(crate) ppu: Arc<Mutex<Ppu>>,
     /// Total master clock cycles elapsed since power-on.
     pub total_cycles: u128,
     /// The currently loaded ROM, or `None` if no ROM has been loaded.
@@ -90,7 +91,7 @@ impl Nes {
     /// To convert these indices to RGB colors, use a
     /// [`ScreenRenderer`](crate::emulation::screen_renderer::ScreenRenderer) implementation.
     #[inline]
-    pub fn get_pixel_buffer(&self) -> Vec<u16> { self.ppu.borrow().pixel_buffer.clone() }
+    pub fn get_pixel_buffer(&self) -> Vec<u16> { self.ppu.lock().pixel_buffer.clone() }
 
     /// Powers on the emulator, initializing the CPU-PPU connection.
     ///
@@ -118,7 +119,7 @@ impl Nes {
     /// [`power()`](Nes::power) again before resuming emulation.
     pub fn power_off(&mut self) {
         self.cpu = Cpu::default();
-        self.ppu = Rc::new(RefCell::new(Ppu::default()));
+        self.ppu = Arc::new(Mutex::new(Ppu::default()));
         self.total_cycles = 0;
         self.cpu_cycle_counter = 0;
         self.ppu_cycle_counter = 0;
@@ -192,7 +193,7 @@ impl Nes {
     pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>> {
         vec![
             self.cpu.get_memory_debug(range.clone()),
-            self.ppu.borrow().get_memory_debug(range.clone()),
+            self.ppu.lock().get_memory_debug(range.clone()),
         ]
     }
 
@@ -217,7 +218,7 @@ impl Nes {
     /// For most use cases, prefer [`Nes::default()`] which creates a standard
     /// NES configuration. Use this constructor when you need to supply a
     /// pre-configured CPU or PPU (e.g., for testing).
-    pub fn new(cpu: Cpu, ppu: Rc<RefCell<Ppu>>) -> Self {
+    pub fn new(cpu: Cpu, ppu: Arc<Mutex<Ppu>>) -> Self {
         Self {
             cpu,
             ppu,
@@ -236,7 +237,7 @@ impl Nes {
     /// the reset vector (`$FFFC`).
     pub fn reset(&mut self) {
         self.cpu.reset();
-        self.ppu.borrow_mut().reset();
+        self.ppu.lock().reset();
     }
 
     /// Loads a ROM into the emulator.
@@ -266,7 +267,7 @@ impl Nes {
     {
         let rom_file = rom_get.into();
         self.cpu.load_rom(&rom_file);
-        self.ppu.borrow_mut().load_rom(&rom_file);
+        self.ppu.lock().load_rom(&rom_file);
         self.rom_file = Some(rom_file);
     }
 
@@ -277,7 +278,7 @@ impl Nes {
     /// and later restored with [`load_state()`](Nes::load_state).
     pub fn save_state(&self) -> Option<SaveState> {
         let ppu_state = {
-            let ppu_ref = self.ppu.borrow();
+            let ppu_ref = self.ppu.lock();
             PpuState::from(ppu_ref.deref())
         };
 
@@ -302,7 +303,7 @@ impl Nes {
         // otherwise fall back to the savestate's ROM (which may have empty data due to Skip)
         let rom_to_use = self.rom_file.as_ref().unwrap_or(&state.rom_file);
 
-        self.ppu = Rc::new(RefCell::new(Ppu::from(&state.ppu, rom_to_use)));
+        self.ppu = Arc::new(Mutex::new(Ppu::from(&state.ppu, rom_to_use)));
 
         self.cpu = Cpu::from(&state.cpu, self.ppu.clone(), rom_to_use);
 
@@ -350,7 +351,7 @@ impl Nes {
         // Only borrow PPU when vbl_clear_scheduled might be active
         // This check is only relevant immediately after reading PPU status
         {
-            let ppu = self.ppu.borrow();
+            let ppu = self.ppu.lock();
             if ppu.vbl_clear_scheduled.get().is_some() {
                 ppu.vbl_reset_counter.set(ppu.vbl_reset_counter.get() + 1);
                 ppu.process_vbl_clear_scheduled();
@@ -366,7 +367,7 @@ impl Nes {
         let mut is_frame_done = false;
 
         if self.ppu_cycle_counter == 4 {
-            is_frame_done = self.ppu.borrow_mut().step();
+            is_frame_done = self.ppu.lock().step();
             self.ppu_cycle_counter = 0;
         }
 
@@ -381,7 +382,7 @@ impl Nes {
 
             if do_trace && let Some(ref mut trace) = self.trace_log {
                 let ppu_state = {
-                    let ppu_ref = self.ppu.borrow();
+                    let ppu_ref = self.ppu.lock();
                     PpuState::from(ppu_ref.deref())
                 };
 
@@ -421,7 +422,7 @@ impl Nes {
 impl Default for Nes {
     fn default() -> Self {
         let cpu = Cpu::new();
-        let ppu = Rc::new(RefCell::new(Ppu::default()));
+        let ppu = Arc::new(Mutex::new(Ppu::default()));
         Nes::new(cpu, ppu)
     }
 }
@@ -444,28 +445,28 @@ impl Nes {
     // --- PPU debug accessors ---
 
     /// Returns `true` if the current frame is an even frame.
-    pub fn is_even_frame(&self) -> bool { self.ppu.borrow().even_frame }
+    pub fn is_even_frame(&self) -> bool { self.ppu.lock().even_frame }
 
     /// Returns `true` if the PPU is currently rendering (background or sprites enabled).
-    pub fn is_rendering(&self) -> bool { self.ppu.borrow().is_rendering() }
+    pub fn is_rendering(&self) -> bool { self.ppu.lock().is_rendering() }
 
     /// Returns debug palette data from the PPU.
     pub fn get_palettes_debug(&self) -> crate::emulation::ppu_util::EmulatorFetchable {
-        self.ppu.borrow().get_palettes_debug()
+        self.ppu.lock().get_palettes_debug()
     }
 
     /// Returns debug tile data from the PPU.
     pub fn get_tiles_debug(&self) -> crate::emulation::ppu_util::EmulatorFetchable {
-        self.ppu.borrow().get_tiles_debug()
+        self.ppu.lock().get_tiles_debug()
     }
 
     /// Returns debug nametable data from the PPU.
     pub fn get_nametable_debug(&self) -> crate::emulation::ppu_util::EmulatorFetchable {
-        self.ppu.borrow().get_nametable_debug()
+        self.ppu.lock().get_nametable_debug()
     }
 
     /// Returns OAM (sprite memory) contents for debugging.
-    pub fn get_oam_debug(&self) -> Vec<u8> { self.ppu.borrow().oam.get_memory_debug(None) }
+    pub fn get_oam_debug(&self) -> Vec<u8> { self.ppu.lock().oam.get_memory_debug(None) }
 
     // --- Memory write methods ---
 
@@ -479,15 +480,15 @@ impl Nes {
 
     /// Writes a value to PPU memory at the given address (for initialization/debugging).
     pub fn ppu_mem_write(&self, addr: u16, value: u8) {
-        self.ppu.borrow_mut().memory.mem_write(addr, value);
+        self.ppu.lock().memory.mem_write(addr, value);
     }
 
     /// Initializes PPU memory at the given address (for initialization/debugging).
-    pub fn ppu_mem_init(&self, addr: u16, data: u8) { self.ppu.borrow_mut().mem_init(addr, data); }
+    pub fn ppu_mem_init(&self, addr: u16, data: u8) { self.ppu.lock().mem_init(addr, data); }
 
     /// Writes a value to OAM (sprite memory) at the given address (for initialization/debugging).
     pub fn oam_write(&self, addr: u16, value: u8) {
-        self.ppu.borrow_mut().oam.mem_write(addr, value);
+        self.ppu.lock().oam.mem_write(addr, value);
     }
 
     /// Returns a reference to the trace log, if tracing is enabled.

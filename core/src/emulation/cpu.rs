@@ -1,7 +1,9 @@
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::collections::VecDeque;
 use std::ops::RangeInclusive;
-use std::rc::Rc;
+use std::sync::Arc;
+
+use parking_lot::Mutex;
 
 use serde::{Deserialize, Serialize};
 
@@ -45,7 +47,7 @@ pub struct Cpu {
     pub y_register: u8,
     pub processor_status: u8,
     pub memory: MemoryMap,
-    pub ppu: Option<Rc<RefCell<Ppu>>>,
+    pub ppu: Option<Arc<Mutex<Ppu>>>,
     pub irq_provider: Cell<bool>,
     pub lo: u8,
     pub hi: u8,
@@ -1152,7 +1154,7 @@ impl Cpu {
         }
 
         if let Some(ppu) = &self.ppu {
-            let ppu = ppu.borrow();
+            let ppu = ppu.lock();
             ppu.tick_open_bus(12);
             let curr_nmi = ppu.poll_nmi();
 
@@ -1869,7 +1871,7 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub fn from(state: &CpuState, ppu: Rc<RefCell<Ppu>>, rom: &RomFile) -> Self {
+    pub fn from(state: &CpuState, ppu: Arc<Mutex<Ppu>>, rom: &RomFile) -> Self {
         OPCODES_MAP.get_or_init(opcode::init);
         OPCODES_TABLE.get_or_init(opcode::init_lookup_table);
 

@@ -27,7 +27,7 @@ fn test_nmi_vector() {
     nes.cpu.memory.add_memory(0x4020..=0xFFFF, Memory::Rom(rom));
 
     // Manually force an nmi
-    nes.ppu.borrow().nmi_requested.set(true);
+    nes.ppu.lock().nmi_requested.set(true);
 
     nes.reset();
 
