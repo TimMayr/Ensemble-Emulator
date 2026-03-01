@@ -70,7 +70,14 @@ pub type FrontendEventQueue = Rc<RefCell<VecDeque<FrontendEvent>>>;
 ///
 /// Uses `RendererKind` for runtime-switchable rendering. The renderer can be
 /// changed at runtime by updating `config.view_config.renderer`.
+///
+/// On native targets, the emulator runs on a dedicated thread and
+/// communication happens entirely through channels.  On WASM, the emulator
+/// remains on the main thread (`channel_emu` field) since `std::thread` is
+/// unavailable.
 pub struct EguiApp {
+    /// The emulator instance — only present on WASM where threading is unavailable.
+    #[cfg(target_arch = "wasm32")]
     pub(crate) channel_emu: ChannelEmulator,
     pub(crate) to_emulator: Sender<FrontendMessage>,
     pub(crate) from_emulator: Receiver<EmulatorMessage>,
@@ -92,13 +99,41 @@ pub struct EguiApp {
     last_autosave: Instant,
     /// Track if window was focused last frame to detect focus loss
     was_focused: bool,
+    /// Track the previous speed setting to detect changes and send SetUncapped
+    previous_app_speed: AppSpeed,
 }
 
 impl EguiApp {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        loaded_config: Option<PersistentConfig>,
+        to_emulator: Sender<FrontendMessage>,
+        from_emulator: Receiver<EmulatorMessage>,
+        to_async: Sender<AsyncFrontendMessage>,
+        from_async: Receiver<AsyncFrontendMessage>,
+    ) -> Self {
+        Self::new_inner(cc, loaded_config, to_emulator, from_emulator, to_async, from_async)
+    }
+
+    #[cfg(target_arch = "wasm32")]
     pub fn new(
         cc: &eframe::CreationContext<'_>,
         loaded_config: Option<PersistentConfig>,
         channel_emu: ChannelEmulator,
+        to_emulator: Sender<FrontendMessage>,
+        from_emulator: Receiver<EmulatorMessage>,
+        to_async: Sender<AsyncFrontendMessage>,
+        from_async: Receiver<AsyncFrontendMessage>,
+    ) -> Self {
+        let mut app = Self::new_inner(cc, loaded_config, to_emulator, from_emulator, to_async, from_async);
+        app.channel_emu = channel_emu;
+        app
+    }
+
+    fn new_inner(
+        cc: &eframe::CreationContext<'_>,
+        loaded_config: Option<PersistentConfig>,
         to_emulator: Sender<FrontendMessage>,
         from_emulator: Receiver<EmulatorMessage>,
         to_async: Sender<AsyncFrontendMessage>,
@@ -119,7 +154,13 @@ impl EguiApp {
         }
 
         Self {
-            channel_emu,
+            #[cfg(target_arch = "wasm32")]
+            channel_emu: {
+                // Placeholder — immediately overwritten by the wasm `new()`.
+                let nes = Nes::default();
+                let (emu, _, _) = ChannelEmulator::new(nes);
+                emu
+            },
             to_emulator,
             from_emulator,
             from_async,
@@ -134,6 +175,7 @@ impl EguiApp {
             nametables_was_visible: false,
             last_autosave: Instant::now(),
             was_focused: true,
+            previous_app_speed: AppSpeed::default(),
         }
     }
 
@@ -417,8 +459,21 @@ impl EguiApp {
         }
     }
 
-    /// Update emulator textures and run emulation frames
+    /// Update emulator textures and run emulation frames.
+    ///
+    /// On native, sends `StepFrame` messages to the emulator thread.
+    /// On WASM, calls `execute_frame()` directly since there is no thread.
     fn update_emu_textures(&mut self, ctx: &Context) {
+        // Detect speed changes and send SetUncapped when needed
+        if self.config.speed_config.app_speed != self.previous_app_speed {
+            let is_uncapped = self.config.speed_config.app_speed == AppSpeed::Uncapped;
+            let was_uncapped = self.previous_app_speed == AppSpeed::Uncapped;
+            if is_uncapped != was_uncapped {
+                let _ = self.to_emulator.send(FrontendMessage::SetUncapped(is_uncapped));
+            }
+            self.previous_app_speed = self.config.speed_config.app_speed;
+        }
+
         let now = Instant::now();
         if !self.config.speed_config.is_paused {
             let delta = now.duration_since(self.emu_textures.last_frame_request);
@@ -435,10 +490,25 @@ impl EguiApp {
             // Effectively paused, so we skip
             if frame_budget < Duration::from_secs(5) {
                 while self.accumulator >= frame_budget {
-                    if let Err(e) = self.channel_emu.execute_frame() {
-                        eprintln!("Emulator error: {}", e);
-                        ctx.send_viewport_cmd(ViewportCommand::Close);
-                        break;
+                    // On native, the emulator thread does the work
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        if !is_uncapped
+                            && self.to_emulator.send(FrontendMessage::StepFrame).is_err()
+                        {
+                            ctx.send_viewport_cmd(ViewportCommand::Close);
+                            break;
+                        }
+                    }
+
+                    // On WASM, drive the emulator directly
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        if let Err(e) = self.channel_emu.execute_frame() {
+                            eprintln!("Emulator error: {}", e);
+                            ctx.send_viewport_cmd(ViewportCommand::Close);
+                            break;
+                        }
                     }
 
                     self.accumulator -= frame_budget;
@@ -518,8 +588,11 @@ impl EguiApp {
         {
             // Update timestamp first to prevent overlapping save operations
             self.last_autosave = Instant::now();
-            let savestate = self.channel_emu.nes.save_state();
-            self.create_auto_save(Box::new(savestate.unwrap()));
+            // Request savestate via message — the emulator thread will create
+            // it and send it back as an EmulatorMessage::SaveState.
+            let _ = self
+                .to_emulator
+                .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
         }
     }
 
@@ -536,8 +609,9 @@ impl EguiApp {
         {
             // Update timestamp first to prevent overlapping save operations
             self.last_autosave = Instant::now();
-            let savestate = self.channel_emu.nes.save_state();
-            self.create_auto_save(Box::new(savestate.unwrap()));
+            let _ = self
+                .to_emulator
+                .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
         }
 
         self.was_focused = is_focused;
@@ -554,6 +628,8 @@ impl eframe::App for EguiApp {
             &mut self.emu_textures.last_frame_request,
         );
 
+        // On WASM, drive the emulator directly since there's no thread
+        #[cfg(target_arch = "wasm32")]
         if let Err(e) = self.channel_emu.process_messages() {
             eprintln!("Emulator error: {}", e);
             ctx.send_viewport_cmd(ViewportCommand::Close);
@@ -636,11 +712,11 @@ impl eframe::App for EguiApp {
             });
         }
 
-        let savestate = self.channel_emu.nes.save_state();
-
-        if let Some(state) = savestate {
-            self.create_auto_save(Box::new(state));
-        }
+        // Request an autosave via message — on native, the emulator thread
+        // will handle it; the Quit message will also trigger a save and stop.
+        let _ = self
+            .to_emulator
+            .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
 
         let _ = self.to_emulator.send(FrontendMessage::Quit);
     }
@@ -651,6 +727,8 @@ impl Debug for EguiApp {
 }
 
 struct SetupResponse {
+    /// Only present on WASM; on native the emu is moved to a thread.
+    #[cfg(target_arch = "wasm32")]
     emu: ChannelEmulator,
     to_emu: Sender<FrontendMessage>,
     from_emu: Receiver<EmulatorMessage>,
@@ -660,7 +738,10 @@ struct SetupResponse {
     persistence_path: Option<PathBuf>,
 }
 
-/// Native: common setup with PathBuf for command-line ROM loading
+/// Common setup: creates emulator, channels, and optionally queues a ROM load.
+///
+/// On native, spawns the emulator on a dedicated thread.
+/// On WASM, returns the emulator for the UI to drive directly.
 fn common_setup(rom: Option<PathBuf>) -> SetupResponse {
     // Create the emulator instance
     let console = Nes::default();
@@ -668,6 +749,15 @@ fn common_setup(rom: Option<PathBuf>) -> SetupResponse {
     // Create channel-based emulator wrapper
     let (emu, to_emu, from_emu) = ChannelEmulator::new(console);
     let (async_sender, from_async) = crossbeam_channel::unbounded();
+
+    // Spawn the emulator on a dedicated thread (native only)
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::thread::Builder::new()
+            .name("emulator".into())
+            .spawn(move || emu.run())
+            .expect("failed to spawn emulator thread");
+    }
 
     if rom.is_some() {
         // Setup Emulator State via messages - read ROM file if provided
@@ -696,6 +786,7 @@ fn common_setup(rom: Option<PathBuf>) -> SetupResponse {
 
     SetupResponse {
         persistence_path,
+        #[cfg(target_arch = "wasm32")]
         emu,
         to_emu,
         from_emu,
@@ -754,7 +845,6 @@ async fn run_internal(res: SetupResponse) -> Result<(), Box<dyn std::error::Erro
             Ok(Box::new(EguiApp::new(
                 cc,
                 loaded_config,
-                res.emu,
                 res.to_emu,
                 res.from_emu,
                 res.async_sender,

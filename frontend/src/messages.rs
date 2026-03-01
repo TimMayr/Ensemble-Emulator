@@ -31,6 +31,9 @@ pub enum FrontendMessage {
     WriteCpu(u16, u8),
     CreateSaveState(SaveType),
     LoadSaveState(Box<SaveState>),
+    /// Enable or disable uncapped mode. When enabled, the emulator runs
+    /// frames continuously without waiting for StepFrame messages.
+    SetUncapped(bool),
 }
 
 #[derive(Debug, Default, Eq, PartialEq, Copy, Clone, Hash)]

@@ -8,16 +8,22 @@ use monsoon_core::util::Hashable;
 
 use crate::messages::{ControllerEvent, EmulatorMessage, FrontendMessage, SaveType};
 
-/// Channel-based emulator wrapper for clean frontend/emulator separation.
+/// Channel-based emulator wrapper that communicates with the frontend via
+/// crossbeam channels.
 ///
-/// This module provides a non-threaded emulator wrapper that uses channels for
-/// communication. While it doesn't provide true multi-threading (due to the
-/// emulator core using `Rc<RefCell<>>` which is not `Send`), it provides:
+/// On native targets, `ChannelEmulator` is moved to a dedicated thread via
+/// [`run()`](ChannelEmulator::run). On WASM, it remains on the main thread
+/// and the frontend drives it by calling
+/// [`process_messages()`](ChannelEmulator::process_messages) and
+/// [`execute_frame()`](ChannelEmulator::execute_frame) directly.
 ///
-/// - Clean separation of concerns between frontend and emulator
-/// - Message-based communication protocol
-/// - Easy upgrade path to multi-threading once core is refactored
-/// - Testable architecture
+/// # Threading model
+///
+/// The emulator thread is *request-driven*: it executes a frame only when it
+/// receives a [`FrontendMessage::StepFrame`] message from the frontend. The
+/// one exception is **uncapped mode** — when enabled via
+/// [`FrontendMessage::SetUncapped(true)`], the emulator runs frames as fast
+/// as possible until the mode is disabled again.
 ///
 /// # Architecture
 ///
@@ -26,28 +32,14 @@ use crate::messages::{ControllerEvent, EmulatorMessage, FrontendMessage, SaveTyp
 ///              (channels)              ↓
 /// Frontend ← EmulatorMessage ←─────────┘
 /// ```
-///
-/// # Example
-///
-/// ```ignore
-/// use lockstep::emulation::channel_emu::ChannelEmulator;
-/// use lockstep::emulation::emu::{Console, Consoles};
-/// use lockstep::emulation::nes::Nes;
-///
-/// let console = Nes::default();
-/// let (mut emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
-///
-/// // In your main loop:
-/// emu.step_frame()?; // Run one frame
-/// ```
-/// A non-threaded emulator wrapper that communicates via channels
-/// This provides a clean interface for the frontend without threading complications.
-/// The emulator runs in the same thread but is decoupled via message passing.
 pub struct ChannelEmulator {
     pub nes: Nes,
     to_frontend: Sender<EmulatorMessage>,
     from_frontend: Receiver<FrontendMessage>,
     input: u8,
+    /// When true, the emulator runs frames continuously without waiting
+    /// for `StepFrame` messages.
+    uncapped: bool,
     /// Cached palette data for change detection
     last_palette_data: Option<PaletteData>,
     /// Cached hash of pattern table data for efficient change detection
@@ -85,6 +77,7 @@ impl ChannelEmulator {
             to_frontend: tx_from_emu,
             from_frontend: rx_from_frontend,
             input: 0,
+            uncapped: false,
             last_palette_data: None,
             last_pattern_table_hash: None,
         };
@@ -92,73 +85,120 @@ impl ChannelEmulator {
         (emu, tx_to_emu, rx_to_frontend)
     }
 
-    /// Run one frame of emulation and handle messages
-    pub fn process_messages(&mut self) -> Result<(), String> {
-        // Check for messages from frontend
-        while let Ok(msg) = self.from_frontend.try_recv() {
-            match msg {
-                FrontendMessage::Quit => {
-                    let state = self.nes.save_state();
-                    if let Some(state) = state {
-                        let _ = self.to_frontend.send(EmulatorMessage::SaveState(
-                            Box::new(state),
-                            SaveType::Autosave,
-                        ));
-                    }
-                    let _ = self.to_frontend.send(EmulatorMessage::Stopped);
-                    return Err("Quit requested".to_string());
+    /// Blocking event loop for the emulator thread (native only).
+    ///
+    /// The loop waits for messages from the frontend. When a `StepFrame`
+    /// message arrives, one frame is executed. In uncapped mode, frames
+    /// run continuously and messages are drained between frames via
+    /// non-blocking `try_recv`.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn run(mut self) {
+        loop {
+            if self.uncapped {
+                // In uncapped mode, drain all pending messages without blocking,
+                // then execute a frame immediately.
+                match self.process_messages() {
+                    Ok(()) => {}
+                    Err(_) => break,
                 }
-                FrontendMessage::Reset => {
-                    self.nes.reset();
+                if self.execute_frame().is_err() {
+                    break;
                 }
-                FrontendMessage::StepFrame => {
-                    // Execute one frame regardless of pause state
-                    self.execute_frame()?;
-                }
-                FrontendMessage::ControllerInput(event) => {
-                    self.handle_controller_event(event);
-                }
-                FrontendMessage::RequestDebugData(fetchable) => match fetchable {
-                    EmulatorFetchable::Palettes(_) => {
-                        let _ = self
-                            .to_frontend
-                            .send(EmulatorMessage::DebugData(self.nes.get_palettes_debug()));
-                    }
-                    EmulatorFetchable::Tiles(_) => {
-                        let _ = self
-                            .to_frontend
-                            .send(EmulatorMessage::DebugData(self.nes.get_tiles_debug()));
-                    }
-                    EmulatorFetchable::Nametables(_) => {
-                        let _ = self
-                            .to_frontend
-                            .send(EmulatorMessage::DebugData(self.nes.get_nametable_debug()));
-                    }
-                },
-                FrontendMessage::WritePpu(address, data) => self.nes.ppu_mem_init(address, data),
-                FrontendMessage::WriteCpu(address, data) => self.nes.cpu_mem_init(address, data),
-                FrontendMessage::LoadRom((data, name)) => {
-                    let loadable = (&data[..], name);
-                    self.nes.load_rom(&loadable);
-                    let _ = self
-                        .to_frontend
-                        .send(EmulatorMessage::RomLoaded(self.nes.rom_file.clone()));
-                }
-                FrontendMessage::Power => {
-                    self.nes.power();
-                }
-                FrontendMessage::PowerOff => self.nes.power_off(),
-                FrontendMessage::CreateSaveState(t) => {
-                    if self.nes.rom_file.is_some() {
-                        let state = self.nes.save_state();
-                        if let Some(state) = state {
-                            let _ = self
-                                .to_frontend
-                                .send(EmulatorMessage::SaveState(Box::new(state), t));
+            } else {
+                // Normal mode: block until a message arrives.
+                match self.from_frontend.recv() {
+                    Ok(msg) => {
+                        if self.handle_message(msg).is_err() {
+                            break;
                         }
                     }
+                    Err(_) => break, // Channel disconnected
                 }
-                FrontendMessage::LoadSaveState(s) => self.nes.load_state(*s),
+                // Drain any remaining messages that arrived while we were
+                // processing the first one.
+                match self.process_messages() {
+                    Ok(()) => {}
+                    Err(_) => break,
+                }
+            }
+        }
+    }
+
+    /// Process all pending messages without blocking.
+    pub fn process_messages(&mut self) -> Result<(), String> {
+        while let Ok(msg) = self.from_frontend.try_recv() {
+            self.handle_message(msg)?;
+        }
+        Ok(())
+    }
+
+    /// Handle a single frontend message. Returns `Err` when the emulator
+    /// should shut down (quit requested or fatal error).
+    fn handle_message(&mut self, msg: FrontendMessage) -> Result<(), String> {
+        match msg {
+            FrontendMessage::Quit => {
+                let state = self.nes.save_state();
+                if let Some(state) = state {
+                    let _ = self.to_frontend.send(EmulatorMessage::SaveState(
+                        Box::new(state),
+                        SaveType::Autosave,
+                    ));
+                }
+                let _ = self.to_frontend.send(EmulatorMessage::Stopped);
+                return Err("Quit requested".to_string());
+            }
+            FrontendMessage::Reset => {
+                self.nes.reset();
+            }
+            FrontendMessage::StepFrame => {
+                self.execute_frame()?;
+            }
+            FrontendMessage::ControllerInput(event) => {
+                self.handle_controller_event(event);
+            }
+            FrontendMessage::RequestDebugData(fetchable) => match fetchable {
+                EmulatorFetchable::Palettes(_) => {
+                    let _ = self
+                        .to_frontend
+                        .send(EmulatorMessage::DebugData(self.nes.get_palettes_debug()));
+                }
+                EmulatorFetchable::Tiles(_) => {
+                    let _ = self
+                        .to_frontend
+                        .send(EmulatorMessage::DebugData(self.nes.get_tiles_debug()));
+                }
+                EmulatorFetchable::Nametables(_) => {
+                    let _ = self
+                        .to_frontend
+                        .send(EmulatorMessage::DebugData(self.nes.get_nametable_debug()));
+                }
+            },
+            FrontendMessage::WritePpu(address, data) => self.nes.ppu_mem_init(address, data),
+            FrontendMessage::WriteCpu(address, data) => self.nes.cpu_mem_init(address, data),
+            FrontendMessage::LoadRom((data, name)) => {
+                let loadable = (&data[..], name);
+                self.nes.load_rom(&loadable);
+                let _ = self
+                    .to_frontend
+                    .send(EmulatorMessage::RomLoaded(self.nes.rom_file.clone()));
+            }
+            FrontendMessage::Power => {
+                self.nes.power();
+            }
+            FrontendMessage::PowerOff => self.nes.power_off(),
+            FrontendMessage::CreateSaveState(t) => {
+                if self.nes.rom_file.is_some() {
+                    let state = self.nes.save_state();
+                    if let Some(state) = state {
+                        let _ = self
+                            .to_frontend
+                            .send(EmulatorMessage::SaveState(Box::new(state), t));
+                    }
+                }
+            }
+            FrontendMessage::LoadSaveState(s) => self.nes.load_state(*s),
+            FrontendMessage::SetUncapped(uncapped) => {
+                self.uncapped = uncapped;
             }
         }
 
