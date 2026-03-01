@@ -132,7 +132,7 @@ architecture.
 - `Mutex` is heavier than `RefCell` (~25 ns lock overhead per acquisition).
   The PPU is accessed on nearly every master clock cycle (every 4th cycle for
   PPU step, every 12th for CPU step via `PpuRegisters`), so this adds
-  measurable overhead to the hot loop. The core runs ~357 000 master cycles per
+  measurable overhead to the hot loop. The core runs ~357,000 master cycles per
   frame, with thousands of mutex acquisitions per frame.
 - Deadlock risk if lock ordering is not careful (though current code never holds
   the borrow across another borrow, so mechanical replacement should be safe)
@@ -267,9 +267,7 @@ unbounded channels).
 
 The `input` field on `ChannelEmulator` (which accumulates button presses via
 bitwise OR) should be **reset to 0 after each frame**, then re-filled from
-the queue before the next frame. This prevents sticky buttons. (Note: the
-current code appears to accumulate input bits but never resets them — this
-would need to be addressed regardless of threading.)
+the queue before the next frame. This prevents sticky buttons.
 
 ### 6. Direct `Nes` access from UI (debug/savestate)
 
@@ -393,7 +391,7 @@ If using `Arc<Mutex<Ppu>>`:
 - ~25 ns per uncontended lock/unlock for `std::sync::Mutex`
 - ~10 ns for `parking_lot::Mutex`
 - Approximately 3,000–5,000 PPU locks per frame (PPU step + PPU register access)
-- Estimated overhead: **30–125 µs/frame** (0.2–0.7% of 16.67 ms frame budget)
+- Estimated overhead: **30–125 µs/frame** (~0.2–0.8% of 16.67 ms frame budget)
 - This is acceptable for a first implementation
 
 ### Frame synchronization
@@ -409,9 +407,11 @@ asynchronously. Two synchronization strategies:
    frontend acknowledges it. This ensures exactly 1:1 frame production and
    keeps memory usage bounded, but adds latency equal to UI frame time.
 
-**Recommendation**: Use approach 1 (free-running) with a bounded channel or a
-latest-value swap buffer for `FrameReady`. For debug data, the current
-change-detection hashing approach works well across threads.
+**Recommendation**: Use approach 1 (free-running). For the `FrameReady` path
+specifically, consider using a bounded channel (capacity 2–3) or a
+latest-value swap buffer instead of the current unbounded channel, to prevent
+unbounded memory growth if the UI thread falls behind. For debug data, the
+current change-detection hashing approach works well across threads.
 
 ---
 
