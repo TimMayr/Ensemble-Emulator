@@ -5,9 +5,9 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp};
+use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
-use crate::emulation::mem::Memory;
 use crate::emulation::ppu::{EmulatorFetchable, Ppu};
 use crate::emulation::rom::RomFile;
 use crate::emulation::savestate::{CpuState, PpuState, SaveState};
@@ -450,14 +450,10 @@ impl Nes {
     pub fn is_rendering(&self) -> bool { self.ppu.borrow().is_rendering() }
 
     /// Returns debug palette data from the PPU.
-    pub fn get_palettes_debug(&self) -> EmulatorFetchable {
-        self.ppu.borrow().get_palettes_debug()
-    }
+    pub fn get_palettes_debug(&self) -> EmulatorFetchable { self.ppu.borrow().get_palettes_debug() }
 
     /// Returns debug tile data from the PPU.
-    pub fn get_tiles_debug(&self) -> EmulatorFetchable {
-        self.ppu.borrow().get_tiles_debug()
-    }
+    pub fn get_tiles_debug(&self) -> EmulatorFetchable { self.ppu.borrow().get_tiles_debug() }
 
     /// Returns debug nametable data from the PPU.
     pub fn get_nametable_debug(&self) -> EmulatorFetchable {

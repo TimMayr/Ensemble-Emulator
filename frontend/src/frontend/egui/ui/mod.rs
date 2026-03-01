@@ -10,11 +10,10 @@ mod pattern_table;
 mod pattern_table_pane;
 pub mod save_browser;
 pub mod savestate_dialogs;
+mod sprite_viewer_pane;
 mod status_bar;
 pub mod widgets;
-mod sprite_viewer_pane;
 
-pub use sprite_viewer_pane::render_sprite_viewer;
 pub use emulator_output::render_emulator_output;
 pub use keybindings_pane::render_keybindings;
 pub use menu_bar::add_menu_bar;
@@ -25,4 +24,5 @@ pub use pattern_table::draw_pattern_table;
 pub use pattern_table_pane::render_pattern_table;
 pub use save_browser::render_save_browser;
 pub use savestate_dialogs::render_dialogs as render_savestate_dialogs;
+pub use sprite_viewer_pane::render_sprite_viewer;
 pub use status_bar::add_status_bar;
