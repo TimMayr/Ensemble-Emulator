@@ -54,5 +54,8 @@ jobs:
       - name: Run clippy on workspace
         run: cargo clippy --workspace -- -D warnings
 
+      - name: Run clippy for WASM target
+        run: cargo clippy -p monsoon-frontend --target wasm32-unknown-unknown -- -D warnings
+
       - name: Run clippy on CLI crate
         run: cargo clippy -p monsoon-cli -- -D warnings
