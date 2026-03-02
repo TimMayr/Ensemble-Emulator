@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 use crossbeam_channel::{Receiver, Sender};
-use monsoon_core::emulation::nes::{ExecutionFinishedType, Nes};
+use monsoon_core::emulation::nes::Nes;
 use monsoon_core::emulation::ppu_util::{EmulatorFetchable, PaletteData};
 use monsoon_core::util::Hashable;
 
@@ -167,20 +167,115 @@ impl ChannelEmulator {
                     }
                 }
                 FrontendMessage::LoadSaveState(s) => self.nes.load_state(*s),
+                FrontendMessage::StepPpuCycle => self.execute_master_cycle()?,
+                FrontendMessage::StepCpuCycle => self.execute_cpu_cycle()?,
+                FrontendMessage::StepMasterCycle => self.execute_master_cycle()?,
+                FrontendMessage::StepScanline => self.execute_scanline()?,
             }
         }
 
         Ok(())
     }
 
+    pub fn execute_master_cycle(&mut self) -> Result<(), String> {
+        match self.nes.step() {
+            Ok(_) => {
+                // Frame completed, send it to frontend
+                let frame = self.nes.get_pixel_buffer();
+                let frame_data = (*frame).to_vec();
+                if self
+                    .to_frontend
+                    .send(EmulatorMessage::FrameReady(frame_data))
+                    .is_err()
+                {
+                    // Frontend disconnected
+                    return Err("Frontend disconnected".to_string());
+                }
+
+                // Check if debug data has changed and notify frontend
+                self.check_debug_data_changed();
+
+                Ok(())
+            }
+            Err(e) => Err(format!("Emulator error: {}", e)),
+        }
+    }
+
+    pub fn execute_ppu_cycle(&mut self) -> Result<(), String> {
+        match self.nes.step_ppu_cycle() {
+            Ok(_) => {
+                // Frame completed, send it to frontend
+                let frame = self.nes.get_pixel_buffer();
+                let frame_data = (*frame).to_vec();
+                if self
+                    .to_frontend
+                    .send(EmulatorMessage::FrameReady(frame_data))
+                    .is_err()
+                {
+                    // Frontend disconnected
+                    return Err("Frontend disconnected".to_string());
+                }
+
+                // Check if debug data has changed and notify frontend
+                self.check_debug_data_changed();
+
+                Ok(())
+            }
+            Err(e) => Err(format!("Emulator error: {}", e)),
+        }
+    }
+
+    pub fn execute_cpu_cycle(&mut self) -> Result<(), String> {
+        match self.nes.step_cpu_cycle() {
+            Ok(_) => {
+                // Frame completed, send it to frontend
+                let frame = self.nes.get_pixel_buffer();
+                let frame_data = (*frame).to_vec();
+                if self
+                    .to_frontend
+                    .send(EmulatorMessage::FrameReady(frame_data))
+                    .is_err()
+                {
+                    // Frontend disconnected
+                    return Err("Frontend disconnected".to_string());
+                }
+
+                // Check if debug data has changed and notify frontend
+                self.check_debug_data_changed();
+
+                Ok(())
+            }
+            Err(e) => Err(format!("Emulator error: {}", e)),
+        }
+    }
+
+    pub fn execute_scanline(&mut self) -> Result<(), String> {
+        match self.nes.step_scanline() {
+            Ok(_) => {
+                // Frame completed, send it to frontend
+                let frame = self.nes.get_pixel_buffer();
+                let frame_data = (*frame).to_vec();
+                if self
+                    .to_frontend
+                    .send(EmulatorMessage::FrameReady(frame_data))
+                    .is_err()
+                {
+                    // Frontend disconnected
+                    return Err("Frontend disconnected".to_string());
+                }
+
+                // Check if debug data has changed and notify frontend
+                self.check_debug_data_changed();
+
+                Ok(())
+            }
+            Err(e) => Err(format!("Emulator error: {}", e)),
+        }
+    }
+
     pub fn execute_frame(&mut self) -> Result<(), String> {
         match self.nes.step_frame() {
-            Ok(
-                ExecutionFinishedType::CycleCompleted
-                | ExecutionFinishedType::ReachedLastCycle
-                | ExecutionFinishedType::ReachedHlt
-                | ExecutionFinishedType::FrameDone,
-            ) => {
+            Ok(_) => {
                 // Frame completed, send it to frontend
                 let frame = self.nes.get_pixel_buffer();
                 let frame_data = (*frame).to_vec();

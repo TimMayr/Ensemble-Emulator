@@ -1,4 +1,4 @@
-use crate::emulation::nes::Nes;
+use crate::emulation::nes::{Nes, RunOptions};
 
 #[test]
 fn test_11_stack() {
@@ -7,7 +7,7 @@ fn test_11_stack() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/11-stack.nes",
     ));
     emu.reset();
-    emu.run_until(69296933, false)
+    emu.run_until(69296933, RunOptions::default())
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6016));

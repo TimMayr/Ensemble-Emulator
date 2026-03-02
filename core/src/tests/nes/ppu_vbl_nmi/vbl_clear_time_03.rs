@@ -1,4 +1,4 @@
-use crate::emulation::nes::Nes;
+use crate::emulation::nes::{Nes, RunOptions};
 
 #[test]
 fn test_03_vbl_clear_time() {
@@ -7,7 +7,7 @@ fn test_03_vbl_clear_time() {
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/03-vbl_clear_time.nes",
     ));
     emu.power();
-    emu.run_until(76_843_511, false)
+    emu.run_until(76_843_511, RunOptions::default())
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x604C));

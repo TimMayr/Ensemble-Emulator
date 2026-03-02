@@ -6,6 +6,7 @@ use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, OpenBus, Ram};
+use crate::emulation::nes::ExecutionFinished;
 // Re-import public constants/types from ppu_util so internal code can use them
 // with short names.
 pub use crate::emulation::ppu_util::{
@@ -175,7 +176,7 @@ impl Ppu {
     }
 
     #[inline]
-    pub fn step(&mut self) -> bool {
+    pub fn step(&mut self) -> ExecutionFinished {
         self.prev_vbl = self.status_register.get() & VBLANK_NMI_BIT;
 
         if self.reset_signal {
@@ -193,8 +194,6 @@ impl Ppu {
         if is_frame_start {
             self.even_frame = !self.even_frame;
         }
-
-        let res = false;
 
         for ref mut s in self.sprite_fifo {
             if s.is_counting && s.down_counter > 0 {
@@ -367,16 +366,25 @@ impl Ppu {
         self.dot += increment;
 
         let mut is_frame_end = false;
+        let mut is_scanline_end = false;
+
         if self.dot > DOTS_PER_SCANLINE {
             self.dot -= DOTS_IN_SCANLINE;
             self.scanline += 1;
+
+            is_scanline_end = true;
+
             if self.scanline > PRE_RENDER_SCANLINE {
                 self.scanline = 0;
                 is_frame_end = true;
             }
         }
 
-        is_frame_end || res
+        ExecutionFinished {
+            frame_done: is_frame_end,
+            scanline_done: is_scanline_end,
+            ..Default::default()
+        }
     }
 
     #[inline]

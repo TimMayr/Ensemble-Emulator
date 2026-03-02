@@ -41,6 +41,26 @@ pub fn handle_keyboard_input(
             *last_frame_request = Instant::now();
         }
 
+        if is_binding_pressed(i, &config.keybindings.emulation.step_frame) {
+            let _ = async_sender.send(AsyncFrontendMessage::StepFrame);
+        }
+
+        if is_binding_pressed(i, &config.keybindings.emulation.step_scanline) {
+            let _ = async_sender.send(AsyncFrontendMessage::StepScanline);
+        }
+
+        if is_binding_pressed(i, &config.keybindings.emulation.step_master_cycle) {
+            let _ = async_sender.send(AsyncFrontendMessage::StepMasterCycle);
+        }
+
+        if is_binding_pressed(i, &config.keybindings.emulation.step_cpu_cycle) {
+            let _ = async_sender.send(AsyncFrontendMessage::StepCpuCycle);
+        }
+
+        if is_binding_pressed(i, &config.keybindings.emulation.step_ppu_cycle) {
+            let _ = async_sender.send(AsyncFrontendMessage::StepPpuCycle);
+        }
+
         if is_binding_pressed(i, &config.keybindings.emulation.reset) {
             let _ = async_sender.send(AsyncFrontendMessage::Reset);
         }

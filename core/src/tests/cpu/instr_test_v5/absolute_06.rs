@@ -1,4 +1,4 @@
-use crate::emulation::nes::Nes;
+use crate::emulation::nes::{Nes, RunOptions};
 
 #[test]
 fn test_06_absolute() {
@@ -7,7 +7,7 @@ fn test_06_absolute() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/06-absolute.nes",
     ));
     emu.reset();
-    emu.run_until(89949793, false)
+    emu.run_until(89949793, RunOptions::default())
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6019));

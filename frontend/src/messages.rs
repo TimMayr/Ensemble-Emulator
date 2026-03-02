@@ -31,6 +31,10 @@ pub enum FrontendMessage {
     WriteCpu(u16, u8),
     CreateSaveState(SaveType),
     LoadSaveState(Box<SaveState>),
+    StepPpuCycle,
+    StepCpuCycle,
+    StepMasterCycle,
+    StepScanline,
 }
 
 #[derive(Debug, Default, Eq, PartialEq, Copy, Clone, Hash)]

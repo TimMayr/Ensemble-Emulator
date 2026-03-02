@@ -5,9 +5,9 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use crate::emulation::cpu::{Cpu, MicroOp};
-use crate::emulation::mem::Memory;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::ppu_registers::PpuRegisters;
+use crate::emulation::mem::Memory;
 use crate::emulation::ppu::{EmulatorFetchable, Ppu};
 use crate::emulation::rom::RomFile;
 use crate::emulation::savestate::{CpuState, PpuState, SaveState};
@@ -133,8 +133,8 @@ impl Nes {
     /// # Panics
     ///
     /// Panics if an internal emulation error occurs during execution.
-    pub fn run(&mut self) -> Result<ExecutionFinishedType, String> {
-        self.run_until(u128::MAX, false)
+    pub fn run(&mut self) -> Result<ExecutionFinished, String> {
+        self.run_until(u128::MAX, RunOptions::default())
     }
 
     /// Runs the emulator until a specific cycle count is reached, or until a frame
@@ -160,15 +160,32 @@ impl Nes {
     pub fn run_until(
         &mut self,
         last_cycle: u128,
-        stop_at_frame: bool,
-    ) -> Result<ExecutionFinishedType, String> {
+        run_option: RunOptions,
+    ) -> Result<ExecutionFinished, String> {
         loop {
-            let res = self.step_internal(last_cycle, stop_at_frame);
+            let res = self.step_internal(last_cycle);
             match res {
-                Ok(ExecutionFinishedType::CycleCompleted) => {
-                    continue;
-                }
                 Ok(res) => {
+                    if run_option.stop_at_scanline && res.scanline_done {
+                        return Ok(res);
+                    }
+
+                    if run_option.stop_at_frame && res.frame_done {
+                        return Ok(res);
+                    }
+
+                    if run_option.stop_at_cpu_cycle && res.cpu_cycle_completed {
+                        return Ok(res);
+                    }
+
+                    if run_option.stop_at_ppu_cycle && res.ppu_cycle_completed {
+                        return Ok(res);
+                    }
+
+                    if res.cycle_completed {
+                        continue;
+                    }
+
                     return Ok(res);
                 }
                 Err(err) => {
@@ -200,14 +217,52 @@ impl Nes {
     /// scanline 240 and enters vertical blanking).
     ///
     /// This is the recommended method for frame-based emulation loops.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok(ExecutionFinishedType::FrameDone)` on success.
-    /// - `Ok(ExecutionFinishedType::ReachedHlt)` if the CPU halts mid-frame.
     #[inline]
-    pub fn step_frame(&mut self) -> Result<ExecutionFinishedType, String> {
-        self.run_until(u128::MAX, true)
+    pub fn step_frame(&mut self) -> Result<ExecutionFinished, String> {
+        self.run_until(
+            u128::MAX,
+            RunOptions {
+                stop_at_frame: true,
+                ..Default::default()
+            },
+        )
+    }
+
+    /// Runs the emulator until the next scanline completion (until the PPU completes
+    /// dot 340).
+    #[inline]
+    pub fn step_scanline(&mut self) -> Result<ExecutionFinished, String> {
+        self.run_until(
+            u128::MAX,
+            RunOptions {
+                stop_at_scanline: true,
+                ..Default::default()
+            },
+        )
+    }
+
+    /// Runs the emulator for until the next cpu cycle completes (<=12 master cycles)
+    #[inline]
+    pub fn step_cpu_cycle(&mut self) -> Result<ExecutionFinished, String> {
+        self.run_until(
+            u128::MAX,
+            RunOptions {
+                stop_at_cpu_cycle: true,
+                ..Default::default()
+            },
+        )
+    }
+
+    /// Runs the emulator for until the next ppu cycle completes (<=4 master cycles)
+    #[inline]
+    pub fn step_ppu_cycle(&mut self) -> Result<ExecutionFinished, String> {
+        self.run_until(
+            u128::MAX,
+            RunOptions {
+                stop_at_ppu_cycle: true,
+                ..Default::default()
+            },
+        )
     }
 }
 
@@ -333,16 +388,15 @@ impl Nes {
     ///
     /// For most use cases, prefer [`step_frame()`](Nes::step_frame).
     #[inline(always)]
-    pub fn step(&mut self) -> Result<ExecutionFinishedType, String> {
-        self.step_internal(u128::MAX, false)
-    }
+    pub fn step(&mut self) -> Result<ExecutionFinished, String> { self.step_internal(u128::MAX) }
 
     #[inline]
-    fn step_internal(
-        &mut self,
-        last_cycle: u128,
-        stop_at_frame: bool,
-    ) -> Result<ExecutionFinishedType, String> {
+    fn step_internal(&mut self, last_cycle: u128) -> Result<ExecutionFinished, String> {
+        let mut res = ExecutionFinished {
+            cycle_completed: true,
+            ..Default::default()
+        };
+
         self.total_cycles += 1;
         self.cpu_cycle_counter = self.cpu_cycle_counter.wrapping_add(1);
         self.ppu_cycle_counter = self.ppu_cycle_counter.wrapping_add(1);
@@ -359,14 +413,13 @@ impl Nes {
 
         if self.total_cycles > last_cycle {
             self.total_cycles -= 1;
-            return Ok(ExecutionFinishedType::ReachedLastCycle);
+            res.last_cycle_reached = true;
+            return Ok(res);
         };
 
-        let mut res = Ok(ExecutionFinishedType::CycleCompleted);
-        let mut is_frame_done = false;
-
         if self.ppu_cycle_counter == 4 {
-            is_frame_done = self.ppu.borrow_mut().step();
+            res = res.merge(self.ppu.borrow_mut().step());
+            res.ppu_cycle_completed = true;
             self.ppu_cycle_counter = 0;
         }
 
@@ -377,7 +430,15 @@ impl Nes {
             let do_trace = self.trace_log.is_some()
                 && matches!(&self.cpu.current_op, &MicroOp::FetchOpcode(..));
 
-            res = self.cpu.step();
+            let cpu_res = self.cpu.step();
+
+            #[allow(clippy::question_mark)]
+            if let Ok(cpu_res) = cpu_res {
+                res = res.merge(cpu_res);
+                res.cpu_cycle_completed = true;
+            } else {
+                return cpu_res;
+            }
 
             if do_trace && let Some(ref mut trace) = self.trace_log {
                 let ppu_state = {
@@ -403,11 +464,7 @@ impl Nes {
             self.cpu_cycle_counter = 0;
         }
 
-        if stop_at_frame && is_frame_done {
-            res = Ok(ExecutionFinishedType::FrameDone);
-        }
-
-        res
+        Ok(res)
     }
 
     /// Enables CPU instruction tracing for debugging purposes.
@@ -496,18 +553,35 @@ impl Nes {
 ///
 /// Returned by [`Nes::run()`], [`Nes::run_until()`], [`Nes::step()`], and
 /// [`Nes::step_frame()`] to indicate the reason execution stopped.
-#[derive(Debug)]
-pub enum ExecutionFinishedType {
-    /// The total cycle count exceeded the `last_cycle` limit passed to
-    /// [`Nes::run_until()`].
-    ReachedLastCycle,
-    /// The CPU executed a halt (`HLT` / `KIL`) instruction and cannot
-    /// continue without a reset.
-    ReachedHlt,
-    /// A single master clock cycle completed. This is only returned by
-    /// [`Nes::step()`] when the cycle did not trigger any other stop condition.
-    CycleCompleted,
-    /// A complete video frame has been rendered. The pixel buffer is now
-    /// ready to be read via [`Nes::get_pixel_buffer()`].
-    FrameDone,
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
+pub struct ExecutionFinished {
+    pub last_cycle_reached: bool,
+    pub hlt_reached: bool,
+    pub cycle_completed: bool,
+    pub cpu_cycle_completed: bool,
+    pub ppu_cycle_completed: bool,
+    pub frame_done: bool,
+    pub scanline_done: bool,
+}
+
+impl ExecutionFinished {
+    pub fn merge(self, with: ExecutionFinished) -> Self {
+        Self {
+            last_cycle_reached: self.last_cycle_reached || with.last_cycle_reached,
+            hlt_reached: self.hlt_reached || with.hlt_reached,
+            cycle_completed: self.cycle_completed || with.cycle_completed,
+            cpu_cycle_completed: self.cpu_cycle_completed || with.cycle_completed,
+            ppu_cycle_completed: self.ppu_cycle_completed || with.ppu_cycle_completed,
+            frame_done: self.frame_done || with.frame_done,
+            scanline_done: self.scanline_done || with.scanline_done,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
+pub struct RunOptions {
+    pub stop_at_frame: bool,
+    pub stop_at_scanline: bool,
+    pub stop_at_ppu_cycle: bool,
+    pub stop_at_cpu_cycle: bool,
 }

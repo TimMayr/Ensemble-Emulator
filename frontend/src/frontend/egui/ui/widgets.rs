@@ -101,6 +101,7 @@ pub fn image_cell_flipped(
 /// Draw two vertically stacked image cells with optional horizontal/vertical flip.
 ///
 /// When v_flip is set, each tile is flipped vertically and the top and bottom tiles are swapped.
+#[allow(clippy::too_many_arguments)]
 pub fn image_cell_dual_vert_flipped(
     ui: &mut egui::Ui,
     rect: egui::Rect,

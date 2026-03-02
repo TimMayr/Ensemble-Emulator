@@ -1,5 +1,4 @@
-use crate::emulation::nes::Nes;
-
+use crate::emulation::nes::{Nes, RunOptions};
 #[test]
 fn test_01_basics() {
     let mut emu = Nes::default();
@@ -7,7 +6,7 @@ fn test_01_basics() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/01-basics.nes",
     ));
     emu.reset();
-    emu.run_until(8448321, false)
+    emu.run_until(8448321, RunOptions::default())
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6017));

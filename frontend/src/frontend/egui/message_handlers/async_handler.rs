@@ -209,6 +209,21 @@ impl EguiApp {
                     .to_emulator
                     .send(FrontendMessage::ControllerInput(event));
             }
+            AsyncFrontendMessage::StepPpuCycle => {
+                let _ = self.to_emulator.send(FrontendMessage::StepPpuCycle);
+            }
+            AsyncFrontendMessage::StepCpuCycle => {
+                let _ = self.to_emulator.send(FrontendMessage::StepCpuCycle);
+            }
+            AsyncFrontendMessage::StepMasterCycle => {
+                let _ = self.to_emulator.send(FrontendMessage::StepMasterCycle);
+            }
+            AsyncFrontendMessage::StepScanline => {
+                let _ = self.to_emulator.send(FrontendMessage::StepScanline);
+            }
+            AsyncFrontendMessage::StepFrame => {
+                let _ = self.to_emulator.send(FrontendMessage::StepFrame);
+            }
         }
     }
 

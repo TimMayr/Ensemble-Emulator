@@ -3,7 +3,9 @@
 use monsoon_core::emulation::ppu_util::SpriteMode;
 
 use crate::frontend::egui::textures::EmuTextures;
-use crate::frontend::egui::ui::widgets::{PainterGridConfig, image_cell_flipped, image_cell_dual_vert_flipped};
+use crate::frontend::egui::ui::widgets::{
+    PainterGridConfig, image_cell_dual_vert_flipped, image_cell_flipped,
+};
 
 /// Render both pattern tables side by side
 pub fn render_sprite_viewer(ui: &mut egui::Ui, emu_textures: &EmuTextures) {

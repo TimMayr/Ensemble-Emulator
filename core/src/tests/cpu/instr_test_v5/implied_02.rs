@@ -1,4 +1,4 @@
-use crate::emulation::nes::Nes;
+use crate::emulation::nes::{Nes, RunOptions};
 
 #[test]
 fn test_02_implied() {
@@ -7,7 +7,7 @@ fn test_02_implied() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/02-implied.nes",
     ));
     emu.reset();
-    emu.run_until(44638541, false)
+    emu.run_until(44638541, RunOptions::default())
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6018));
