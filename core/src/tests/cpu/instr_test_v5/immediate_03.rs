@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::emulation::cpu::Cpu;
-use crate::emulation::nes::Nes;
+use crate::emulation::nes::{Nes, RunOptions};
 use crate::emulation::ppu::Ppu;
 
 #[test]
@@ -20,7 +20,7 @@ fn test_03_immediate() {
     ));
 
     emu.reset();
-    emu.run_until(41064917, false)
+    emu.run_until(41064917, RunOptions::default())
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601A));

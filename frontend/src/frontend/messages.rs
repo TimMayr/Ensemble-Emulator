@@ -121,6 +121,11 @@ pub enum AsyncFrontendMessage {
     },
     /// Send controller input to the emulator
     ControllerInput(ControllerEvent),
+    StepPpuCycle,
+    StepCpuCycle,
+    StepMasterCycle,
+    StepScanline,
+    StepFrame,
 }
 
 /// Context for the multistep savestate loading process

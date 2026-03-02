@@ -1,4 +1,4 @@
-use crate::emulation::nes::Nes;
+use crate::emulation::nes::{Nes, RunOptions};
 
 #[test]
 fn test_01_vbl_basics() {
@@ -7,7 +7,7 @@ fn test_01_vbl_basics() {
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/01-vbl_basics.nes",
     ));
     emu.power();
-    emu.run_until(51119365, false)
+    emu.run_until(51119365, RunOptions::default())
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601B));

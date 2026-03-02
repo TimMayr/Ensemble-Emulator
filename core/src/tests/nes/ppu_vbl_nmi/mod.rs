@@ -1,4 +1,4 @@
-use crate::emulation::nes::Nes;
+use crate::emulation::nes::{Nes, RunOptions};
 
 #[cfg(test)]
 mod even_odd_frames_09;
@@ -28,7 +28,7 @@ fn test_ppu_vbl_nmi() {
         "./tests/nes-test-roms/ppu_vbl_nmi/ppu_vbl_nmi.nes",
     ));
     emu.power();
-    emu.run_until(650_000_000, false)
+    emu.run_until(650_000_000, RunOptions::default())
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6079));

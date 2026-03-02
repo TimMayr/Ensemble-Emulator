@@ -1,5 +1,5 @@
 use crate::emulation::mem::{Memory, MemoryDevice, Rom};
-use crate::emulation::nes::Nes;
+use crate::emulation::nes::{Nes, RunOptions};
 
 #[test]
 fn test_nmi_vector() {

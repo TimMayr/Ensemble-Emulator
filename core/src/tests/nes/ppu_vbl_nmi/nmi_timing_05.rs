@@ -1,4 +1,4 @@
-use crate::emulation::nes::Nes;
+use crate::emulation::nes::{Nes, RunOptions};
 
 #[test]
 fn test_05_nmi_timing() {
@@ -7,7 +7,7 @@ fn test_05_nmi_timing() {
         "./tests/nes-test-roms/ppu_vbl_nmi/rom_singles/05-nmi_timing.nes",
     ));
     emu.power();
-    emu.run_until(85341973, false)
+    emu.run_until(85341973, RunOptions::default())
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x604D));

@@ -9,8 +9,7 @@ use crate::emulation::mem::apu_registers::ApuRegisters;
 use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::{Memory, Ram};
-use crate::emulation::nes::ExecutionFinishedType;
-use crate::emulation::nes::ExecutionFinishedType::CycleCompleted;
+use crate::emulation::nes::ExecutionFinished;
 use crate::emulation::opcode;
 use crate::emulation::opcode::{OPCODES_MAP, OPCODES_TABLE, OpCode, get_opcode};
 use crate::emulation::ppu::Ppu;
@@ -1128,9 +1127,12 @@ impl Cpu {
     }
 
     #[inline]
-    pub fn step(&mut self) -> Result<ExecutionFinishedType, String> {
+    pub fn step(&mut self) -> Result<ExecutionFinished, String> {
         if self.is_halted {
-            return Ok(ExecutionFinishedType::ReachedHlt);
+            return Ok(ExecutionFinished {
+                hlt_reached: true,
+                ..Default::default()
+            });
         }
 
         self.dma_read = !self.dma_read;
@@ -1179,19 +1181,28 @@ impl Cpu {
                 self.trigger_nmi();
                 self.nmi_pending = false;
                 self.irq_pending = false;
-                return Ok(CycleCompleted);
+                return Ok(ExecutionFinished {
+                    cycle_completed: true,
+                    ..Default::default()
+                });
             } else if self.irq_pending && !self.get_interrupt_disable_flag() {
                 self.trigger_irq();
                 self.irq_provider.set(false);
                 self.nmi_pending = false;
                 self.irq_pending = false;
-                return Ok(CycleCompleted);
+                return Ok(ExecutionFinished {
+                    cycle_completed: true,
+                    ..Default::default()
+                });
             }
 
             self.current_op = MicroOp::FetchOpcode(MicroOpCallback::None);
         }
 
-        Ok(CycleCompleted)
+        Ok(ExecutionFinished {
+            cycle_completed: true,
+            ..Default::default()
+        })
     }
 
     #[inline(always)]

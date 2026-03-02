@@ -98,6 +98,41 @@ fn render_emulation_keybindings(ui: &mut egui::Ui, config: &mut AppConfig) {
                 ));
                 ui.end_row();
 
+                ui.label("Step Frame");
+                ui.add(Hotkey::with_id(
+                    &mut config.keybindings.emulation.step_frame,
+                    "kb_step_frame",
+                ));
+                ui.end_row();
+
+                ui.label("Step Scanline");
+                ui.add(Hotkey::with_id(
+                    &mut config.keybindings.emulation.step_scanline,
+                    "kb_step_scanline",
+                ));
+                ui.end_row();
+
+                ui.label("Step Master Cycle");
+                ui.add(Hotkey::with_id(
+                    &mut config.keybindings.emulation.step_master_cycle,
+                    "kb_step_master_cycle",
+                ));
+                ui.end_row();
+
+                ui.label("Step PPU Cycle");
+                ui.add(Hotkey::with_id(
+                    &mut config.keybindings.emulation.step_ppu_cycle,
+                    "kb_step_cpu_cycle",
+                ));
+                ui.end_row();
+
+                ui.label("Step CPU Cycle");
+                ui.add(Hotkey::with_id(
+                    &mut config.keybindings.emulation.step_cpu_cycle,
+                    "kb_step_ppu_cycle",
+                ));
+                ui.end_row();
+
                 ui.label("Reset");
                 ui.add(Hotkey::with_id(
                     &mut config.keybindings.emulation.reset,
