@@ -18,11 +18,14 @@ pub fn render_sprite_viewer(ui: &mut egui::Ui, emu_textures: &EmuTextures) {
 
         let available = ui.available_size();
 
-        let logical_width = base_table_width + 8.0;
-        let logical_height = base_table_height + 20.0; // +20 for label
+        // Fixed (non-scaling) UI elements: horizontal padding, label height
+        let fixed_width = 8.0;
+        let fixed_height = 20.0; // label
 
-        // Scale to fit both width and height
-        let scale = (available.x / logical_width).min(available.y / logical_height);
+        // Scale to fit: subtract fixed elements from available space before dividing
+        let scale = ((available.x - fixed_width) / base_table_width)
+            .min((available.y - fixed_height) / base_table_height)
+            .max(0.1);
         let table_width = base_table_width * scale;
         let table_height = base_table_height * scale;
 
