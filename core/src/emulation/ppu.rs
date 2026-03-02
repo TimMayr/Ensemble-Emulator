@@ -10,11 +10,11 @@ use crate::emulation::nes::ExecutionFinished;
 // Re-import public constants/types from ppu_util so internal code can use them
 // with short names.
 pub use crate::emulation::ppu_util::{
-    EmulatorFetchable, NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, NametableData,
-    PALETTE_RAM_START_ADDRESS, PaletteData, TILE_SIZE, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
-    TileData,
+    EmulatorFetchable, NametableData, PaletteData, TileData, NAMETABLE_COLS,
+    NAMETABLE_COUNT, NAMETABLE_ROWS, PALETTE_RAM_START_ADDRESS, TILE_SIZE, TOTAL_OUTPUT_HEIGHT,
+    TOTAL_OUTPUT_WIDTH,
 };
-use crate::emulation::ppu_util::{SPRITE_COUNT, SoamData, Sprite, SpriteData, SpriteMode};
+use crate::emulation::ppu_util::{SoamData, Sprite, SpriteData, SpriteMode, SPRITE_COUNT};
 use crate::emulation::rom::RomFile;
 use crate::emulation::savestate::PpuState;
 
@@ -222,7 +222,7 @@ impl Ppu {
                 self.is_soam_clear_active = true;
                 self.init_soam();
             } else {
-                self.is_soam_clear_active = false
+                self.is_soam_clear_active = false;
             }
 
             if (65..=256).contains(&self.dot) {
@@ -539,16 +539,13 @@ impl Ppu {
 
     #[inline]
     pub fn init_soam(&mut self) {
-        match (self.dot - 1) % 2 {
-            0 => {
+        match (self.dot - 1).is_multiple_of(2) {
+            true => {
                 self.oam_addr_register = (self.dot - 1) as u8;
                 self.oam_fetch = self.get_oam_at_addr();
             }
-            1 => {
+            false => {
                 self.secondary_oam_write(((self.dot - 1) / 2) as u8, self.oam_fetch);
-            }
-            _ => {
-                unreachable!()
             }
         }
     }
@@ -953,6 +950,7 @@ impl Ppu {
 
     #[inline(always)]
     pub fn secondary_oam_read(&mut self, addr: u8) -> u8 {
+        // Mask for only 0-32
         let row = addr & 0x1F;
         let byte = 8u8;
 
@@ -969,6 +967,7 @@ impl Ppu {
 
     #[inline(always)]
     pub fn secondary_oam_write(&mut self, addr: u8, data: u8) {
+        // Mask for only 0-32
         let row = addr & 0x1F;
         let byte = 8u8;
 
