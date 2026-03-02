@@ -18,19 +18,19 @@ name = "frontend"
 path = "src/bin/main.rs"
 
 [dependencies]
-eframe = { version = "0.33.3", features = ["wgpu", "persistence"] }
-egui = { version = "0.33.3", features = ["accesskit", "persistence", "rayon"] }
-egui_tiles = { version = "0.14.1", features = ["serde"] }
-clap = { version = "4.5.54", features = ["derive", "cargo", "env", "string", "unicode", "wrap_help"] }
-crossbeam-channel = { version = "0.5.15" }
-rfd = { version = "0.17.2" }
-directories = { version = "6.0.0" }
-chrono = { version = "0.4.43", features = ["now"] }
-web-time = { version = "1.1.0" }
+eframe = { version = "0.33", features = ["wgpu", "persistence"] }
+egui = { version = "0.33", features = ["accesskit", "persistence", "rayon"] }
+egui_tiles = { version = "0.14", features = ["serde"] }
+clap = { version = "4.5", features = ["derive", "cargo", "env", "string", "unicode", "wrap_help"] }
+crossbeam-channel = { version = "0.5" }
+rfd = { version = "0.17" }
+directories = { version = "6.0" }
+web-time = { version = "1.1" }
+chrono = { version = "0.4", features = ["now"] }
 sha2 = { version = "0.11.0-rc.5" }
-serde = { version = "1.0.228", features = ["derive", "alloc", "rc"] }
-toml = { version = "1.0.2", features = ["fast_hash"] }
-async-trait = { version = "0.1.89" }
+serde = { version = "1.0", features = ["derive", "alloc", "rc"] }
+toml = { version = "1.0", features = ["fast_hash"] }
+async-trait = { version = "0.1" }
 
 monsoon-core = { workspace = true }
 monsoon-default-renderers = { workspace = true, optional = true }
@@ -40,13 +40,12 @@ default = ["default_renderers"]
 default_renderers = ["monsoon-default-renderers"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.49", features = ["rt-multi-thread", "macros"] }
 
 # Web-only dependencies
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-chrono = { version = "0.4.43", features = ["wasmbind"] }
+chrono = { version = "0.4", features = ["wasmbind"] }
 web-sys = { version = "0.3", features = ["Window", "Document", "HtmlCanvasElement"] }
-wasm-bindgen = "0.2.108"
-wasm-bindgen-futures = "0.4.58"
-rexie = { version = "0.6.2" }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+rexie = { version = "0.6" }
 js-sys = "0.3"

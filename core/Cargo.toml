@@ -18,7 +18,7 @@ name = "monsoon_core"
 path = "src/lib.rs"
 
 [dependencies]
-serde = {version = "1.0.228", features = ["derive", "alloc", "rc"]}
-serde_json = { version = "1.0.149" }
-postcard = { version = "1.1.3", features = ["use-std"] }
+serde = {version = "1.0", features = ["derive", "alloc", "rc"]}
+serde_json = { version = "1.0" }
+postcard = { version = "1.1", features = ["use-std"] }
 sha2 = {version = "0.11.0-rc.5"}

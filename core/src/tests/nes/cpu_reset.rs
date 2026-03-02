@@ -1,4 +1,4 @@
-use crate::emulation::nes::Nes;
+use crate::emulation::nes::{Nes, RunOptions};
 
 #[test]
 fn test_ram_after_reset() {

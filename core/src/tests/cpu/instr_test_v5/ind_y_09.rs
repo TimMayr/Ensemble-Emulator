@@ -1,4 +1,4 @@
-use crate::emulation::nes::Nes;
+use crate::emulation::nes::{Nes, RunOptions};
 
 #[test]
 fn test_09_ind_y() {
@@ -7,7 +7,7 @@ fn test_09_ind_y() {
         "./tests/nes-test-roms/instr_test-v5/rom_singles/09-ind_y.nes",
     ));
     emu.reset();
-    emu.run_until(58933325, false)
+    emu.run_until(58933325, RunOptions::default())
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6016));

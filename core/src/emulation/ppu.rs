@@ -6,14 +6,15 @@ use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{Memory, OpenBus, Ram};
+use crate::emulation::nes::ExecutionFinished;
 // Re-import public constants/types from ppu_util so internal code can use them
 // with short names.
 pub use crate::emulation::ppu_util::{
-    EmulatorFetchable, NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, NametableData,
-    PALETTE_RAM_START_ADDRESS, PaletteData, TILE_SIZE, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
-    TileData,
+    EmulatorFetchable, NametableData, PaletteData, TileData, NAMETABLE_COLS,
+    NAMETABLE_COUNT, NAMETABLE_ROWS, PALETTE_RAM_START_ADDRESS, TILE_SIZE, TOTAL_OUTPUT_HEIGHT,
+    TOTAL_OUTPUT_WIDTH,
 };
-use crate::emulation::ppu_util::{SPRITE_COUNT, Sprite, SpriteData, SpriteMode};
+use crate::emulation::ppu_util::{SoamData, Sprite, SpriteData, SpriteMode, SPRITE_COUNT};
 use crate::emulation::rom::RomFile;
 use crate::emulation::savestate::PpuState;
 
@@ -175,7 +176,7 @@ impl Ppu {
     }
 
     #[inline]
-    pub fn step(&mut self) -> bool {
+    pub fn step(&mut self) -> ExecutionFinished {
         self.prev_vbl = self.status_register.get() & VBLANK_NMI_BIT;
 
         if self.reset_signal {
@@ -193,8 +194,6 @@ impl Ppu {
         if is_frame_start {
             self.even_frame = !self.even_frame;
         }
-
-        let res = false;
 
         for ref mut s in self.sprite_fifo {
             if s.is_counting && s.down_counter > 0 {
@@ -223,7 +222,7 @@ impl Ppu {
                 self.is_soam_clear_active = true;
                 self.init_soam();
             } else {
-                self.is_soam_clear_active = false
+                self.is_soam_clear_active = false;
             }
 
             if (65..=256).contains(&self.dot) {
@@ -367,16 +366,25 @@ impl Ppu {
         self.dot += increment;
 
         let mut is_frame_end = false;
+        let mut is_scanline_end = false;
+
         if self.dot > DOTS_PER_SCANLINE {
             self.dot -= DOTS_IN_SCANLINE;
             self.scanline += 1;
+
+            is_scanline_end = true;
+
             if self.scanline > PRE_RENDER_SCANLINE {
                 self.scanline = 0;
                 is_frame_end = true;
             }
         }
 
-        is_frame_end || res
+        ExecutionFinished {
+            frame_done: is_frame_end,
+            scanline_done: is_scanline_end,
+            ..Default::default()
+        }
     }
 
     #[inline]
@@ -531,16 +539,13 @@ impl Ppu {
 
     #[inline]
     pub fn init_soam(&mut self) {
-        match (self.dot - 1) % 2 {
-            0 => {
+        match (self.dot - 1).is_multiple_of(2) {
+            true => {
                 self.oam_addr_register = (self.dot - 1) as u8;
                 self.oam_fetch = self.get_oam_at_addr();
             }
-            1 => {
+            false => {
                 self.secondary_oam_write(((self.dot - 1) / 2) as u8, self.oam_fetch);
-            }
-            _ => {
-                unreachable!()
             }
         }
     }
@@ -945,6 +950,7 @@ impl Ppu {
 
     #[inline(always)]
     pub fn secondary_oam_read(&mut self, addr: u8) -> u8 {
+        // Mask for only 0-32
         let row = addr & 0x1F;
         let byte = 8u8;
 
@@ -952,7 +958,16 @@ impl Ppu {
     }
 
     #[inline(always)]
+    pub fn secondary_oam_snapshot(&self, addr: u8) -> u8 {
+        let row = addr & 0x1F;
+        let byte = 8u8;
+
+        self.oam.mem_read_debug((row as u16 * 9) + byte as u16)
+    }
+
+    #[inline(always)]
     pub fn secondary_oam_write(&mut self, addr: u8, data: u8) {
+        // Mask for only 0-32
         let row = addr & 0x1F;
         let byte = 8u8;
 
@@ -1228,6 +1243,60 @@ impl Ppu {
         }
 
         EmulatorFetchable::Sprites(Some(Box::new(sprites)))
+    }
+
+    pub fn get_soam_sprites_debug(&self) -> EmulatorFetchable {
+        let sprite_mode = if self.get_sprite_height() == 8 {
+            SpriteMode::SMALL
+        } else {
+            SpriteMode::TALL
+        };
+
+        let base_pattern_table = ((self.ctrl_register & 0b1000) as u16) << 5;
+
+        let mut sprites = SoamData {
+            sprites: [Sprite::default(); 8],
+            mode: sprite_mode,
+        };
+
+        for sprite in 0..8 {
+            let sprite_base_address = sprite * 4;
+            let y_pos = self.secondary_oam_snapshot(sprite_base_address as u8);
+            let x_pos = self.secondary_oam_snapshot((sprite_base_address + 3) as u8);
+            let tile_byte = self.secondary_oam_snapshot((sprite_base_address + 1) as u8);
+
+            let tile = if sprite_mode == SpriteMode::SMALL {
+                (tile_byte as u16) | base_pattern_table
+            } else {
+                ((tile_byte & !1) as u16) | (((tile_byte & 1) as u16) << 8)
+            };
+
+            let bottom_tile = if sprite_mode == SpriteMode::SMALL {
+                0
+            } else {
+                ((tile_byte & !1) as u16 + 1) | (((tile_byte & 1) as u16) << 8)
+            };
+
+            let attribute_byte = self.oam_snapshot((sprite_base_address + 2) as u8);
+            let priority = (attribute_byte << 2) >> 7 == 0;
+            let h_flip = (attribute_byte << 1) >> 7 == 1;
+            let v_flip = attribute_byte >> 7 == 1;
+
+            let palette = (attribute_byte & 0b11) + 4;
+
+            sprites.sprites[sprite] = Sprite {
+                y_pos: y_pos as u16,
+                x_pos: x_pos as u16,
+                tile,
+                bottom_tile,
+                palette,
+                priority,
+                h_flip,
+                v_flip,
+            }
+        }
+
+        EmulatorFetchable::SoamSprites(Some(Box::new(sprites)))
     }
 }
 

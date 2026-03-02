@@ -13,7 +13,7 @@
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-use monsoon_core::emulation::nes::{MASTER_CYCLES_PER_FRAME, Nes};
+use monsoon_core::emulation::nes::{MASTER_CYCLES_PER_FRAME, Nes, RunOptions};
 use monsoon_core::emulation::savestate::{SaveState, try_load_state_from_bytes};
 use monsoon_core::util::ToBytes;
 
@@ -789,7 +789,7 @@ impl ExecutionEngine {
                 let target_cycles = frame_start_cycles + capture_point;
 
                 // Run until the target cycle
-                match self.emu.run_until(target_cycles, false) {
+                match self.emu.run_until(target_cycles, RunOptions::default()) {
                     Ok(_) => {}
                     Err(e) => {
                         return Ok(ExecutionResult {

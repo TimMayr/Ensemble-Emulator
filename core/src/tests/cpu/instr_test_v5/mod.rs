@@ -31,7 +31,7 @@ mod zero_page_04;
 #[cfg(test)]
 mod zp_xy_05;
 
-use crate::emulation::nes::Nes;
+use crate::emulation::nes::{Nes, RunOptions};
 
 #[test]
 fn test_official_only() {
@@ -40,7 +40,7 @@ fn test_official_only() {
         "./tests/nes-test-roms/instr_test-v5/official_only.nes",
     ));
     emu.reset();
-    emu.run_until(750_000_000, false)
+    emu.run_until(750_000_000, RunOptions::default())
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601C));
@@ -62,7 +62,7 @@ fn test_all_instrs() {
         "./tests/nes-test-roms/instr_test-v5/all_instrs.nes",
     ));
     emu.reset();
-    emu.run_until(900_000_000, false)
+    emu.run_until(900_000_000, RunOptions::default())
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x601C));

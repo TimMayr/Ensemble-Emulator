@@ -1,4 +1,4 @@
-use crate::emulation::nes::Nes;
+use crate::emulation::nes::{Nes, RunOptions};
 
 #[test]
 fn test_instr_misc() {
@@ -7,7 +7,7 @@ fn test_instr_misc() {
         "./tests/nes-test-roms/instr_misc/instr_misc.nes",
     ));
     emu.reset();
-    emu.run_until(20_000_000, false)
+    emu.run_until(20_000_000, RunOptions::default())
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6031));

@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 // Binding types (ported from egui_hotkey)
 // ============================================================================
 
-/// Variant for binding. This can be either [`egui::PointerButton`] or [`egui::Key`].
+/// Variant for binding. This can be either [`PointerButton`] or [`Key`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BindVariant {
     Mouse(PointerButton),
@@ -75,7 +75,7 @@ impl Display for BindVariant {
     }
 }
 
-/// Binding to a variant that also stores the [`egui::Modifiers`].
+/// Binding to a variant that also stores the [`Modifiers`].
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Binding {
     pub variant: BindVariant,
@@ -373,6 +373,11 @@ impl Default for ControllerKeybindings {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EmulationKeybindings {
     pub pause: Option<Binding>,
+    pub step_frame: Option<Binding>,
+    pub step_scanline: Option<Binding>,
+    pub step_cpu_cycle: Option<Binding>,
+    pub step_ppu_cycle: Option<Binding>,
+    pub step_master_cycle: Option<Binding>,
     pub reset: Option<Binding>,
     pub quicksave: Option<Binding>,
     pub quickload: Option<Binding>,
@@ -381,7 +386,12 @@ pub struct EmulationKeybindings {
 impl Default for EmulationKeybindings {
     fn default() -> Self {
         Self {
-            pause: Some(Binding::key(Key::Period)),
+            pause: Some(Binding::key(Key::Comma)),
+            step_frame: Some(Binding::key(Key::Period)),
+            step_scanline: Some(Binding::with_modifiers(Key::Period, Modifiers::CTRL)),
+            step_master_cycle: Some(Binding::key(Key::Slash)),
+            step_cpu_cycle: Some(Binding::with_modifiers(Key::Slash, Modifiers::ALT)),
+            step_ppu_cycle: Some(Binding::with_modifiers(Key::Slash, Modifiers::SHIFT)),
             reset: Some(Binding::key(Key::R)),
             quicksave: Some(Binding::key(Key::F5)),
             quickload: Some(Binding::key(Key::F8)),

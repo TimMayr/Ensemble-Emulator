@@ -1,4 +1,4 @@
-use crate::emulation::nes::Nes;
+use crate::emulation::nes::{Nes, RunOptions};
 
 #[test]
 fn test_oam_stress() {
@@ -8,7 +8,7 @@ fn test_oam_stress() {
     ));
     emu.power();
 
-    emu.run_until(700_119_365, false)
+    emu.run_until(700_119_365, RunOptions::default())
         .expect("Error while running test");
 
     let whole_mem = emu.get_memory_debug(Some(0x6000..=0x6129));
