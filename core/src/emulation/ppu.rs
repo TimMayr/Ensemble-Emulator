@@ -30,8 +30,6 @@ pub const PALETTE_RAM_END_INDEX: u16 = 0x3FFF;
 pub const PALETTE_RAM_SIZE: u16 = 0x20;
 pub const VRAM_SIZE: usize = 0x800;
 pub const DOTS_PER_SCANLINE: u16 = 340;
-/// Number of dots in one scanline including dot 0 (341 total: dots 0-340)
-pub const DOTS_IN_SCANLINE: u16 = DOTS_PER_SCANLINE + 1;
 pub const OPEN_BUS_DECAY_DELAY: u32 = 420_000;
 pub const SPRITE_OVERFLOW_FLAG: u8 = 0b0010_0000;
 pub const BYTES_PER_TILE: usize = 16; // 8 low plane + 8 high plane
@@ -187,18 +185,10 @@ impl Ppu {
             self.t_register = 0;
         }
 
-        // Direct increment of dot/scanline is much faster than u128 modulo
-        // Only need to track frame boundaries now
         let is_frame_start = self.dot == 0 && self.scanline == 0;
 
         if is_frame_start {
             self.even_frame = !self.even_frame;
-        }
-
-        for s in self.sprite_fifos.iter_mut() {
-            if s.is_counting && s.down_counter > 0 {
-                s.down_counter -= 1;
-            }
         }
 
         if (self.scanline < VISIBLE_SCANLINES + 1 || self.scanline == PRE_RENDER_SCANLINE)
@@ -261,17 +251,20 @@ impl Ppu {
                     let mut sprite_pixel_priority = 0;
 
                     for s in self.sprite_fifos.iter_mut() {
-                        if s.down_counter == 0 {
-                            sprite_pixel_priority = s.attribute & 0b0010_0000;
-                            sprite_pixel_palette = s.attribute & 3;
-
+                        if s.down_counter == 0 && !s.is_counting {
                             let shift_out_lo = (s.shifter_pattern_lo & 0x80 != 0) as u8;
                             let shift_out_hi = (s.shifter_pattern_hi & 0x80 != 0) as u8;
 
                             s.shifter_pattern_lo <<= 1;
                             s.shifter_pattern_hi <<= 1;
 
-                            sprite_pixel_pattern = (shift_out_hi << 1) | shift_out_lo;
+                            let pattern = (shift_out_hi << 1) | shift_out_lo;
+
+                            if pattern != 0 && sprite_pixel_pattern == 0 {
+                                sprite_pixel_priority = s.attribute & 0b0010_0000;
+                                sprite_pixel_palette = s.attribute & 3;
+                                sprite_pixel_pattern = pattern;
+                            }
                         }
                     }
 
@@ -286,7 +279,7 @@ impl Ppu {
                     let pixel_color_address = if bg_color_address == PALETTE_RAM_START_ADDRESS
                         && sprite_color_address == 0x3F10
                     {
-                        bg_color_address
+                        PALETTE_RAM_START_ADDRESS
                     } else if bg_color_address == PALETTE_RAM_START_ADDRESS
                         && sprite_color_address != 0x3F10
                     {
@@ -306,6 +299,16 @@ impl Ppu {
                     self.pixel_buffer
                         [self.scanline as usize * SCREEN_RENDER_WIDTH + (self.dot - 1) as usize] =
                         (pixel_color as u16) | ((self.get_emph_bits() as u16) << 6);
+                }
+
+                for s in self.sprite_fifos.iter_mut() {
+                    if s.is_counting && s.down_counter > 0 {
+                        s.down_counter -= 1;
+
+                        if s.down_counter == 0 {
+                            s.is_counting = false;
+                        }
+                    }
                 }
 
                 self.shift_bg_shifters();
@@ -370,7 +373,7 @@ impl Ppu {
         let mut is_scanline_end = false;
 
         if self.dot > DOTS_PER_SCANLINE {
-            self.dot -= DOTS_IN_SCANLINE;
+            self.dot = 0;
             self.scanline += 1;
 
             is_scanline_end = true;
@@ -409,14 +412,13 @@ impl Ppu {
                     ((self.current_sprite_tile_id & 1) as u16) << 12
                 };
 
+                let raw_row = (self.scanline as u8).wrapping_sub(self.current_sprite_y);
+
                 let row_offset =
                     if self.sprite_fifos[(self.soam_index / 4) as usize].attribute & 0x80 == 0 {
-                        (self.scanline as u8).wrapping_sub(self.current_sprite_y)
+                        raw_row
                     } else {
-                        (self.scanline as u8)
-                            .wrapping_sub(self.current_sprite_y)
-                            .wrapping_add(self.get_sprite_height())
-                            % self.get_sprite_height()
+                        (self.get_sprite_height() - 1) - raw_row
                     };
 
                 self.address_bus =
