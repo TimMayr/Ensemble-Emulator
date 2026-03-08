@@ -164,7 +164,7 @@ pub struct UserConfig {
     /// Last saved savestate directory (for file picker initial directory)
     pub previous_savestate_save_dir: Option<StorageKey>,
     pub pattern_edit_color: u8,
-    pub loaded_rom: Option<RomFile>,
+    pub loaded_rom: Option<(RomFile, LoadedRom)>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

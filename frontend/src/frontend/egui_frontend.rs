@@ -198,7 +198,9 @@ impl EguiApp {
         }
     }
 
-    pub(crate) fn load_rom(&mut self, data: Vec<u8>, name: String) {
+    pub(crate) fn load_rom(&mut self, data: LoadedRom) {
+        let name = data.name.clone();
+        
         let _ = self
             .to_emulator
             .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
@@ -226,8 +228,7 @@ impl EguiApp {
     pub(crate) fn load_savestate_with_rom(
         &mut self,
         context: &SavestateLoadContext,
-        rom_data: Vec<u8>,
-        rom_name: String,
+        rom: LoadedRom,
     ) {
         if self.config.user_config.loaded_rom.is_some() {
             let _ = self
@@ -237,7 +238,7 @@ impl EguiApp {
 
         // First power off, load ROM, power on
         let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-        self.load_rom(rom_data, rom_name);
+        self.load_rom(rom);
         let _ = self.to_emulator.send(FrontendMessage::Power);
 
         // Then load the savestate
@@ -256,7 +257,7 @@ impl EguiApp {
 
     pub(crate) fn create_auto_save(&self, savestate: Box<SaveState>) {
         if let Some(rom) = &self.config.user_config.loaded_rom {
-            let rom_hash = &rom.data_checksum;
+            let rom_hash = &rom.0.data_checksum;
             let prev_name = &self.config.user_config.previous_rom_name;
             if let Some(prev_name) = prev_name {
                 let display_name = util::rom_display_name(prev_name, rom_hash);

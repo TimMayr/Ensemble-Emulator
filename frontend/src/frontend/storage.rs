@@ -93,7 +93,7 @@ pub struct StorageMetadata {
 ///
 /// These categories help organize data and may map to different directories
 /// on native platforms or different IndexedDB object stores on WASM.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum StorageCategory {
     /// Application configuration (config.toml, keybindings, etc.)
     Config,
@@ -105,7 +105,7 @@ pub enum StorageCategory {
     Root,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct StorageKey {
     pub category: StorageCategory,
     pub sub_path: String,

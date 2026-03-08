@@ -251,8 +251,9 @@ impl Ppu {
                     let mut sprite_pixel_palette = 0u8;
                     let mut sprite_pixel_pattern = 0u8;
                     let mut sprite_pixel_priority = 0;
+                    let mut sprite_zero_outputting = false;
 
-                    for s in self.sprite_fifos.iter_mut() {
+                    for(i, s) in self.sprite_fifos.iter_mut().enumerate() {
                         if s.down_counter == 0 && !s.is_counting {
                             let shift_out_lo = (s.shifter_pattern_lo & 0x80 != 0) as u8;
                             let shift_out_hi = (s.shifter_pattern_hi & 0x80 != 0) as u8;
@@ -266,6 +267,10 @@ impl Ppu {
                                 sprite_pixel_priority = s.attribute & 0b0010_0000;
                                 sprite_pixel_palette = s.attribute & 3;
                                 sprite_pixel_pattern = pattern;
+                            }
+                            
+                            if i==0 { 
+                                sprite_zero_outputting = true;
                             }
                         }
                     }
@@ -299,7 +304,7 @@ impl Ppu {
                     let pixel_color = self.mem_read(pixel_color_address);
 
                     if sprite_color_address != 0x3F10
-                        && bg_color_address != PALETTE_RAM_START_ADDRESS
+                        && bg_color_address != PALETTE_RAM_START_ADDRESS && sprite_zero_outputting
                     {
                         self.set_sprite_zero();
                     }

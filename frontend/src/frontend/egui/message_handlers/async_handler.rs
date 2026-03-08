@@ -76,7 +76,7 @@ impl EguiApp {
                 });
             }
             AsyncFrontendMessage::UseMatchingRom(context, rom) => {
-                self.load_savestate_with_rom(&context, rom.data, rom.name);
+                self.load_savestate_with_rom(&context, rom);
             }
             AsyncFrontendMessage::ManuallySelectRom(context) => {
                 util::spawn_rom_picker_for_savestate(
@@ -96,7 +96,7 @@ impl EguiApp {
                     });
             }
             AsyncFrontendMessage::LoadSavestateAnyway(context, rom) => {
-                self.load_savestate_with_rom(&context, rom.data, rom.name);
+                self.load_savestate_with_rom(&context, rom);
             }
             AsyncFrontendMessage::SelectAnotherRom(context) => {
                 util::spawn_rom_picker_for_savestate(
@@ -127,9 +127,9 @@ impl EguiApp {
                     let _ = self.to_emulator.send(FrontendMessage::PowerOff);
 
                     // Save directory for next file picker
-                    self.config.user_config.previous_rom_dir = Some(rom.directory);
+                    self.config.user_config.previous_rom_dir = Some(rom.directory.clone());
 
-                    self.load_rom(rom.data, rom.name);
+                    self.load_rom(rom);
                     let _ = self.to_emulator.send(FrontendMessage::Power);
                     self.config.console_config.is_powered = true;
                 }
@@ -298,7 +298,7 @@ impl EguiApp {
 
         let checksum = util::compute_data_checksum(&rom.data);
         if checksum == context.savestate.rom_file.data_checksum {
-            self.load_savestate_with_rom(context, rom.data, rom.name);
+            self.load_savestate_with_rom(context, rom);
         } else {
             self.config.pending_dialogs.checksum_mismatch_dialog =
                 Some(ChecksumMismatchDialogState {
@@ -351,7 +351,7 @@ impl EguiApp {
             .user_config
             .loaded_rom
             .as_ref()
-            .map(|r| r.data_checksum);
+            .map(|r| r.0.data_checksum);
         let rom_name = self.config.user_config.previous_rom_name.clone();
         let sender = self.async_sender.clone();
         let to_emulator = self.to_emulator.clone();
@@ -437,7 +437,7 @@ impl EguiApp {
         if let Some(rom) = &self.config.user_config.loaded_rom
             && let Some(prev_name) = &self.config.user_config.previous_rom_name
         {
-            let rom_hash = &rom.data_checksum;
+            let rom_hash = &rom.0.data_checksum;
             let display_name = util::rom_display_name(prev_name, rom_hash);
 
             // Show the dialog immediately with loading state
@@ -468,7 +468,7 @@ impl EguiApp {
             .user_config
             .loaded_rom
             .as_ref()
-            .map(|r| r.data_checksum);
+            .map(|r| r.0.data_checksum);
 
         util::spawn_async(async move {
             let storage_impl = storage::get_storage();

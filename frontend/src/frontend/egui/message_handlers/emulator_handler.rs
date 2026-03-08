@@ -145,7 +145,7 @@ impl EguiApp {
 
     fn handle_quicksave(&self, savestate: Box<SaveState>) {
         if let Some(rom) = &self.config.user_config.loaded_rom {
-            let rom_hash = &rom.data_checksum;
+            let rom_hash = &rom.0.data_checksum;
             let prev_name = &self.config.user_config.previous_rom_name;
             if let Some(prev_name) = prev_name {
                 let display_name = util::rom_display_name(prev_name, rom_hash);

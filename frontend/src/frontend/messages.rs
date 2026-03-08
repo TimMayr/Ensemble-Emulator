@@ -31,7 +31,7 @@ pub struct LoadedFile {
 
 /// Represents ROM data loaded from a file picker.
 /// Contains the raw bytes, the filename, and optionally the directory.
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct LoadedRom {
     /// Raw ROM data bytes
     pub data: Vec<u8>,

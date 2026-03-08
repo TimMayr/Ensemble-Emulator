@@ -1,6 +1,7 @@
 use monsoon_core::emulation::ppu_util::EmulatorFetchable;
 use monsoon_core::emulation::rom::RomFile;
 use monsoon_core::emulation::savestate::SaveState;
+use crate::frontend::messages::LoadedRom;
 
 /// Message types for communication between the frontend and emulator.
 ///
@@ -26,7 +27,7 @@ pub enum FrontendMessage {
     /// Request to step one frame
     StepFrame,
     RequestDebugData(EmulatorFetchable),
-    LoadRom((Vec<u8>, String)),
+    LoadRom((LoadedRom, String)),
     WritePpu(u16, u8),
     WriteCpu(u16, u8),
     CreateSaveState(SaveType),
@@ -67,5 +68,5 @@ pub enum EmulatorMessage {
     Stopped,
     DebugData(EmulatorFetchable),
     SaveState(Box<SaveState>, SaveType),
-    RomLoaded(Option<RomFile>),
+    RomLoaded(Option<(RomFile, LoadedRom)>),
 }
