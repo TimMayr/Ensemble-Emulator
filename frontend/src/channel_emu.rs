@@ -177,7 +177,7 @@ impl ChannelEmulator {
                     }
                 }
                 FrontendMessage::LoadSaveState(s) => self.nes.load_state(*s),
-                FrontendMessage::StepPpuCycle => self.execute_master_cycle()?,
+                FrontendMessage::StepPpuCycle => self.execute_ppu_cycle()?,
                 FrontendMessage::StepCpuCycle => self.execute_cpu_cycle()?,
                 FrontendMessage::StepMasterCycle => self.execute_master_cycle()?,
                 FrontendMessage::StepScanline => self.execute_scanline()?,
