@@ -28,23 +28,15 @@ pub fn render_sprite_viewer(ui: &mut egui::Ui, config: &AppConfig, emu_textures:
             let spacing = ui.spacing().item_spacing.x;
 
             // Calculate shared scale balancing space between sprites and SOAM,
-            // similar to how the pattern table viewer balances its two tables.
-            // Subtract fixed (non-scaling) UI elements from available space before dividing.
-            let fixed_width = if soam_available {
-                spacing * 3.0
+            // similar to how the pattern table viewer balances its two tables
+            let logical_width = if soam_available {
+                sprite_base_width + soam_base_width + spacing * 3.0
             } else {
-                spacing
+                sprite_base_width + spacing
             };
-            let content_width = if soam_available {
-                sprite_base_width + soam_base_width
-            } else {
-                sprite_base_width
-            };
-            let fixed_height = 20.0; // label
+            let logical_height = sprite_base_height + 20.0; // +20 for label
 
-            let scale = ((available.x - fixed_width) / content_width)
-                .min((available.y - fixed_height) / sprite_base_height)
-                .max(0.1);
+            let scale = (available.x / logical_width).min(available.y / logical_height);
             let table_width = sprite_base_width * scale;
             let table_height = sprite_base_height * scale;
 
