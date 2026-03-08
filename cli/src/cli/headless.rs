@@ -364,7 +364,7 @@ fn print_video_info(
 ) {
     let mode_str = if streaming { " [streaming mode]" } else { "" };
     let fps_str = format!(
-        "{:.2} fps ({:?}, {}x)",
+        "{:.4} fps ({:?}, {}x)",
         fps_config.output_fps(),
         fps_config.mode,
         fps_config.multiplier

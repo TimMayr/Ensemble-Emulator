@@ -76,7 +76,6 @@
 //! [`ToBytes`]: util::ToBytes
 //! [`try_load_state_from_bytes`]: emulation::savestate::try_load_state_from_bytes
 
-#![feature(ascii_char)]
 extern crate core;
 #[allow(clippy::upper_case_acronyms)]
 pub mod emulation;

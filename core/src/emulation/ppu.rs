@@ -140,7 +140,7 @@ impl Ppu {
             soam_index: 0,
             soam_disable: false,
             oam_increment: 4,
-            soam_write_counter: 4,
+            soam_write_counter: 0,
             current_sprite_y: 0,
             sprite_fifos: [SpriteFifo::default(); 8],
             current_sprite_tile_id: 0,
@@ -209,6 +209,7 @@ impl Ppu {
                 self.oam_index = 0;
                 self.current_sprite_y = 0;
                 self.oam_increment = 4;
+                self.soam_write_counter = 0;
                 self.set_soam_disable(false);
             }
 
@@ -410,14 +411,11 @@ impl Ppu {
 
                 let row_offset =
                     if self.sprite_fifos[(self.soam_index / 4) as usize].attribute & 0x80 == 0 {
-                        self.current_sprite_y
-                            .wrapping_sub(self.scanline.wrapping_add(1) as u8)
-                            % self.get_sprite_height()
+                        (self.scanline as u8).wrapping_sub(self.current_sprite_y)
                     } else {
-                        (self
-                            .current_sprite_y
-                            .wrapping_sub((self.scanline as u8).wrapping_add(1))
-                            .wrapping_add(self.get_sprite_height()))
+                        (self.scanline as u8)
+                            .wrapping_sub(self.current_sprite_y)
+                            .wrapping_add(self.get_sprite_height())
                             % self.get_sprite_height()
                     };
 
@@ -480,14 +478,6 @@ impl Ppu {
                 if self.soam_write_counter == 0 {
                     self.current_sprite_y = self.oam_fetch;
                 }
-
-                let is_in_range = self.is_sprite_in_range();
-
-                if is_in_range {
-                    self.oam_increment = 1;
-                } else {
-                    self.oam_increment = 4;
-                }
             }
             false => {
                 let write = if self.scanline != PRE_RENDER_SCANLINE {
@@ -499,6 +489,8 @@ impl Ppu {
                 self.secondary_oam_write(self.soam_index, write);
 
                 if self.is_sprite_in_range() {
+                    self.oam_increment = 1;
+
                     self.soam_index += 1;
 
                     if self.soam_write_counter == 3 {
@@ -512,6 +504,7 @@ impl Ppu {
                     }
                 } else {
                     self.soam_write_counter = 0;
+                    self.oam_increment = 4;
                 }
 
                 if self.soam_index >= 32 {
@@ -1273,7 +1266,7 @@ impl Ppu {
                 ((tile_byte & !1) as u16 + 1) | (((tile_byte & 1) as u16) << 8)
             };
 
-            let attribute_byte = self.oam_snapshot((sprite_base_address + 2) as u8);
+            let attribute_byte = self.secondary_oam_snapshot((sprite_base_address + 2) as u8);
             let priority = (attribute_byte << 2) >> 7 == 0;
             let h_flip = (attribute_byte << 1) >> 7 == 1;
             let v_flip = attribute_byte >> 7 == 1;

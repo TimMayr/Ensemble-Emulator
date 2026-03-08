@@ -208,7 +208,7 @@ pub struct VideoArgs {
     pub video_mode: VideoExportMode,
 
     /// Video output resolution (native, 2x, 3x, 4x, 720p, 1080p, 4k, or WIDTHxHEIGHT)
-    #[arg(long)]
+    #[arg(long, default_value = "native")]
     pub video_scale: Option<String>,
 
     /// Screen renderer to use for palette-to-RGB conversion.
