@@ -298,7 +298,9 @@ impl Ppu {
 
                     let pixel_color = self.mem_read(pixel_color_address);
 
-                    if sprite_color_address != 0x3F10 && bg_color_address != PALETTE_RAM_START_ADDRESS {
+                    if sprite_color_address != 0x3F10
+                        && bg_color_address != PALETTE_RAM_START_ADDRESS
+                    {
                         self.set_sprite_zero();
                     }
 
@@ -412,7 +414,9 @@ impl Ppu {
             }
             2 => {
                 self.current_sprite_tile_id = self.secondary_oam_read(self.soam_index + 1);
-                let table_base = if self.get_sprite_height() == 8 {
+                let sprite_height = self.get_sprite_height();
+
+                let table_base = if sprite_height == 8 {
                     ((self.ctrl_register & 0x8) as u16) << 9
                 } else {
                     ((self.current_sprite_tile_id & 1) as u16) << 12
@@ -427,8 +431,21 @@ impl Ppu {
                         (self.get_sprite_height() - 1) - raw_row
                     };
 
-                self.address_bus =
-                    table_base + ((self.current_sprite_tile_id as u16) * 16) + row_offset as u16;
+                let tile_id = if sprite_height == 8 {
+                    self.current_sprite_tile_id as u16
+                } else {
+                    // Strip bit 0 (used for table select), then select top or bottom tile
+                    let base_tile = (self.current_sprite_tile_id & 0xFE) as u16;
+                    if row_offset < 8 {
+                        base_tile
+                    } else {
+                        base_tile + 1
+                    }
+                };
+
+                let fine_y = row_offset % 8;
+
+                self.address_bus = table_base + (tile_id * 16) + fine_y as u16;
 
                 let mut pattern = self.mem_read(self.address_bus);
 
@@ -674,7 +691,6 @@ impl Ppu {
         self.status_register
             .set(self.status_register.get() & !SPRITE_ZERO_FLAG);
     }
-
 
     #[inline]
     pub fn get_vram_addr_step(&self) -> u8 {
