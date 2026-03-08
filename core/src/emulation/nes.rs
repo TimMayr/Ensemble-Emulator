@@ -578,7 +578,7 @@ impl ExecutionFinished {
             last_cycle_reached: self.last_cycle_reached || with.last_cycle_reached,
             hlt_reached: self.hlt_reached || with.hlt_reached,
             cycle_completed: self.cycle_completed || with.cycle_completed,
-            cpu_cycle_completed: self.cpu_cycle_completed || with.cycle_completed,
+            cpu_cycle_completed: self.cpu_cycle_completed || with.cpu_cycle_completed,
             ppu_cycle_completed: self.ppu_cycle_completed || with.ppu_cycle_completed,
             frame_done: self.frame_done || with.frame_done,
             scanline_done: self.scanline_done || with.scanline_done,
