@@ -200,8 +200,10 @@ impl Binding {
     /// Returns true if the variant is down and input modifiers are matching.
     pub fn down(&self, input_state: impl Deref<Target = InputState>) -> bool {
         match &self.variant {
-            // Modifier-only bindings check the modifier flag directly,
-            // bypassing matches_logically which would reject extra ctrl.
+            // Modifier-only bindings check the modifier flag directly.
+            // We bypass `matches_logically` because it would reject
+            // e.g. a Ctrl-only binding (Ctrl sets `modifiers.ctrl`, and
+            // `matches_logically(NONE)` considers extra Ctrl an error).
             BindVariant::ModifierKey(mk) => mk.is_down(&input_state),
             _ => {
                 input_state.modifiers.matches_logically(self.modifiers)
@@ -460,6 +462,9 @@ fn get_initial_modifiers(ui: &Ui, id: Id) -> Modifiers {
 
 /// Return the first modifier key that is active in `current` but was *not*
 /// active in `initial`.  Returns `None` if no new modifier was pressed.
+///
+/// When multiple modifiers are pressed simultaneously, priority is
+/// Shift → Ctrl → Alt (the first match wins).
 fn newly_pressed_modifier(initial: Modifiers, current: Modifiers) -> Option<ModifierKey> {
     if current.shift && !initial.shift {
         Some(ModifierKey::Shift)
