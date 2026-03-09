@@ -433,7 +433,7 @@ impl Ppu {
                 let row_offset = if self.get_sprite_fifo_for_soam_index().attribute & 0x80 == 0 {
                     raw_row
                 } else {
-                    (self.get_sprite_height() - 1) - raw_row
+                    (self.get_sprite_height() - 1).wrapping_sub(raw_row)
                 };
 
                 let tile_id = if sprite_height == 8 {
@@ -783,10 +783,11 @@ impl Ppu {
     pub fn get_vram_at_addr(&mut self) -> u8 {
         let mut ret = self.ppu_data_buffer;
 
-        self.ppu_data_buffer = self.mem_read(self.v_register);
-
-        if (PALETTE_RAM_START_ADDRESS..=PALETTE_RAM_END_INDEX).contains(&self.v_register) {
+        if !(PALETTE_RAM_START_ADDRESS..=PALETTE_RAM_END_INDEX).contains(&self.v_register) {
+            self.ppu_data_buffer = self.mem_read(self.v_register);
+        } else {
             ret = self.mem_read(self.v_register);
+            self.ppu_data_buffer = self.mem_read(self.v_register - 0x1000);
         }
 
         if !(self.scanline < VISIBLE_SCANLINES + 1 || self.scanline == PRE_RENDER_SCANLINE)

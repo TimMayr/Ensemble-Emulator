@@ -432,7 +432,7 @@ impl Nes {
         if self.cpu_cycle_counter == 10 {
             // Only check trace_log when actually needed
             let do_trace = self.trace_log.is_some()
-                && matches!(&self.cpu.current_op, &MicroOp::FetchOpcode(..));
+                && matches!(&self.cpu.current_op, &MicroOp::FetchOpcode);
 
             let cpu_res = self.cpu.step();
 

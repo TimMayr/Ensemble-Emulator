@@ -503,7 +503,7 @@ impl Default for ControllerKeybindings {
             right: Some(Binding::key(Key::ArrowRight)),
             a: Some(Binding::key(Key::Space)),
             b: Some(Binding::key(Key::Delete)),
-            start: Some(Binding::key(Key::S)),
+            start: Some(Binding::key(Key::Enter)),
             select: Some(Binding::key(Key::Tab)),
         }
     }
