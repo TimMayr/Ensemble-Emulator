@@ -431,8 +431,8 @@ impl Nes {
         // cpu_cycle_counter + 2 == 12  means cpu_cycle_counter == 10
         if self.cpu_cycle_counter == 10 {
             // Only check trace_log when actually needed
-            let do_trace = self.trace_log.is_some()
-                && matches!(&self.cpu.current_op, &MicroOp::FetchOpcode);
+            let do_trace =
+                self.trace_log.is_some() && matches!(&self.cpu.current_op, &MicroOp::FetchOpcode);
 
             let cpu_res = self.cpu.step();
 

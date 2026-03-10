@@ -111,13 +111,21 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             ),
             // ASL
             OpCode::new(0x0A, "ASL", AccumulatorOrImplied(MicroOpCallback::ASL)),
-            OpCode::new(0x06, "ASL", ZeroPageRMW(Target::DataBus, MicroOpCallback::ASL)),
+            OpCode::new(
+                0x06,
+                "ASL",
+                ZeroPageRMW(Target::DataBus, MicroOpCallback::ASL),
+            ),
             OpCode::new(
                 0x16,
                 "ASL",
                 ZeroPageIndexRMW(Source::X, MicroOpCallback::ASL),
             ),
-            OpCode::new(0x0E, "ASL", AbsoluteRMW(Target::DataBus, MicroOpCallback::ASL)),
+            OpCode::new(
+                0x0E,
+                "ASL",
+                AbsoluteRMW(Target::DataBus, MicroOpCallback::ASL),
+            ),
             OpCode::new(
                 0x1E,
                 "ASL",
@@ -266,13 +274,21 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 AbsoluteRead(Target::DataBus, MicroOpCallback::CPY),
             ),
             // //DEC
-            OpCode::new(0xC6, "DEC", ZeroPageRMW(Target::DataBus, MicroOpCallback::DEC)),
+            OpCode::new(
+                0xC6,
+                "DEC",
+                ZeroPageRMW(Target::DataBus, MicroOpCallback::DEC),
+            ),
             OpCode::new(
                 0xD6,
                 "DEC",
                 ZeroPageIndexRMW(Source::X, MicroOpCallback::DEC),
             ),
-            OpCode::new(0xCE, "DEC", AbsoluteRMW(Target::DataBus, MicroOpCallback::DEC)),
+            OpCode::new(
+                0xCE,
+                "DEC",
+                AbsoluteRMW(Target::DataBus, MicroOpCallback::DEC),
+            ),
             OpCode::new(
                 0xDE,
                 "DEC",
@@ -324,13 +340,21 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
                 IndirectIndexedRead(Target::DataBus, MicroOpCallback::EOR),
             ),
             // //INC
-            OpCode::new(0xE6, "INC", ZeroPageRMW(Target::DataBus, MicroOpCallback::INC)),
+            OpCode::new(
+                0xE6,
+                "INC",
+                ZeroPageRMW(Target::DataBus, MicroOpCallback::INC),
+            ),
             OpCode::new(
                 0xF6,
                 "INC",
                 ZeroPageIndexRMW(Source::X, MicroOpCallback::INC),
             ),
-            OpCode::new(0xEE, "INC", AbsoluteRMW(Target::DataBus, MicroOpCallback::INC)),
+            OpCode::new(
+                0xEE,
+                "INC",
+                AbsoluteRMW(Target::DataBus, MicroOpCallback::INC),
+            ),
             OpCode::new(
                 0xFE,
                 "INC",
@@ -416,13 +440,21 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             ),
             // //LSR
             OpCode::new(0x4A, "LSR", AccumulatorOrImplied(MicroOpCallback::LSR)),
-            OpCode::new(0x46, "LSR", ZeroPageRMW(Target::DataBus, MicroOpCallback::LSR)),
+            OpCode::new(
+                0x46,
+                "LSR",
+                ZeroPageRMW(Target::DataBus, MicroOpCallback::LSR),
+            ),
             OpCode::new(
                 0x56,
                 "LSR",
                 ZeroPageIndexRMW(Source::X, MicroOpCallback::LSR),
             ),
-            OpCode::new(0x4E, "LSR", AbsoluteRMW(Target::DataBus, MicroOpCallback::LSR)),
+            OpCode::new(
+                0x4E,
+                "LSR",
+                AbsoluteRMW(Target::DataBus, MicroOpCallback::LSR),
+            ),
             OpCode::new(
                 0x5E,
                 "LSR",
@@ -481,13 +513,21 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             OpCode::new(0x28, "PLP", PL(Target::P, MicroOpCallback::None)),
             // //ROL
             OpCode::new(0x2A, "ROL", AccumulatorOrImplied(MicroOpCallback::ROL)),
-            OpCode::new(0x26, "ROL", ZeroPageRMW(Target::DataBus, MicroOpCallback::ROL)),
+            OpCode::new(
+                0x26,
+                "ROL",
+                ZeroPageRMW(Target::DataBus, MicroOpCallback::ROL),
+            ),
             OpCode::new(
                 0x36,
                 "ROL",
                 ZeroPageIndexRMW(Source::X, MicroOpCallback::ROL),
             ),
-            OpCode::new(0x2E, "ROL", AbsoluteRMW(Target::DataBus, MicroOpCallback::ROL)),
+            OpCode::new(
+                0x2E,
+                "ROL",
+                AbsoluteRMW(Target::DataBus, MicroOpCallback::ROL),
+            ),
             OpCode::new(
                 0x3E,
                 "ROL",
@@ -495,13 +535,21 @@ pub fn init() -> HashMap<u8, &'static OpCode> {
             ),
             // //ROR
             OpCode::new(0x6A, "ROR", AccumulatorOrImplied(MicroOpCallback::ROR)),
-            OpCode::new(0x66, "ROR", ZeroPageRMW(Target::DataBus, MicroOpCallback::ROR)),
+            OpCode::new(
+                0x66,
+                "ROR",
+                ZeroPageRMW(Target::DataBus, MicroOpCallback::ROR),
+            ),
             OpCode::new(
                 0x76,
                 "ROR",
                 ZeroPageIndexRMW(Source::X, MicroOpCallback::ROR),
             ),
-            OpCode::new(0x6E, "ROR", AbsoluteRMW(Target::DataBus, MicroOpCallback::ROR)),
+            OpCode::new(
+                0x6E,
+                "ROR",
+                AbsoluteRMW(Target::DataBus, MicroOpCallback::ROR),
+            ),
             OpCode::new(
                 0x7E,
                 "ROR",

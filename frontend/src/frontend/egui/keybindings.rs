@@ -452,12 +452,7 @@ fn set_initial_modifiers(ui: &Ui, id: Id, mods: Modifiers) {
 fn get_initial_modifiers(ui: &Ui, id: Id) -> Modifiers {
     let storage_id = Id::new("hotkey_initial_mods").with(ui.make_persistent_id(id));
     ui.ctx()
-        .memory_mut(|memory| {
-            memory
-                .data
-                .get_temp(storage_id)
-                .unwrap_or(Modifiers::NONE)
-        })
+        .memory_mut(|memory| memory.data.get_temp(storage_id).unwrap_or(Modifiers::NONE))
 }
 
 /// Return the first modifier key that is active in `current` but was *not*

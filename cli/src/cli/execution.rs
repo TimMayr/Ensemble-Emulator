@@ -312,7 +312,7 @@ impl StopCondition {
             } => {
                 let was_read = emu
                     .last_memory_access()
-                    .map(|(_, was_read)| was_read)
+                    .map(|(_, was_read, _)| was_read)
                     .unwrap_or(true);
                 StopReason::MemoryWatchpoint {
                     addr: *addr,

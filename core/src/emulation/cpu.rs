@@ -4,13 +4,14 @@ use std::ops::RangeInclusive;
 use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
+
 use crate::emulation::mem::apu_registers::ApuRegisters;
 use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::{Memory, Ram};
 use crate::emulation::nes::ExecutionFinished;
 use crate::emulation::opcode;
-use crate::emulation::opcode::{get_opcode, OpCode, OPCODES_MAP, OPCODES_TABLE};
+use crate::emulation::opcode::{OPCODES_MAP, OPCODES_TABLE, OpCode, get_opcode};
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::RomFile;
 use crate::emulation::savestate::CpuState;
@@ -1147,7 +1148,7 @@ impl Cpu {
             self.irq_pending = self.irq_detected;
         }
 
-         self.execute_micro_op(op);
+        self.execute_micro_op(op);
 
         if self.dma_triggered && self.cpu_read_cycle {
             self.trigger_oam_dma();

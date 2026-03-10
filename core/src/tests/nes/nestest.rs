@@ -10,7 +10,8 @@ fn nestest() {
     emu.enable_trace();
     emu.load_rom(&String::from("./tests/nes-test-roms/nestest_headless.nes"));
     emu.power();
-    emu.run_until(1_000_000_000, RunOptions::default()).expect("Error running test");
+    emu.run_until(1_000_000_000, RunOptions::default())
+        .expect("Error running test");
 
     let log = emu
         .trace_log
