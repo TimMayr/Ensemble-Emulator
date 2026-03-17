@@ -14,7 +14,8 @@ use crate::threaded_emu::ThreadedEmulator;
 /// Emulator wrapper that abstracts over threaded and non-threaded implementations.
 pub enum EmulatorWrapper {
     /// Non-threaded emulator (used on WASM, or for debugging)
-    Channel(ChannelEmulator),
+    /// Boxed to reduce enum size since ChannelEmulator is much larger than ThreadedEmulator
+    Channel(Box<ChannelEmulator>),
     /// Threaded emulator (used on native platforms for better responsiveness)
     /// Stores the ThreadedEmulator to keep the background thread alive
     #[cfg(not(target_arch = "wasm32"))]
@@ -55,7 +56,7 @@ impl EmulatorWrapper {
         {
             // On WASM, use non-threaded emulator with the provided console
             let (emu, tx_to_emu, rx_from_emu) = ChannelEmulator::new(console);
-            (EmulatorWrapper::Channel(emu), tx_to_emu, rx_from_emu)
+            (EmulatorWrapper::Channel(Box::new(emu)), tx_to_emu, rx_from_emu)
         }
     }
 
