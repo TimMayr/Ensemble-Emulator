@@ -445,22 +445,10 @@ impl EguiApp {
             // Effectively paused, so we skip
             if frame_budget < Duration::from_secs(5) {
                 while self.accumulator >= frame_budget {
-                    // For ChannelEmulator, execute frame directly
-                    // For ThreadedEmulator, send StepFrame message
-                    if let Some(nes) = self.emulator.nes_mut() {
-                        // ChannelEmulator path (WASM or non-threaded)
-                        if let Err(e) = nes.step_frame() {
-                            eprintln!("Emulator error: {}", e);
-                            ctx.send_viewport_cmd(ViewportCommand::Close);
-                            break;
-                        }
-                    } else {
-                        // ThreadedEmulator path (native with threading)
-                        if self.to_emulator.send(FrontendMessage::StepFrame).is_err() {
-                            eprintln!("Failed to send StepFrame message to emulator");
-                            ctx.send_viewport_cmd(ViewportCommand::Close);
-                            break;
-                        }
+                    if let Err(e) = self.emulator.execute_frame() {
+                        eprintln!("Emulator error: {}", e);
+                        ctx.send_viewport_cmd(ViewportCommand::Close);
+                        break;
                     }
 
                     self.accumulator -= frame_budget;

@@ -97,4 +97,19 @@ impl EmulatorWrapper {
             EmulatorWrapper::Threaded(_) => None,
         }
     }
+
+    /// Execute a single frame of emulation.
+    ///
+    /// For `ChannelEmulator`, this calls `execute_frame()` directly.
+    /// For `ThreadedEmulator`, this sends a `StepFrame` message to the background thread.
+    pub fn execute_frame(&mut self) -> Result<(), String> {
+        match self {
+            EmulatorWrapper::Channel(emu) => emu.execute_frame(),
+            #[cfg(not(target_arch = "wasm32"))]
+            EmulatorWrapper::Threaded(threaded) => {
+                // Send StepFrame message to the background thread
+                threaded.send(FrontendMessage::StepFrame)
+            }
+        }
+    }
 }
