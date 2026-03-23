@@ -181,3 +181,5 @@ fabric.properties
 /core/tests/outputs/*.log
 /log
 /frontend/dist/
+
+.idea
