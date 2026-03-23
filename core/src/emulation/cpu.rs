@@ -66,7 +66,7 @@ pub struct Cpu {
     pub dma_read: bool,
     pub dma_triggered: bool,
     pub dma_page: u8,
-    /// Last memory access for watchpoint debugging (address, was_read)
+    /// Last memory access for watchpoint debugging (address, was_read, value)
     pub last_memory_access: Option<(u16, bool, u8)>,
 }
 
