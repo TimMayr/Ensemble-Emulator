@@ -13,7 +13,7 @@ use std::hash::Hash;
 use std::ops::Deref;
 
 use egui::{
-    vec2, Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget,
+    Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget, vec2,
 };
 use serde::{Deserialize, Serialize};
 
@@ -235,8 +235,8 @@ pub trait HotkeyBinding {
 }
 
 impl HotkeyBinding for Binding {
-    const ACCEPT_MOUSE: bool = true;
     const ACCEPT_KEYBOARD: bool = true;
+    const ACCEPT_MOUSE: bool = true;
 
     fn new(variant: BindVariant, modifiers: Modifiers) -> Self {
         Binding {
@@ -263,8 +263,8 @@ impl<B> HotkeyBinding for Option<B>
 where
     B: HotkeyBinding,
 {
-    const ACCEPT_MOUSE: bool = B::ACCEPT_MOUSE;
     const ACCEPT_KEYBOARD: bool = B::ACCEPT_KEYBOARD;
+    const ACCEPT_MOUSE: bool = B::ACCEPT_MOUSE;
 
     fn new(variant: BindVariant, modifiers: Modifiers) -> Self { Some(B::new(variant, modifiers)) }
 

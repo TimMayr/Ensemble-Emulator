@@ -783,7 +783,9 @@ impl Ppu {
     pub fn get_vram_at_addr(&mut self) -> u8 {
         let mut ret = self.ppu_data_buffer;
 
-        if !(self.v_register >= PALETTE_RAM_START_ADDRESS && self.v_register <= PALETTE_RAM_END_ADDRESS) {
+        if !(self.v_register >= PALETTE_RAM_START_ADDRESS
+            && self.v_register <= PALETTE_RAM_END_ADDRESS)
+        {
             self.ppu_data_buffer = self.mem_read(self.v_register);
         } else {
             ret = self.mem_read(self.v_register);
