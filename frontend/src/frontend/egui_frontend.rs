@@ -566,9 +566,6 @@ impl EguiApp {
 
 impl eframe::App for EguiApp {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
-        #[cfg(target_arch = "wasm32")]
-        let previous_keybindings = self.config.keybindings.clone();
-
         // Handle keyboard input
         handle_keyboard_input(
             ctx,
@@ -612,10 +609,16 @@ impl eframe::App for EguiApp {
         );
 
         // Central panel with tile tree
+        #[cfg(target_arch = "wasm32")]
+        let mut keybindings_changed = false;
         egui::CentralPanel::default().show(ctx, |ui| {
             let mut behavior =
                 TreeBehavior::new(&mut self.config, &self.emu_textures, &self.async_sender);
             self.tree.ui(&mut behavior, ui);
+            #[cfg(target_arch = "wasm32")]
+            {
+                keybindings_changed = behavior.keybindings_changed;
+            }
         });
 
         // Render any pending savestate dialogs
@@ -625,7 +628,7 @@ impl eframe::App for EguiApp {
         self.render_save_browser_impl(ctx);
 
         #[cfg(target_arch = "wasm32")]
-        if self.config.keybindings != previous_keybindings {
+        if keybindings_changed {
             self.persist_config_async();
         }
 

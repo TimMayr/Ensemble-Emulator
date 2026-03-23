@@ -65,6 +65,7 @@ pub struct TreeBehavior<'a> {
     pub config: &'a mut AppConfig,
     pub emu_textures: &'a EmuTextures,
     pub async_sender: &'a Sender<AsyncFrontendMessage>,
+    pub keybindings_changed: bool,
 }
 
 impl<'a> TreeBehavior<'a> {
@@ -77,6 +78,7 @@ impl<'a> TreeBehavior<'a> {
             config,
             emu_textures,
             async_sender,
+            keybindings_changed: false,
         }
     }
 }
@@ -100,7 +102,7 @@ impl Behavior<Pane> for TreeBehavior<'_> {
                 render_palettes(ui, self.config, self.emu_textures, self.async_sender)
             }
             Pane::Keybindings => {
-                render_keybindings(ui, self.config);
+                self.keybindings_changed |= render_keybindings(ui, self.config);
             }
             Pane::Sprites => render_sprite_viewer(ui, self.config, self.emu_textures),
         }
