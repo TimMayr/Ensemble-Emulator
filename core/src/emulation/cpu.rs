@@ -1896,7 +1896,7 @@ impl Cpu {
             current_op: state.current_op,
             op_queue: state.op_queue.clone(),
             current_opcode: state.current_opcode.and_then(get_opcode),
-            data_bus: state.temp,
+            data_bus: state.data_bus,
             ane_constant: state.ane_constant,
             is_halted: state.is_halted,
             irq_pending: state.irq_pending,

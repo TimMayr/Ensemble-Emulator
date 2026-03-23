@@ -13,7 +13,7 @@ use std::hash::Hash;
 use std::ops::Deref;
 
 use egui::{
-    Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget, vec2,
+    vec2, Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget,
 };
 use serde::{Deserialize, Serialize};
 
@@ -473,6 +473,10 @@ fn newly_pressed_modifier(initial: Modifiers, current: Modifiers) -> Option<Modi
         Some(ModifierKey::Ctrl)
     } else if current.alt && !initial.alt {
         Some(ModifierKey::Alt)
+    } else if current.command && !initial.command {
+        Some(ModifierKey::Command)
+    } else if current.mac_cmd && !initial.mac_cmd {
+        Some(ModifierKey::MacCmd)
     } else {
         None
     }

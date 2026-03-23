@@ -64,7 +64,7 @@ pub struct CpuState {
     /// Opcode byte of the instruction currently being executed.
     pub(crate) current_opcode: Option<u8>,
     /// Temporary register for intermediate calculations.
-    pub(crate) temp: u8,
+    pub(crate) data_bus: u8,
     /// Constant used by the ANE (XAA) illegal opcode.
     pub(crate) ane_constant: u8,
     /// Whether the CPU has executed a halt (KIL) instruction.
@@ -119,7 +119,7 @@ impl From<&Cpu> for CpuState {
             current_op: cpu.current_op,
             op_queue: cpu.op_queue.clone(),
             current_opcode: cpu.current_opcode.map(|c| c.opcode),
-            temp: cpu.data_bus,
+            data_bus: cpu.data_bus,
             ane_constant: cpu.ane_constant,
             is_halted: cpu.is_halted,
             read_cycle: cpu.cpu_read_cycle,
