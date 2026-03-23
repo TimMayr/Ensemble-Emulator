@@ -63,7 +63,7 @@ pub struct CpuState {
     pub(crate) op_queue: VecDeque<MicroOp>,
     /// Opcode byte of the instruction currently being executed.
     pub(crate) current_opcode: Option<u8>,
-    /// Temporary register for intermediate calculations.
+    /// CPU data bus / last-fetched data byte.
     pub(crate) data_bus: u8,
     /// Constant used by the ANE (XAA) illegal opcode.
     pub(crate) ane_constant: u8,
