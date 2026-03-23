@@ -27,9 +27,9 @@ pub(crate) fn hotkey_expecting_id() -> Id { Id::new("hotkey_expecting_input") }
 // Binding types (ported from egui_hotkey)
 // ============================================================================
 
-/// A standalone modifier key (Shift, Ctrl, or Alt) used as a binding target.
+/// A standalone modifier key (Shift, Ctrl, Alt, Command, or MacCmd) used as a binding target.
 ///
-/// Unlike regular [`Key`] variants, modifier keys are not part of egui's `Key`
+/// Unlike regular [`Key`] variants, these modifier keys are not part of egui's `Key`
 /// enum and are only tracked via [`Modifiers`].  This variant allows users to
 /// bind a bare modifier key to a controller button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
