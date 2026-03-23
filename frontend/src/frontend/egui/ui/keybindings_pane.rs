@@ -157,21 +157,15 @@ fn render_emulation_keybindings(ui: &mut egui::Ui, config: &mut AppConfig) {
 
                 ui.label("Quicksave");
                 ui.add(
-                    Hotkey::with_id(
-                        &mut config.keybindings.emulation.quicksave,
-                        "kb_quicksave",
-                    )
-                    .accept_modifier_keys(false),
+                    Hotkey::with_id(&mut config.keybindings.emulation.quicksave, "kb_quicksave")
+                        .accept_modifier_keys(false),
                 );
                 ui.end_row();
 
                 ui.label("Quickload");
                 ui.add(
-                    Hotkey::with_id(
-                        &mut config.keybindings.emulation.quickload,
-                        "kb_quickload",
-                    )
-                    .accept_modifier_keys(false),
+                    Hotkey::with_id(&mut config.keybindings.emulation.quickload, "kb_quickload")
+                        .accept_modifier_keys(false),
                 );
                 ui.end_row();
             });
