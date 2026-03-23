@@ -225,8 +225,8 @@ impl Binding {
 
 /// This Trait defines types that can be used as hotkey's target.
 pub trait HotkeyBinding {
-    const ACCEPT_MOUSE: bool;
     const ACCEPT_KEYBOARD: bool;
+    const ACCEPT_MOUSE: bool;
 
     fn new(variant: BindVariant, modifiers: Modifiers) -> Self;
     fn get(&self) -> Option<Binding>;
