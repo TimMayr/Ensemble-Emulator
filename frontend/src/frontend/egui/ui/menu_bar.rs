@@ -52,13 +52,12 @@ pub fn add_menu_bar(
                     async_sender,
                 ));
                 ui.add(HotKeyButton::for_action(
-                    OnKeyAction::PowerCycle,
+                    OnKeyAction::PowerToggle,
                     config,
                     async_sender,
                 ));
-
                 ui.add(HotKeyButton::for_action(
-                    OnKeyAction::PowerToggle,
+                    OnKeyAction::PowerCycle,
                     config,
                     async_sender,
                 ));
