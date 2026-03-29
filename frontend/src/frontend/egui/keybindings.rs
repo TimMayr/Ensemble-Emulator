@@ -468,6 +468,16 @@ impl Binding {
     }
 }
 
+/// Match current modifiers against required ones.
+///
+/// - Strict mode (`allow_extra_modifiers = false`) delegates to egui's
+///   `matches_logically`, preserving existing single-action semantics.
+/// - Permissive mode requires all requested modifiers to be down, while
+///   allowing additional modifiers to also be held.
+///
+/// Permissive mode is used for continuous/controller bindings so overlapping
+/// held inputs (e.g. `Shift` and `Shift+Enter`) can co-trigger instead of
+/// making one action block the other.
 fn modifiers_match(current: Modifiers, required: Modifiers, allow_extra_modifiers: bool) -> bool {
     if !allow_extra_modifiers {
         return current.matches_logically(required);
