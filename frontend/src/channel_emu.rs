@@ -169,10 +169,13 @@ impl ChannelEmulator {
                         self.nes.rom_file.clone().map(|r| (r, rom)),
                     ));
                 }
-                FrontendMessage::Power => {
-                    self.nes.power();
+                FrontendMessage::Power(bool) => {
+                    if bool {
+                        self.nes.power();
+                    } else {
+                        self.nes.power_off()
+                    }
                 }
-                FrontendMessage::PowerOff => self.nes.power_off(),
                 FrontendMessage::CreateSaveState(t) => {
                     if self.nes.rom_file.is_some() {
                         let state = self.nes.save_state();

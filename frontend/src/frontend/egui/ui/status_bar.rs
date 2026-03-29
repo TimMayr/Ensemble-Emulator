@@ -22,6 +22,10 @@ pub fn add_status_bar(
             } else {
                 ui.label("Emulator: Initializing");
             }
+            if let Some((_, l)) = &config.console_config.loaded_rom {
+                ui.separator();
+                ui.label(format!("Loaded Rom: {}", l.name));
+            }
         });
     });
 }
