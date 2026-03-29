@@ -224,8 +224,8 @@ impl EguiApp {
             AsyncFrontendMessage::StepFrame => {
                 let _ = self.to_emulator.send(FrontendMessage::StepFrame);
             }
-            AsyncFrontendMessage::SetLastFrameRequest(i) => {
-                self.emu_textures.last_frame_request = i;
+            AsyncFrontendMessage::SetFrameTimingBaseline(i) => {
+                self.reset_frame_timing_baseline(i);
             }
             AsyncFrontendMessage::StartLoadRom => spawn_rom_picker(
                 &self.async_sender,

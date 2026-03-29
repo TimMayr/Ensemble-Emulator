@@ -554,6 +554,12 @@ impl EguiApp {
         self.was_focused = is_focused;
     }
 
+    /// Reset emulation frame timing baseline to avoid catch-up bursts.
+    pub(crate) fn reset_frame_timing_baseline(&mut self, now: Instant) {
+        self.emu_textures.last_frame_request = now;
+        self.accumulator = Duration::ZERO;
+    }
+
     #[cfg(target_arch = "wasm32")]
     fn persist_config_async(&self) {
         let persistent_config: PersistentConfig = (&self.config).into();
