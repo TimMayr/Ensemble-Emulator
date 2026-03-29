@@ -13,7 +13,7 @@ use std::hash::Hash;
 
 use crossbeam_channel::Sender;
 use egui::{
-    vec2, Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget,
+    Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget, vec2,
 };
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
@@ -298,12 +298,6 @@ impl OnKeyAction {
             OnKeyAction::BrowseSavestates => "Browse Savestates",
             OnKeyAction::PowerCycle => "Power Cycle",
             OnKeyAction::PowerToggle => "Toggle Power",
-            OnKeyAction::OpenOptionsMenu => "Open Options",
-            OnKeyAction::OpenKeybindingsMenu => "Open Keybinds",
-            OnKeyAction::OpenPaletteViewer => "Open Palette Viewer",
-            OnKeyAction::OpenPatternTableViewer => "Open Pattern Table Viewer",
-            OnKeyAction::OpenNametableViewer => "Open Nametable Viewer",
-            OnKeyAction::OpenSpriteViewer => "Open Sprite Viewer",
             OnKeyAction::Speedup => "Speedup",
             OnKeyAction::OpenOptionsMenu => "Open Options",
             OnKeyAction::OpenKeybindingsMenu => "Open Keybinds",
@@ -311,7 +305,6 @@ impl OnKeyAction {
             OnKeyAction::OpenPatternTableViewer => "Open Pattern Table Viewer",
             OnKeyAction::OpenNametableViewer => "Open Nametable Viewer",
             OnKeyAction::OpenSpriteViewer => "Open Sprite Viewer",
-            OnKeyAction::Speedup => "Speedup",
         }
     }
 
@@ -355,23 +348,10 @@ impl OnKeyAction {
             | OnKeyAction::OpenSpriteViewer
             | OnKeyAction::ChangeDebugPalette
             | OnKeyAction::Speedup => KeybindCategory::Debug,
-            | OnKeyAction::OpenNametableViewer
-            | OnKeyAction::OpenPaletteViewer
-            | OnKeyAction::OpenPatternTableViewer
-            | OnKeyAction::OpenSpriteViewer
-            | OnKeyAction::ChangeDebugPalette => KeybindCategory::Debug,
-            | OnKeyAction::ChangeDebugPalette
-            | OnKeyAction::Speedup => KeybindCategory::Debug,
             OnKeyAction::LoadRom
             | OnKeyAction::Quit
             | OnKeyAction::LoadSavestate
             | OnKeyAction::CreateSavestate
-            | OnKeyAction::BrowseSavestates
-            | OnKeyAction::OpenOptionsMenu
-            | OnKeyAction::OpenKeybindingsMenu => KeybindCategory::Ui,
-            OnKeyAction::PowerToggle | OnKeyAction::Reset | OnKeyAction::PowerCycle => {
-                KeybindCategory::Console
-            }
             | OnKeyAction::BrowseSavestates
             | OnKeyAction::OpenOptionsMenu
             | OnKeyAction::OpenKeybindingsMenu => KeybindCategory::Ui,
@@ -447,13 +427,7 @@ impl OnKeyAction {
             OnKeyAction::OpenPatternTableViewer => AsyncFrontendMessage::OpenPatternTableViewer,
             OnKeyAction::OpenNametableViewer => AsyncFrontendMessage::OpenNametableViewer,
             OnKeyAction::OpenSpriteViewer => AsyncFrontendMessage::OpenSpriteViewer,
-            OnKeyAction::Speedup => {AsyncFrontendMessage::Speedup}
-            OnKeyAction::OpenOptionsMenu => AsyncFrontendMessage::OpenOptionsMenu,
-            OnKeyAction::OpenKeybindingsMenu => AsyncFrontendMessage::OpenKeybindsMenu,
-            OnKeyAction::OpenPaletteViewer => AsyncFrontendMessage::OpenPaletteViewer,
-            OnKeyAction::OpenPatternTableViewer => AsyncFrontendMessage::OpenPatternTableViewer,
-            OnKeyAction::OpenNametableViewer => AsyncFrontendMessage::OpenNametableViewer,
-            OnKeyAction::OpenSpriteViewer => AsyncFrontendMessage::OpenSpriteViewer,
+            OnKeyAction::Speedup => AsyncFrontendMessage::Speedup,
         }
     }
 
