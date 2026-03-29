@@ -228,6 +228,12 @@ pub enum OnKeyAction {
     BrowseSavestates,
     PowerCycle,
     PowerToggle,
+    OpenOptionsMenu,
+    OpenKeybindingsMenu,
+    OpenPaletteViewer,
+    OpenPatternTableViewer,
+    OpenNametableViewer,
+    OpenSpriteViewer,
     Speedup,
 }
 
@@ -287,6 +293,12 @@ impl OnKeyAction {
             OnKeyAction::PowerCycle => "Power Cycle",
             OnKeyAction::PowerToggle => "Toggle Power",
             OnKeyAction::Speedup => "Speedup",
+            OnKeyAction::OpenOptionsMenu => "Open Options",
+            OnKeyAction::OpenKeybindingsMenu => "Open Keybinds",
+            OnKeyAction::OpenPaletteViewer => "Open Palette Viewer",
+            OnKeyAction::OpenPatternTableViewer => "Open Pattern Table Viewer",
+            OnKeyAction::OpenNametableViewer => "Open Nametable Viewer",
+            OnKeyAction::OpenSpriteViewer => "Open Sprite Viewer",
         }
     }
 
@@ -326,11 +338,22 @@ impl OnKeyAction {
             | OnKeyAction::Quickload
             | OnKeyAction::ChangeDebugPalette
             | OnKeyAction::Speedup => KeybindCategory::Debug,
+            | OnKeyAction::OpenNametableViewer
+            | OnKeyAction::OpenPaletteViewer
+            | OnKeyAction::OpenPatternTableViewer
+            | OnKeyAction::OpenSpriteViewer
+            | OnKeyAction::ChangeDebugPalette => KeybindCategory::Debug,
             OnKeyAction::LoadRom
             | OnKeyAction::Quit
             | OnKeyAction::LoadSavestate
             | OnKeyAction::CreateSavestate
             | OnKeyAction::BrowseSavestates => KeybindCategory::Ui,
+            OnKeyAction::PowerToggle | OnKeyAction::Reset | OnKeyAction::PowerCycle => {
+                KeybindCategory::Console
+            }
+            | OnKeyAction::BrowseSavestates
+            | OnKeyAction::OpenOptionsMenu
+            | OnKeyAction::OpenKeybindingsMenu => KeybindCategory::Ui,
             OnKeyAction::PowerToggle | OnKeyAction::Reset | OnKeyAction::PowerCycle => {
                 KeybindCategory::Console
             }
@@ -397,6 +420,12 @@ impl OnKeyAction {
             OnKeyAction::BrowseSavestates => AsyncFrontendMessage::OpenSaveBrowser,
             OnKeyAction::PowerCycle => AsyncFrontendMessage::PowerCycle,
             OnKeyAction::PowerToggle => AsyncFrontendMessage::PowerToggle,
+            OnKeyAction::OpenOptionsMenu => AsyncFrontendMessage::OpenOptionsMenu,
+            OnKeyAction::OpenKeybindingsMenu => AsyncFrontendMessage::OpenKeybindsMenu,
+            OnKeyAction::OpenPaletteViewer => AsyncFrontendMessage::OpenPaletteViewer,
+            OnKeyAction::OpenPatternTableViewer => AsyncFrontendMessage::OpenPatternTableViewer,
+            OnKeyAction::OpenNametableViewer => AsyncFrontendMessage::OpenNametableViewer,
+            OnKeyAction::OpenSpriteViewer => AsyncFrontendMessage::OpenSpriteViewer,
             OnKeyAction::Speedup => {AsyncFrontendMessage::Speedup}
         }
     }

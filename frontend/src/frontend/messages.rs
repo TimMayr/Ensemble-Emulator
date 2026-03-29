@@ -149,6 +149,12 @@ pub enum AsyncFrontendMessage {
     StartLoadSavestate,
     PowerCycle,
     Speedup,
+    OpenKeybindsMenu,
+    OpenOptionsMenu,
+    OpenPaletteViewer,
+    OpenPatternTableViewer,
+    OpenNametableViewer,
+    OpenSpriteViewer,
 }
 
 /// Context for the multistep savestate loading process

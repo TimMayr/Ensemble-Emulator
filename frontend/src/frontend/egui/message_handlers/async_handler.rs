@@ -10,6 +10,7 @@ use monsoon_core::emulation::savestate;
 use monsoon_core::util::ToBytes;
 
 use crate::frontend::egui::config::AutoPauseReason;
+use crate::frontend::egui::tiles::{add_pane_if_missing, Pane};
 use crate::frontend::egui_frontend::EguiApp;
 use crate::frontend::messages::{AsyncFrontendMessage, LoadedRom, SavestateLoadContext};
 use crate::frontend::savestates::{
@@ -179,8 +180,10 @@ impl EguiApp {
                 let _ = self.to_emulator.send(FrontendMessage::Reset);
             }
             AsyncFrontendMessage::CreateSavestate => {
-                self.config
-                    .set_auto_pause_reason(AutoPauseReason::SavestateCreateSaveDialog, true);
+                if self.config.console_config.loaded_rom.is_some() {
+                    self.config
+                        .set_auto_pause_reason(AutoPauseReason::SavestateCreateSaveDialog, true);
+                }
                 let _ = self
                     .to_emulator
                     .send(FrontendMessage::CreateSaveState(SaveType::Manual));
@@ -276,6 +279,24 @@ impl EguiApp {
                     mem.data
                         .insert_temp::<bool>(Id::new(AsyncFrontendMessage::Speedup), true)
                 });
+            }
+            AsyncFrontendMessage::OpenKeybindsMenu => {
+                add_pane_if_missing(&mut self.tree, Pane::Keybindings);
+            }
+            AsyncFrontendMessage::OpenOptionsMenu => {
+                add_pane_if_missing(&mut self.tree, Pane::Options);
+            }
+            AsyncFrontendMessage::OpenPaletteViewer => {
+                add_pane_if_missing(&mut self.tree, Pane::Palettes);
+            }
+            AsyncFrontendMessage::OpenPatternTableViewer => {
+                add_pane_if_missing(&mut self.tree, Pane::PatternTables);
+            }
+            AsyncFrontendMessage::OpenNametableViewer => {
+                add_pane_if_missing(&mut self.tree, Pane::Nametables);
+            }
+            AsyncFrontendMessage::OpenSpriteViewer => {
+                add_pane_if_missing(&mut self.tree, Pane::Sprites);
             }
         }
         self.config.sync_dialog_pause_reason();
