@@ -2,25 +2,26 @@ use crossbeam_channel::Sender;
 use egui::Ui;
 
 use crate::frontend::egui::config::AppConfig;
-use crate::frontend::egui::tiles::{Pane, add_pane_if_missing};
+use crate::frontend::egui::keybindings::OnKeyAction;
+use crate::frontend::egui::tiles::{add_pane_if_missing, Pane};
+use crate::frontend::egui::ui::widgets::HotKeyButton;
 use crate::frontend::messages::AsyncFrontendMessage;
-use crate::frontend::util::{spawn_rom_picker, spawn_savestate_picker};
+use crate::frontend::util::spawn_savestate_picker;
 
 pub fn add_menu_bar(
     ui: &mut Ui,
-    config: &AppConfig,
+    config: &mut AppConfig,
     async_sender: &Sender<AsyncFrontendMessage>,
     tree: &mut egui_tiles::Tree<Pane>,
 ) {
     egui::Panel::top("menu_bar").show_inside(ui, |ui| {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
-                if ui.button("Load Rom").clicked() {
-                    spawn_rom_picker(
-                        async_sender,
-                        config.user_config.previous_rom_load_dir.as_ref(),
-                    );
-                }
+                ui.add(HotKeyButton::for_action(
+                    OnKeyAction::LoadRom,
+                    config,
+                    async_sender.clone(),
+                ));
 
                 ui.menu_button("Savestates", |ui| {
                     if config.console_config.loaded_rom.is_some()

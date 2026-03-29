@@ -235,7 +235,7 @@ impl Default for KeybindingsConfig {
         let mut map = BTreeMap::new();
 
         for bind in bindings {
-            map.insert(bind.logical_bind, bind);
+            map.insert(bind.action, bind);
         }
 
         KeybindingsConfig {

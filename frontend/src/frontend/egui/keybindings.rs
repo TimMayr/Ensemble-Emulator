@@ -14,7 +14,7 @@ use std::time::Instant;
 
 use crossbeam_channel::Sender;
 use egui::{
-    Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget, vec2,
+    vec2, Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget,
 };
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
@@ -393,7 +393,7 @@ impl OnKeyAction {
 pub struct Binding {
     pub variant: BindVariant,
     pub modifiers: Modifiers,
-    pub logical_bind: OnKeyAction,
+    pub action: OnKeyAction,
 }
 
 impl Debug for Binding {
@@ -411,7 +411,7 @@ impl Binding {
         Self {
             variant: BindVariant::Keyboard(key),
             modifiers: Modifiers::NONE,
-            logical_bind: action,
+            action,
         }
     }
 
@@ -420,7 +420,7 @@ impl Binding {
         Self {
             variant: BindVariant::Keyboard(key),
             modifiers,
-            logical_bind: action,
+            action,
         }
     }
 
@@ -562,6 +562,7 @@ pub trait HotkeyBinding {
 
     fn new(variant: BindVariant, modifiers: Modifiers, action: OnKeyAction) -> Self;
     fn get(&self) -> Option<&Binding>;
+    fn as_string(&self) -> String;
     fn set(&mut self, variant: BindVariant, modifiers: Modifiers, action: OnKeyAction);
     fn clear(&mut self);
     fn active(&self, input: &InputState) -> bool;
@@ -575,16 +576,18 @@ impl HotkeyBinding for Binding {
         Binding {
             variant,
             modifiers,
-            logical_bind: action,
+            action,
         }
     }
 
     fn get(&self) -> Option<&Binding> { Some(self) }
 
+    fn as_string(&self) -> String { self.get_string_rep() }
+
     fn set(&mut self, variant: BindVariant, modifiers: Modifiers, action: OnKeyAction) {
         self.variant = variant;
         self.modifiers = modifiers;
-        self.logical_bind = action;
+        self.action = action;
     }
 
     fn clear(&mut self) {
@@ -593,7 +596,7 @@ impl HotkeyBinding for Binding {
     }
 
     fn active(&self, input: &InputState) -> bool {
-        match self.logical_bind.get_trigger_type() {
+        match self.action.get_trigger_type() {
             TriggerType::Single => self.pressed(input),
             // Controller actions are continuous; allow overlapping binds to
             // trigger together instead of making one block the other.
@@ -614,6 +617,13 @@ where
     }
 
     fn get(&self) -> Option<&Binding> { self.as_ref()?.get() }
+
+    fn as_string(&self) -> String {
+        match self {
+            None => "Not Bound".to_string(),
+            Some(b) => b.as_string(),
+        }
+    }
 
     fn set(&mut self, variant: BindVariant, modifiers: Modifiers, action: OnKeyAction) {
         if let Some(this) = self {
@@ -737,7 +747,7 @@ where
                         .binding
                         .get()
                         .expect("Binding does not have associated Action")
-                        .logical_bind;
+                        .action;
 
                     if let Some((key, mods)) = keyboard.or(mouse) {
                         let (key, mods) =
@@ -750,7 +760,7 @@ where
                                 binding: Binding {
                                     variant: key,
                                     modifiers: mods,
-                                    logical_bind: action,
+                                    action,
                                 },
                             }),
                         );
@@ -787,7 +797,7 @@ where
                                         binding: Binding {
                                             variant: BindVariant::ModifierKey(mk),
                                             modifiers: Modifiers::NONE,
-                                            logical_bind: action,
+                                            action,
                                         },
                                     }),
                                 );
