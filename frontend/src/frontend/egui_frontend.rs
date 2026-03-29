@@ -445,13 +445,17 @@ impl EguiApp {
             self.accumulator += delta;
             self.emu_textures.last_frame_request = now;
 
-            let frame_budget = self.get_frame_budget();
+            let mut frame_budget = self.get_frame_budget();
             let is_uncapped = self.config.speed_config.app_speed == AppSpeed::Uncapped
                 || ctx.memory(|mem| {
                     mem.data
                         .get_temp(Id::new(AsyncFrontendMessage::Speedup))
                         .unwrap_or(false)
                 });
+
+            if is_uncapped {
+                frame_budget = Duration::from_nanos((1_000_000_000.0 / f64::MAX) as u64)
+            }
 
             let max_emulation_time = Duration::from_millis(17);
 
