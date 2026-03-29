@@ -3,8 +3,8 @@ use egui::{Context, FocusDirection};
 
 use crate::frontend::egui::config::{AppConfig, KeybindingsConfig};
 use crate::frontend::egui::keybindings::{
-    BindVariant, Binding, HotkeyBinding, TriggerType, hotkey_get_suppressed_binding,
-    hotkey_is_any_expecting, hotkey_set_suppressed_binding, hotkey_take_just_set_this_frame,
+    BindVariant, Binding, HotkeyBinding, hotkey_get_suppressed_binding, hotkey_is_any_expecting,
+    hotkey_set_suppressed_binding, hotkey_take_just_set_this_frame,
 };
 use crate::frontend::messages::AsyncFrontendMessage;
 
@@ -33,32 +33,19 @@ pub fn handle_keyboard_input(
 
     ctx.input_mut(|i| {
         if !hotkey_is_expecting && !hotkey_just_set_this_frame {
-            let mut actions = Vec::new();
-
-            for (action, binding) in &config.keybindings.keybindings {
-                if let Some(suppressed) = suppressed_binding
-                    && *action == suppressed.action
-                    && *binding == suppressed.binding
-                {
-                    continue;
-                }
-                if binding.active(i) {
-                    actions.push(*action);
-                }
-            }
+            let (actions, consumed_bindings) =
+                resolve_active_key_actions(&config.keybindings, i, suppressed_binding);
 
             // Now no borrow of `config.keybindings` is active
             for action in actions {
                 action.get_callback_function()(async_sender);
             }
-        }
 
-        // Consume key events for all active keybindings so that egui
-        // widgets do not act on them (e.g. Space clicking a focused
-        // button).  Skip this when the Hotkey rebinding widget is
-        // waiting for a key press – it needs to see the raw events.
-        if !hotkey_is_expecting && !hotkey_just_set_this_frame {
-            consume_triggered_keys(i, &config.keybindings);
+            // Consume key events for non-controller active keybindings so that
+            // egui widgets do not act on them (e.g. Space clicking a focused
+            // button).  Skip this when the Hotkey rebinding widget is waiting
+            // for a key press – it needs to see the raw events.
+            consume_triggered_keys(i, &consumed_bindings);
         }
     });
 
@@ -71,20 +58,78 @@ pub fn handle_keyboard_input(
     }
 }
 
-/// Consume key-press events for every active keybinding.
+/// Resolve active key actions for this frame.
+///
+/// Controller actions pass through and can co-trigger.
+/// Non-controller actions are filtered to only those with the highest
+/// specificity among currently active non-controller bindings.
+fn resolve_active_key_actions(
+    keybindings: &KeybindingsConfig,
+    input: &egui::InputState,
+    suppressed_binding: Option<crate::frontend::egui::keybindings::SuppressedBinding>,
+) -> (Vec<crate::frontend::egui::keybindings::OnKeyAction>, Vec<Binding>) {
+    let mut actions = Vec::new();
+    let mut consumed_bindings = Vec::new();
+
+    let mut best_non_controller_specificity: Option<usize> = None;
+    let mut pending_non_controller: Vec<(
+        crate::frontend::egui::keybindings::OnKeyAction,
+        Binding,
+        usize,
+    )> = Vec::new();
+
+    for (action, binding) in &keybindings.keybindings {
+        if let Some(suppressed) = suppressed_binding
+            && *action == suppressed.action
+            && *binding == suppressed.binding
+        {
+            continue;
+        }
+
+        if !binding.active(input) {
+            continue;
+        }
+
+        if action.allows_multi_trigger() {
+            actions.push(*action);
+            continue;
+        }
+
+        let specificity = binding_specificity(binding);
+        match best_non_controller_specificity {
+            None => {
+                best_non_controller_specificity = Some(specificity);
+                pending_non_controller.push((*action, *binding, specificity));
+            }
+            Some(best) if specificity > best => {
+                best_non_controller_specificity = Some(specificity);
+                pending_non_controller.clear();
+                pending_non_controller.push((*action, *binding, specificity));
+            }
+            Some(best) if specificity == best => {
+                pending_non_controller.push((*action, *binding, specificity));
+            }
+            Some(_) => {}
+        }
+    }
+
+    for (action, binding, _) in pending_non_controller {
+        actions.push(action);
+        consumed_bindings.push(binding);
+    }
+
+    (actions, consumed_bindings)
+}
+
+/// Consume key-press events for the resolved triggered keybindings.
 ///
 /// After the emulator's input handler has read the key state, we remove the
 /// corresponding `Event::Key` entries from [`egui::InputState`] so that egui
 /// widgets rendered later in the frame do not also react to them (e.g. Space
 /// clicking a focused button, or Tab advancing widget focus).
-fn consume_triggered_keys(input: &mut egui::InputState, keybindings: &KeybindingsConfig) {
-    for (action, binding) in &keybindings.keybindings {
-        // Continuous bindings (controller actions) are evaluated via `down`.
-        // Consuming their initial `pressed` event can interfere with hold
-        // recognition on some platforms/egui backends.
-        if action.get_trigger_type() == TriggerType::Single && binding.pressed(input) {
-            consume_binding(input, &Some(*binding))
-        }
+fn consume_triggered_keys(input: &mut egui::InputState, consumed_bindings: &[Binding]) {
+    for binding in consumed_bindings {
+        consume_binding(input, &Some(*binding))
     }
 }
 
@@ -97,4 +142,17 @@ fn consume_binding(input: &mut egui::InputState, binding: &Option<Binding>) {
     {
         input.consume_key(b.modifiers, key);
     }
+}
+
+fn binding_specificity(binding: &Binding) -> usize {
+    binding.modifiers.alt as usize
+        + binding.modifiers.ctrl as usize
+        + binding.modifiers.shift as usize
+        + binding.modifiers.command as usize
+        + binding.modifiers.mac_cmd as usize
+        + match binding.variant {
+            BindVariant::ModifierKey(_) => 0,
+            BindVariant::Unbound => 0,
+            _ => 1,
+        }
 }

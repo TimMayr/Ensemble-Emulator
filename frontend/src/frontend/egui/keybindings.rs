@@ -333,6 +333,16 @@ impl OnKeyAction {
         }
     }
 
+    /// Returns `true` when this action should pass-through and co-trigger with
+    /// other active bindings.
+    pub fn allows_multi_trigger(&self) -> bool { self.get_category() == KeybindCategory::Controller }
+
+    /// Returns whether modifier matching for this action should permit extra
+    /// held modifiers beyond those explicitly required by the binding.
+    pub fn allows_extra_modifiers(&self) -> bool {
+        self.get_category() == KeybindCategory::Controller
+    }
+
     pub fn get_associated_message(&self) -> AsyncFrontendMessage {
         match self {
             OnKeyAction::ControllerUp => AsyncFrontendMessage::ControllerInput(ControllerEvent::Up),
@@ -449,12 +459,20 @@ impl Binding {
     /// Note: always returns `false` for [`ModifierKey`] bindings — see
     /// [`BindVariant::pressed`] for details.
     pub fn pressed(&self, input_state: &InputState) -> bool {
+        self.pressed_with_modifier_matching(input_state, false)
+    }
+
+    fn pressed_with_modifier_matching(
+        &self,
+        input_state: &InputState,
+        allow_extra_modifiers: bool,
+    ) -> bool {
         match &self.variant {
             // Modifier-only bindings cannot detect single-frame presses
             // because egui does not emit key events for modifiers.
             BindVariant::ModifierKey(_) => false,
             _ => {
-                input_state.modifiers.matches_logically(self.modifiers)
+                modifiers_match(input_state.modifiers, self.modifiers, allow_extra_modifiers)
                     && self.variant.pressed(input_state)
             }
         }
@@ -594,11 +612,12 @@ impl HotkeyBinding for Binding {
     }
 
     fn active(&self, input: &InputState) -> bool {
+        let allow_extra_modifiers = self.action.allows_extra_modifiers();
         match self.action.get_trigger_type() {
-            TriggerType::Single => self.pressed(input),
-            // Controller actions are continuous; allow overlapping binds to
-            // trigger together instead of making one block the other.
-            TriggerType::Continuous => self.down_permissive(input),
+            TriggerType::Single => self.pressed_with_modifier_matching(input, allow_extra_modifiers),
+            TriggerType::Continuous => {
+                self.down_with_modifier_matching(input, allow_extra_modifiers)
+            }
         }
     }
 }
