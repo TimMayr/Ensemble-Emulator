@@ -352,7 +352,7 @@ impl OnKeyAction {
             }),
             OnKeyAction::PauseEmulator => Box::new(|config, sender| {
                 config.speed_config.is_paused = !config.speed_config.is_paused;
-                let _ = sender.send(AsyncFrontendMessage::SetLastFrameRequest(Instant::now()));
+                let _ = sender.send(AsyncFrontendMessage::SetFrameTimingBaseline(Instant::now()));
             }),
             OnKeyAction::StepFrame => Box::new(|_, sender| {
                 let _ = sender.send(AsyncFrontendMessage::StepFrame);

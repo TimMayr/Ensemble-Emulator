@@ -134,7 +134,7 @@ pub enum AsyncFrontendMessage {
     StepMasterCycle,
     StepScanline,
     StepFrame,
-    SetLastFrameRequest(Instant),
+    SetFrameTimingBaseline(Instant),
     Quit,
 }
 
