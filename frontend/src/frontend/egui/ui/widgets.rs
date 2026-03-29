@@ -4,7 +4,7 @@
 //! multiple UI components to reduce code duplication.
 
 use crossbeam_channel::Sender;
-use egui::{vec2, Response, StrokeKind, Ui, Widget};
+use egui::{Response, StrokeKind, Ui, Widget, vec2};
 use monsoon_core::emulation::palette_util::RgbColor;
 
 use crate::frontend::egui::config::AppConfig;
@@ -236,32 +236,60 @@ impl<'a> HotKeyButton<'a> {
 
 impl<'a> Widget for HotKeyButton<'a> {
     fn ui(self, ui: &mut Ui) -> Response {
-        let response = ui
-            .allocate_ui_with_layout(
-                egui::vec2(
-                    ui.spacing().interact_size.x * 8.0,
-                    ui.spacing().interact_size.y,
-                ),
-                egui::Layout::left_to_right(egui::Align::Center),
-                |ui| {
-                    ui.label(self.action.get_display_name());
+        let left_text = self.action.get_display_name();
+        let right_text = self
+            .config
+            .keybindings
+            .keybindings
+            .get(&self.action)
+            .cloned()
+            .as_string();
 
-                    ui.add_space(ui.spacing().item_spacing.x * 3.0);
+        let font_id = egui::TextStyle::Button.resolve(ui.style());
+        let text_color = ui.visuals().text_color();
+        let left_galley =
+            ui.fonts_mut(|f| f.layout_no_wrap(left_text.to_owned(), font_id.clone(), text_color));
+        let right_galley =
+            ui.fonts_mut(|f| f.layout_no_wrap(right_text.clone(), font_id.clone(), text_color));
 
-                    ui.label(
-                        self.config
-                            .keybindings
-                            .keybindings
-                            .get(&self.action)
-                            .cloned()
-                            .as_string(),
-                    );
-                },
-            )
-            .response;
+        // Approximate 1-1.5 tabs as a 5-space minimum gap.
+        let space_width = ui
+            .fonts_mut(|f| f.layout_no_wrap(" ".to_owned(), font_id.clone(), text_color))
+            .size()
+            .x;
+        let min_gap = space_width * 5.0;
+        let padding = ui.spacing().button_padding;
+
+        let min_width = left_galley.size().x + right_galley.size().x + min_gap + (padding.x * 2.0);
+        let desired_width = (ui.spacing().interact_size.x * 8.0).max(min_width);
+        let desired_size = egui::vec2(desired_width, ui.spacing().interact_size.y);
+
+        let response = ui.add_sized(desired_size, egui::Button::new(""));
 
         if response.clicked() {
             self.action.get_callback_function()(self.config, &self.sender)
+        }
+
+        if ui.is_rect_visible(response.rect) {
+            let visuals = ui.style().interact(&response);
+            let text_y = response.rect.center().y;
+            let left_pos = egui::pos2(response.rect.left() + padding.x, text_y);
+            let right_pos = egui::pos2(response.rect.right() - padding.x, text_y);
+
+            ui.painter().text(
+                left_pos,
+                egui::Align2::LEFT_CENTER,
+                left_text,
+                font_id.clone(),
+                visuals.text_color(),
+            );
+            ui.painter().text(
+                right_pos,
+                egui::Align2::RIGHT_CENTER,
+                right_text,
+                font_id,
+                visuals.text_color(),
+            );
         }
 
         response
