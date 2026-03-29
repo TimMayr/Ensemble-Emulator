@@ -300,6 +300,26 @@ impl Default for KeybindingsConfig {
                 OnKeyAction::OpenSpriteViewer,
             ),
             Binding::with_modifiers(Key::Tab, Modifiers::CTRL, OnKeyAction::Speedup),
+            Binding::with_modifiers(
+                Key::P,
+                Modifiers::CTRL.plus(Modifiers::SHIFT),
+                OnKeyAction::OpenPaletteViewer,
+            ),
+            Binding::with_modifiers(
+                Key::T,
+                Modifiers::CTRL.plus(Modifiers::SHIFT),
+                OnKeyAction::OpenPatternTableViewer,
+            ),
+            Binding::with_modifiers(
+                Key::N,
+                Modifiers::CTRL.plus(Modifiers::SHIFT),
+                OnKeyAction::OpenNametableViewer,
+            ),
+            Binding::with_modifiers(
+                Key::S,
+                Modifiers::CTRL.plus(Modifiers::SHIFT),
+                OnKeyAction::OpenSpriteViewer,
+            ),
             // Ui Bindings
             Binding::with_modifiers(Key::O, Modifiers::CTRL, OnKeyAction::LoadRom),
             Binding::with_modifiers(Key::Q, Modifiers::CTRL, OnKeyAction::Quit),
