@@ -13,7 +13,7 @@ use std::hash::Hash;
 
 use crossbeam_channel::Sender;
 use egui::{
-    Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget, vec2,
+    vec2, Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget,
 };
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
@@ -311,6 +311,7 @@ impl OnKeyAction {
             OnKeyAction::OpenPatternTableViewer => "Open Pattern Table Viewer",
             OnKeyAction::OpenNametableViewer => "Open Nametable Viewer",
             OnKeyAction::OpenSpriteViewer => "Open Sprite Viewer",
+            OnKeyAction::Speedup => "Speedup",
         }
     }
 
@@ -359,6 +360,8 @@ impl OnKeyAction {
             | OnKeyAction::OpenPatternTableViewer
             | OnKeyAction::OpenSpriteViewer
             | OnKeyAction::ChangeDebugPalette => KeybindCategory::Debug,
+            | OnKeyAction::ChangeDebugPalette
+            | OnKeyAction::Speedup => KeybindCategory::Debug,
             OnKeyAction::LoadRom
             | OnKeyAction::Quit
             | OnKeyAction::LoadSavestate

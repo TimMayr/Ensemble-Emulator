@@ -320,6 +320,7 @@ impl Default for KeybindingsConfig {
                 Modifiers::CTRL.plus(Modifiers::SHIFT),
                 OnKeyAction::OpenSpriteViewer,
             ),
+            Binding::with_modifiers(Key::Tab, Modifiers::CTRL, OnKeyAction::Speedup),
             // Ui Bindings
             Binding::with_modifiers(Key::O, Modifiers::CTRL, OnKeyAction::LoadRom),
             Binding::with_modifiers(Key::Q, Modifiers::CTRL, OnKeyAction::Quit),
