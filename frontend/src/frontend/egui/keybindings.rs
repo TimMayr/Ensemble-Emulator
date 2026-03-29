@@ -14,7 +14,7 @@ use std::time::Instant;
 
 use crossbeam_channel::Sender;
 use egui::{
-    vec2, Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget,
+    Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget, vec2,
 };
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
@@ -30,6 +30,13 @@ use crate::messages::ControllerEvent;
 /// the keybinding UI is active.
 fn hotkey_active_id() -> Id { Id::new("hotkey_active_widget_id") }
 fn hotkey_just_set_this_frame_id() -> Id { Id::new("hotkey_just_set_this_frame") }
+fn hotkey_suppressed_binding_id() -> Id { Id::new("hotkey_suppressed_binding_until_release") }
+
+#[derive(Clone, Copy)]
+pub(crate) struct SuppressedBinding {
+    pub action: OnKeyAction,
+    pub binding: Binding,
+}
 
 /// Returns true if any hotkey widget is currently waiting for key input.
 pub(crate) fn hotkey_is_any_expecting(ctx: &egui::Context) -> bool {
@@ -50,6 +57,31 @@ pub(crate) fn hotkey_take_just_set_this_frame(ctx: &egui::Context) -> bool {
             false
         }
     })
+}
+
+pub(crate) fn hotkey_get_suppressed_binding(ctx: &egui::Context) -> Option<SuppressedBinding> {
+    ctx.memory_mut(|memory| {
+        memory
+            .data
+            .get_temp::<SuppressedBinding>(hotkey_suppressed_binding_id())
+    })
+}
+
+pub(crate) fn hotkey_set_suppressed_binding(
+    ctx: &egui::Context,
+    suppressed: Option<SuppressedBinding>,
+) {
+    ctx.memory_mut(|memory| {
+        if let Some(suppressed) = suppressed {
+            memory
+                .data
+                .insert_temp(hotkey_suppressed_binding_id(), suppressed);
+        } else {
+            memory
+                .data
+                .remove::<SuppressedBinding>(hotkey_suppressed_binding_id());
+        }
+    });
 }
 
 // ============================================================================
@@ -668,6 +700,7 @@ where
                 let escape_pressed = ui.input(|i| i.key_pressed(Key::Escape));
                 if escape_pressed {
                     self.binding.clear();
+                    hotkey_set_suppressed_binding(ui.ctx(), None);
                     ui.ctx().memory_mut(|memory| {
                         memory
                             .data
@@ -717,6 +750,17 @@ where
                         let (key, mods) =
                             normalize_captured_binding(key, mods.unwrap_or(Modifiers::NONE));
                         self.binding.set(key, mods, action);
+                        hotkey_set_suppressed_binding(
+                            ui.ctx(),
+                            Some(SuppressedBinding {
+                                action,
+                                binding: Binding {
+                                    variant: key,
+                                    modifiers: mods,
+                                    logical_bind: action,
+                                },
+                            }),
+                        );
                         ui.ctx().memory_mut(|memory| {
                             memory
                                 .data
@@ -742,6 +786,17 @@ where
                                     BindVariant::ModifierKey(mk),
                                     Modifiers::NONE,
                                     action,
+                                );
+                                hotkey_set_suppressed_binding(
+                                    ui.ctx(),
+                                    Some(SuppressedBinding {
+                                        action,
+                                        binding: Binding {
+                                            variant: BindVariant::ModifierKey(mk),
+                                            modifiers: Modifiers::NONE,
+                                            logical_bind: action,
+                                        },
+                                    }),
                                 );
                                 ui.ctx().memory_mut(|memory| {
                                     memory
