@@ -253,6 +253,7 @@ impl KeybindingsConfig {
 impl Default for KeybindingsConfig {
     fn default() -> Self {
         let bindings = vec![
+            // Controller Bindings
             Binding::key(Key::W, OnKeyAction::ControllerUp),
             Binding::key(Key::S, OnKeyAction::ControllerDown),
             Binding::key(Key::A, OnKeyAction::ControllerLeft),
@@ -265,21 +266,30 @@ impl Default for KeybindingsConfig {
             ),
             Binding::key(Key::Enter, OnKeyAction::ControllerStartButton),
             Binding::key(Key::Tab, OnKeyAction::ControllerSelectButton),
+            // Emulator Bindings
             Binding::key(Key::Comma, OnKeyAction::PauseEmulator),
             Binding::key(Key::Period, OnKeyAction::StepFrame),
             Binding::with_modifiers(Key::Period, Modifiers::CTRL, OnKeyAction::StepScanline),
             Binding::key(Key::Slash, OnKeyAction::StepMasterCycle),
             Binding::with_modifiers(Key::Slash, Modifiers::ALT, OnKeyAction::StepCpuCycle),
             Binding::with_modifiers(Key::Slash, Modifiers::SHIFT, OnKeyAction::StepPpuCycle),
-            Binding::key(Key::R, OnKeyAction::Reset),
             Binding::key(Key::F5, OnKeyAction::Quicksave),
             Binding::key(Key::F8, OnKeyAction::Quickload),
             Binding::key(Key::N, OnKeyAction::ChangeDebugPalette),
+            // Ui Bindings
             Binding::with_modifiers(Key::O, Modifiers::CTRL, OnKeyAction::LoadRom),
             Binding::with_modifiers(Key::Q, Modifiers::CTRL, OnKeyAction::Quit),
             Binding::with_modifiers(Key::L, Modifiers::CTRL, OnKeyAction::LoadSavestate),
             Binding::with_modifiers(Key::S, Modifiers::CTRL, OnKeyAction::CreateSavestate),
             Binding::with_modifiers(Key::B, Modifiers::CTRL, OnKeyAction::BrowseSavestates),
+            // Console Bindings
+            Binding::key(Key::R, OnKeyAction::Reset),
+            Binding::with_modifiers(
+                Key::P,
+                Modifiers::CTRL.plus(Modifiers::ALT),
+                OnKeyAction::PowerCycle,
+            ),
+            Binding::with_modifiers(Key::P, Modifiers::CTRL, OnKeyAction::PowerToggle),
         ];
 
         let mut map = BTreeMap::new();

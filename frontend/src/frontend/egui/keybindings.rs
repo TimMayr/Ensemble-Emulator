@@ -226,6 +226,8 @@ pub enum OnKeyAction {
     LoadSavestate,
     CreateSavestate,
     BrowseSavestates,
+    PowerCycle,
+    PowerToggle,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -234,11 +236,14 @@ pub enum TriggerType {
     Continuous,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, EnumIter, Hash)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, EnumIter, Hash, Ord, PartialOrd,
+)]
 pub enum KeybindCategory {
     Controller,
     Debug,
     Ui,
+    Console,
 }
 
 impl KeybindCategory {
@@ -247,6 +252,7 @@ impl KeybindCategory {
             KeybindCategory::Controller => "Controller Keybinds",
             KeybindCategory::Debug => "Debug Keybinds",
             KeybindCategory::Ui => "Ui Shortcuts",
+            KeybindCategory::Console => "Console Keybinds",
         }
     }
 }
@@ -277,6 +283,8 @@ impl OnKeyAction {
             OnKeyAction::LoadSavestate => "Load Savestate",
             OnKeyAction::CreateSavestate => "Create Savestate",
             OnKeyAction::BrowseSavestates => "Browse Savestates",
+            OnKeyAction::PowerCycle => "Power Cycle",
+            OnKeyAction::PowerToggle => "Toggle Power",
         }
     }
 
@@ -289,7 +297,8 @@ impl OnKeyAction {
             | OnKeyAction::ControllerAButton
             | OnKeyAction::ControllerBButton
             | OnKeyAction::ControllerStartButton
-            | OnKeyAction::ControllerSelectButton => TriggerType::Continuous,
+            | OnKeyAction::ControllerSelectButton
+            | OnKeyAction::Reset => TriggerType::Continuous,
             _ => TriggerType::Single,
         }
     }
@@ -310,7 +319,6 @@ impl OnKeyAction {
             | OnKeyAction::StepMasterCycle
             | OnKeyAction::StepPpuCycle
             | OnKeyAction::StepCpuCycle
-            | OnKeyAction::Reset
             | OnKeyAction::Quicksave
             | OnKeyAction::Quickload
             | OnKeyAction::ChangeDebugPalette => KeybindCategory::Debug,
@@ -319,6 +327,9 @@ impl OnKeyAction {
             | OnKeyAction::LoadSavestate
             | OnKeyAction::CreateSavestate
             | OnKeyAction::BrowseSavestates => KeybindCategory::Ui,
+            OnKeyAction::PowerToggle
+            | OnKeyAction::Reset
+            | OnKeyAction::PowerCycle => KeybindCategory::Console,
         }
     }
 
@@ -344,7 +355,7 @@ impl OnKeyAction {
                 AsyncFrontendMessage::ControllerInput(ControllerEvent::Start)
             }
             OnKeyAction::ControllerSelectButton => {
-                AsyncFrontendMessage::ControllerInput(ControllerEvent::Start)
+                AsyncFrontendMessage::ControllerInput(ControllerEvent::Select)
             }
             OnKeyAction::PauseEmulator => AsyncFrontendMessage::PauseEmulator,
             OnKeyAction::StepFrame => AsyncFrontendMessage::StepFrame,
@@ -361,6 +372,8 @@ impl OnKeyAction {
             OnKeyAction::LoadSavestate => AsyncFrontendMessage::StartLoadSavestate,
             OnKeyAction::CreateSavestate => AsyncFrontendMessage::CreateSavestate,
             OnKeyAction::BrowseSavestates => AsyncFrontendMessage::OpenSaveBrowser,
+            OnKeyAction::PowerCycle => AsyncFrontendMessage::PowerCycle,
+            OnKeyAction::PowerToggle => AsyncFrontendMessage::PowerToggle,
         }
     }
 

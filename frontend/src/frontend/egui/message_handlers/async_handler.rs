@@ -127,13 +127,13 @@ impl EguiApp {
                     let _ = self
                         .to_emulator
                         .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
-                    let _ = self.to_emulator.send(FrontendMessage::PowerOff);
+                    let _ = self.to_emulator.send(FrontendMessage::Power(false));
 
                     // Save directory for next file picker
                     self.config.user_config.previous_rom_load_dir = Some(rom.directory.clone());
 
                     self.load_rom(rom);
-                    let _ = self.to_emulator.send(FrontendMessage::Power);
+                    let _ = self.to_emulator.send(FrontendMessage::Power(true));
                     self.config.console_config.is_powered = true;
                 }
             }
@@ -152,19 +152,25 @@ impl EguiApp {
             AsyncFrontendMessage::ExportSaveFromBrowser(key) => {
                 self.handle_export_save_from_browser(key);
             }
-            AsyncFrontendMessage::PowerOn => {
+            AsyncFrontendMessage::PowerToggle => {
                 let _ = self
                     .to_emulator
                     .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
-                let _ = self.to_emulator.send(FrontendMessage::Power);
-                self.config.console_config.is_powered = true;
-            }
-            AsyncFrontendMessage::PowerOff => {
-                let _ = self
-                    .to_emulator
-                    .send(FrontendMessage::CreateSaveState(SaveType::Autosave));
-                let _ = self.to_emulator.send(FrontendMessage::PowerOff);
-                self.config.console_config.is_powered = false;
+
+                self.config.console_config.is_powered = !self.config.console_config.is_powered;
+
+                let _ = self.to_emulator.send(FrontendMessage::Power(
+                    self.config.console_config.is_powered,
+                ));
+
+                if self.config.console_config.is_powered
+                    && let Some((_, rom)) = &self.config.console_config.loaded_rom
+                {
+                    let name = rom.name.clone();
+                    let _ = self
+                        .to_emulator
+                        .send(FrontendMessage::LoadRom((rom.clone(), name)));
+                }
             }
             AsyncFrontendMessage::Reset => {
                 let _ = self
@@ -260,6 +266,10 @@ impl EguiApp {
                     &self.async_sender,
                     self.config.user_config.previous_savestate_load_dir.as_ref(),
                 );
+            }
+            AsyncFrontendMessage::PowerCycle => {
+                let _ = self.async_sender.send(AsyncFrontendMessage::PowerToggle);
+                let _ = self.async_sender.send(AsyncFrontendMessage::PowerToggle);
             }
         }
         self.config.sync_dialog_pause_reason();

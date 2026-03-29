@@ -46,21 +46,22 @@ pub fn add_menu_bar(
                 });
             });
             ui.menu_button("Console", |ui| {
-                ui.add(HotKeyButton::for_action(OnKeyAction::Reset, config, async_sender));
-                if ui.button("Power cycle").clicked() {
-                    let _ = async_sender.send(AsyncFrontendMessage::PowerOff);
-                    let _ = async_sender.send(AsyncFrontendMessage::LoadRom(
-                        config.console_config.loaded_rom.clone().map(|r| r.1),
-                    ));
-                    let _ = async_sender.send(AsyncFrontendMessage::PowerOn);
-                }
-                if !config.console_config.is_powered {
-                    if ui.button("Power On").clicked() {
-                        let _ = async_sender.send(AsyncFrontendMessage::PowerOn);
-                    }
-                } else if ui.button("Power Off").clicked() {
-                    let _ = async_sender.send(AsyncFrontendMessage::PowerOff);
-                }
+                ui.add(HotKeyButton::for_action(
+                    OnKeyAction::Reset,
+                    config,
+                    async_sender,
+                ));
+                ui.add(HotKeyButton::for_action(
+                    OnKeyAction::PowerCycle,
+                    config,
+                    async_sender,
+                ));
+
+                ui.add(HotKeyButton::for_action(
+                    OnKeyAction::PowerToggle,
+                    config,
+                    async_sender,
+                ));
             });
             ui.menu_button("View", |ui| {
                 if ui.button("Options").clicked() {

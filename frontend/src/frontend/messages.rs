@@ -116,10 +116,8 @@ pub enum AsyncFrontendMessage {
     // Consolidated emulator operations
     // These replace direct FrontendMessage sends from UI components
     // =========================================================================
-    /// Power on the console (updates is_powered config)
-    PowerOn,
-    /// Power off the console (updates is_powered config)
-    PowerOff,
+    /// Toggle Power State of the console (updates is_powered config)
+    PowerToggle,
     /// Reset the console (soft reset)
     Reset,
     /// Create a manual savestate
@@ -149,6 +147,7 @@ pub enum AsyncFrontendMessage {
     PauseEmulator,
     ChangeDebugPalette,
     StartLoadSavestate,
+    PowerCycle,
 }
 
 /// Context for the multistep savestate loading process
