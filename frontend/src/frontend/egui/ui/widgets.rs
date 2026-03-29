@@ -236,14 +236,15 @@ impl<'a> HotKeyButton<'a> {
 
 impl<'a> Widget for HotKeyButton<'a> {
     fn ui(self, ui: &mut Ui) -> Response {
+        const DEFAULT_WIDTH_MULTIPLIER: f32 = 8.0;
+        // We don't have a direct "tab stop" metric in egui text layout here.
+        // Empirically, ~5 spaces gives a visual separation close to 1-1.5 tabs
+        // for the default button font used in this UI.
+        const TABLIKE_GAP_SPACES: f32 = 5.0;
+
         let left_text = self.action.get_display_name();
-        let right_text = self
-            .config
-            .keybindings
-            .keybindings
-            .get(&self.action)
-            .cloned()
-            .as_string();
+        let bindings = &self.config.keybindings.keybindings;
+        let right_text = bindings.get(&self.action).cloned().as_string();
 
         let font_id = egui::TextStyle::Button.resolve(ui.style());
         let text_color = ui.visuals().text_color();
@@ -252,16 +253,18 @@ impl<'a> Widget for HotKeyButton<'a> {
         let right_galley =
             ui.fonts_mut(|f| f.layout_no_wrap(right_text.clone(), font_id.clone(), text_color));
 
-        // Approximate 1-1.5 tabs as a 5-space minimum gap.
         let space_width = ui
             .fonts_mut(|f| f.layout_no_wrap(" ".to_owned(), font_id.clone(), text_color))
             .size()
             .x;
-        let min_gap = space_width * 5.0;
+        let min_gap = space_width * TABLIKE_GAP_SPACES;
         let padding = ui.spacing().button_padding;
 
         let min_width = left_galley.size().x + right_galley.size().x + min_gap + (padding.x * 2.0);
-        let desired_width = (ui.spacing().interact_size.x * 8.0).max(min_width);
+        // Keep the historical menu row width so alignment remains stable across
+        // items, while still expanding for long labels/key names when needed.
+        let desired_width =
+            (ui.spacing().interact_size.x * DEFAULT_WIDTH_MULTIPLIER).max(min_width);
         let desired_size = egui::vec2(desired_width, ui.spacing().interact_size.y);
 
         let response = ui.add_sized(desired_size, egui::Button::new(""));
