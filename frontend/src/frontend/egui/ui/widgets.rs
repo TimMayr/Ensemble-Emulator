@@ -3,7 +3,13 @@
 //! This module contains common widget patterns that are used across
 //! multiple UI components to reduce code duplication.
 
+use crossbeam_channel::Sender;
+use egui::{vec2, Response, StrokeKind, Ui, Widget};
 use monsoon_core::emulation::palette_util::RgbColor;
+
+use crate::frontend::egui::config::AppConfig;
+use crate::frontend::egui::keybindings::{HotkeyBinding, OnKeyAction};
+use crate::frontend::messages::AsyncFrontendMessage;
 
 /// Draw a colored cell with hover highlighting using RgbColor.
 ///
@@ -20,12 +26,12 @@ use monsoon_core::emulation::palette_util::RgbColor;
 /// # Returns
 /// The response from the interaction
 pub fn color_cell_rgb(
-    ui: &mut egui::Ui,
+    ui: &mut Ui,
     rect: egui::Rect,
     color: RgbColor,
     sense: egui::Sense,
     id_source: impl std::hash::Hash,
-) -> egui::Response {
+) -> Response {
     let response = ui.interact(rect, ui.id().with(id_source), sense);
     let painter = ui.painter();
 
@@ -40,7 +46,7 @@ pub fn color_cell_rgb(
             rect,
             0.0,
             egui::Stroke::new(3.0, egui::Color32::WHITE),
-            egui::StrokeKind::Inside,
+            StrokeKind::Inside,
         );
     }
 
@@ -61,25 +67,25 @@ pub fn color_cell_rgb(
 /// # Returns
 /// The response from the interaction
 pub fn image_cell(
-    ui: &mut egui::Ui,
+    ui: &mut Ui,
     rect: egui::Rect,
     texture_id: egui::TextureId,
     sense: egui::Sense,
     id_source: impl std::hash::Hash,
-) -> egui::Response {
+) -> Response {
     image_cell_flipped(ui, rect, texture_id, false, false, sense, id_source)
 }
 
 /// Draw an image cell (texture) with optional horizontal/vertical flip.
 pub fn image_cell_flipped(
-    ui: &mut egui::Ui,
+    ui: &mut Ui,
     rect: egui::Rect,
     texture_id: egui::TextureId,
     h_flip: bool,
     v_flip: bool,
     sense: egui::Sense,
     id_source: impl std::hash::Hash,
-) -> egui::Response {
+) -> Response {
     let response = ui.interact(rect, ui.id().with(id_source), sense);
     let painter = ui.painter();
 
@@ -91,7 +97,7 @@ pub fn image_cell_flipped(
             rect,
             0.0,
             egui::Stroke::new(3.0, egui::Color32::WHITE),
-            egui::StrokeKind::Inside,
+            StrokeKind::Inside,
         );
     }
 
@@ -105,7 +111,7 @@ pub fn image_cell_flipped(
 /// tiles are swapped.
 #[allow(clippy::too_many_arguments)]
 pub fn image_cell_dual_vert_flipped(
-    ui: &mut egui::Ui,
+    ui: &mut Ui,
     rect: egui::Rect,
     texture_id_1: egui::TextureId,
     texture_id_2: egui::TextureId,
@@ -113,7 +119,7 @@ pub fn image_cell_dual_vert_flipped(
     v_flip: bool,
     sense: egui::Sense,
     id_source: impl std::hash::Hash,
-) -> egui::Response {
+) -> Response {
     let response = ui.interact(rect, ui.id().with(id_source), sense);
     let painter = ui.painter();
     let middle = rect.min.y + (rect.max.y - rect.min.y) / 2.0;
@@ -135,7 +141,7 @@ pub fn image_cell_dual_vert_flipped(
             rect,
             0.0,
             egui::Stroke::new(3.0, egui::Color32::WHITE),
-            egui::StrokeKind::Inside,
+            StrokeKind::Inside,
         );
     }
 
@@ -180,7 +186,7 @@ impl PainterGridConfig {
 
     /// Get the size of each cell
     pub fn cell_size(&self) -> egui::Vec2 {
-        egui::vec2(
+        vec2(
             self.width / self.cols as f32,
             self.get_height() / self.rows as f32,
         )
@@ -191,12 +197,12 @@ impl PainterGridConfig {
         let row = index / self.cols;
         let col = index % self.cols;
         let cell_size = self.cell_size();
-        let min = parent_min + egui::vec2(col as f32 * cell_size.x, row as f32 * cell_size.y);
+        let min = parent_min + vec2(col as f32 * cell_size.x, row as f32 * cell_size.y);
         egui::Rect::from_min_size(min, cell_size)
     }
 
     /// Total size of the grid
-    pub fn total_size(&self) -> egui::Vec2 { egui::vec2(self.width, self.get_height()) }
+    pub fn total_size(&self) -> egui::Vec2 { vec2(self.width, self.get_height()) }
 }
 
 /// Compute UV rect for a texture with optional horizontal/vertical flip.
@@ -206,4 +212,58 @@ fn flip_uv(h_flip: bool, v_flip: bool) -> egui::Rect {
     let v_min = if v_flip { 1.0 } else { 0.0 };
     let v_max = if v_flip { 0.0 } else { 1.0 };
     egui::Rect::from_min_max(egui::pos2(u_min, v_min), egui::pos2(u_max, v_max))
+}
+
+pub struct HotKeyButton<'a> {
+    action: OnKeyAction,
+    config: &'a mut AppConfig,
+    sender: Sender<AsyncFrontendMessage>,
+}
+
+impl<'a> HotKeyButton<'a> {
+    pub fn for_action(
+        on_key_action: OnKeyAction,
+        config: &'a mut AppConfig,
+        sender: Sender<AsyncFrontendMessage>,
+    ) -> Self {
+        HotKeyButton {
+            action: on_key_action,
+            config,
+            sender,
+        }
+    }
+}
+
+impl<'a> Widget for HotKeyButton<'a> {
+    fn ui(self, ui: &mut Ui) -> Response {
+        let response = ui
+            .allocate_ui_with_layout(
+                egui::vec2(
+                    ui.spacing().interact_size.x * 8.0,
+                    ui.spacing().interact_size.y,
+                ),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    ui.label(self.action.get_display_name());
+
+                    ui.add_space(ui.spacing().item_spacing.x * 3.0);
+
+                    ui.label(
+                        self.config
+                            .keybindings
+                            .keybindings
+                            .get(&self.action)
+                            .cloned()
+                            .as_string(),
+                    );
+                },
+            )
+            .response;
+
+        if response.clicked() {
+            self.action.get_callback_function()(self.config, &self.sender)
+        }
+
+        response
+    }
 }

@@ -608,7 +608,7 @@ impl eframe::App for EguiApp {
     }
 
     fn ui(&mut self, ui: &mut Ui, _: &mut Frame) {
-        add_menu_bar(ui, &self.config, &self.async_sender, &mut self.tree);
+        add_menu_bar(ui, &mut self.config, &self.async_sender, &mut self.tree);
 
         // Status bar at bottom
         add_status_bar(
