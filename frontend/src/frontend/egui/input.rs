@@ -3,8 +3,8 @@ use egui::{Context, FocusDirection};
 
 use crate::frontend::egui::config::{AppConfig, KeybindingsConfig};
 use crate::frontend::egui::keybindings::{
-    BindVariant, Binding, HotkeyBinding, TriggerType, hotkey_is_any_expecting,
-    hotkey_take_just_set_this_frame,
+    BindVariant, Binding, HotkeyBinding, TriggerType, hotkey_get_suppressed_binding,
+    hotkey_is_any_expecting, hotkey_set_suppressed_binding, hotkey_take_just_set_this_frame,
 };
 use crate::frontend::messages::AsyncFrontendMessage;
 
@@ -22,12 +22,26 @@ pub fn handle_keyboard_input(
 ) {
     let hotkey_is_expecting = hotkey_is_any_expecting(ctx);
     let hotkey_just_set_this_frame = hotkey_take_just_set_this_frame(ctx);
+    let mut suppressed_binding = hotkey_get_suppressed_binding(ctx);
+
+    if let Some(suppressed) = suppressed_binding
+        && !ctx.input(|i| suppressed.binding.down(i))
+    {
+        hotkey_set_suppressed_binding(ctx, None);
+        suppressed_binding = None;
+    }
 
     ctx.input_mut(|i| {
         if !hotkey_is_expecting && !hotkey_just_set_this_frame {
             let mut actions = Vec::new();
 
             for (action, binding) in &config.keybindings.keybindings {
+                if let Some(suppressed) = suppressed_binding
+                    && *action == suppressed.action
+                    && *binding == suppressed.binding
+                {
+                    continue;
+                }
                 if binding.active(i) {
                     actions.push(*action);
                 }
