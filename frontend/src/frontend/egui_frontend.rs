@@ -84,7 +84,7 @@ pub struct EguiApp {
     accumulator: Duration,
     pub(crate) config: AppConfig,
     /// The tile tree for docking behavior
-    tree: egui_tiles::Tree<Pane>,
+    pub(crate) tree: egui_tiles::Tree<Pane>,
     /// Track if pattern tables was visible last frame to detect when it becomes
     /// visible
     pattern_tables_was_visible: bool,
@@ -622,7 +622,7 @@ impl eframe::App for EguiApp {
     }
 
     fn ui(&mut self, ui: &mut Ui, _: &mut Frame) {
-        add_menu_bar(ui, &mut self.config, &self.async_sender, &mut self.tree);
+        add_menu_bar(ui, &mut self.config, &self.async_sender);
 
         // Status bar at bottom
         add_status_bar(

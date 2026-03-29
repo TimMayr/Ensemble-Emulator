@@ -5,7 +5,7 @@ use egui::{Key, Modifiers};
 use monsoon_core::emulation::palette_util::RgbPalette;
 use monsoon_core::emulation::ppu_util::EmulatorFetchable;
 use monsoon_core::emulation::rom::RomFile;
-use monsoon_core::emulation::screen_renderer::{ScreenRenderer, create_renderer};
+use monsoon_core::emulation::screen_renderer::{create_renderer, ScreenRenderer};
 use serde::{Deserialize, Serialize};
 
 use crate::frontend::egui::keybindings::{
@@ -276,12 +276,42 @@ impl Default for KeybindingsConfig {
             Binding::key(Key::F5, OnKeyAction::Quicksave),
             Binding::key(Key::F8, OnKeyAction::Quickload),
             Binding::key(Key::N, OnKeyAction::ChangeDebugPalette),
+            Binding::with_modifiers(
+                Key::P,
+                Modifiers::CTRL.plus(Modifiers::SHIFT),
+                OnKeyAction::OpenPaletteViewer,
+            ),
+            Binding::with_modifiers(
+                Key::T,
+                Modifiers::CTRL.plus(Modifiers::SHIFT),
+                OnKeyAction::OpenPatternTableViewer,
+            ),
+            Binding::with_modifiers(
+                Key::N,
+                Modifiers::CTRL.plus(Modifiers::SHIFT),
+                OnKeyAction::OpenNametableViewer,
+            ),
+            Binding::with_modifiers(
+                Key::S,
+                Modifiers::CTRL.plus(Modifiers::SHIFT),
+                OnKeyAction::OpenSpriteViewer,
+            ),
             // Ui Bindings
             Binding::with_modifiers(Key::O, Modifiers::CTRL, OnKeyAction::LoadRom),
             Binding::with_modifiers(Key::Q, Modifiers::CTRL, OnKeyAction::Quit),
             Binding::with_modifiers(Key::L, Modifiers::CTRL, OnKeyAction::LoadSavestate),
             Binding::with_modifiers(Key::S, Modifiers::CTRL, OnKeyAction::CreateSavestate),
             Binding::with_modifiers(Key::B, Modifiers::CTRL, OnKeyAction::BrowseSavestates),
+            Binding::with_modifiers(
+                Key::O,
+                Modifiers::CTRL.plus(Modifiers::SHIFT),
+                OnKeyAction::OpenOptionsMenu,
+            ),
+            Binding::with_modifiers(
+                Key::K,
+                Modifiers::CTRL.plus(Modifiers::SHIFT),
+                OnKeyAction::OpenKeybindingsMenu,
+            ),
             // Console Bindings
             Binding::key(Key::R, OnKeyAction::Reset),
             Binding::with_modifiers(
