@@ -13,7 +13,7 @@ use std::hash::Hash;
 
 use crossbeam_channel::Sender;
 use egui::{
-    vec2, Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget,
+    Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget, vec2,
 };
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
