@@ -155,7 +155,6 @@ pub enum AsyncFrontendMessage {
     OpenPatternTableViewer,
     OpenNametableViewer,
     OpenSpriteViewer,
-    Speedup,
 }
 
 /// Context for the multistep savestate loading process
