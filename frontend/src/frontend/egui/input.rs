@@ -67,11 +67,14 @@ fn resolve_active_key_actions(
     keybindings: &KeybindingsConfig,
     input: &egui::InputState,
     suppressed_binding: Option<crate::frontend::egui::keybindings::SuppressedBinding>,
-) -> (Vec<crate::frontend::egui::keybindings::OnKeyAction>, Vec<Binding>) {
+) -> (
+    Vec<crate::frontend::egui::keybindings::OnKeyAction>,
+    Vec<Binding>,
+) {
     let mut actions = Vec::new();
     let mut consumed_bindings = Vec::new();
 
-    let mut best_non_controller_specificity: Option<usize> = None;
+    let mut highest_non_controller_specificity: Option<usize> = None;
     let mut pending_non_controller: Vec<(
         crate::frontend::egui::keybindings::OnKeyAction,
         Binding,
@@ -96,13 +99,13 @@ fn resolve_active_key_actions(
         }
 
         let specificity = binding_specificity(binding);
-        match best_non_controller_specificity {
+        match highest_non_controller_specificity {
             None => {
-                best_non_controller_specificity = Some(specificity);
+                highest_non_controller_specificity = Some(specificity);
                 pending_non_controller.push((*action, *binding, specificity));
             }
             Some(best) if specificity > best => {
-                best_non_controller_specificity = Some(specificity);
+                highest_non_controller_specificity = Some(specificity);
                 pending_non_controller.clear();
                 pending_non_controller.push((*action, *binding, specificity));
             }
@@ -144,6 +147,10 @@ fn consume_binding(input: &mut egui::InputState, binding: &Option<Binding>) {
     }
 }
 
+/// Returns a specificity score for tie-breaking overlapping active bindings.
+///
+/// Score = number of required modifier flags + 1 for non-modifier key/mouse
+/// variants. Higher scores are considered more specific.
 fn binding_specificity(binding: &Binding) -> usize {
     binding.modifiers.alt as usize
         + binding.modifiers.ctrl as usize

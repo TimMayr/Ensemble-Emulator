@@ -3,6 +3,7 @@ use egui::Ui;
 
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::keybindings::OnKeyAction;
+use crate::frontend::egui::tiles::{Pane, add_pane_if_missing};
 use crate::frontend::egui::ui::widgets::HotKeyButton;
 use crate::frontend::messages::AsyncFrontendMessage;
 

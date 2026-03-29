@@ -13,7 +13,7 @@ use std::hash::Hash;
 
 use crossbeam_channel::Sender;
 use egui::{
-    vec2, Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget,
+    Event, Id, InputState, Key, Modifiers, PointerButton, Response, Sense, Ui, Widget, vec2,
 };
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
@@ -353,10 +353,19 @@ impl OnKeyAction {
 
     /// Returns `true` when this action should pass-through and co-trigger with
     /// other active bindings.
-    pub fn allows_multi_trigger(&self) -> bool { self.get_category() == KeybindCategory::Controller }
+    ///
+    /// When enabled, overlapping bindings can activate simultaneously instead
+    /// of being filtered by specificity (for example, both `Shift` and
+    /// `Shift+Enter` can trigger together).
+    pub fn allows_multi_trigger(&self) -> bool {
+        self.get_category() == KeybindCategory::Controller
+    }
 
     /// Returns whether modifier matching for this action should permit extra
     /// held modifiers beyond those explicitly required by the binding.
+    ///
+    /// For example, a binding that requires `Shift` will still match while
+    /// `Shift+Ctrl` is held when this returns `true`.
     pub fn allows_extra_modifiers(&self) -> bool {
         self.get_category() == KeybindCategory::Controller
     }
@@ -507,15 +516,6 @@ impl Binding {
         self.down_with_modifier_matching(input_state, false)
     }
 
-    /// Returns true if the variant is down with permissive modifier matching.
-    ///
-    /// Required modifiers must be present, but extra modifiers are allowed.
-    /// This is used for continuous/controller inputs so overlapping binds do
-    /// not steal inputs from each other.
-    fn down_permissive(&self, input_state: &InputState) -> bool {
-        self.down_with_modifier_matching(input_state, true)
-    }
-
     fn down_with_modifier_matching(
         &self,
         input_state: &InputState,
@@ -638,7 +638,9 @@ impl HotkeyBinding for Binding {
     fn active(&self, input: &InputState) -> bool {
         let allow_extra_modifiers = self.action.allows_extra_modifiers();
         match self.action.get_trigger_type() {
-            TriggerType::Single => self.pressed_with_modifier_matching(input, allow_extra_modifiers),
+            TriggerType::Single => {
+                self.pressed_with_modifier_matching(input, allow_extra_modifiers)
+            }
             TriggerType::Continuous => {
                 self.down_with_modifier_matching(input, allow_extra_modifiers)
             }

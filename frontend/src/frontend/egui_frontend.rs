@@ -625,12 +625,7 @@ impl eframe::App for EguiApp {
         add_menu_bar(ui, &mut self.config, &self.async_sender);
 
         // Status bar at bottom
-        add_status_bar(
-            ui,
-            &self.fps_counter,
-            &self.config,
-            &self.emu_textures,
-        );
+        add_status_bar(ui, &self.fps_counter, &self.config, &self.emu_textures);
 
         // Central panel with tile tree
         #[cfg(target_arch = "wasm32")]
