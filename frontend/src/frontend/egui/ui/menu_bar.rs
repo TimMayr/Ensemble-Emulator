@@ -95,6 +95,16 @@ pub fn add_menu_bar(
                     config,
                     async_sender,
                 ));
+                ui.add(HotKeyButton::for_action(
+                    OnKeyAction::OpenSoamViewer,
+                    config,
+                    async_sender,
+                ));
+                ui.add(HotKeyButton::for_action(
+                    OnKeyAction::OpenRomHeaderViewer,
+                    config,
+                    async_sender,
+                ));
             });
         });
     });

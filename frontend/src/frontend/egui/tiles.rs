@@ -11,7 +11,7 @@ use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
 use crate::frontend::egui::ui::{
     render_emulator_output, render_keybindings, render_nametable, render_options, render_palettes,
-    render_pattern_table, render_sprite_viewer,
+    render_pattern_table, render_rom_header, render_soam_viewer, render_sprite_viewer,
 };
 use crate::frontend::messages::AsyncFrontendMessage;
 
@@ -29,6 +29,8 @@ pub enum Pane {
     Nametables,
     Palettes,
     Sprites,
+    SoamSprites,
+    RomHeader,
     /// Keybindings configuration - closeable, can be reopened via menu
     Keybindings,
 }
@@ -43,7 +45,9 @@ impl Pane {
             | Pane::Nametables
             | Pane::Palettes
             | Pane::Keybindings
-            | Pane::Sprites => true,
+            | Pane::Sprites
+            | Pane::SoamSprites
+            | Pane::RomHeader => true,
         }
     }
 
@@ -57,6 +61,8 @@ impl Pane {
             Pane::Palettes => "Palettes",
             Pane::Keybindings => "Keybindings",
             Pane::Sprites => "Sprites",
+            Pane::SoamSprites => "Soam Sprites",
+            Pane::RomHeader => "Rom Header",
         }
     }
 }
@@ -105,7 +111,9 @@ impl Behavior<Pane> for TreeBehavior<'_> {
             Pane::Keybindings => {
                 self.keybindings_changed |= render_keybindings(ui, self.config);
             }
-            Pane::Sprites => render_sprite_viewer(ui, self.config, self.emu_textures),
+            Pane::Sprites => render_sprite_viewer(ui, self.emu_textures),
+            Pane::SoamSprites => render_soam_viewer(ui, self.config, self.emu_textures),
+            Pane::RomHeader => render_rom_header(ui, self.config),
         }
         UiResponse::None
     }
@@ -217,10 +225,10 @@ pub fn compute_required_fetches_from_tree(
 
     if find_pane(&tree.tiles, &Pane::Sprites).is_some() {
         explicit_fetches.insert(EmulatorFetchable::Sprites(None));
+    }
 
-        if config.is_effectively_paused() {
-            explicit_fetches.insert(EmulatorFetchable::SoamSprites(None));
-        }
+    if find_pane(&tree.tiles, &Pane::SoamSprites).is_some() && config.is_effectively_paused() {
+        explicit_fetches.insert(EmulatorFetchable::SoamSprites(None));
     }
 
     if !explicit_fetches.is_empty() {

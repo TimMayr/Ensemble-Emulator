@@ -299,6 +299,16 @@ impl Default for KeybindingsConfig {
                 Modifiers::CTRL.plus(Modifiers::SHIFT),
                 OnKeyAction::OpenSpriteViewer,
             ),
+            Binding::with_modifiers(
+                Key::Y,
+                Modifiers::CTRL.plus(Modifiers::SHIFT),
+                OnKeyAction::OpenSoamViewer,
+            ),
+            Binding::with_modifiers(
+                Key::H,
+                Modifiers::CTRL.plus(Modifiers::SHIFT),
+                OnKeyAction::OpenRomHeaderViewer,
+            ),
             Binding::with_modifiers(Key::Tab, Modifiers::CTRL, OnKeyAction::Speedup),
             Binding::with_modifiers(
                 Key::P,
@@ -319,6 +329,16 @@ impl Default for KeybindingsConfig {
                 Key::S,
                 Modifiers::CTRL.plus(Modifiers::SHIFT),
                 OnKeyAction::OpenSpriteViewer,
+            ),
+            Binding::with_modifiers(
+                Key::Y,
+                Modifiers::CTRL.plus(Modifiers::SHIFT),
+                OnKeyAction::OpenSoamViewer,
+            ),
+            Binding::with_modifiers(
+                Key::H,
+                Modifiers::CTRL.plus(Modifiers::SHIFT),
+                OnKeyAction::OpenRomHeaderViewer,
             ),
             Binding::with_modifiers(Key::Tab, Modifiers::CTRL, OnKeyAction::Speedup),
             // Ui Bindings
