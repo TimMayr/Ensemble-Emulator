@@ -292,6 +292,12 @@ impl EguiApp {
             AsyncFrontendMessage::OpenSpriteViewer => {
                 add_pane_if_missing(&mut self.tree, Pane::Sprites);
             }
+            AsyncFrontendMessage::OpenSoamViewer => {
+                add_pane_if_missing(&mut self.tree, Pane::SoamSprites);
+            }
+            AsyncFrontendMessage::OpenRomHeaderViewer => {
+                add_pane_if_missing(&mut self.tree, Pane::RomHeader);
+            }
             AsyncFrontendMessage::Speedup => {
                 ctx.memory_mut(|mem| {
                     mem.data

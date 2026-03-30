@@ -154,6 +154,8 @@ pub enum AsyncFrontendMessage {
     OpenPatternTableViewer,
     OpenNametableViewer,
     OpenSpriteViewer,
+    OpenSoamViewer,
+    OpenRomHeaderViewer,
     Speedup,
 }
 

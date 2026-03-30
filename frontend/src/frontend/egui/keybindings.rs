@@ -234,6 +234,8 @@ pub enum OnKeyAction {
     OpenPatternTableViewer,
     OpenNametableViewer,
     OpenSpriteViewer,
+    OpenSoamViewer,
+    OpenRomHeaderViewer,
     Speedup,
 }
 
@@ -299,6 +301,8 @@ impl OnKeyAction {
             OnKeyAction::OpenPatternTableViewer => "Open Pattern Table Viewer",
             OnKeyAction::OpenNametableViewer => "Open Nametable Viewer",
             OnKeyAction::OpenSpriteViewer => "Open Sprite Viewer",
+            OnKeyAction::OpenSoamViewer => "Open Soam Viewer",
+            OnKeyAction::OpenRomHeaderViewer => "Open Rom Header Viewer",
         }
     }
 
@@ -340,6 +344,8 @@ impl OnKeyAction {
             | OnKeyAction::OpenPaletteViewer
             | OnKeyAction::OpenPatternTableViewer
             | OnKeyAction::OpenSpriteViewer
+            | OnKeyAction::OpenSoamViewer
+            | OnKeyAction::OpenRomHeaderViewer
             | OnKeyAction::ChangeDebugPalette
             | OnKeyAction::Speedup => KeybindCategory::Debug,
             OnKeyAction::LoadRom
@@ -421,6 +427,8 @@ impl OnKeyAction {
             OnKeyAction::OpenPatternTableViewer => AsyncFrontendMessage::OpenPatternTableViewer,
             OnKeyAction::OpenNametableViewer => AsyncFrontendMessage::OpenNametableViewer,
             OnKeyAction::OpenSpriteViewer => AsyncFrontendMessage::OpenSpriteViewer,
+            OnKeyAction::OpenSoamViewer => AsyncFrontendMessage::OpenSoamViewer,
+            OnKeyAction::OpenRomHeaderViewer => AsyncFrontendMessage::OpenRomHeaderViewer,
             OnKeyAction::Speedup => AsyncFrontendMessage::Speedup,
         }
     }
