@@ -1,22 +1,5 @@
 use crate::frontend::egui::config::AppConfig;
 
-fn format_bytes_human_readable(bytes: u32) -> String {
-    const UNITS: [&str; 3] = ["Bytes", "KB", "MB"];
-
-    let mut value = bytes as f64;
-    let mut unit_idx = 0usize;
-    while value >= 1024.0 && unit_idx < UNITS.len() - 1 {
-        value /= 1024.0;
-        unit_idx += 1;
-    }
-
-    if unit_idx == 0 {
-        format!("{bytes} {}", UNITS[unit_idx])
-    } else {
-        format!("{value:.2} {} ({bytes} Bytes)", UNITS[unit_idx])
-    }
-}
-
 pub fn render_rom_header(ui: &mut egui::Ui, config: &AppConfig) {
     if let Some((rom, loaded_rom)) = &config.console_config.loaded_rom {
         egui::Grid::new("rom_header_info")
@@ -27,8 +10,12 @@ pub fn render_rom_header(ui: &mut egui::Ui, config: &AppConfig) {
                 ui.label(&loaded_rom.name);
                 ui.end_row();
 
+                ui.label("Internal Name");
+                ui.label(rom.name.as_deref().unwrap_or("(none)"));
+                ui.end_row();
+
                 ui.label("Mapper");
-                ui.label(rom.mapper.to_string());
+                ui.label(rom.mapper_number.to_string());
                 ui.end_row();
 
                 ui.label("Submapper");
@@ -36,7 +23,7 @@ pub fn render_rom_header(ui: &mut egui::Ui, config: &AppConfig) {
                 ui.end_row();
 
                 ui.label("CPU/PPU Timing");
-                ui.label(rom.timing_region.to_string());
+                ui.label(rom.cpu_ppu_timing.to_string());
                 ui.end_row();
 
                 ui.label("Console Type");
@@ -44,27 +31,27 @@ pub fn render_rom_header(ui: &mut egui::Ui, config: &AppConfig) {
                 ui.end_row();
 
                 ui.label("PRG ROM Size");
-                ui.label(format_bytes_human_readable(rom.prg_memory.prg_rom_size));
+                ui.label(format!("{} bytes", rom.prg_memory.prg_rom_size));
                 ui.end_row();
 
                 ui.label("PRG RAM Size");
-                ui.label(format_bytes_human_readable(rom.prg_memory.prg_ram_size));
+                ui.label(format!("{} bytes", rom.prg_memory.prg_ram_size));
                 ui.end_row();
 
                 ui.label("PRG NVRAM Size");
-                ui.label(format_bytes_human_readable(rom.prg_memory.prg_nvram_size));
+                ui.label(format!("{} bytes", rom.prg_memory.prg_nvram_size));
                 ui.end_row();
 
                 ui.label("CHR ROM Size");
-                ui.label(format_bytes_human_readable(rom.chr_memory.chr_rom_size));
+                ui.label(format!("{} bytes", rom.chr_memory.chr_rom_size));
                 ui.end_row();
 
                 ui.label("CHR RAM Size");
-                ui.label(format_bytes_human_readable(rom.chr_memory.chr_ram_size));
+                ui.label(format!("{} bytes", rom.chr_memory.chr_ram_size));
                 ui.end_row();
 
                 ui.label("CHR NVRAM Size");
-                ui.label(format_bytes_human_readable(rom.chr_memory.chr_nvram_size));
+                ui.label(format!("{} bytes", rom.chr_memory.chr_nvram_size));
                 ui.end_row();
 
                 ui.label("Hardwired Nametable Layout");

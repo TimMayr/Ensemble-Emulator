@@ -201,9 +201,7 @@ impl Display for BindVariant {
 
 type HotKeyCallback = dyn Fn(&Sender<AsyncFrontendMessage>);
 
-#[derive(
-    Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Hash, Ord, PartialOrd, EnumIter,
-)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Hash, Ord, PartialOrd)]
 pub enum OnKeyAction {
     ControllerUp,
     ControllerDown,
@@ -303,8 +301,8 @@ impl OnKeyAction {
             OnKeyAction::OpenPatternTableViewer => "Open Pattern Table Viewer",
             OnKeyAction::OpenNametableViewer => "Open Nametable Viewer",
             OnKeyAction::OpenSpriteViewer => "Open Sprite Viewer",
-            OnKeyAction::OpenSoamViewer => "Open SOAM Viewer",
-            OnKeyAction::OpenRomHeaderViewer => "Open ROM Header Viewer",
+            OnKeyAction::OpenSoamViewer => "Open Soam Viewer",
+            OnKeyAction::OpenRomHeaderViewer => "Open Rom Header Viewer",
         }
     }
 

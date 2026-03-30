@@ -1,6 +1,6 @@
 //! Pattern table viewer pane rendering
 
-use monsoon_core::emulation::ppu_util::{Sprite, SpriteMode};
+use monsoon_core::emulation::ppu_util::SpriteMode;
 
 use crate::frontend::egui::config::AppConfig;
 use crate::frontend::egui::textures::EmuTextures;
@@ -8,11 +8,7 @@ use crate::frontend::egui::ui::widgets::{
     PainterGridConfig, image_cell_dual_vert_flipped, image_cell_flipped,
 };
 
-fn sprite_hover_ui(
-    ui: &mut egui::Ui,
-    sprite: &Sprite,
-    mode: SpriteMode,
-) {
+fn sprite_hover_ui(ui: &mut egui::Ui, sprite: &monsoon_core::emulation::ppu_util::Sprite, mode: SpriteMode) {
     ui.label(format!(
         "Tile: {}x{} (Pattern Table {})",
         (sprite.tile & 0xFF) % 16,
@@ -25,7 +21,7 @@ fn sprite_hover_ui(
             "Bottom Tile: {}x{} (Pattern Table {})",
             (sprite.bottom_tile & 0xFF) % 16,
             (sprite.bottom_tile & 0xFF) / 16,
-            sprite.bottom_tile >> 8
+            sprite.tile >> 8
         ));
     }
 
@@ -84,8 +80,7 @@ pub fn render_sprite_viewer(ui: &mut egui::Ui, emu_textures: &EmuTextures) {
                     ("sprite", i),
                 )
             } else {
-                let lower_tile =
-                    &tile_textures[sprite.palette as usize][sprite.bottom_tile as usize];
+                let lower_tile = &tile_textures[sprite.palette as usize][sprite.bottom_tile as usize];
                 image_cell_dual_vert_flipped(
                     ui,
                     rect,
@@ -151,8 +146,7 @@ pub fn render_soam_viewer(ui: &mut egui::Ui, config: &AppConfig, emu_textures: &
                     ("soam_sprite", i),
                 )
             } else {
-                let lower_tile =
-                    &tile_textures[sprite.palette as usize][sprite.bottom_tile as usize];
+                let lower_tile = &tile_textures[sprite.palette as usize][sprite.bottom_tile as usize];
                 image_cell_dual_vert_flipped(
                     ui,
                     rect,
