@@ -19,8 +19,8 @@ use crate::emulation::mem::nametable_memory::{NametableArrangement, NametableMem
 use crate::emulation::mem::{Memory, MemoryDevice, Ram, Rom};
 use crate::emulation::rom::formats::archaic_ines::ArchaicInes;
 use crate::emulation::rom::formats::ines::Ines;
-use crate::emulation::rom::formats::ines_07::Ines07;
 use crate::emulation::rom::formats::ines2::Ines2;
+use crate::emulation::rom::formats::ines_07::Ines07;
 
 /// Errors that can occur while parsing a ROM file.
 #[derive(Debug, Clone)]
@@ -191,7 +191,7 @@ pub enum ExpansionDevice {
     UForce = 45,
     RobStackUp = 46,
     CityPatrolmanLightgun = 47,
-    SharpC1CasetteInterface = 48,
+    SharpC1CassetteInterface = 48,
     StandardControllerSwappedLayout = 49,
     ExcaliburSudokuPad = 50,
     AblPinball = 51,
@@ -236,7 +236,7 @@ impl Display for ExpansionDevice {
                 "NES Four Score/Satellite w/ two additional standard controllers"
             }
             ExpansionDevice::FourScoreSimple => {
-                "Famicom Four Player Adapter w/ two two additional standard controllers using the \
+                "Famicom Four Player Adapter w/ two additional standard controllers using the \
                  \"simple\" protocol"
             }
             ExpansionDevice::VsSystem1P4016 => "Vs. System (One Player via Port 1)",
@@ -290,7 +290,7 @@ impl Display for ExpansionDevice {
             ExpansionDevice::UForce => "U-Force",
             ExpansionDevice::RobStackUp => "R.O.B Stack-Up",
             ExpansionDevice::CityPatrolmanLightgun => "City Patrolman Lightgun",
-            ExpansionDevice::SharpC1CasetteInterface => "Sharp C1 Cassette Interface",
+            ExpansionDevice::SharpC1CassetteInterface => "Sharp C1 Cassette Interface",
             ExpansionDevice::StandardControllerSwappedLayout => {
                 "Standard Controller with swapped Left-Right/Up-Down/B-A"
             }
@@ -321,7 +321,7 @@ impl Display for ExpansionDevice {
             ExpansionDevice::Ps2MouseUM6578 => "PS/2 Mouse in UM6578 PS/2 port",
             ExpansionDevice::YuxingMouse4016 => "裕兴 (Yùxìng) Mouse (via Port 1)",
             ExpansionDevice::SuborKeyboardPlusYuxingMouse4016 => {
-                "小霸王 (Xiǎobàwáng, a.k.a. Subor)Keyboard + 裕兴 (Yùxìng) Mouse mouse (via Port 1)"
+                "小霸王 (Xiǎobàwáng, a.k.a. Subor )Keyboard + 裕兴 (Yùxìng) Mouse (via Port 1)"
             }
             ExpansionDevice::GiggleTvPump => "Giggle TV Pump",
             ExpansionDevice::BBKKeyboardPlusR90RotatedPs2Mouse4017 => {
@@ -581,7 +581,7 @@ impl Display for RomTimingRegion {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str: &str = match self {
             RomTimingRegion::RP2C02 => "NTSC/RP2C02",
-            RomTimingRegion::RP2C07 => "Licenced PAL/RP2C07",
+            RomTimingRegion::RP2C07 => "Licensed PAL/RP2C07",
             RomTimingRegion::Multi => "Multiple Regions",
             RomTimingRegion::UA6538 => "Dendy/UA6538",
             RomTimingRegion::Unknown(_) => "Unknown Region",
@@ -875,7 +875,7 @@ impl From<&String> for RomFile {
 /// # Example
 ///
 /// ```rust
-/// use monsoon_core::emulation::rom::RomBuilder;
+/// use monsoon_core::emulation::rom::{RomBuilder, RomMapper};
 ///
 /// let rom = RomBuilder::new()
 ///     .prg_rom_size(32 * 1024)
@@ -884,7 +884,7 @@ impl From<&String> for RomFile {
 ///     .hardwired_nametable_layout(true) // vertical mirroring
 ///     .build();
 ///
-/// assert_eq!(rom.mapper, 0);
+/// assert_eq!(rom.mapper, RomMapper::NRom);
 /// ```
 pub struct RomBuilder {
     name: Option<String>,
