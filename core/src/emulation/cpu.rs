@@ -18,7 +18,8 @@ use crate::emulation::savestate::CpuState;
 use crate::util;
 
 pub const INTERNAL_RAM_MEMORY_RANGE: RangeInclusive<u16> = 0x0..=0x1FFF;
-pub const INTERNAL_RAM_SIZE: u16 = 0x800;
+pub const PPU_REG_RANGE: RangeInclusive<u16> = 0x2000..=0x3FFF;
+pub const INTERNAL_RAM_SIZE: usize = 0x800;
 pub const STACK_START_ADDRESS: u16 = 0x0100;
 pub const NEGATIVE_BIT: u8 = 0x80;
 pub const CARRY_BIT: u8 = 0x1;

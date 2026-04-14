@@ -32,3 +32,4 @@ pub mod ppu_util;
 pub mod rom;
 pub mod savestate;
 pub mod screen_renderer;
+pub(crate) mod board;

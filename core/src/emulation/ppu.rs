@@ -5,7 +5,7 @@ use std::ops::RangeInclusive;
 use crate::emulation::mem::memory_map::MemoryMap;
 use crate::emulation::mem::mirror_memory::MirrorMemory;
 use crate::emulation::mem::palette_ram::PaletteRam;
-use crate::emulation::mem::{Memory, OpenBus, Ram};
+use crate::emulation::mem::{Memory, Ram};
 use crate::emulation::nes::ExecutionFinished;
 // Re-import public constants/types from ppu_util so internal code can use them
 // with short names.
@@ -66,7 +66,6 @@ pub struct Ppu {
     pub scanline: u16,
     pub dot: u16,
     pub prev_vbl: u8,
-    pub open_bus: Cell<OpenBus>,
     pub address_bus: u16,
     pub address_latch: u8,
     pub shift_pattern_lo: u16,
@@ -123,7 +122,6 @@ impl Ppu {
             scanline: 0,
             dot: 0,
             prev_vbl: 0,
-            open_bus: OpenBus::new(OPEN_BUS_DECAY_DELAY).into(),
             address_bus: 0,
             address_latch: 0,
             shift_pattern_lo: 0,
@@ -1090,13 +1088,6 @@ impl Ppu {
         data
     }
 
-    #[inline]
-    pub fn tick_open_bus(&self, times: u8) {
-        let mut bus = self.open_bus.get();
-        bus.tick(times);
-        self.open_bus.set(bus);
-    }
-
     pub fn from(state: &PpuState, rom: &RomFile) -> Self {
         let mut ppu = Self {
             dot_counter: state.cycle_counter,
@@ -1125,7 +1116,6 @@ impl Ppu {
             scanline: state.scanline,
             dot: state.dot,
             prev_vbl: state.prev_vbl,
-            open_bus: Cell::new(state.open_bus),
             address_bus: state.address_bus,
             address_latch: state.address_latch,
             shift_pattern_lo: state.shift_pattern_lo,
