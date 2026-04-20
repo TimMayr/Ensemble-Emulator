@@ -14,7 +14,7 @@
 //!
 //! # Scaling
 //!
-//! Video scaling is handled natively by FFmpeg using the nearest neighbor
+//! Video scaling is Handled natively by FFmpeg using the nearest neighbor
 //! filter, which preserves sharp pixel edges for retro games.
 
 use std::fs::{self, File};
@@ -956,7 +956,7 @@ pub fn is_ffmpeg_available() -> bool {
 /// This encoder is designed for use during emulation - frames are written
 /// immediately as they are generated, without buffering all frames in memory.
 ///
-/// Scaling is handled natively by FFmpeg using nearest-neighbor interpolation,
+/// Scaling is Handled natively by FFmpeg using nearest-neighbor interpolation,
 /// which is efficient and produces sharp pixel edges.
 pub struct StreamingVideoEncoder {
     encoder: Box<dyn VideoEncoder>,

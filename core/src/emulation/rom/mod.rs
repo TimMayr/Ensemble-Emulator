@@ -15,12 +15,12 @@ use num_enum::{FromPrimitive, IntoPrimitive};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::emulation::mem::nametable_memory::{NametableArrangement, NametableMemory};
-use crate::emulation::mem::{Memory, MemoryDevice, Ram, Rom};
+use crate::emulation::mem::nametable_memory::NametableArrangement;
+use crate::emulation::mem::{MemoryDevice, Ram, Rom};
 use crate::emulation::rom::formats::archaic_ines::ArchaicInes;
 use crate::emulation::rom::formats::ines::Ines;
-use crate::emulation::rom::formats::ines_07::Ines07;
 use crate::emulation::rom::formats::ines2::Ines2;
+use crate::emulation::rom::formats::ines_07::Ines07;
 
 /// Errors that can occur while parsing a ROM file.
 #[derive(Debug, Clone)]
@@ -752,7 +752,7 @@ impl RomFile {
     /// This is used internally to populate the CPU memory map at addresses
     /// `$8000`-`$FFFF`.
     #[doc(hidden)]
-    pub fn get_prg_rom(&self) -> Memory {
+    pub fn get_prg_rom(&self) -> Rom {
         let mut rom = Rom::new(self.prg_memory.prg_rom_size as usize);
 
         let mut start = 16usize;
@@ -766,7 +766,7 @@ impl RomFile {
                 .to_vec()
                 .into_boxed_slice(),
         );
-        Memory::Rom(rom)
+        rom
     }
 
     /// Extracts the CHR ROM region as a read-only [`Memory`] device, if
@@ -775,7 +775,7 @@ impl RomFile {
     /// Returns `None` when the ROM uses CHR RAM instead of CHR ROM
     /// (i.e., `chr_rom_size == 0`).
     #[doc(hidden)]
-    pub fn get_chr_rom(&self) -> Option<Memory> {
+    pub fn get_chr_rom(&self) -> Option<Rom> {
         if self.chr_memory.chr_rom_size == 0 {
             return None;
         }
@@ -796,7 +796,7 @@ impl RomFile {
                 .to_vec()
                 .into_boxed_slice(),
         );
-        Some(Memory::Rom(rom))
+        Some(rom)
     }
 
     /// Extracts the PRG RAM region as a writable [`Memory`] device.
@@ -804,22 +804,26 @@ impl RomFile {
     /// This is mapped at CPU addresses `$6000`-`$7FFF` and may be
     /// battery-backed for save data.
     #[doc(hidden)]
-    pub fn get_prg_ram(&self) -> Memory {
-        let mut ram = Ram::new(self.prg_memory.prg_ram_size as usize);
+    pub fn get_prg_ram(&self) -> Option<Ram> {
+        if self.prg_memory.prg_ram_size > 0 {
+            let mut ram = Ram::new(self.prg_memory.prg_ram_size as usize);
 
-        let mut start = 16usize;
+            let mut start = 16usize;
 
-        if self.trainer_present {
-            start += 512;
+            if self.trainer_present {
+                start += 512;
+            }
+
+            ram.load(
+                self.data[start..start + self.prg_memory.prg_rom_size as usize]
+                    .to_vec()
+                    .into_boxed_slice(),
+            );
+
+            Some(ram)
+        } else {
+            None
         }
-
-        ram.load(
-            self.data[start..start + self.prg_memory.prg_rom_size as usize]
-                .to_vec()
-                .into_boxed_slice(),
-        );
-
-        Memory::Ram(ram)
     }
 
     /// Creates the nametable memory for the PPU based on the ROM's mirroring
@@ -828,12 +832,12 @@ impl RomFile {
     /// Returns a [`Memory`] device configured for either horizontal or vertical
     /// nametable mirroring, as specified by the ROM header.
     #[doc(hidden)]
-    pub fn get_nametable_memory(&self) -> Memory {
+    pub fn get_nametable_memory(&self) -> NametableArrangement {
         let mirroring = match self.hardwired_nametable_layout {
             true => NametableArrangement::Vertical,
             false => NametableArrangement::Horizontal,
         };
-        Memory::NametableMemory(NametableMemory::new(mirroring))
+        mirroring
     }
 }
 

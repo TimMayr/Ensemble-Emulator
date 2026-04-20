@@ -1,20 +1,16 @@
-use std::cell::Cell;
 use std::fmt::{Display, Formatter};
 use std::ops::RangeInclusive;
 
-use crate::emulation::mem::memory_map::MemoryMap;
-use crate::emulation::mem::mirror_memory::MirrorMemory;
-use crate::emulation::mem::palette_ram::PaletteRam;
-use crate::emulation::mem::{Memory, Ram};
+use crate::emulation::board::PpuBus;
+use crate::emulation::mem::{MemoryDevice, OpenBus, Ram};
 use crate::emulation::nes::ExecutionFinished;
 // Re-import public constants/types from ppu_util so internal code can use them
 // with short names.
 pub use crate::emulation::ppu_util::{
-    EmulatorFetchable, NAMETABLE_COLS, NAMETABLE_COUNT, NAMETABLE_ROWS, NametableData,
-    PALETTE_RAM_END_ADDRESS, PALETTE_RAM_START_ADDRESS, PaletteData, SPRITE_COUNT, SoamData,
-    Sprite, SpriteData, SpriteMode, TILE_SIZE, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH, TileData,
+    EmulatorFetchable, NametableData, PaletteData, SoamData, Sprite,
+    SpriteData, SpriteMode, TileData, NAMETABLE_COLS, NAMETABLE_COUNT,
+    NAMETABLE_ROWS, PALETTE_RAM_END_ADDRESS, PALETTE_RAM_START_ADDRESS, SPRITE_COUNT, TILE_SIZE, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
 };
-use crate::emulation::rom::RomFile;
 use crate::emulation::savestate::PpuState;
 
 pub const PATTERN_TABLE_SIZE: usize = 256;
@@ -47,22 +43,20 @@ pub struct Ppu {
     pub dot_counter: u128,
     pub ctrl_register: u8,
     pub mask_register: u8,
-    pub status_register: Cell<u8>,
+    pub status_register: u8,
     pub oam_addr_register: u8,
     pub v_register: u16,
     pub ppu_data_buffer: u8,
-    pub nmi_requested: Cell<bool>,
-    pub memory: MemoryMap,
-    pub palette_ram: MemoryMap,
-    pub oam: MemoryMap,
-    pub write_latch: Cell<bool>,
+    pub nmi_requested: bool,
+    pub oam: Ram,
+    pub write_latch: bool,
     pub t_register: u16,
     pub fine_x_scroll: u8,
     pub even_frame: bool,
     pub reset_signal: bool,
     pub pixel_buffer: Vec<u16>,
-    pub vbl_reset_counter: Cell<u8>,
-    pub vbl_clear_scheduled: Cell<Option<u8>>,
+    pub vbl_reset_counter: u8,
+    pub vbl_clear_scheduled: Option<u8>,
     pub scanline: u16,
     pub dot: u16,
     pub prev_vbl: u8,
@@ -108,9 +102,7 @@ impl Ppu {
             bg_next_tile_attribute: 0,
             bg_next_tile_lsb: 0,
             fine_x_scroll: 0,
-            nmi_requested: Cell::new(false),
-            memory: Self::get_default_memory_map(),
-            palette_ram: Self::get_palette_memory_map(),
+            nmi_requested: false,
             oam: Self::get_default_oam(),
             write_latch: false.into(),
             t_register: 0,
@@ -144,40 +136,16 @@ impl Ppu {
         }
     }
 
-    fn get_default_memory_map() -> MemoryMap { MemoryMap::default() }
-
-    fn get_palette_memory_map() -> MemoryMap {
-        let mut mem = MemoryMap::default();
-
-        mem.add_memory(
-            0..=PALETTE_RAM_END_ADDRESS - PALETTE_RAM_START_ADDRESS,
-            Memory::MirrorMemory(MirrorMemory::new(
-                Box::new(Memory::PaletteRam(PaletteRam::default())),
-                PALETTE_RAM_SIZE - 1,
-            )),
-        );
-
-        mem
-    }
-
-    fn get_default_oam() -> MemoryMap {
-        let mut map = MemoryMap::new();
-        map.add_memory(
-            0..=((OAM_SIZE as u16) + OAM_SIZE as u16 / 8u16),
-            Memory::Ram(Ram::new(OAM_SIZE + OAM_SIZE / 8)),
-        );
-
-        map
-    }
+    fn get_default_oam() -> Ram { Ram::new(OAM_SIZE + OAM_SIZE / 8) }
 
     #[inline(always)]
-    pub fn step(&mut self) -> ExecutionFinished {
-        self.prev_vbl = self.status_register.get() & VBLANK_NMI_BIT;
+    pub fn step(&mut self, bus: &mut impl PpuBus) -> ExecutionFinished {
+        self.prev_vbl = self.status_register & VBLANK_NMI_BIT;
 
         if self.reset_signal {
             self.ctrl_register = 0;
             self.mask_register = 0;
-            self.write_latch.set(false);
+            self.write_latch = false;
             self.ppu_data_buffer = 0;
             self.t_register = 0;
         }
@@ -209,13 +177,13 @@ impl Ppu {
             if self.dot >= 1 && self.dot <= 64 {
                 self.set_soam_disable(false);
                 self.is_soam_clear_active = true;
-                self.init_soam();
+                self.init_soam(bus.get_ppu_open_bus());
             } else {
                 self.is_soam_clear_active = false;
             }
 
             if self.dot >= 65 && self.dot <= 256 {
-                self.sprite_eval();
+                self.sprite_eval(bus.get_ppu_open_bus());
             }
 
             if self.dot >= 257 && self.dot <= 320 {
@@ -223,12 +191,12 @@ impl Ppu {
                     self.soam_index = 0;
                 }
 
-                self.sprite_fetch();
+                self.sprite_fetch(bus);
             }
 
             if self.dot >= 321 && self.dot <= 341 {
                 if (self.dot & 1) == 0 {
-                    self.secondary_oam_read(self.soam_index);
+                    self.secondary_oam_read(self.soam_index, bus.get_ppu_open_bus());
                 }
 
                 if self.dot == 339 {
@@ -297,7 +265,7 @@ impl Ppu {
                         bg_color_address
                     };
 
-                    let pixel_color = self.mem_read(pixel_color_address);
+                    let pixel_color = bus.read(pixel_color_address);
 
                     if sprite_color_address != 0x3F10
                         && bg_color_address != PALETTE_RAM_START_ADDRESS
@@ -371,7 +339,7 @@ impl Ppu {
             self.dot_counter += 1;
         }
 
-        self.address_latch = self.mem_read(self.address_bus);
+        self.address_latch = bus.read(self.address_bus);
 
         self.dot_counter += 1;
 
@@ -406,17 +374,20 @@ impl Ppu {
     pub fn get_emph_bits(&self) -> u8 { self.get_mask_register() >> 5 }
 
     #[inline]
-    pub fn sprite_fetch(&mut self) {
+    pub fn sprite_fetch(&mut self, bus: &mut impl PpuBus) {
+        let open_bus = bus.get_ppu_open_bus();
+
         match (self.dot - 1) % 8 {
             0 => {
-                self.current_sprite_y = self.secondary_oam_read(self.soam_index);
+                self.current_sprite_y = self.secondary_oam_read(self.soam_index, open_bus);
             }
             1 => {
                 self.get_sprite_fifo_for_soam_index().attribute =
-                    self.secondary_oam_read(self.soam_index + 2);
+                    self.secondary_oam_read(self.soam_index + 2, open_bus);
             }
             2 => {
-                self.current_sprite_tile_id = self.secondary_oam_read(self.soam_index + 1);
+                self.current_sprite_tile_id =
+                    self.secondary_oam_read(self.soam_index + 1, open_bus);
                 let sprite_height = self.get_sprite_height();
 
                 let table_base = if sprite_height == 8 {
@@ -449,7 +420,7 @@ impl Ppu {
 
                 self.address_bus = table_base + (tile_id * 16) + fine_y as u16;
 
-                let mut pattern = self.mem_read(self.address_bus);
+                let mut pattern = bus.read(self.address_bus);
 
                 if self.get_sprite_fifo_for_soam_index().attribute & 0b0100_0000 != 0 {
                     pattern = pattern.reverse_bits();
@@ -463,9 +434,9 @@ impl Ppu {
             }
             3 => {
                 self.get_sprite_fifo_for_soam_index().down_counter =
-                    self.secondary_oam_read(self.soam_index + 3);
+                    self.secondary_oam_read(self.soam_index + 3, open_bus);
 
-                let mut pattern = self.mem_read(self.address_bus + 8);
+                let mut pattern = bus.read(self.address_bus + 8);
 
                 if self.get_sprite_fifo_for_soam_index().attribute & 0b0100_0000 != 0 {
                     pattern = pattern.reverse_bits();
@@ -479,7 +450,7 @@ impl Ppu {
             }
             4..8 => {
                 self.get_sprite_fifo_for_soam_index().down_counter =
-                    self.secondary_oam_read(self.soam_index + 3);
+                    self.secondary_oam_read(self.soam_index + 3, open_bus);
                 if (self.dot - 1) % 8 == 7 {
                     self.soam_index += 4;
                 }
@@ -500,11 +471,11 @@ impl Ppu {
     }
 
     #[inline]
-    pub fn sprite_eval(&mut self) {
+    pub fn sprite_eval(&mut self, open_bus: &OpenBus) {
         match ((self.dot - 1) & 1) == 0 {
             true => {
                 self.oam_addr_register = self.oam_index;
-                self.oam_fetch = self.get_oam_at_addr();
+                self.oam_fetch = self.get_oam_at_addr(open_bus);
 
                 if self.soam_write_counter == 0 {
                     self.current_sprite_y = self.oam_fetch;
@@ -514,10 +485,10 @@ impl Ppu {
                 let write = if self.scanline != PRE_RENDER_SCANLINE {
                     self.oam_fetch
                 } else {
-                    self.secondary_oam_read(self.soam_index)
+                    self.secondary_oam_read(self.soam_index, open_bus)
                 };
 
-                self.secondary_oam_write(self.soam_index, write);
+                self.secondary_oam_write(self.soam_index, write, open_bus);
 
                 if self.is_sprite_in_range() {
                     self.oam_increment = 1;
@@ -562,14 +533,14 @@ impl Ppu {
     pub fn set_soam_disable(&mut self, disable: bool) { self.soam_disable = disable; }
 
     #[inline]
-    pub fn init_soam(&mut self) {
+    pub fn init_soam(&mut self, open_bus: &OpenBus) {
         match ((self.dot - 1) & 1) == 0 {
             true => {
                 self.oam_addr_register = (self.dot - 1) as u8;
-                self.oam_fetch = self.get_oam_at_addr();
+                self.oam_fetch = self.get_oam_at_addr(open_bus);
             }
             false => {
-                self.secondary_oam_write(((self.dot - 1) / 2) as u8, self.oam_fetch);
+                self.secondary_oam_write(((self.dot - 1) / 2) as u8, self.oam_fetch, open_bus);
             }
         }
     }
@@ -675,28 +646,16 @@ impl Ppu {
     }
 
     #[inline]
-    pub fn set_sprite_overflow(&self) {
-        self.status_register
-            .set(self.status_register.get() | SPRITE_OVERFLOW_FLAG);
-    }
+    pub fn set_sprite_overflow(&mut self) { self.status_register |= SPRITE_OVERFLOW_FLAG; }
 
     #[inline]
-    pub fn clear_sprite_overflow(&self) {
-        self.status_register
-            .set(self.status_register.get() & !SPRITE_OVERFLOW_FLAG);
-    }
+    pub fn clear_sprite_overflow(&mut self) { self.status_register &= !SPRITE_OVERFLOW_FLAG; }
 
     #[inline]
-    pub fn set_sprite_zero(&self) {
-        self.status_register
-            .set(self.status_register.get() | SPRITE_ZERO_FLAG);
-    }
+    pub fn set_sprite_zero(&mut self) { self.status_register |= SPRITE_ZERO_FLAG; }
 
     #[inline]
-    pub fn clear_sprite_zero(&self) {
-        self.status_register
-            .set(self.status_register.get() & !SPRITE_ZERO_FLAG);
-    }
+    pub fn clear_sprite_zero(&mut self) { self.status_register &= !SPRITE_ZERO_FLAG; }
 
     #[inline]
     pub fn get_vram_addr_step(&self) -> u8 {
@@ -708,35 +667,34 @@ impl Ppu {
     }
 
     #[inline]
-    pub fn update_nmi(&self) {
-        if (self.status_register.get() & self.ctrl_register & VBLANK_NMI_BIT) != 0 {
-            self.nmi_requested.set(true);
-        } else {
-            self.nmi_requested.set(false);
-        }
+    pub fn update_nmi(&mut self) {
+        self.nmi_requested = (self.status_register & self.ctrl_register & VBLANK_NMI_BIT) != 0;
     }
 
     #[inline]
-    pub fn clear_vbl_bit(&self) {
-        self.status_register
-            .set(self.status_register.get() & !VBLANK_NMI_BIT);
+    pub fn clear_vbl_bit(&mut self) {
+        self.status_register &= !VBLANK_NMI_BIT;
         self.update_nmi()
     }
 
     #[inline]
     pub fn set_vbl_bit(&mut self) {
-        self.status_register
-            .set(self.status_register.get() | VBLANK_NMI_BIT);
+        self.status_register |= VBLANK_NMI_BIT;
         self.update_nmi()
     }
 
     #[inline]
-    pub fn get_ppu_status(&self) -> u8 {
-        let result = (self.status_register.get() & !VBLANK_NMI_BIT) | self.prev_vbl;
-        self.vbl_clear_scheduled.set(Some(2));
+    pub fn snapshot_ppu_status(&self) -> u8 {
+        (self.status_register & !VBLANK_NMI_BIT) | self.prev_vbl
+    }
+
+    #[inline]
+    pub fn get_ppu_status(&mut self) -> u8 {
+        let result = (self.status_register & !VBLANK_NMI_BIT) | self.prev_vbl;
+        self.vbl_clear_scheduled = Some(2);
         self.process_vbl_clear_scheduled();
 
-        self.write_latch.set(false);
+        self.write_latch = false;
         result
     }
 
@@ -768,25 +726,37 @@ impl Ppu {
     pub fn set_oam_addr_register(&mut self, value: u8) { self.oam_addr_register = value }
 
     #[inline]
-    pub fn get_oam_at_addr(&mut self) -> u8 {
+    pub fn snapshot_oam_at_addr(&self, open_bus: &OpenBus) -> u8 {
         if self.is_soam_clear_active {
             0xFF
         } else {
-            self.oam_read(self.oam_addr_register)
+            self.oam_read(self.oam_addr_register, open_bus)
         }
     }
 
     #[inline]
-    pub fn get_vram_at_addr(&mut self) -> u8 {
+    pub fn get_oam_at_addr(&mut self, open_bus: &OpenBus) -> u8 {
+        if self.is_soam_clear_active {
+            0xFF
+        } else {
+            self.oam_read(self.oam_addr_register, open_bus)
+        }
+    }
+
+    #[inline]
+    pub fn snapshot_vram_at_addr(&self) -> u8 { self.ppu_data_buffer }
+
+    #[inline]
+    pub fn get_vram_at_addr(&mut self, bus: &mut impl PpuBus) -> u8 {
         let mut ret = self.ppu_data_buffer;
 
         if !(self.v_register >= PALETTE_RAM_START_ADDRESS
             && self.v_register <= PALETTE_RAM_END_ADDRESS)
         {
-            self.ppu_data_buffer = self.mem_read(self.v_register);
+            self.ppu_data_buffer = bus.read(self.v_register);
         } else {
-            ret = self.mem_read(self.v_register);
-            self.ppu_data_buffer = self.mem_read(self.v_register - 0x1000);
+            ret = bus.read(self.v_register);
+            self.ppu_data_buffer = bus.read(self.v_register - 0x1000);
         }
 
         if !(self.scanline < VISIBLE_SCANLINES + 1 || self.scanline == PRE_RENDER_SCANLINE)
@@ -815,8 +785,8 @@ impl Ppu {
     }
 
     #[inline]
-    pub fn write_vram(&mut self, data: u8) {
-        self.mem_write(self.v_register, data);
+    pub fn write_vram(&mut self, data: u8, bus: &mut impl PpuBus) {
+        bus.write(self.v_register, data);
         self.v_register = self
             .v_register
             .wrapping_add(self.get_vram_addr_step() as u16);
@@ -828,7 +798,7 @@ impl Ppu {
             return;
         }
 
-        if !self.write_latch.get() {
+        if !self.write_latch {
             // First write to $2005 (horizontal)
             // coarse X = bits 3–7, fine X = bits 0–2
             self.t_register = (self.t_register & !0b1_1111) | ((data >> 3) as u16);
@@ -842,12 +812,12 @@ impl Ppu {
                 | ((data as u16 & !0b1111_1000) << 12); // bits 0–2 → bits 12–14
         }
 
-        self.write_latch.set(!self.write_latch.get());
+        self.write_latch = !self.write_latch;
     }
 
     #[inline]
     pub fn write_vram_addr(&mut self, data: u8) {
-        if !self.write_latch.get() {
+        if !self.write_latch {
             // First write: upper byte (but only lower 6 bits valid)
             self.t_register = (self.t_register & 0x00FF) | ((data as u16 & 0b00111111) << 8);
         } else {
@@ -856,11 +826,11 @@ impl Ppu {
             self.v_register = self.t_register;
         }
 
-        self.write_latch.set(!self.write_latch.get());
+        self.write_latch = !self.write_latch
     }
 
     #[inline]
-    pub fn poll_nmi(&self) -> bool { self.nmi_requested.get() }
+    pub fn poll_nmi(&self) -> bool { self.nmi_requested }
 
     #[inline]
     pub fn is_background_rendering(&self) -> bool {
@@ -915,50 +885,11 @@ impl Ppu {
         }
     }
 
-    pub fn mem_read_debug(&self, addr: u16) -> u8 {
-        match addr {
-            PALETTE_RAM_START_ADDRESS..=PALETTE_RAM_END_ADDRESS => self
-                .palette_ram
-                .mem_read_debug(addr - PALETTE_RAM_START_ADDRESS),
-            _ => self.memory.mem_read_debug(addr),
-        }
-    }
-
     #[inline]
-    pub fn mem_read(&mut self, addr: u16) -> u8 {
-        match addr {
-            PALETTE_RAM_START_ADDRESS..=PALETTE_RAM_END_ADDRESS => {
-                self.palette_ram.mem_read(addr - PALETTE_RAM_START_ADDRESS)
-            }
-            _ => self.memory.mem_read(addr),
-        }
-    }
-
-    #[inline]
-    pub fn mem_write(&mut self, addr: u16, data: u8) {
-        match addr {
-            PALETTE_RAM_START_ADDRESS..=PALETTE_RAM_END_ADDRESS => self
-                .palette_ram
-                .mem_write(addr - PALETTE_RAM_START_ADDRESS, data),
-            _ => self.memory.mem_write(addr, data),
-        }
-    }
-
-    #[inline]
-    pub fn mem_init(&mut self, addr: u16, data: u8) {
-        match addr {
-            PALETTE_RAM_START_ADDRESS..=PALETTE_RAM_END_ADDRESS => self
-                .palette_ram
-                .init(addr - PALETTE_RAM_START_ADDRESS, data),
-            _ => self.memory.init(addr, data),
-        }
-    }
-
-    #[inline]
-    pub fn oam_read(&mut self, addr: u8) -> u8 {
+    pub fn oam_read(&self, addr: u8, open_bus: &OpenBus) -> u8 {
         let row = addr / 8;
         let byte = addr % 8;
-        let mut res = self.oam.mem_read((row as u16 * 9) + byte as u16);
+        let mut res = self.oam.read((row as u16 * 9) + byte as u16, open_bus);
 
         if self.is_soam_clear_active {
             res = 0xFF;
@@ -968,10 +899,10 @@ impl Ppu {
     }
 
     #[inline]
-    pub fn oam_snapshot(&self, addr: u8) -> u8 {
+    pub fn oam_snapshot(&self, addr: u8, open_bus: &OpenBus) -> u8 {
         let row = addr / 8;
         let byte = addr % 8;
-        let mut res = self.oam.mem_read_debug((row as u16 * 9) + byte as u16);
+        let mut res = self.oam.snapshot((row as u16 * 9) + byte as u16, open_bus);
 
         if self.is_soam_clear_active {
             res = 0xFF;
@@ -984,53 +915,38 @@ impl Ppu {
     pub fn oam_write(&mut self, addr: u8, data: u8) {
         let row = addr / 8;
         let byte = addr % 8;
-        self.oam.mem_write((row as u16 * 9) + byte as u16, data)
+        self.oam.write((row as u16 * 9) + byte as u16, data)
     }
 
     #[inline]
-    pub fn secondary_oam_read(&mut self, addr: u8) -> u8 {
+    pub fn secondary_oam_read(&mut self, addr: u8, open_bus: &OpenBus) -> u8 {
         // Mask for only 0-32
         let row = addr & 0x1F;
         let byte = 8u8;
 
-        self.oam.mem_read((row as u16 * 9) + byte as u16)
+        self.oam.read((row as u16 * 9) + byte as u16, open_bus)
     }
 
     #[inline]
-    pub fn secondary_oam_snapshot(&self, addr: u8) -> u8 {
+    pub fn secondary_oam_snapshot(&self, addr: u8, open_bus: &OpenBus) -> u8 {
+        // Mask for only 0-32
         let row = addr & 0x1F;
         let byte = 8u8;
 
-        self.oam.mem_read_debug((row as u16 * 9) + byte as u16)
+        self.oam.snapshot((row as u16 * 9) + byte as u16, open_bus)
     }
 
     #[inline]
-    pub fn secondary_oam_write(&mut self, addr: u8, data: u8) {
+    pub fn secondary_oam_write(&mut self, addr: u8, data: u8, open_bus: &OpenBus) {
         // Mask for only 0-32
         let row = addr & 0x1F;
         let byte = 8u8;
 
         if !self.soam_disable {
-            self.oam.mem_write((row as u16 * 9) + byte as u16, data);
+            self.oam.write((row as u16 * 9) + byte as u16, data);
         } else {
-            self.oam.mem_read((row as u16 * 9) + byte as u16);
+            self.oam.read((row as u16 * 9) + byte as u16, open_bus);
         }
-    }
-
-    pub fn load_rom(&mut self, rom_file: &RomFile) {
-        let chr_rom = rom_file.get_chr_rom();
-
-        if let Some(chr_rom) = chr_rom {
-            self.memory.add_memory(0x0000..=0x1FFF, chr_rom);
-        }
-
-        self.memory.add_memory(
-            0x2000..=PALETTE_RAM_END_ADDRESS,
-            Memory::MirrorMemory(MirrorMemory::new(
-                Box::new(rom_file.get_nametable_memory()),
-                (VRAM_SIZE * 2 - 1) as u16,
-            )),
-        )
     }
 
     pub fn reset(&mut self) { self.reset_signal = false; }
@@ -1038,20 +954,27 @@ impl Ppu {
     #[inline]
     pub fn get_pixel_buffer(&self) -> &Vec<u16> { &self.pixel_buffer }
 
-    pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
-        self.memory.get_memory_debug(range)
+    pub fn get_memory_debug(
+        &self,
+        range: Option<RangeInclusive<u16>>,
+        bus: &mut impl PpuBus,
+    ) -> Vec<u8> {
+        let range = range.unwrap_or(0u16..=0x3FFF);
+        let mut vec = Vec::with_capacity(range.len());
+        range.for_each(|addr| vec.push(bus.read_debug(addr)));
+        vec
     }
 
     #[inline]
-    pub fn process_vbl_clear_scheduled(&self) {
-        if let Some(vbl_clear_cycle) = self.vbl_clear_scheduled.get() {
-            if vbl_clear_cycle >= self.vbl_reset_counter.get() {
+    pub fn process_vbl_clear_scheduled(&mut self) {
+        if let Some(vbl_clear_cycle) = self.vbl_clear_scheduled {
+            if vbl_clear_cycle >= self.vbl_reset_counter {
                 self.clear_vbl_bit();
             }
 
-            if vbl_clear_cycle <= self.vbl_reset_counter.get() {
-                self.vbl_clear_scheduled.set(None);
-                self.vbl_reset_counter.set(0);
+            if vbl_clear_cycle <= self.vbl_reset_counter {
+                self.vbl_clear_scheduled = None;
+                self.vbl_reset_counter = 0;
             }
         }
     }
@@ -1070,7 +993,7 @@ impl Ppu {
         self.shift_in_attr_hi = attr_high_bit;
     }
 
-    fn load_palette_colors(&self) -> [[u8; 4]; 8] {
+    fn load_palette_colors(&self, bus: &impl PpuBus) -> [[u8; 4]; 8] {
         let mut data = [[0; 4]; 8];
 
         for palette in 0..8 {
@@ -1078,7 +1001,7 @@ impl Ppu {
             let base = PALETTE_RAM_START_ADDRESS + palette * 4;
 
             for (i, color) in colors.iter_mut().enumerate() {
-                let idx = self.mem_read_debug(base + i as u16);
+                let idx = bus.read_debug(base + i as u16);
                 *color = idx;
             }
 
@@ -1088,7 +1011,7 @@ impl Ppu {
         data
     }
 
-    pub fn from(state: &PpuState, rom: &RomFile) -> Self {
+    pub fn from(state: &PpuState) -> Self {
         let mut ppu = Self {
             dot_counter: state.cycle_counter,
             ctrl_register: state.ctrl_register,
@@ -1097,9 +1020,7 @@ impl Ppu {
             oam_addr_register: state.oam_addr_register,
             v_register: state.ppu_addr_register,
             ppu_data_buffer: state.ppu_data_buffer,
-            nmi_requested: Cell::new(state.nmi_requested),
-            memory: Self::get_default_memory_map(),
-            palette_ram: Self::get_palette_memory_map(),
+            nmi_requested: state.nmi_requested,
             oam: Self::get_default_oam(),
             write_latch: state.write_latch.into(),
             t_register: state.t_register,
@@ -1111,8 +1032,8 @@ impl Ppu {
             reset_signal: state.reset_signal,
             // Initialize pixel buffer fresh - it's not saved in savestate
             pixel_buffer: vec![0; TOTAL_OUTPUT_WIDTH * TOTAL_OUTPUT_HEIGHT],
-            vbl_reset_counter: Cell::new(state.vbl_reset_counter),
-            vbl_clear_scheduled: Cell::new(state.vbl_clear_scheduled),
+            vbl_reset_counter: state.vbl_reset_counter,
+            vbl_clear_scheduled: state.vbl_clear_scheduled,
             scanline: state.scanline,
             dot: state.dot,
             prev_vbl: state.prev_vbl,
@@ -1137,28 +1058,20 @@ impl Ppu {
             log: "".to_string(),
         };
 
-        // Load ROM first to set up memory mapping (CHR ROM and nametables)
-        ppu.load_rom(rom);
-
-        // Restore nametable VRAM (at address 0x2000)
-        ppu.memory.load_range(&state.nametable_ram, 0x2000);
-
-        // Restore OAM and palette RAM
-        ppu.oam.load(&state.oam_mem);
-        ppu.palette_ram.load(&state.palette_ram);
+        ppu.oam.load(state.oam_mem.clone().into_boxed_slice());
 
         ppu
     }
 }
 
 impl Ppu {
-    pub fn get_palettes_debug(&self) -> EmulatorFetchable {
+    pub fn get_palettes_debug(&self, bus: &impl PpuBus) -> EmulatorFetchable {
         EmulatorFetchable::Palettes(Some(Box::new(PaletteData {
-            colors: self.load_palette_colors(),
+            colors: self.load_palette_colors(bus),
         })))
     }
 
-    pub fn get_tiles_debug(&self) -> EmulatorFetchable {
+    pub fn get_tiles_debug(&self, bus: &impl PpuBus) -> EmulatorFetchable {
         let mut tiles = [TileData::default(); 512];
         for table_ix in 0..2 {
             let table_base = (table_ix * TABLE_BYTES) as u16;
@@ -1168,8 +1081,8 @@ impl Ppu {
                 let mut plane_1: u64 = 0;
 
                 for y in 0..TILE_SIZE {
-                    let p0 = self.mem_read_debug(tile_addr + y as u16);
-                    let p1 = self.mem_read_debug(tile_addr + y as u16 + 8);
+                    let p0 = bus.read_debug(tile_addr + y as u16);
+                    let p1 = bus.read_debug(tile_addr + y as u16 + 8);
 
                     plane_0 = (plane_0 << 8) | p0 as u64;
                     plane_1 = (plane_1 << 8) | p1 as u64;
@@ -1188,7 +1101,7 @@ impl Ppu {
         EmulatorFetchable::Tiles(Some(Box::new(tiles)))
     }
 
-    pub fn get_nametable_debug(&self) -> EmulatorFetchable {
+    pub fn get_nametable_debug(&self, bus: &impl PpuBus) -> EmulatorFetchable {
         let nametable_start = 0x2000u16;
         let pattern_table = ((self.ctrl_register & 0b1_0000) as u16) << 4;
         let mut nametables = [[0; NAMETABLE_ROWS * NAMETABLE_COLS]; NAMETABLE_COUNT];
@@ -1204,7 +1117,7 @@ impl Ppu {
             for row in 0..NAMETABLE_ROWS {
                 for col in 0..NAMETABLE_COLS {
                     let addr = nametable_base + (row * NAMETABLE_COLS + col) as u16;
-                    let tile = (self.mem_read_debug(addr) as u16) | pattern_table;
+                    let tile = (bus.read_debug(addr) as u16) | pattern_table;
                     nametables[nametable_index][row * NAMETABLE_COLS + col] = tile;
                 }
             }
@@ -1212,7 +1125,7 @@ impl Ppu {
             // Read attribute table (64 bytes per nametable)
             let attr_base = nametable_base + attr_offset;
             for (i, attr) in attributes[nametable_index].iter_mut().enumerate() {
-                *attr = self.mem_read_debug(attr_base + i as u16);
+                *attr = bus.read_debug(attr_base + i as u16);
             }
         }
 
@@ -1236,17 +1149,19 @@ impl Ppu {
             mode: sprite_mode,
         };
 
+        let open_bus_mock = OpenBus::new(0);
+
         for sprite in 0..SPRITE_COUNT {
             let sprite_base_address = sprite * 4;
-            let y_pos = self.oam_snapshot(sprite_base_address as u8);
-            let x_pos = self.oam_snapshot((sprite_base_address + 3) as u8);
-            let tile_byte = self.oam_snapshot((sprite_base_address + 1) as u8);
+            let y_pos = self.oam_snapshot(sprite_base_address as u8, &open_bus_mock);
+            let x_pos = self.oam_snapshot((sprite_base_address + 3) as u8, &open_bus_mock);
+            let tile_byte = self.oam_snapshot((sprite_base_address + 1) as u8, &open_bus_mock);
 
             let tile = Self::get_top_tile(sprite_mode, base_pattern_table, tile_byte);
 
             let bottom_tile = Self::get_bottom_tile(sprite_mode, tile_byte);
 
-            let attribute_byte = self.oam_snapshot((sprite_base_address + 2) as u8);
+            let attribute_byte = self.oam_snapshot((sprite_base_address + 2) as u8, &open_bus_mock);
             let priority = (attribute_byte << 2) >> 7 == 0;
             let h_flip = (attribute_byte << 1) >> 7 == 1;
             let v_flip = attribute_byte >> 7 == 1;
@@ -1282,17 +1197,22 @@ impl Ppu {
             mode: sprite_mode,
         };
 
+        let open_bus_mock = OpenBus::new(0);
+
         for sprite in 0..8 {
             let sprite_base_address = sprite * 4;
-            let y_pos = self.secondary_oam_snapshot(sprite_base_address as u8);
-            let x_pos = self.secondary_oam_snapshot((sprite_base_address + 3) as u8);
-            let tile_byte = self.secondary_oam_snapshot((sprite_base_address + 1) as u8);
+            let y_pos = self.secondary_oam_snapshot(sprite_base_address as u8, &open_bus_mock);
+            let x_pos =
+                self.secondary_oam_snapshot((sprite_base_address + 3) as u8, &open_bus_mock);
+            let tile_byte =
+                self.secondary_oam_snapshot((sprite_base_address + 1) as u8, &open_bus_mock);
 
             let tile = Self::get_top_tile(sprite_mode, base_pattern_table, tile_byte);
 
             let bottom_tile = Self::get_bottom_tile(sprite_mode, tile_byte);
 
-            let attribute_byte = self.secondary_oam_snapshot((sprite_base_address + 2) as u8);
+            let attribute_byte =
+                self.secondary_oam_snapshot((sprite_base_address + 2) as u8, &open_bus_mock);
             let priority = (attribute_byte << 2) >> 7 == 0;
             let h_flip = (attribute_byte << 1) >> 7 == 1;
             let v_flip = attribute_byte >> 7 == 1;

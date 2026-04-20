@@ -1,25 +1,18 @@
-use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::ops::RangeInclusive;
-use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::emulation::mem::apu_registers::ApuRegisters;
-use crate::emulation::mem::memory_map::MemoryMap;
-use crate::emulation::mem::mirror_memory::MirrorMemory;
-use crate::emulation::mem::{Memory, Ram};
+use crate::emulation::board::CpuBus;
 use crate::emulation::nes::ExecutionFinished;
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OPCODES_MAP, OPCODES_TABLE, OpCode, get_opcode};
-use crate::emulation::ppu::Ppu;
-use crate::emulation::rom::RomFile;
+use crate::emulation::opcode::{get_opcode, OpCode, OPCODES_MAP, OPCODES_TABLE};
 use crate::emulation::savestate::CpuState;
 use crate::util;
 
 pub const INTERNAL_RAM_MEMORY_RANGE: RangeInclusive<u16> = 0x0..=0x1FFF;
 pub const PPU_REG_RANGE: RangeInclusive<u16> = 0x2000..=0x3FFF;
-pub const INTERNAL_RAM_SIZE: usize = 0x800;
+pub const INTERNAL_RAM_SIZE: u16 = 0x800;
 pub const STACK_START_ADDRESS: u16 = 0x0100;
 pub const NEGATIVE_BIT: u8 = 0x80;
 pub const CARRY_BIT: u8 = 0x1;
@@ -44,9 +37,6 @@ pub struct Cpu {
     pub x_register: u8,
     pub y_register: u8,
     pub processor_status: u8,
-    pub memory: MemoryMap,
-    pub ppu: Option<Rc<RefCell<Ppu>>>,
-    pub irq_provider: Cell<bool>,
     pub lo: u8,
     pub hi: u8,
     pub current_op: MicroOp,
@@ -83,10 +73,7 @@ impl Default for Cpu {
             accumulator: 0,
             x_register: 0,
             y_register: 0,
-            memory: Self::get_default_memory_map(),
             stack_pointer: 0,
-            ppu: None,
-            irq_provider: Cell::new(false),
             lo: 0,
             hi: 0,
             current_op: MicroOp::FetchOpcode,
@@ -120,9 +107,9 @@ impl Cpu {
     }
 
     #[inline(always)]
-    pub fn mem_read(&mut self, addr: u16) -> u8 {
+    pub fn mem_read(&mut self, addr: u16, bus: &mut impl CpuBus) -> u8 {
         self.cpu_read_cycle = true;
-        let res = self.memory.mem_read(addr);
+        let res = bus.read(addr);
 
         self.last_memory_access = Some((addr, true, res));
 
@@ -130,7 +117,7 @@ impl Cpu {
     }
 
     #[inline(always)]
-    pub fn mem_write(&mut self, addr: u16, data: u8) {
+    pub fn mem_write(&mut self, addr: u16, data: u8, bus: &mut impl CpuBus) {
         self.cpu_read_cycle = false;
         self.last_memory_access = Some((addr, false, data));
 
@@ -139,50 +126,60 @@ impl Cpu {
             self.dma_page = data;
         }
 
-        self.memory.mem_write(addr, data);
+        bus.write(addr, data);
     }
 
     #[inline]
-    pub fn mem_read_u16(&mut self, addr: u16) -> u16 { self.memory.mem_read_u16(addr) }
+    pub fn mem_read_u16(&mut self, addr: u16, bus: &mut impl CpuBus) -> u16 {
+        let least_significant_bits = self.mem_read(addr, bus) as u16;
+        let highest_significant_bits = self.mem_read(addr + 1, bus) as u16;
+
+        (highest_significant_bits << 8) | (least_significant_bits)
+    }
 
     #[inline]
-    pub fn mem_write_u16(&mut self, addr: u16, data: u16) { self.memory.mem_write_u16(addr, data); }
+    pub fn mem_write_u16(&mut self, addr: u16, data: u16, bus: &mut impl CpuBus) {
+        let least_significant_bits = (data & 0x00FF) as u8;
+        let highest_significant_bits = (data >> 8) as u8;
+        self.mem_write(addr, least_significant_bits, bus);
+        self.mem_write(addr + 1, highest_significant_bits, bus)
+    }
 
     #[inline]
-    pub fn stack_pop(&mut self) -> u8 {
-        let val = self.mem_read(STACK_START_ADDRESS + self.stack_pointer as u16);
+    pub fn stack_pop(&mut self, bus: &mut impl CpuBus) -> u8 {
+        let val = self.mem_read(STACK_START_ADDRESS + self.stack_pointer as u16, bus);
         self.stack_pointer = self.stack_pointer.wrapping_add(1);
         val
     }
 
     #[inline]
-    pub fn stack_peek(&mut self) -> u8 {
-        self.mem_read(STACK_START_ADDRESS + self.stack_pointer as u16)
+    pub fn stack_peek(&mut self, bus: &mut impl CpuBus) -> u8 {
+        self.mem_read(STACK_START_ADDRESS + self.stack_pointer as u16, bus)
     }
 
     #[inline]
-    pub fn stack_push(&mut self, data: Option<u8>) {
+    pub fn stack_push(&mut self, data: Option<u8>, bus: &mut impl CpuBus) {
         if let Some(data) = data {
             let addr = STACK_START_ADDRESS + self.stack_pointer as u16;
-            self.mem_write(addr, data);
+            self.mem_write(addr, data, bus);
         }
 
         self.stack_pointer = self.stack_pointer.wrapping_sub(1);
     }
 
     #[inline]
-    pub fn stack_pop_u16(&mut self) -> u16 {
-        let lo = self.stack_pop() as u16;
-        let hi = self.stack_pop() as u16;
+    pub fn stack_pop_u16(&mut self, bus: &mut impl CpuBus) -> u16 {
+        let lo = self.stack_pop(bus) as u16;
+        let hi = self.stack_pop(bus) as u16;
         (hi << 8) | lo
     }
 
     #[inline]
-    pub fn stack_push_u16(&mut self, data: u16) {
+    pub fn stack_push_u16(&mut self, data: u16, bus: &mut impl CpuBus) {
         let hi = (data >> 8) as u8;
         let lo = (data & 0xFF) as u8;
-        self.stack_push(Option::from(hi));
-        self.stack_push(Option::from(lo));
+        self.stack_push(Option::from(hi), bus);
+        self.stack_push(Option::from(lo), bus);
     }
 
     #[inline]
@@ -1123,12 +1120,19 @@ impl Cpu {
         }
     }
 
-    pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<u8> {
-        self.memory.get_memory_debug(range)
+    pub fn get_memory_debug(
+        &self,
+        range: Option<RangeInclusive<u16>>,
+        bus: &mut impl CpuBus,
+    ) -> Vec<u8> {
+        let range = range.unwrap_or(0u16..=0xFFFF);
+        let mut vec = Vec::with_capacity(range.len());
+        range.for_each(|addr| vec.push(bus.read_debug(addr)));
+        vec
     }
 
     #[inline(always)]
-    pub fn step(&mut self) -> Result<ExecutionFinished, String> {
+    pub fn step(&mut self, bus: &mut impl CpuBus) -> Result<ExecutionFinished, String> {
         if self.is_halted {
             return Ok(ExecutionFinished {
                 hlt_reached: true,
@@ -1149,16 +1153,16 @@ impl Cpu {
             self.irq_pending = self.irq_detected;
         }
 
-        self.execute_micro_op(op);
+        self.execute_micro_op(op, bus);
 
         if self.dma_triggered && self.cpu_read_cycle {
             self.trigger_oam_dma();
         }
 
-        if let Some(ppu) = &self.ppu {
-            let ppu = ppu.borrow();
-            ppu.tick_open_bus(12);
-            let curr_nmi = ppu.poll_nmi();
+        // NMI Things
+        {
+            bus.get_ppu_open_bus().tick(12);
+            let curr_nmi = bus.poll_nmi();
 
             if curr_nmi && !self.prev_nmi {
                 self.current_irq_vec = NMI_HANDLER_ADDR;
@@ -1168,7 +1172,7 @@ impl Cpu {
             self.prev_nmi = curr_nmi;
         }
 
-        if self.irq_provider.get() {
+        if bus.poll_irq() {
             self.current_irq_vec = IRQ_VECTOR_ADDR;
             self.irq_detected = true;
         } else {
@@ -1188,7 +1192,7 @@ impl Cpu {
                 });
             } else if self.irq_pending && !self.get_interrupt_disable_flag() {
                 self.trigger_irq();
-                self.irq_provider.set(false);
+                bus.set_irq(false);
                 self.nmi_pending = false;
                 self.irq_pending = false;
                 return Ok(ExecutionFinished {
@@ -1207,10 +1211,10 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn execute_micro_op(&mut self, micro_op: MicroOp) {
+    fn execute_micro_op(&mut self, micro_op: MicroOp, bus: &mut impl CpuBus) {
         match micro_op {
             MicroOp::FetchOpcode => {
-                let opcode = self.mem_read(self.program_counter);
+                let opcode = self.mem_read(self.program_counter, bus);
                 self.program_counter = self.program_counter.wrapping_add(1);
 
                 // Fast O(1) array lookup instead of HashMap
@@ -1219,24 +1223,24 @@ impl Cpu {
                 self.get_instructions_for_op_type();
             }
             MicroOp::FetchOperandLo(callback) => {
-                self.lo = self.mem_read(self.program_counter);
+                self.lo = self.mem_read(self.program_counter, bus);
                 self.program_counter = self.program_counter.wrapping_add(1);
 
-                self.run_op(callback);
+                self.run_op(callback, bus);
             }
             MicroOp::FetchOperandHi(callback) => {
-                self.hi = self.mem_read(self.program_counter);
+                self.hi = self.mem_read(self.program_counter, bus);
                 self.program_counter = self.program_counter.wrapping_add(1);
 
-                self.run_op(callback);
+                self.run_op(callback, bus);
             }
             MicroOp::Read(source, target, callback) => {
                 if let Some(address) = self.get_u16_address(&source) {
-                    let val = self.mem_read(address);
-                    self.write_to_target(&target, val);
+                    let val = self.mem_read(address, bus);
+                    self.write_to_target(&target, val, bus);
                 }
 
-                self.run_op(callback);
+                self.run_op(callback, bus);
             }
             // pre_callback denotes whether to call the callback before or after the write. In the
             // case of a dummy write we write with false so that the value from before the callback
@@ -1244,44 +1248,44 @@ impl Cpu {
             // beforehand so that we write the updated value
             MicroOp::Write(target, src, pre_callback, callback) => {
                 if pre_callback {
-                    self.run_op(callback);
+                    self.run_op(callback, bus);
                 }
 
                 let val = self.get_src_value(&src);
 
                 if let Some(val) = val {
-                    self.write_to_target(&target, val);
+                    self.write_to_target(&target, val, bus);
                 }
 
                 if !pre_callback {
-                    self.run_op(callback);
+                    self.run_op(callback, bus);
                 }
             }
             MicroOp::StackPush(source, callback) => {
                 let src_value = self.get_src_value(&source);
 
-                self.stack_push(src_value);
+                self.stack_push(src_value, bus);
 
-                self.run_op(callback);
+                self.run_op(callback, bus);
             }
             MicroOp::StackPop(target, callback) => {
-                let val = self.stack_pop();
-                self.write_to_target(&target, val);
+                let val = self.stack_pop(bus);
+                self.write_to_target(&target, val, bus);
 
-                self.run_op(callback);
+                self.run_op(callback, bus);
             }
             MicroOp::StackPeek(target, callback) => {
-                let val = self.stack_peek();
-                self.write_to_target(&target, val);
+                let val = self.stack_peek(bus);
+                self.write_to_target(&target, val, bus);
 
-                self.run_op(callback);
+                self.run_op(callback, bus);
             }
             MicroOp::ReadPageCrossAware(source, offset, target, schedule_read, callback) => {
                 let mut page_cross = false;
 
                 if let Some(address) = self.get_u16_address(&source) {
-                    let val = self.mem_read(address);
-                    self.write_to_target(&target, val);
+                    let val = self.mem_read(address, bus);
+                    self.write_to_target(&target, val, bus);
                     let offset = self.get_src_value(&offset);
 
                     if let Some(offset) = offset
@@ -1299,24 +1303,28 @@ impl Cpu {
 
                     self.hi = self.hi.wrapping_add(1);
                 } else {
-                    self.run_op(callback);
+                    self.run_op(callback, bus);
                 }
             }
             MicroOp::DummyReadAddOffsetWriteToTarget(source, offset, target, callback) => {
                 if let Some(address) = self.get_u16_address(&source) {
-                    self.mem_read(address);
+                    self.mem_read(address, bus);
                     let src_value = self.get_src_value(&offset);
 
                     if let Some(src_value) = src_value {
-                        self.write_to_target(&target, address.wrapping_add(src_value as u16) as u8);
+                        self.write_to_target(
+                            &target,
+                            address.wrapping_add(src_value as u16) as u8,
+                            bus,
+                        );
                     }
                 }
 
-                self.run_op(callback);
+                self.run_op(callback, bus);
             }
             MicroOp::DummyRead(callback) => {
-                self.mem_read(self.program_counter);
-                self.run_op(callback);
+                self.mem_read(self.program_counter, bus);
+                self.run_op(callback, bus);
             }
             MicroOp::ReadWithOffsetFromZPAndAddSomethingU8(
                 address_source,
@@ -1333,8 +1341,8 @@ impl Cpu {
 
                     if let Some(src_value) = src_value {
                         let offset_address = util::add_to_low_byte(address as u8 as u16, src_value);
-                        let value = self.mem_read(offset_address);
-                        self.write_to_target(&target, value);
+                        let value = self.mem_read(offset_address, bus);
+                        self.write_to_target(&target, value, bus);
                     }
                 }
 
@@ -1345,14 +1353,14 @@ impl Cpu {
                     && let Some(to_add) = to_add
                 {
                     let value = add_to.wrapping_add(to_add);
-                    self.write_to_target(&to_save, value);
+                    self.write_to_target(&to_save, value, bus);
                 }
 
                 if inc_pc {
                     self.program_counter = self.program_counter.wrapping_add(1);
                 }
 
-                self.run_op(callback);
+                self.run_op(callback, bus);
             }
             MicroOp::ReadWithOffsetFromU16AndAddSomething(
                 address_source,
@@ -1369,8 +1377,8 @@ impl Cpu {
 
                     if let Some(offset) = offset {
                         let offset_address = util::add_to_low_byte(address, offset);
-                        let value = self.mem_read(offset_address);
-                        self.write_to_target(&target, value);
+                        let value = self.mem_read(offset_address, bus);
+                        self.write_to_target(&target, value, bus);
                     }
                 }
 
@@ -1381,14 +1389,14 @@ impl Cpu {
                     && let Some(to_add) = to_add
                 {
                     let value = add_to.wrapping_add(to_add);
-                    self.write_to_target(&to_save, value);
+                    self.write_to_target(&to_save, value, bus);
                 }
 
                 if inc_pc {
                     self.program_counter = self.program_counter.wrapping_add(1);
                 }
 
-                self.run_op(callback);
+                self.run_op(callback, bus);
             }
             MicroOp::BranchIncrement(to_add) => {
                 let add_to = self.program_counter;
@@ -1396,7 +1404,7 @@ impl Cpu {
 
                 if let Some(to_add) = to_add {
                     let value = add_to.wrapping_add(to_add as i8 as i16 as u16);
-                    self.write_to_target(&Target::PCL, value as u8);
+                    self.write_to_target(&Target::PCL, value as u8, bus);
 
                     if util::crosses_page_boundary_i8(add_to, to_add as i8) {
                         self.op_queue.push_back(MicroOp::FixHiBranch(value));
@@ -1410,7 +1418,7 @@ impl Cpu {
     }
 
     #[inline]
-    fn run_op(&mut self, op: MicroOpCallback) {
+    fn run_op(&mut self, op: MicroOpCallback, bus: &mut impl CpuBus) {
         match op {
             MicroOpCallback::None => {}
             MicroOpCallback::ADC => adc(self),
@@ -1452,7 +1460,7 @@ impl Cpu {
             MicroOpCallback::ANE => ane(self),
             MicroOpCallback::ARR => arr(self),
             MicroOpCallback::DCP => dcp(self),
-            MicroOpCallback::ISB => isb(self),
+            MicroOpCallback::ISB => isb(self, bus),
             MicroOpCallback::LAX => lax(self),
             MicroOpCallback::LXA => lxa(self),
             MicroOpCallback::LAS => las(self),
@@ -1491,64 +1499,6 @@ impl Cpu {
         }
     }
 
-    pub fn load_rom(&mut self, rom_file: &RomFile) {
-        let prg_rom = rom_file.get_prg_rom();
-
-        if rom_file.prg_memory.prg_rom_size > (16 * 1024) {
-            self.memory.add_memory(0x8000..=0xFFFF, prg_rom)
-        } else {
-            self.memory.add_memory(
-                0x8000..=0xFFFF,
-                Memory::MirrorMemory(MirrorMemory::new(Box::new(prg_rom), 0x3FFF)),
-            )
-        }
-
-        match rom_file.prg_memory.prg_ram_size {
-            0 => {}
-            2048 => self.memory.add_memory(
-                0x6000..=0x7FFF,
-                Memory::MirrorMemory(MirrorMemory::new(
-                    Box::new(Memory::Ram(Ram::new(
-                        rom_file.prg_memory.prg_ram_size as usize,
-                    ))),
-                    0x7FF,
-                )),
-            ),
-            4096 => self.memory.add_memory(
-                0x6000..=0x7FFF,
-                Memory::MirrorMemory(MirrorMemory::new(
-                    Box::new(Memory::Ram(Ram::new(
-                        rom_file.prg_memory.prg_ram_size as usize,
-                    ))),
-                    0xFFF,
-                )),
-            ),
-            8192 => self.memory.add_memory(
-                0x6000..=0x7FFF,
-                Memory::Ram(Ram::new(rom_file.prg_memory.prg_ram_size as usize)),
-            ),
-            _ => {}
-        }
-    }
-
-    fn get_default_memory_map() -> MemoryMap {
-        let mut mem = MemoryMap::default();
-        // Internal Ram
-        mem.add_memory(
-            INTERNAL_RAM_MEMORY_RANGE,
-            Memory::MirrorMemory(MirrorMemory::new(
-                Box::new(Memory::Ram(Ram::new(INTERNAL_RAM_SIZE as usize))),
-                INTERNAL_RAM_SIZE - 1,
-            )),
-        );
-
-        // APU Registers
-        mem.add_memory(0x4000..=0x4017, Memory::ApuRegisters(ApuRegisters::new()));
-        // Unused APU Registers
-        mem.add_memory(0x4018..=0x401F, Memory::Ram(Ram::new(0x8)));
-        mem
-    }
-
     #[inline]
     pub fn get_src_value(&mut self, src: &Source) -> Option<u8> {
         match src {
@@ -1569,7 +1519,7 @@ impl Cpu {
     }
 
     #[inline]
-    fn write_to_target(&mut self, trg: &Target, val: u8) {
+    fn write_to_target(&mut self, trg: &Target, val: u8, bus: &mut impl CpuBus) {
         match trg {
             Target::A => {
                 self.accumulator = val;
@@ -1595,11 +1545,11 @@ impl Cpu {
             Target::DataBus => self.data_bus = val,
             Target::P => self.processor_status = val & (!UNUSED_BIT & !BREAK_BIT),
             Target::AddressLatch => {
-                self.mem_write(self.get_addr_latch(), val);
+                self.mem_write(self.get_addr_latch(), val, bus);
             }
-            Target::LoWrite => self.mem_write(self.lo as u16, val),
+            Target::LoWrite => self.mem_write(self.lo as u16, val, bus),
             Target::None => {}
-            Target::OamWrite => self.mem_write(OAM_REG_ADDRESS, val),
+            Target::OamWrite => self.mem_write(OAM_REG_ADDRESS, val, bus),
             Target::IrqVecCandidate => unreachable!(),
         }
     }
@@ -1869,8 +1819,6 @@ pub enum OpType {
 impl Cpu {
     pub fn test_instance() -> Self {
         let mut inst = Cpu::new();
-        inst.memory
-            .add_memory(0x4020..=0xFFFF, Memory::Ram(Ram::new(0xBFE0)));
 
         // Test instance doesn't get reset, therefore we need to manually fix the stack
         // pointer
@@ -1880,20 +1828,17 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub fn from(state: &CpuState, ppu: Rc<RefCell<Ppu>>, rom: &RomFile) -> Self {
+    pub fn from(state: &CpuState) -> Self {
         OPCODES_MAP.get_or_init(opcode::init);
         OPCODES_TABLE.get_or_init(opcode::init_lookup_table);
 
-        let mut cpu = Self {
+        let cpu = Self {
             program_counter: state.program_counter,
             stack_pointer: state.stack_pointer,
             accumulator: state.accumulator,
             x_register: state.x_register,
             y_register: state.y_register,
             processor_status: state.processor_status,
-            memory: Self::get_default_memory_map(),
-            ppu: Some(ppu),
-            irq_provider: Cell::new(state.irq_provider),
             lo: state.lo,
             hi: state.hi,
             current_op: state.current_op,
@@ -1916,17 +1861,6 @@ impl Cpu {
             dma_page: state.dma_page,
             last_memory_access: None,
         };
-
-        // Load ROM first to set up memory mapping
-        cpu.load_rom(rom);
-
-        // Restore internal RAM (2KB at 0x0000-0x07FF)
-        cpu.memory.load_range(&state.internal_ram, 0x0000);
-
-        // Restore PRG RAM if present (0x6000-0x7FFF)
-        if !state.prg_ram.is_empty() {
-            cpu.memory.load_range(&state.prg_ram, 0x6000);
-        }
 
         cpu
     }
@@ -2264,13 +2198,13 @@ fn branch(cpu: &mut Cpu, condition: Condition) {
 }
 
 #[inline]
-fn isb(cpu: &mut Cpu) {
+fn isb(cpu: &mut Cpu, bus: &mut impl CpuBus) {
     // Inc
     let target_value = cpu.get_src_value(&Source::DataBus);
 
     if let Some(target_value) = target_value {
         let mod_value = target_value.wrapping_add(1);
-        cpu.write_to_target(&Target::DataBus, mod_value);
+        cpu.write_to_target(&Target::DataBus, mod_value, bus);
         cpu.update_negative_and_zero_flags(mod_value);
 
         // SBC

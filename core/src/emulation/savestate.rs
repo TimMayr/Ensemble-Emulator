@@ -15,9 +15,12 @@ use std::collections::VecDeque;
 
 use serde::{Deserialize, Serialize};
 
-use crate::emulation::cpu::{Cpu, INTERNAL_RAM_SIZE, MicroOp};
-use crate::emulation::mem::OpenBus;
-use crate::emulation::ppu::{Ppu, VRAM_SIZE};
+use crate::emulation::board::Board;
+use crate::emulation::cpu::{Cpu, MicroOp};
+use crate::emulation::mapper::Mapper;
+use crate::emulation::mem::{MemoryDevice, OpenBus};
+use crate::emulation::peripherals::Peripheral;
+use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::RomFile;
 
 /// Magic header bytes identifying a Monsoon save state file (`"ESSV1"`).
@@ -27,7 +30,7 @@ pub const BINARY_FORMAT_VERSION: u8 = 0;
 /// Format version byte for JSON encoding.
 pub const JSON_FORMAT_VERSION: u8 = 1;
 
-pub const VERSION: u16 = 1;
+pub const VERSION: u16 = 2;
 
 /// Snapshot of the CPU state at a specific point in time.
 ///
@@ -48,13 +51,6 @@ pub struct CpuState {
     pub y_register: u8,
     /// Processor status flags (NV-BDIZC).
     pub processor_status: u8,
-    /// Internal RAM snapshot (2 KB, addresses `$0000`-`$07FF`).
-    pub internal_ram: Vec<u8>,
-    /// PRG RAM snapshot if present (up to 8 KB, addresses `$6000`-`$7FFF`).
-    pub prg_ram: Vec<u8>,
-    /// Full memory dump for tracing/debug (not serialized to reduce size).
-    #[serde(skip)]
-    pub memory: Vec<u8>,
     /// Low byte of the current address being assembled.
     pub(crate) lo: u8,
     /// High byte of the current address being assembled.
@@ -77,8 +73,6 @@ pub struct CpuState {
     pub(crate) irq_detected: bool,
     /// IRQ pending flag.
     pub(crate) irq_pending: bool,
-    /// External IRQ line state.
-    pub(crate) irq_provider: bool,
     /// Whether the CPU is currently in an IRQ handler.
     pub(crate) is_in_irq: bool,
     /// Current interrupt vector address.
@@ -108,14 +102,6 @@ impl From<&Cpu> for CpuState {
             x_register: cpu.x_register,
             y_register: cpu.y_register,
             processor_status: cpu.processor_status,
-            // Only save internal RAM (2KB) - addresses 0x0000-0x07FF
-            internal_ram: cpu
-                .memory
-                .get_memory_debug(Some(0x0..=(INTERNAL_RAM_SIZE - 1))),
-            // Save PRG RAM if present (0x6000-0x7FFF)
-            prg_ram: cpu.memory.get_memory_debug(Some(0x6000..=0x7FFF)),
-            // Full memory dump for tracing (not serialized)
-            memory: cpu.memory.get_memory_debug(Some(0x0..=0xFFFF)),
             lo: cpu.lo,
             hi: cpu.hi,
             current_op: cpu.current_op,
@@ -127,7 +113,6 @@ impl From<&Cpu> for CpuState {
             read_cycle: cpu.cpu_read_cycle,
             irq_detected: cpu.irq_detected,
             irq_pending: cpu.irq_pending,
-            irq_provider: cpu.irq_provider.get(),
             is_in_irq: cpu.is_in_irq,
             current_irq_vec: cpu.current_irq_vec,
             locked_irq_vec: cpu.locked_irq_vec,
@@ -160,8 +145,6 @@ pub struct PpuState {
     pub mask_register: u8,
     /// Whether an NMI has been requested.
     pub nmi_requested: bool,
-    /// Nametable VRAM snapshot (2 KB).
-    pub nametable_ram: Vec<u8>,
     /// Current VRAM address register (v).
     pub ppu_addr_register: u16,
     /// OAM address register (`$2003`).
@@ -192,8 +175,6 @@ pub struct PpuState {
     pub(crate) vbl_clear_scheduled: Option<u8>,
     /// Previous VBL state for edge detection.
     pub(crate) prev_vbl: u8,
-    /// Open bus state.
-    pub(crate) open_bus: OpenBus,
     /// Current address on the PPU address bus.
     pub(crate) address_bus: u16,
     /// Address latch value.
@@ -226,33 +207,27 @@ pub struct PpuState {
     pub(crate) oam_fetch: u8,
     /// OAM (sprite) memory snapshot (256 bytes).
     pub oam_mem: Vec<u8>,
-    /// Palette RAM snapshot (32 bytes).
-    pub palette_ram: Vec<u8>,
 }
 
 impl From<&Ppu> for PpuState {
     fn from(ppu: &Ppu) -> Self {
         Self {
             cycle_counter: ppu.dot_counter,
-            vbl_reset_counter: ppu.vbl_reset_counter.get(),
-            status_register: ppu.status_register.get(),
+            vbl_reset_counter: ppu.vbl_reset_counter,
+            status_register: ppu.status_register,
             ctrl_register: ppu.ctrl_register,
             mask_register: ppu.mask_register,
-            nmi_requested: ppu.nmi_requested.get(),
+            nmi_requested: ppu.nmi_requested,
             // Only save nametable VRAM (2KB) - addresses 0x2000-0x27FF
-            nametable_ram: ppu
-                .memory
-                .get_memory_debug(Some(0x2000..=(0x2000 + (VRAM_SIZE as u16 * 2)))),
             ppu_addr_register: ppu.v_register,
             oam_addr_register: ppu.oam_addr_register,
-            write_latch: ppu.write_latch.get(),
+            write_latch: ppu.write_latch,
             ppu_data_buffer: ppu.ppu_data_buffer,
             t_register: ppu.t_register,
             bg_next_tile_id: ppu.bg_next_tile_id,
             bg_next_tile_lsb: ppu.bg_next_tile_lsb,
-            vbl_clear_scheduled: ppu.vbl_clear_scheduled.get(),
+            vbl_clear_scheduled: ppu.vbl_clear_scheduled,
             prev_vbl: ppu.prev_vbl,
-            open_bus: ppu.open_bus.get(),
             address_bus: ppu.address_bus,
             address_latch: ppu.address_latch,
             shift_pattern_lo: ppu.shift_pattern_lo,
@@ -268,14 +243,47 @@ impl From<&Ppu> for PpuState {
             oam_increment: ppu.oam_increment,
             soam_write_counter: ppu.soam_write_counter,
             oam_fetch: ppu.oam_fetch,
-            oam_mem: ppu.oam.get_memory_debug(None),
+            oam_mem: ppu.oam.snapshot_all(),
             bg_next_tile_attribute: ppu.bg_next_tile_attribute,
             fine_x_scroll: ppu.fine_x_scroll,
             even_frame: ppu.even_frame,
             reset_signal: ppu.reset_signal,
             dot: ppu.dot,
             scanline: ppu.scanline,
-            palette_ram: ppu.palette_ram.get_memory_debug(None),
+        }
+    }
+}
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct BoardState {
+    /// Captured CPU state.
+    pub cpu: CpuState,
+    /// Captured PPU state.
+    pub ppu: PpuState,
+    pub cpu_ram: Vec<u8>,
+    pub nametable_ram: Vec<u8>,
+    pub palette_ram: Vec<u8>,
+    pub mapper: Mapper,
+    pub cpu_open_bus: OpenBus,
+    pub ppu_open_bus: OpenBus,
+    pub controller1: Option<Peripheral>,
+    pub controller2: Option<Peripheral>,
+    pub joystick_strobe_data: u8,
+}
+
+impl From<&Board> for BoardState {
+    fn from(board: &Board) -> Self {
+        BoardState {
+            cpu: CpuState::from(&board.cpu),
+            ppu: PpuState::from(&board.ppu),
+            cpu_ram: board.cpu_ram.snapshot_all(),
+            nametable_ram: board.nametable_ram.snapshot_all(),
+            palette_ram: board.palette_ram.snapshot_all(),
+            mapper: board.mapper.clone(),
+            cpu_open_bus: board.cpu_open_bus,
+            ppu_open_bus: board.ppu_open_bus,
+            controller1: board.controller1.clone(),
+            controller2: board.controller2.clone(),
+            joystick_strobe_data: board.joystick_strobe_data,
         }
     }
 }
@@ -303,10 +311,7 @@ impl From<&Ppu> for PpuState {
 /// ```
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct SaveState {
-    /// Captured CPU state.
-    pub cpu: CpuState,
-    /// Captured PPU state.
-    pub ppu: PpuState,
+    pub board: BoardState,
     /// ROM metadata (raw data is skipped in serialization).
     pub rom_file: RomFile,
     /// Save state format version.

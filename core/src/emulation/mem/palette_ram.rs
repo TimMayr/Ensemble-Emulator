@@ -1,9 +1,20 @@
-use crate::emulation::mem::{MemoryDevice, Ram};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+use crate::emulation::mem::{MemoryDevice, OpenBus, Ram};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaletteRam {
     zero_bits: [u8; 4],
     palettes: Ram,
+}
+
+impl PaletteRam {
+    pub fn snapshot_all(&self) -> Vec<u8> {
+        let range = 0..=0x20u16;
+        let mut vec = Vec::with_capacity(range.len());
+        range.for_each(|addr| vec.push(self.read(addr, &mut OpenBus::new(0))));
+        vec
+    }
 }
 
 impl Default for PaletteRam {
@@ -15,9 +26,9 @@ impl Default for PaletteRam {
     }
 }
 
-impl MemoryDevice for PaletteRam {
+impl PaletteRam {
     #[inline]
-    fn read(&self, addr: u16, open_bus: u8) -> u8 {
+    pub fn read(&self, addr: u16, open_bus: &OpenBus) -> u8 {
         match addr {
             0x0 | 0x4 | 0x8 | 0xC | 0x10 | 0x14 | 0x18 | 0x1C => {
                 self.zero_bits[(addr % 0x10) as usize / 4usize]
@@ -26,8 +37,10 @@ impl MemoryDevice for PaletteRam {
         }
     }
 
+    pub fn snapshot(&self, addr: u16, open_bus: &OpenBus) -> u8 { self.read(addr, open_bus) }
+
     #[inline]
-    fn write(&mut self, addr: u16, data: u8) {
+    pub fn write(&mut self, addr: u16, data: u8) {
         let data = data & 0b00111111;
         match addr {
             0x0 | 0x4 | 0x8 | 0xC | 0x10 | 0x14 | 0x18 | 0x1C => {
@@ -36,24 +49,15 @@ impl MemoryDevice for PaletteRam {
             _ => self.palettes.write(addr, data),
         }
     }
+}
 
-    #[inline]
-    fn init(&mut self, addr: u16, data: u8) { self.write(addr, data) }
-
-    #[inline]
-    fn load(&mut self, data: Box<[u8]>) {
-        for (i, value) in data.iter().enumerate() {
-            match i {
-                0x0 | 0x4 | 0x8 | 0xC => self.zero_bits[i / 4] = *value,
-                _ => self.palettes.write(i as u16, *value),
-            }
-        }
-    }
-
-    #[inline]
-    fn snapshot_all(&self) -> Vec<u8> {
-        let mut out = self.palettes.snapshot_all();
-        out.extend(self.zero_bits);
-        out
+impl From<&Vec<u8>> for PaletteRam {
+    fn from(value: &Vec<u8>) -> Self {
+        let mut palette_ram = PaletteRam::default();
+        value
+            .iter()
+            .enumerate()
+            .for_each(|(i, b)| palette_ram.write(i as u16, *b));
+        palette_ram
     }
 }

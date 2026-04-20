@@ -1,16 +1,13 @@
-use std::cell::RefCell;
 use std::fmt::Debug;
-use std::ops::{Deref, RangeInclusive};
-use std::rc::Rc;
+use std::ops::RangeInclusive;
 use std::time::Duration;
 
-use crate::emulation::cpu::{Cpu, MicroOp};
-use crate::emulation::mem::Memory;
-use crate::emulation::mem::mirror_memory::MirrorMemory;
-use crate::emulation::mem::ppu_registers::PpuRegisters;
-use crate::emulation::ppu::{EmulatorFetchable, Ppu};
+use crate::emulation::board::{Board, CpuBus, PpuBus};
+use crate::emulation::cpu::MicroOp;
+use crate::emulation::mem::MemoryDevice;
+use crate::emulation::ppu::EmulatorFetchable;
 use crate::emulation::rom::RomFile;
-use crate::emulation::savestate::{CpuState, PpuState, SaveState, VERSION};
+use crate::emulation::savestate::{BoardState, SaveState, VERSION};
 use crate::trace::TraceLog;
 
 /// Number of CPU cycles executed in a single NTSC frame (~29,780).
@@ -61,11 +58,7 @@ pub const MASTER_CYCLES_PER_FRAME: u32 = 357366;
 /// let pixels = nes.get_pixel_buffer();
 /// ```
 pub struct Nes {
-    /// The MOS 6502 CPU instance.
-    pub(crate) cpu: Cpu,
-    /// The 2C02 PPU instance, wrapped in `Rc<RefCell<_>>` because the CPU
-    /// and PPU share access (e.g., through memory-mapped PPU registers).
-    pub(crate) ppu: Rc<RefCell<Ppu>>,
+    pub(crate) board: Board,
     /// Total master clock cycles elapsed since power-on.
     pub total_cycles: u128,
     /// The currently loaded ROM, or `None` if no ROM has been loaded.
@@ -95,7 +88,7 @@ impl Nes {
     /// [`ScreenRenderer`](crate::emulation::screen_renderer::ScreenRenderer)
     /// implementation.
     #[inline]
-    pub fn get_pixel_buffer(&self) -> Vec<u16> { self.ppu.borrow().pixel_buffer.clone() }
+    pub fn get_pixel_buffer(&self) -> Vec<u16> { self.board.ppu.pixel_buffer.clone() }
 
     /// Powers on the emulator, initializing the CPU-PPU connection.
     ///
@@ -103,27 +96,14 @@ impl Nes {
     /// (addresses `$2000`-`$3FFF`) and performs the CPU reset sequence.
     /// Must be called after [`load_rom()`](Nes::load_rom) and before any
     /// execution methods.
-    pub fn power(&mut self) {
-        self.cpu.ppu = Some(self.ppu.clone());
-
-        self.cpu.memory.add_memory(
-            0x2000..=0x3FFF,
-            Memory::MirrorMemory(MirrorMemory::new(
-                Box::new(Memory::PpuRegisters(PpuRegisters::new(self.ppu.clone()))),
-                0x0007,
-            )),
-        );
-
-        self.cpu.reset();
-    }
+    pub fn power(&mut self) { self.board.cpu.reset(); }
 
     /// Powers off the emulator, resetting all state to defaults.
     ///
     /// After calling this, you must call [`load_rom()`](Nes::load_rom) and
     /// [`power()`](Nes::power) again before resuming emulation.
     pub fn power_off(&mut self) {
-        self.cpu = Cpu::default();
-        self.ppu = Rc::new(RefCell::new(Ppu::default()));
+        self.board = Board::default();
         self.total_cycles = 0;
         self.cpu_cycle_counter = 0;
         self.ppu_cycle_counter = 0;
@@ -220,10 +200,14 @@ impl Nes {
     ///   mapped memory.
     ///
     /// This is a side-effect-free read intended for debugger UIs.
-    pub fn get_memory_debug(&self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>> {
+    pub fn get_memory_debug(&mut self, range: Option<RangeInclusive<u16>>) -> Vec<Vec<u8>> {
         vec![
-            self.cpu.get_memory_debug(range.clone()),
-            self.ppu.borrow().get_memory_debug(range.clone()),
+            self.board
+                .cpu
+                .get_memory_debug(range.clone(), &mut self.board),
+            self.board
+                .ppu
+                .get_memory_debug(range.clone(), &mut self.board),
         ]
     }
 
@@ -288,10 +272,9 @@ impl Nes {
     /// For most use cases, prefer [`Nes::default()`] which creates a standard
     /// NES configuration. Use this constructor when you need to supply a
     /// pre-configured CPU or PPU (e.g., for testing).
-    pub fn new(cpu: Cpu, ppu: Rc<RefCell<Ppu>>) -> Self {
+    pub fn new(board: Board) -> Self {
         Self {
-            cpu,
-            ppu,
+            board,
             rom_file: None,
             trace_log: None,
             total_cycles: 0,
@@ -305,10 +288,7 @@ impl Nes {
     /// This is equivalent to pressing the reset button on the NES console.
     /// The ROM remains loaded, but the CPU program counter is reloaded from
     /// the reset vector (`$FFFC`).
-    pub fn reset(&mut self) {
-        self.cpu.reset();
-        self.ppu.borrow_mut().reset();
-    }
+    pub fn reset(&mut self) { self.board.reset(); }
 
     /// Loads a ROM into the emulator.
     ///
@@ -336,8 +316,7 @@ impl Nes {
         for<'a> &'a T: Into<RomFile>,
     {
         let rom_file = rom_get.into();
-        self.cpu.load_rom(&rom_file);
-        self.ppu.borrow_mut().load_rom(&rom_file);
+        self.board.load_rom(&rom_file);
         self.rom_file = Some(rom_file);
     }
 
@@ -348,14 +327,8 @@ impl Nes {
     /// [`ToBytes::to_bytes()`](crate::util::ToBytes::to_bytes)
     /// and later restored with [`load_state()`](Nes::load_state).
     pub fn save_state(&self) -> Option<SaveState> {
-        let ppu_state = {
-            let ppu_ref = self.ppu.borrow();
-            PpuState::from(ppu_ref.deref())
-        };
-
         self.rom_file.as_ref().map(|rom| SaveState {
-            cpu: CpuState::from(&self.cpu),
-            ppu: ppu_state,
+            board: BoardState::from(&self.board),
             total_cycles: self.total_cycles,
             rom_file: rom.clone(),
             version: VERSION,
@@ -373,21 +346,8 @@ impl Nes {
         // Use the already loaded ROM file if available (it has the actual ROM data),
         // otherwise fall back to the savestate's ROM (which may have empty data due to
         // Skip)
-        let rom_to_use = self.rom_file.as_ref().unwrap_or(&state.rom_file);
 
-        self.ppu = Rc::new(RefCell::new(Ppu::from(&state.ppu, rom_to_use)));
-
-        self.cpu = Cpu::from(&state.cpu, self.ppu.clone(), rom_to_use);
-
-        // Add PPU registers to CPU memory map (same as power() does)
-        // This is critical - without this, the CPU can't communicate with the PPU!
-        self.cpu.memory.add_memory(
-            0x2000..=0x3FFF,
-            Memory::MirrorMemory(MirrorMemory::new(
-                Box::new(Memory::PpuRegisters(PpuRegisters::new(self.ppu.clone()))),
-                0x0007,
-            )),
-        );
+        self.board = Board::from(&state.board);
 
         // Only update rom_file if we didn't have one loaded
         if self.rom_file.is_none() {
@@ -410,6 +370,9 @@ impl Nes {
 
     #[inline(always)]
     fn step_internal(&mut self, last_cycle: u128) -> Result<ExecutionFinished, String> {
+        let ppu = &mut self.board.ppu;
+        let cpu = &mut self.board.cpu;
+
         let mut res = ExecutionFinished {
             cycle_completed: true,
             ..Default::default()
@@ -422,9 +385,8 @@ impl Nes {
         // Only borrow PPU when vbl_clear_scheduled might be active
         // This check is only relevant immediately after reading PPU status
         {
-            let ppu = self.ppu.borrow();
-            if ppu.vbl_clear_scheduled.get().is_some() {
-                ppu.vbl_reset_counter.set(ppu.vbl_reset_counter.get() + 1);
+            if ppu.vbl_clear_scheduled.is_some() {
+                ppu.vbl_reset_counter += 1;
                 ppu.process_vbl_clear_scheduled();
             }
         }
@@ -436,7 +398,7 @@ impl Nes {
         };
 
         if self.ppu_cycle_counter == 4 {
-            res = res.merge(self.ppu.borrow_mut().step());
+            res = res.merge(ppu.step(&mut self.board));
             res.ppu_cycle_completed = true;
             self.ppu_cycle_counter = 0;
         }
@@ -446,9 +408,9 @@ impl Nes {
         if self.cpu_cycle_counter == 10 {
             // Only check trace_log when actually needed
             let do_trace =
-                self.trace_log.is_some() && matches!(&self.cpu.current_op, &MicroOp::FetchOpcode);
+                self.trace_log.is_some() && matches!(&cpu.current_op, &MicroOp::FetchOpcode);
 
-            let cpu_res = self.cpu.step();
+            let cpu_res = cpu.step(&mut self.board);
 
             #[allow(clippy::question_mark)]
             if let Ok(cpu_res) = cpu_res {
@@ -482,14 +444,8 @@ impl Nes {
     #[inline(never)]
     fn write_trace_log(&mut self) {
         if let Some(ref mut trace) = self.trace_log {
-            let ppu_state = {
-                let ppu_ref = self.ppu.borrow();
-                PpuState::from(ppu_ref.deref())
-            };
-
             let state = SaveState {
-                cpu: CpuState::from(&self.cpu),
-                ppu: ppu_state,
+                board: BoardState::from(&self.board),
                 ppu_cycle_counter: self.ppu_cycle_counter,
                 cpu_cycle_counter: self.cpu_cycle_counter,
                 total_cycles: self.total_cycles,
@@ -504,9 +460,8 @@ impl Nes {
 
 impl Default for Nes {
     fn default() -> Self {
-        let cpu = Cpu::new();
-        let ppu = Rc::new(RefCell::new(Ppu::default()));
-        Nes::new(cpu, ppu)
+        let board = Board::default();
+        Nes::new(board)
     }
 }
 
@@ -514,75 +469,83 @@ impl Nes {
     // --- CPU debug accessors ---
 
     /// Returns the current program counter value.
-    pub fn program_counter(&self) -> u16 { self.cpu.program_counter }
+    pub fn program_counter(&self) -> u16 { self.board.cpu.program_counter }
 
     /// Returns the opcode byte of the instruction currently being executed.
-    pub fn current_opcode_byte(&self) -> Option<u8> { self.cpu.current_opcode.map(|c| c.opcode) }
+    pub fn current_opcode_byte(&self) -> Option<u8> {
+        self.board.cpu.current_opcode.map(|c| c.opcode)
+    }
 
     /// Returns `true` if the CPU has executed a halt (KIL) instruction.
-    pub fn is_halted(&self) -> bool { self.cpu.is_halted }
+    pub fn is_halted(&self) -> bool { self.board.cpu.is_halted }
 
     /// Returns the last memory access `(address, was_read, value)`, where
     /// `value` is the byte that was read (if `was_read` is `true`) or written
     /// (if `was_read` is `false`), or `None` if no access has occurred yet.
-    pub fn last_memory_access(&self) -> Option<(u16, bool, u8)> { self.cpu.last_memory_access }
+    pub fn last_memory_access(&self) -> Option<(u16, bool, u8)> {
+        self.board.cpu.last_memory_access
+    }
 
     // --- PPU debug accessors ---
 
     /// Returns `true` if the current frame is an even frame.
-    pub fn is_even_frame(&self) -> bool { self.ppu.borrow().even_frame }
+    pub fn is_even_frame(&self) -> bool { self.board.ppu.even_frame }
 
     /// Returns `true` if the PPU is currently rendering (background or sprites
     /// enabled).
-    pub fn is_rendering(&self) -> bool { self.ppu.borrow().is_rendering() }
+    pub fn is_rendering(&self) -> bool { self.board.ppu.is_rendering() }
 
     /// Returns debug palette data from the PPU.
-    pub fn get_palettes_debug(&self) -> EmulatorFetchable { self.ppu.borrow().get_palettes_debug() }
+    pub fn get_palettes_debug(&self) -> EmulatorFetchable {
+        self.board.ppu.get_palettes_debug(&self.board)
+    }
 
     /// Returns debug tile data from the PPU.
-    pub fn get_tiles_debug(&self) -> EmulatorFetchable { self.ppu.borrow().get_tiles_debug() }
+    pub fn get_tiles_debug(&self) -> EmulatorFetchable { self.board.ppu.get_tiles_debug(&self
+        .board) }
 
     /// Returns debug nametable data from the PPU.
     pub fn get_nametable_debug(&self) -> EmulatorFetchable {
-        self.ppu.borrow().get_nametable_debug()
+        self.board.ppu.get_nametable_debug(&self
+            .board)
     }
 
-    pub fn get_sprites_debug(&self) -> EmulatorFetchable { self.ppu.borrow().get_sprites_debug() }
+    pub fn get_sprites_debug(&self) -> EmulatorFetchable {
+        self.board.ppu.get_sprites_debug()
+    }
 
     pub fn get_soam_sprites_debug(&self) -> EmulatorFetchable {
-        self.ppu.borrow().get_soam_sprites_debug()
+        self.board.ppu.get_soam_sprites_debug()
     }
 
     /// Returns OAM (sprite memory) contents for debugging.
-    pub fn get_oam_debug(&self) -> Vec<u8> { self.ppu.borrow().oam.get_memory_debug(None) }
+    pub fn get_oam_debug(&self) -> Vec<u8> { self.board.ppu.oam.snapshot_all() }
 
     // --- Memory write methods ---
 
     /// Writes a value to CPU memory at the given address (for
     /// initialization/debugging).
     pub fn cpu_mem_write(&mut self, addr: u16, value: u8) {
-        self.cpu.memory.mem_write(addr, value);
+        CpuBus::write(&mut self.board, addr, value);
     }
 
     /// Initializes CPU memory at the given address (for
     /// initialization/debugging).
-    pub fn cpu_mem_init(&mut self, addr: u16, data: u8) { self.cpu.memory.init(addr, data); }
+    pub fn cpu_mem_init(&mut self, addr: u16, data: u8) { todo!() }
 
     /// Writes a value to PPU memory at the given address (for
     /// initialization/debugging).
-    pub fn ppu_mem_write(&self, addr: u16, value: u8) {
-        self.ppu.borrow_mut().memory.mem_write(addr, value);
+    pub fn ppu_mem_write(&mut self, addr: u16, value: u8) {
+        PpuBus::write(&mut self.board, addr, value)
     }
 
     /// Initializes PPU memory at the given address (for
     /// initialization/debugging).
-    pub fn ppu_mem_init(&self, addr: u16, data: u8) { self.ppu.borrow_mut().mem_init(addr, data); }
+    pub fn ppu_mem_init(&self, addr: u16, data: u8) { todo!() }
 
     /// Writes a value to OAM (sprite memory) at the given address (for
     /// initialization/debugging).
-    pub fn oam_write(&self, addr: u16, value: u8) {
-        self.ppu.borrow_mut().oam.mem_write(addr, value);
-    }
+    pub fn oam_write(&mut self, addr: u16, value: u8) { self.board.ppu.oam.write(addr, value); }
 
     /// Returns a reference to the trace log, if tracing is enabled.
     pub fn trace_log(&self) -> Option<&TraceLog> { self.trace_log.as_ref() }
