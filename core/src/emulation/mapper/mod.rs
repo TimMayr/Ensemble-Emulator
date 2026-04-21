@@ -44,7 +44,11 @@ impl From<&RomFile> for Mapper {
                     prg_rom: value.get_prg_rom(),
                     chr_rom: value.get_chr_rom().unwrap(),
                     nametable_arrangement: value.get_nametable_memory(),
-                    prg_ram: value.get_prg_ram(),
+                    prg_ram: if prg_ram_size > 0 {
+                        Some(Ram::new(prg_ram_size as usize))
+                    } else {
+                        None
+                    },
                 })
             }
             RomMapper::MMC1 => Mapper::NoMapper(NoMapper {}),
@@ -203,12 +207,9 @@ impl MapperLike for Nrom {
                         open_bus.read()
                     }
                 }
-                0x8000..=0xBFFF => self
+                0x8000..=0xFFFF => self
                     .prg_rom
                     .read((addr - 0x8000) % self.prg_rom_size, &open_bus),
-                0xC000..=0xFFFF => self
-                    .prg_rom
-                    .read((addr - 0xC000) % self.prg_rom_size, &open_bus),
                 _ => open_bus.read(),
             };
 
