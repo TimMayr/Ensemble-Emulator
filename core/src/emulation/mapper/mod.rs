@@ -42,7 +42,7 @@ impl From<&RomFile> for Mapper {
                     prg_ram_size: prg_ram_size as u16,
                     prg_rom_size: value.prg_memory.prg_rom_size as u16,
                     prg_rom: value.get_prg_rom(),
-                    chr_rom: value.get_chr_rom().unwrap(),
+                    chr_rom: value.get_chr_rom(),
                     nametable_arrangement: value.get_nametable_memory(),
                     prg_ram: if prg_ram_size > 0 {
                         Some(Ram::new(prg_ram_size as usize))
@@ -166,7 +166,7 @@ pub struct Nrom {
     pub prg_rom_size: u16,
     pub prg_ram: Option<Ram>,
     pub prg_rom: Rom,
-    pub chr_rom: Rom,
+    pub chr_rom: Option<Rom>,
     pub nametable_arrangement: NametableArrangement,
 }
 
@@ -227,7 +227,13 @@ impl MapperLike for Nrom {
     #[inline]
     fn ppu_read_debug(&self, addr: u16, open_bus: &OpenBus) -> PpuReadResult {
         match addr {
-            0..=0x1FFF => PpuReadResult::Handled(self.chr_rom.read(addr, open_bus)),
+            0..=0x1FFF => {
+                if let Some(rom) = &self.chr_rom {
+                    PpuReadResult::Handled(rom.read(addr, open_bus))
+                } else {
+                    PpuReadResult::Handled(open_bus.read())
+                }
+            },
             0x2000..=0x3EFF => PpuReadResult::Nametable(
                 self.nametable_arrangement.resolve_address(addr - 0x2000) % VRAM_SIZE as u16,
             ),
@@ -240,7 +246,9 @@ impl MapperLike for Nrom {
     fn ppu_write(&mut self, addr: u16, data: u8) -> PpuWriteResult {
         match addr {
             0..=0x1FFF => {
-                self.chr_rom.write(addr, data);
+                if let Some(rom) = &mut self.chr_rom {
+                    rom.write(addr, data)
+                }
                 PpuWriteResult::Handled
             }
             0x2000..=0x3EFF => PpuWriteResult::Nametable(
