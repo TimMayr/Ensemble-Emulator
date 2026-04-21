@@ -2,9 +2,10 @@
 
 use std::convert::Into;
 use std::ops::RangeInclusive;
+
 use crate::emulation::cpu::{Cpu, INTERNAL_RAM_SIZE};
 use crate::emulation::mapper::{
-    CpuReadResult, CpuWriteResult, Mapper, MapperLike, NoMapper, PpuReadResult,
+    CpuReadResult, CpuWriteResult, Mapper, MapperLike, NoMapper, PpuReadResult, PpuWriteResult,
 };
 use crate::emulation::mem::palette_ram::PaletteRam;
 use crate::emulation::mem::{MemoryDevice, OpenBus, Ram};
@@ -34,9 +35,9 @@ pub struct Board {
 pub trait CpuBus {
     fn read(&mut self, addr: u16) -> u8;
     fn read_debug(&self, addr: u16) -> u8;
-    #[inline]
     fn get_range(&self, addr: RangeInclusive<u16>) -> Vec<u8>;
     fn write(&mut self, addr: u16, data: u8);
+    fn init(&mut self, addr: u16, data: u8);
     fn get_ppu_open_bus(&mut self) -> &mut OpenBus;
     fn poll_nmi(&mut self) -> bool;
     fn poll_irq(&mut self) -> bool;
@@ -47,6 +48,7 @@ pub trait PpuBus {
     fn read(&mut self, addr: u16) -> u8;
     fn read_debug(&self, addr: u16) -> u8;
     fn write(&mut self, addr: u16, data: u8);
+    fn init(&mut self, addr: u16, data: u8);
     fn get_ppu_open_bus(&self) -> &OpenBus;
 }
 
@@ -109,7 +111,25 @@ impl<'a> CpuBus for CpuBusView<'a> {
                 0x2000..=0x3FFF => {
                     self.write_ppu_reg(addr, data);
                 }
-                0x4000..=0x401F => {}
+                0x4000..=0x401F => self.write_apu_io(addr, data),
+                _ => {}
+            },
+        }
+    }
+
+    #[inline]
+    fn init(&mut self, addr: u16, data: u8) {
+        let res = self.mapper.init(addr, data);
+
+        match res {
+            CpuWriteResult::Handled => {
+                return;
+            }
+
+            CpuWriteResult::Registered => match addr {
+                0..=0x1FFF => {
+                    self.cpu_ram.init(addr, data);
+                }
                 _ => {}
             },
         }
@@ -154,7 +174,30 @@ impl<'a> PpuBus for PpuBusView<'a> {
     }
 
     #[inline]
-    fn write(&mut self, addr: u16, data: u8) { self.mapper.ppu_write(addr, data); }
+    fn write(&mut self, addr: u16, data: u8) {
+        let res = self.mapper.ppu_write(addr, data);
+
+        match res {
+            PpuWriteResult::Handled => {}
+            PpuWriteResult::Nametable(addr) => self.nametable_ram.write(addr, data),
+            PpuWriteResult::Palette(addr) => self.palette_ram.write(addr, data),
+            PpuWriteResult::Registered => self.ppu_open_bus.set_masked(data, 0xFF),
+        }
+    }
+
+    #[inline]
+    fn init(&mut self, addr: u16, data: u8) {
+        let res = self.mapper.ppu_init(addr, data);
+
+        match res {
+            PpuWriteResult::Handled => {}
+            PpuWriteResult::Nametable(addr) => {
+                self.nametable_ram.init(addr, data);
+            }
+            PpuWriteResult::Palette(addr) => self.palette_ram.init(addr, data),
+            PpuWriteResult::Registered => {}
+        }
+    }
 
     #[inline]
     fn get_ppu_open_bus(&self) -> &OpenBus { &self.ppu_open_bus }
@@ -171,6 +214,7 @@ pub struct CpuBusView<'a> {
     irq: &'a mut bool,
     controller1: &'a mut Option<Peripheral>,
     controller2: &'a mut Option<Peripheral>,
+    joystick_strobe_data: &'a mut u8,
 }
 
 impl<'a> CpuBusView<'a> {
@@ -185,6 +229,7 @@ impl<'a> CpuBusView<'a> {
         irq: &'a mut bool,
         controller1: &'a mut Option<Peripheral>,
         controller2: &'a mut Option<Peripheral>,
+        joystick_probe_data: &'a mut u8,
     ) -> CpuBusView<'a> {
         CpuBusView {
             mapper,
@@ -197,6 +242,7 @@ impl<'a> CpuBusView<'a> {
             irq,
             controller1,
             controller2,
+            joystick_strobe_data: joystick_probe_data,
         }
     }
 
@@ -333,6 +379,21 @@ impl<'a> CpuBusView<'a> {
             _ => (),
         };
     }
+
+    #[inline]
+    fn write_apu_io(&mut self, addr: u16, data: u8) {
+        match addr {
+            0x4016 => {
+                *self.joystick_strobe_data = data & 0b111;
+                Board::update_controllers(
+                    &mut self.controller1,
+                    &mut self.controller2,
+                    &self.joystick_strobe_data,
+                )
+            }
+            _ => {}
+        }
+    }
 }
 
 pub struct PpuBusView<'a> {
@@ -387,26 +448,21 @@ impl Board {
         self.controller1 = controller1;
         self.controller2 = controller2;
 
-        self.update_controllers()
+        Board::update_controllers(
+            &mut self.controller1,
+            &mut self.controller2,
+            &self.joystick_strobe_data,
+        )
     }
 
-    #[inline]
-    fn write_apu_io(&mut self, addr: u16, data: u8) {
-        match addr {
-            0x4016 => {
-                self.joystick_strobe_data = data & 0b111;
-                self.update_controllers();
-            }
-            _ => {}
-        }
-    }
-
-    fn update_controllers(&mut self) {
-        if let (Some(controller1), Some(controller2)) =
-            (&mut self.controller1, &mut self.controller2)
-        {
-            controller1.handle_strobe_data(self.joystick_strobe_data);
-            controller2.handle_strobe_data(self.joystick_strobe_data);
+    fn update_controllers(
+        mut controller1: &mut Option<Peripheral>,
+        mut controller2: &mut Option<Peripheral>,
+        joystick_strobe_data: &u8,
+    ) {
+        if let (Some(controller1), Some(controller2)) = (&mut controller1, &mut controller2) {
+            controller1.handle_strobe_data(*joystick_strobe_data);
+            controller2.handle_strobe_data(*joystick_strobe_data);
         }
     }
 

@@ -2,9 +2,9 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use enum_dispatch::enum_dispatch;
+use nametable_mapping::NametableArrangement;
 use serde::{Deserialize, Serialize};
 
-use nametable_mapping::NametableArrangement;
 use crate::emulation::mem::{MemoryDevice, OpenBus, Ram, Rom};
 use crate::emulation::ppu::{PALETTE_RAM_SIZE, VRAM_SIZE};
 use crate::emulation::rom::{RomFile, RomMapper};
@@ -56,11 +56,13 @@ impl From<&RomFile> for Mapper {
 #[enum_dispatch]
 pub trait MapperLike: Debug + Eq + PartialEq + Hash + Clone {
     fn write(&mut self, addr: u16, data: u8) -> CpuWriteResult;
+    fn init(&mut self, addr: u16, data: u8) -> CpuWriteResult;
     fn read(&mut self, addr: u16, open_bus: &OpenBus) -> CpuReadResult;
     fn read_debug(&self, addr: u16, open_bus: &OpenBus) -> CpuReadResult;
     fn ppu_read(&mut self, addr: u16, open_bus: &OpenBus) -> PpuReadResult;
     fn ppu_read_debug(&self, addr: u16, open_bus: &OpenBus) -> PpuReadResult;
     fn ppu_write(&mut self, addr: u16, data: u8) -> PpuWriteResult;
+    fn ppu_init(&mut self, addr: u16, data: u8) -> PpuWriteResult;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -102,6 +104,13 @@ impl MapperLike for NoMapper {
         }
     }
 
+    fn init(&mut self, addr: u16, _: u8) -> CpuWriteResult {
+        match addr {
+            0x4020..=0xFFFF => CpuWriteResult::Handled,
+            _ => CpuWriteResult::Registered,
+        }
+    }
+
     fn read(&mut self, addr: u16, open_bus: &OpenBus) -> CpuReadResult {
         if (addr >= 0x4000 && addr <= 0x4014) || addr >= 4018 {
             return CpuReadResult::Handled(open_bus.read());
@@ -137,6 +146,13 @@ impl MapperLike for NoMapper {
             _ => PpuWriteResult::Registered,
         }
     }
+
+    fn ppu_init(&mut self, addr: u16, _: u8) -> PpuWriteResult {
+        match addr {
+            0..=0x3FFF => PpuWriteResult::Handled,
+            _ => PpuWriteResult::Registered,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -167,6 +183,9 @@ impl MapperLike for Nrom {
             _ => CpuWriteResult::Registered,
         }
     }
+
+    #[inline]
+    fn init(&mut self, addr: u16, data: u8) -> CpuWriteResult { self.write(addr, data) }
 
     #[inline]
     fn read(&mut self, addr: u16, open_bus: &OpenBus) -> CpuReadResult {
@@ -212,7 +231,7 @@ impl MapperLike for Nrom {
                 self.nametable_arrangement.resolve_address(addr - 0x2000) % VRAM_SIZE as u16,
             ),
             0x3F00..=0x3FFF => PpuReadResult::Palette((addr - 0x3F00) % PALETTE_RAM_SIZE),
-            _ => PpuReadResult::Handled(open_bus.read()),
+            _ => PpuReadResult::Registered,
         }
     }
 
@@ -229,5 +248,10 @@ impl MapperLike for Nrom {
             0x3F00..=0x3FFF => PpuWriteResult::Palette((addr - 0x3F00) % PALETTE_RAM_SIZE),
             _ => PpuWriteResult::Registered,
         }
+    }
+
+    #[inline]
+    fn ppu_init(&mut self, addr: u16, data: u8) -> PpuWriteResult {
+        self.ppu_write(addr, data)
     }
 }

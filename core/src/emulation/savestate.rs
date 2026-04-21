@@ -14,6 +14,7 @@
 use std::collections::VecDeque;
 
 use serde::{Deserialize, Serialize};
+use static_assertions::assert_impl_all;
 
 use crate::emulation::board::Board;
 use crate::emulation::cpu::{Cpu, MicroOp};
@@ -253,6 +254,12 @@ impl From<&Ppu> for PpuState {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum PeripheralState {
+
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct BoardState {
     /// Captured CPU state.
@@ -322,6 +329,8 @@ pub struct SaveState {
     /// CPU clock divider counter at the time of capture.
     pub cpu_cycle_counter: u8,
 }
+
+assert_impl_all!(SaveState: Sync);
 
 /// Attempts to deserialize a [`SaveState`] from raw bytes.
 ///

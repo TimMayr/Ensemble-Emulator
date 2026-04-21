@@ -9,8 +9,6 @@ pub trait MemoryDevice: Debug {
     fn write(&mut self, addr: u16, data: u8);
     fn init(&mut self, addr: u16, data: u8);
     fn load(&mut self, data: Box<[u8]>);
-
-    fn is_internal(&self) -> bool { false }
     fn snapshot(&self, addr: u16, open_bus: &OpenBus) -> u8 { self.read(addr, open_bus) }
     fn snapshot_all(&self) -> Vec<u8>;
 }

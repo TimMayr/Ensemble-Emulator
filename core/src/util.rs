@@ -110,6 +110,7 @@ macro_rules! cpu_bus_view {
             &mut $self.board.irq,
             &mut $self.board.controller1,
             &mut $self.board.controller2,
+            &mut $self.board.joystick_strobe_data,
         )
     };
 }

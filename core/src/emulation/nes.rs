@@ -530,7 +530,9 @@ impl Nes {
 
     /// Initializes CPU memory at the given address (for
     /// initialization/debugging).
-    pub fn cpu_mem_init(&mut self, addr: u16, data: u8) { todo!() }
+    pub fn cpu_mem_init(&mut self, addr: u16, data: u8) {
+        CpuBus::init(&mut cpu_bus_view!(self), addr, data);
+    }
 
     /// Writes a value to PPU memory at the given address (for
     /// initialization/debugging).
@@ -540,7 +542,9 @@ impl Nes {
 
     /// Initializes PPU memory at the given address (for
     /// initialization/debugging).
-    pub fn ppu_mem_init(&self, addr: u16, data: u8) { todo!() }
+    pub fn ppu_mem_init(&mut self, addr: u16, data: u8) {
+        PpuBus::init(&mut ppu_bus_view!(self), addr, data);
+    }
 
     /// Writes a value to OAM (sprite memory) at the given address (for
     /// initialization/debugging).

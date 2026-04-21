@@ -8,14 +8,7 @@ pub struct PaletteRam {
     palettes: Ram,
 }
 
-impl PaletteRam {
-    pub fn snapshot_all(&self) -> Vec<u8> {
-        let range = 0..=0x20u16;
-        let mut vec = Vec::with_capacity(range.len());
-        range.for_each(|addr| vec.push(self.read(addr, &mut OpenBus::new(0))));
-        vec
-    }
-}
+impl PaletteRam {}
 
 impl Default for PaletteRam {
     fn default() -> Self {
@@ -37,6 +30,7 @@ impl PaletteRam {
         }
     }
 
+    #[inline]
     pub fn snapshot(&self, addr: u16, open_bus: &OpenBus) -> u8 { self.read(addr, open_bus) }
 
     #[inline]
@@ -48,6 +42,17 @@ impl PaletteRam {
             }
             _ => self.palettes.write(addr, data),
         }
+    }
+
+    #[inline]
+    pub fn init(&mut self, addr: u16, data: u8) { self.write(addr, data) }
+
+    #[inline]
+    pub fn snapshot_all(&self) -> Vec<u8> {
+        let range = 0..=0x20u16;
+        let mut vec = Vec::with_capacity(range.len());
+        range.for_each(|addr| vec.push(self.read(addr, &mut OpenBus::new(0))));
+        vec
     }
 }
 

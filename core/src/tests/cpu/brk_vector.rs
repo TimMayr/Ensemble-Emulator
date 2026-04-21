@@ -1,5 +1,5 @@
 use crate::emulation::cpu::Cpu;
-use crate::emulation::mem::{Memory, MemoryDevice, Rom};
+use crate::emulation::mem::{MemoryDevice, Rom};
 
 #[test]
 fn test_brk_vector() {

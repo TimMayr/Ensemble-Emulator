@@ -12,7 +12,7 @@ pub struct TraceLog {
     pub log: String,
 }
 
-struct CpuTraceState {
+pub struct CpuTraceState {
     program_counter: u16,
     accumulator: u8,
     x_register: u8,
@@ -21,6 +21,7 @@ struct CpuTraceState {
     stack_pointer: u8,
     current_opcode: Option<OpCode>,
 }
+
 impl Default for TraceLog {
     fn default() -> Self { Self::new() }
 }
@@ -59,6 +60,7 @@ impl TraceLog {
             &mut board.irq,
             &mut board.controller1,
             &mut board.controller2,
+            &mut board.joystick_strobe_data,
         );
         let relevant_mem: Vec<u8> = bus.get_range(relevant_mem_start..=relevant_mem_end);
         let mem_formatted = relevant_mem
