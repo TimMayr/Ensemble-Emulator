@@ -484,7 +484,7 @@ impl From<&BoardState> for Board {
             cpu: Cpu::from(&state.cpu),
             ppu: Ppu::from(&state.ppu),
             cpu_ram: Ram::from(&state.cpu_ram),
-            nametable_ram: Ram::from(&state.cpu_ram),
+            nametable_ram: Ram::from(&state.nametable_ram),
             palette_ram: PaletteRam::from(&state.palette_ram),
             mapper: state.mapper.clone(),
             cpu_open_bus: state.cpu_open_bus,
