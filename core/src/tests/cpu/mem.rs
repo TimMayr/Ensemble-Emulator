@@ -1,5 +1,5 @@
-use crate::emulation::cpu::Cpu;
-use crate::emulation::mem::{Memory, MemoryDevice, Rom};
+use crate::emulation::mem::{MemoryDevice, Rom};
+use crate::tests::cpu::Cpu;
 
 #[test]
 fn test_cpu_ram_writeable_and_readable() {
@@ -26,24 +26,20 @@ fn test_rom_readable() {
     let mut cpu = Cpu::new();
 
     // Create and initialize new Rom
-    let mut rom = Rom::new(0xBFE0);
-    rom.init(0x10, 0x20);
+    let mut rom = Rom::new(0x4000);
+    rom.init(0x30, 0x20);
+    cpu.attach_test_rom(rom);
 
-    // Attach new Rom memory device to cpu
-    cpu.memory.add_memory(0x4020..=0xFFFF, Memory::Rom(rom));
-
-    assert_eq!(cpu.mem_read(0x4030), 0x20);
+    assert_eq!(cpu.mem_read(0x8030), 0x20);
 }
 
 #[test]
 fn test_rom_non_writeable() {
     let mut cpu = Cpu::new();
 
-    // Attach new Rom memory device to cpu
-    cpu.memory
-        .add_memory(0x4020..=0xFFFF, Memory::Rom(Rom::new(0xBFE0)));
+    cpu.attach_test_rom(Rom::new(0x4000));
 
-    cpu.mem_write(0x4030, 0x20);
+    cpu.mem_write(0x8030, 0x20);
 
-    assert_eq!(cpu.mem_read(0x4030), 0x00);
+    assert_eq!(cpu.mem_read(0x8030), 0x00);
 }

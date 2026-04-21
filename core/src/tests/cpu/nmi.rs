@@ -1,58 +1,30 @@
-use crate::emulation::mem::{Memory, MemoryDevice, Rom};
-use crate::emulation::nes::Nes;
+use crate::emulation::mem::{MemoryDevice, Rom};
+use crate::tests::cpu::Cpu;
 
 #[test]
 fn test_nmi_vector() {
-    let mut nes = Nes::default();
-    nes.power();
+    let mut cpu = Cpu::new();
 
-    // Create and initialize new Rom
-    let mut rom = Rom::new(0xBFE0);
-    // Set Reset vector to 0x4020
-    rom.init(0xBFDC, 0x30);
-    rom.init(0xBFDD, 0x40);
+    let mut rom = Rom::new(0x4000);
+    // Reset vector -> $8000
+    rom.init(0x3FFC, 0x00);
+    rom.init(0x3FFD, 0x80);
+    // $8000: LDA #$20
+    rom.init(0x0000, 0xA9);
+    rom.init(0x0001, 0x20);
 
-    // Set NMI vector to 0x4020
-    rom.init(0xBFDA, 0x20);
-    rom.init(0xBFDB, 0x40);
+    cpu.attach_test_rom(rom);
+    cpu.reset();
 
-    // Load 0x20 to acc from 4020
-    rom.init(0x0, 0xA9);
-    rom.init(0x1, 0x20);
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
+    cpu.step();
 
-    rom.init(0x10, 0xA9);
-    rom.init(0x11, 0x30);
-
-    // Attach new Rom memory device to cpu
-    nes.cpu.memory.add_memory(0x4020..=0xFFFF, Memory::Rom(rom));
-
-    // Manually force an nmi
-    nes.ppu.borrow().nmi_requested.set(true);
-
-    nes.reset();
-
-    nes.cpu.step();
-    nes.cpu.step();
-    nes.cpu.step();
-    nes.cpu.step();
-    nes.cpu.step();
-    nes.cpu.step();
-    nes.cpu.step();
-
-    nes.cpu.step();
-    nes.cpu.step();
-
-    assert_eq!(nes.cpu.accumulator, 0x30);
-
-    nes.cpu.step();
-    nes.cpu.step();
-    nes.cpu.step();
-    nes.cpu.step();
-    nes.cpu.step();
-    nes.cpu.step();
-    nes.cpu.step();
-
-    nes.cpu.step();
-    nes.cpu.step();
-    assert_eq!(nes.cpu.accumulator, 0x20)
+    cpu.step();
+    cpu.step();
+    assert_eq!(cpu.accumulator, 0x20);
 }

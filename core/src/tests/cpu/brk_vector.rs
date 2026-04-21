@@ -1,26 +1,29 @@
-use crate::emulation::cpu::Cpu;
 use crate::emulation::mem::{MemoryDevice, Rom};
+use crate::tests::cpu::Cpu;
 
 #[test]
 fn test_brk_vector() {
     let mut cpu = Cpu::new();
 
     // Create and initialize new Rom
-    let mut rom = Rom::new(0xBFE0);
+    let mut rom = Rom::new(0x4000);
 
-    // Set Break Handler vector to 0x4020
-    rom.init(0xBFDE, 0x20);
-    rom.init(0xBFDF, 0x40);
+    // Set reset vector to $8000
+    rom.init(0x3FFC, 0x00);
+    rom.init(0x3FFD, 0x80);
+    // Set break handler vector to $8020
+    rom.init(0x3FFE, 0x20);
+    rom.init(0x3FFF, 0x80);
 
-    // Load 0x20 to acc from 4020
-    rom.init(0x0, 0xA9);
-    rom.init(0x1, 0x20);
+    // Load 0x20 to acc from $8020
+    rom.init(0x20, 0xA9);
+    rom.init(0x21, 0x20);
 
-    // Trigger Break at cpu start
+    // Trigger Break at CPU start ($8000)
     cpu.mem_write(0x0, 0x0);
 
-    // Attach new Rom memory device to cpu
-    cpu.memory.add_memory(0x4020..=0xFFFF, Memory::Rom(rom));
+    // Attach ROM mapper
+    cpu.attach_test_rom(rom);
 
     cpu.step();
     cpu.step();

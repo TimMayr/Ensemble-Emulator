@@ -1,4 +1,4 @@
-use crate::emulation::cpu::Cpu;
+use crate::tests::cpu::Cpu;
 
 #[test]
 fn test_dex_complete() {

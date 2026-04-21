@@ -112,7 +112,7 @@ impl MapperLike for NoMapper {
     }
 
     fn read(&mut self, addr: u16, open_bus: &OpenBus) -> CpuReadResult {
-        if (addr >= 0x4000 && addr <= 0x4014) || addr >= 4018 {
+        if (addr >= 0x4000 && addr <= 0x4014) || addr >= 0x4018 {
             return CpuReadResult::Handled(open_bus.read());
         }
 
@@ -120,7 +120,7 @@ impl MapperLike for NoMapper {
     }
 
     fn read_debug(&self, addr: u16, open_bus: &OpenBus) -> CpuReadResult {
-        if (addr >= 0x4000 && addr <= 0x4014) || addr >= 4018 {
+        if (addr >= 0x4000 && addr <= 0x4014) || addr >= 0x4018 {
             return CpuReadResult::Handled(open_bus.read());
         }
 
@@ -193,7 +193,7 @@ impl MapperLike for Nrom {
     }
 
     fn read_debug(&self, addr: u16, open_bus: &OpenBus) -> CpuReadResult {
-        if (addr >= 0x4000 && addr <= 0x4014) || addr >= 4018 {
+        if (addr >= 0x4000 && addr <= 0x4014) || addr >= 0x4018 {
             let value = match addr {
                 0x6000..=0x7FFF => {
                     if let Some(prg_ram) = &self.prg_ram {

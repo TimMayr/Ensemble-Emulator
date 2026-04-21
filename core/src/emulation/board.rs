@@ -60,7 +60,7 @@ impl<'a> CpuBus for CpuBusView<'a> {
         match res {
             CpuReadResult::Handled(data) => data,
             CpuReadResult::Registered => match addr {
-                0..=INTERNAL_RAM_SIZE => self.cpu_ram.read(addr, &mut self.cpu_open_bus),
+                0..=0x1FFF => self.cpu_ram.read(addr, &mut self.cpu_open_bus),
                 0x2000..=0x3FFF => self.read_ppu_reg(addr, 0),
                 0x4000..=0x401F => CpuBusView::read_apu_io(
                     addr,
@@ -80,7 +80,7 @@ impl<'a> CpuBus for CpuBusView<'a> {
         match res {
             CpuReadResult::Handled(data) => data,
             CpuReadResult::Registered => match addr {
-                0..=INTERNAL_RAM_SIZE => self.cpu_ram.snapshot(addr, &self.cpu_open_bus),
+                0..=0x1FFF => self.cpu_ram.snapshot(addr, &self.cpu_open_bus),
                 0x2000..=0x3FFF => self.snapshot_ppu_reg(addr, 0),
                 0x4000..=0x401F => self.snapshot_apu_io(addr, &self.cpu_open_bus),
                 _ => self.cpu_open_bus.read(),

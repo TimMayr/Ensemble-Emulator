@@ -1,4 +1,4 @@
-use crate::emulation::cpu::Cpu;
+use crate::tests::cpu::Cpu;
 
 #[test]
 fn bpl_fail() {
