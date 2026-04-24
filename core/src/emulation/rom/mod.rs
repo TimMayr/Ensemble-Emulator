@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::emulation::mapper::nametable_mapping::NametableArrangement;
-use crate::emulation::mem::{MemoryDevice, Ram, Rom};
+use crate::emulation::mem::Memory;
 use crate::emulation::rom::formats::archaic_ines::ArchaicInes;
 use crate::emulation::rom::formats::ines::Ines;
 use crate::emulation::rom::formats::ines2::Ines2;
@@ -610,6 +610,7 @@ impl Display for RomTimingRegion {
 #[repr(u16)]
 pub enum RomMapper {
     NRom = 0,
+    MMC1 = 1,
     #[num_enum(catch_all)]
     Unknown(u16),
 }
@@ -618,6 +619,7 @@ impl Display for RomMapper {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str: &str = match self {
             RomMapper::NRom => "NROM",
+            RomMapper::MMC1 => "MMC1",
             RomMapper::Unknown(_) => "Unknown Mapper",
         };
 
@@ -750,8 +752,8 @@ impl RomFile {
     /// This is used internally to populate the CPU memory map at addresses
     /// `$8000`-`$FFFF`.
     #[doc(hidden)]
-    pub fn get_prg_rom(&self) -> Rom {
-        let mut rom = Rom::new(self.prg_memory.prg_rom_size as usize);
+    pub fn get_prg_rom(&self) -> Memory {
+        let mut rom = Memory::new(self.prg_memory.prg_rom_size as usize, false);
 
         let mut start = 16usize;
 
@@ -773,12 +775,12 @@ impl RomFile {
     /// Returns `None` when the ROM uses CHR RAM instead of CHR ROM
     /// (i.e., `chr_rom_size == 0`).
     #[doc(hidden)]
-    pub fn get_chr_rom(&self) -> Option<Rom> {
+    pub fn get_chr_rom(&self) -> Option<Memory> {
         if self.chr_memory.chr_rom_size == 0 {
             return None;
         }
 
-        let mut rom = Rom::new(self.chr_memory.chr_rom_size as usize);
+        let mut rom = Memory::new(self.chr_memory.chr_rom_size as usize, false);
 
         let mut start = 16usize;
 
@@ -802,9 +804,9 @@ impl RomFile {
     /// This is mapped at CPU addresses `$6000`-`$7FFF` and may be
     /// battery-backed for save data.
     #[doc(hidden)]
-    pub fn get_prg_ram(&self) -> Option<Ram> {
+    pub fn get_prg_ram(&self) -> Option<Memory> {
         if self.prg_memory.prg_ram_size > 0 {
-            let mut ram = Ram::new(self.prg_memory.prg_ram_size as usize);
+            let mut ram = Memory::new(self.prg_memory.prg_ram_size as usize, true);
 
             let mut start = 16usize;
 

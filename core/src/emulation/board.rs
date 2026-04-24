@@ -8,10 +8,11 @@ use crate::emulation::mapper::{
     CpuReadResult, CpuWriteResult, Mapper, MapperLike, NoMapper, PpuReadResult, PpuWriteResult,
 };
 use crate::emulation::mem::palette_ram::PaletteRam;
-use crate::emulation::mem::{MemoryDevice, OpenBus, Ram};
+use crate::emulation::mem::{Memory, OpenBus};
 use crate::emulation::peripherals::{Peripheral, PeripheralDevice};
 use crate::emulation::ppu::{
-    Ppu, OPEN_BUS_DECAY_DELAY, PALETTE_RAM_END_ADDRESS, PALETTE_RAM_START_ADDRESS, VRAM_SIZE,
+    Ppu, OPEN_BUS_DECAY_DELAY, PALETTE_RAM_END_ADDRESS, PALETTE_RAM_SIZE,
+    PALETTE_RAM_START_ADDRESS, VRAM_SIZE,
 };
 use crate::emulation::rom::RomFile;
 use crate::emulation::savestate::BoardState;
@@ -19,8 +20,8 @@ use crate::emulation::savestate::BoardState;
 pub struct Board {
     pub cpu: Cpu,
     pub ppu: Ppu,
-    pub cpu_ram: Ram,
-    pub nametable_ram: Ram,
+    pub cpu_ram: Memory,
+    pub nametable_ram: Memory,
     pub palette_ram: PaletteRam,
     pub mapper: Mapper,
     pub cpu_open_bus: OpenBus,
@@ -60,7 +61,7 @@ impl<'a> CpuBus for CpuBusView<'a> {
         match res {
             CpuReadResult::Handled(data) => data,
             CpuReadResult::Registered => match addr {
-                0..=0x1FFF => self.cpu_ram.read(addr, &mut self.cpu_open_bus),
+                0..=0x1FFF => self.cpu_ram.read(addr as u32, &mut self.cpu_open_bus),
                 0x2000..=0x3FFF => self.read_ppu_reg(addr, 0),
                 0x4000..=0x401F => CpuBusView::read_apu_io(
                     addr,
@@ -80,7 +81,7 @@ impl<'a> CpuBus for CpuBusView<'a> {
         match res {
             CpuReadResult::Handled(data) => data,
             CpuReadResult::Registered => match addr {
-                0..=0x1FFF => self.cpu_ram.snapshot(addr, &self.cpu_open_bus),
+                0..=0x1FFF => self.cpu_ram.snapshot(addr as u32, &self.cpu_open_bus),
                 0x2000..=0x3FFF => self.snapshot_ppu_reg(addr, 0),
                 0x4000..=0x401F => self.snapshot_apu_io(addr, &self.cpu_open_bus),
                 _ => self.cpu_open_bus.read(),
@@ -106,7 +107,7 @@ impl<'a> CpuBus for CpuBusView<'a> {
 
             CpuWriteResult::Registered => match addr {
                 0..=0x1FFF => {
-                    self.cpu_ram.write(addr, data);
+                    self.cpu_ram.write(addr as u32, data);
                 }
                 0x2000..=0x3FFF => {
                     self.write_ppu_reg(addr, data);
@@ -128,7 +129,7 @@ impl<'a> CpuBus for CpuBusView<'a> {
 
             CpuWriteResult::Registered => match addr {
                 0..=0x1FFF => {
-                    self.cpu_ram.init(addr, data);
+                    self.cpu_ram.init(addr as u32, data);
                 }
                 _ => {}
             },
@@ -155,9 +156,14 @@ impl<'a> PpuBus for PpuBusView<'a> {
 
         match res {
             PpuReadResult::Handled(data) => data,
-            PpuReadResult::Registered => self.ppu_open_bus.read(),
-            PpuReadResult::Nametable(addr) => self.nametable_ram.read(addr, &mut self.ppu_open_bus),
-            PpuReadResult::Palette(addr) => self.palette_ram.read(addr, &mut self.ppu_open_bus),
+            PpuReadResult::Nametable(addr) => self.nametable_ram.read(addr as u32, &mut self
+                .ppu_open_bus),
+            PpuReadResult::Registered => match addr {
+                0x3F00..=0x3FFF => self
+                    .palette_ram
+                    .read((addr - 0x3F00) % PALETTE_RAM_SIZE, self.ppu_open_bus),
+                _ => self.ppu_open_bus.read(),
+            },
         }
     }
 
@@ -167,9 +173,14 @@ impl<'a> PpuBus for PpuBusView<'a> {
 
         match res {
             PpuReadResult::Handled(data) => data,
-            PpuReadResult::Registered => self.ppu_open_bus.read(),
-            PpuReadResult::Nametable(addr) => self.nametable_ram.snapshot(addr, &self.ppu_open_bus),
-            PpuReadResult::Palette(addr) => self.palette_ram.snapshot(addr, &self.ppu_open_bus),
+            PpuReadResult::Nametable(addr) => self.nametable_ram.snapshot(addr as u32, &self
+                .ppu_open_bus),
+            PpuReadResult::Registered => match addr {
+                0x3F00..=0x3FFF => self
+                    .palette_ram
+                    .snapshot((addr - 0x3F00) % PALETTE_RAM_SIZE, self.ppu_open_bus),
+                _ => self.ppu_open_bus.read(),
+            },
         }
     }
 
@@ -179,9 +190,13 @@ impl<'a> PpuBus for PpuBusView<'a> {
 
         match res {
             PpuWriteResult::Handled => {}
-            PpuWriteResult::Nametable(addr) => self.nametable_ram.write(addr, data),
-            PpuWriteResult::Palette(addr) => self.palette_ram.write(addr, data),
-            PpuWriteResult::Registered => self.ppu_open_bus.set_masked(data, 0xFF),
+            PpuWriteResult::Nametable(addr) => self.nametable_ram.write(addr as u32, data),
+            PpuWriteResult::Registered => match addr {
+                0x3F00..=0x3FFF => self
+                    .palette_ram
+                    .write((addr - 0x3F00) % PALETTE_RAM_SIZE, data),
+                _ => self.ppu_open_bus.set_masked(data, 0xFF),
+            },
         }
     }
 
@@ -192,10 +207,14 @@ impl<'a> PpuBus for PpuBusView<'a> {
         match res {
             PpuWriteResult::Handled => {}
             PpuWriteResult::Nametable(addr) => {
-                self.nametable_ram.init(addr, data);
+                self.nametable_ram.init(addr as u32, data);
             }
-            PpuWriteResult::Palette(addr) => self.palette_ram.init(addr, data),
-            PpuWriteResult::Registered => {}
+            PpuWriteResult::Registered => match addr {
+                0x3F00..=0x3FFF => self
+                    .palette_ram
+                    .init((addr - 0x3F00) % PALETTE_RAM_SIZE, data),
+                _ => {}
+            },
         }
     }
 
@@ -207,8 +226,8 @@ pub struct CpuBusView<'a> {
     mapper: &'a mut Mapper,
     cpu_open_bus: &'a mut OpenBus,
     ppu_open_bus: &'a mut OpenBus,
-    cpu_ram: &'a mut Ram,
-    nametable_ram: &'a mut Ram,
+    cpu_ram: &'a mut Memory,
+    nametable_ram: &'a mut Memory,
     palette_ram: &'a mut PaletteRam,
     ppu: &'a mut Ppu,
     irq: &'a mut bool,
@@ -222,8 +241,8 @@ impl<'a> CpuBusView<'a> {
         mapper: &'a mut Mapper,
         cpu_open_bus: &'a mut OpenBus,
         ppu_open_bus: &'a mut OpenBus,
-        cpu_ram: &'a mut Ram,
-        nametable_ram: &'a mut Ram,
+        cpu_ram: &'a mut Memory,
+        nametable_ram: &'a mut Memory,
         palette_ram: &'a mut PaletteRam,
         ppu: &'a mut Ppu,
         irq: &'a mut bool,
@@ -400,7 +419,7 @@ pub struct PpuBusView<'a> {
     mapper: &'a mut Mapper,
     cpu_open_bus: &'a mut OpenBus,
     ppu_open_bus: &'a mut OpenBus,
-    nametable_ram: &'a mut Ram,
+    nametable_ram: &'a mut Memory,
     palette_ram: &'a mut PaletteRam,
 }
 
@@ -409,7 +428,7 @@ impl<'a> PpuBusView<'a> {
         mapper: &'a mut Mapper,
         cpu_open_bus: &'a mut OpenBus,
         ppu_open_bus: &'a mut OpenBus,
-        nametable_ram: &'a mut Ram,
+        nametable_ram: &'a mut Memory,
         palette_ram: &'a mut PaletteRam,
     ) -> PpuBusView<'a> {
         PpuBusView {
@@ -429,8 +448,8 @@ impl Board {
             ppu,
             cpu_open_bus: OpenBus::new(OPEN_BUS_DECAY_DELAY),
             ppu_open_bus: OpenBus::new(OPEN_BUS_DECAY_DELAY),
-            cpu_ram: Ram::new(INTERNAL_RAM_SIZE as usize),
-            nametable_ram: Ram::new(VRAM_SIZE),
+            cpu_ram: Memory::new(INTERNAL_RAM_SIZE as usize, true),
+            nametable_ram: Memory::new(VRAM_SIZE, true),
             palette_ram: PaletteRam::default(),
             controller1: None,
             controller2: None,
@@ -483,8 +502,8 @@ impl From<&BoardState> for Board {
         Board {
             cpu: Cpu::from(&state.cpu),
             ppu: Ppu::from(&state.ppu),
-            cpu_ram: Ram::from(&state.cpu_ram),
-            nametable_ram: Ram::from(&state.nametable_ram),
+            cpu_ram: Memory::from((&state.cpu_ram, true)),
+            nametable_ram: Memory::from((&state.nametable_ram, true)),
             palette_ram: PaletteRam::from(&state.palette_ram),
             mapper: state.mapper.clone(),
             cpu_open_bus: state.cpu_open_bus,

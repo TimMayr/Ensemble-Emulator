@@ -4,83 +4,48 @@ use serde::{Deserialize, Serialize};
 
 pub mod palette_ram;
 
-pub trait MemoryDevice: Debug {
-    fn read(&self, addr: u16, open_bus: &OpenBus) -> u8;
-    fn write(&mut self, addr: u16, data: u8);
-    fn init(&mut self, addr: u16, data: u8);
-    fn load(&mut self, data: Box<[u8]>);
-    fn snapshot(&self, addr: u16, open_bus: &OpenBus) -> u8 { self.read(addr, open_bus) }
-    fn snapshot_all(&self) -> Vec<u8>;
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)]
-pub struct Ram {
+pub struct Memory {
     memory: Box<[u8]>,
+    pub is_write: bool,
 }
 
-impl Ram {
-    pub fn new(size: usize) -> Self {
+impl Memory {
+    pub fn new(size: usize, is_write: bool) -> Self {
         assert!(size > 0, "RAM size must be greater than zero");
 
         Self {
             memory: vec![0; size].into_boxed_slice(),
+            is_write,
         }
     }
 }
 
-impl MemoryDevice for Ram {
+impl Memory {
     #[inline]
-    fn read(&self, addr: u16, _: &OpenBus) -> u8 {
+    pub fn read(&self, addr: u32, _: &OpenBus) -> u8 {
         self.memory[addr as usize % self.memory.len()]
     }
 
     #[inline]
-    fn write(&mut self, addr: u16, data: u8) {
-        self.memory[addr as usize % self.memory.len()] = data;
-    }
-
-    #[inline]
-    fn init(&mut self, addr: u16, data: u8) {
-        self.memory[addr as usize % self.memory.len()] = data;
-    }
-
-    fn load(&mut self, data: Box<[u8]>) { self.memory = data }
-
-    fn snapshot_all(&self) -> Vec<u8> { self.memory.to_vec() }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub struct Rom {
-    memory: Box<[u8]>,
-}
-
-impl Rom {
-    pub fn new(size: usize) -> Self {
-        assert!(size > 0, "ROM size must be greater than zero");
-
-        Self {
-            memory: vec![0; size].into_boxed_slice(),
+    pub fn write(&mut self, addr: u32, data: u8) {
+        if !self.is_write {
+            return;
         }
-    }
-}
 
-impl MemoryDevice for Rom {
-    #[inline]
-    fn read(&self, addr: u16, _: &OpenBus) -> u8 {
-        self.memory[addr as usize % self.memory.len()]
-    }
-
-    #[inline]
-    fn write(&mut self, _: u16, _: u8) {}
-
-    #[inline]
-    fn init(&mut self, addr: u16, data: u8) {
         self.memory[addr as usize % self.memory.len()] = data;
     }
 
-    fn load(&mut self, data: Box<[u8]>) { self.memory = data }
+    #[inline]
+    pub fn init(&mut self, addr: u32, data: u8) {
+        self.memory[addr as usize % self.memory.len()] = data;
+    }
 
-    fn snapshot_all(&self) -> Vec<u8> { self.memory.to_vec() }
+    pub fn load(&mut self, data: Box<[u8]>) { self.memory = data }
+
+    pub fn snapshot(&self, addr: u32, open_bus: &OpenBus) -> u8 { self.read(addr, open_bus) }
+
+    pub fn snapshot_all(&self) -> Vec<u8> { self.memory.to_vec() }
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -139,18 +104,11 @@ impl OpenBus {
     }
 }
 
-impl From<&Vec<u8>> for Ram {
-    fn from(value: &Vec<u8>) -> Self {
-        Ram {
-            memory: value.clone().into_boxed_slice(),
-        }
-    }
-}
-
-impl From<&Vec<u8>> for Rom {
-    fn from(value: &Vec<u8>) -> Self {
-        Rom {
-            memory: value.clone().into_boxed_slice(),
+impl From<(&Vec<u8>, bool)> for Memory {
+    fn from(value: (&Vec<u8>, bool)) -> Self {
+        Memory {
+            memory: value.0.clone().into_boxed_slice(),
+            is_write: value.1,
         }
     }
 }

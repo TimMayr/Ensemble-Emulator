@@ -4,7 +4,7 @@
 //! ([`Hashable`]) for use by the emulator and consumers of this library.
 
 use crate::emulation::cpu::UPPER_BYTE;
-use crate::emulation::mem::{MemoryDevice, Ram, Rom};
+use crate::emulation::mem::Memory;
 use crate::emulation::savestate::{SaveState, BINARY_FORMAT_VERSION, JSON_FORMAT_VERSION, MAGIC};
 /// Returns `true` if adding a signed `offset` to `base` crosses a 256-byte page
 /// boundary.
@@ -69,12 +69,12 @@ impl ToBytes for SaveState {
     }
 }
 
-impl Hashable for Ram {
-    fn hash(&self) -> u64 { compute_hash(&self.snapshot_all()) }
-}
-
-impl Hashable for Rom {
-    fn hash(&self) -> u64 { compute_hash(&self.snapshot_all()) }
+impl Hashable for Memory {
+    fn hash(&self) -> u64 {
+        let mut base = self.snapshot_all();
+        base.push(self.is_write.into());
+        compute_hash(&base[..])
+    }
 }
 
 impl Hashable for Vec<u8> {

@@ -24,9 +24,18 @@ mod vbl_set_time_02;
 #[test]
 fn test_ppu_vbl_nmi() {
     let mut emu = Nes::default();
-    emu.load_rom(&String::from(
+    let loaded = emu.load_rom(&String::from(
         "./tests/nes-test-roms/ppu_vbl_nmi/ppu_vbl_nmi.nes",
     ));
+
+    if !loaded.0 {
+        assert!(
+            loaded.0,
+            "Mapper of Rom (id: {}) is not implemented... Aborting",
+            loaded.1
+        );
+    }
+
     emu.power();
     emu.run_until(650_000_000, RunOptions::default())
         .expect("Error while running test");

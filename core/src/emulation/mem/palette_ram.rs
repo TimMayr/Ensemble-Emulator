@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-use crate::emulation::mem::{MemoryDevice, OpenBus, Ram};
+use crate::emulation::mem::{Memory, OpenBus};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaletteRam {
     zero_bits: [u8; 4],
-    palettes: Ram,
+    palettes: Memory,
 }
 
 impl PaletteRam {}
@@ -14,7 +14,7 @@ impl Default for PaletteRam {
     fn default() -> Self {
         Self {
             zero_bits: [0; 4],
-            palettes: Ram::new(0x20),
+            palettes: Memory::new(0x20, true),
         }
     }
 }
@@ -26,7 +26,7 @@ impl PaletteRam {
             0x0 | 0x4 | 0x8 | 0xC | 0x10 | 0x14 | 0x18 | 0x1C => {
                 self.zero_bits[(addr % 0x10) as usize / 4usize]
             }
-            _ => self.palettes.read(addr, open_bus),
+            _ => self.palettes.read(addr as u32, open_bus),
         }
     }
 
@@ -40,7 +40,7 @@ impl PaletteRam {
             0x0 | 0x4 | 0x8 | 0xC | 0x10 | 0x14 | 0x18 | 0x1C => {
                 self.zero_bits[(addr % 0x10) as usize / 4usize] = data
             }
-            _ => self.palettes.write(addr, data),
+            _ => self.palettes.write(addr as u32, data),
         }
     }
 

@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 use std::ops::RangeInclusive;
 
 use crate::emulation::board::PpuBus;
-use crate::emulation::mem::{MemoryDevice, OpenBus, Ram};
+use crate::emulation::mem::{Memory, OpenBus};
 use crate::emulation::nes::ExecutionFinished;
 // Re-import public constants/types from ppu_util so internal code can use them
 // with short names.
@@ -48,7 +48,7 @@ pub struct Ppu {
     pub v_register: u16,
     pub ppu_data_buffer: u8,
     pub nmi_requested: bool,
-    pub oam: Ram,
+    pub oam: Memory,
     pub write_latch: bool,
     pub t_register: u16,
     pub fine_x_scroll: u8,
@@ -136,7 +136,7 @@ impl Ppu {
         }
     }
 
-    fn get_default_oam() -> Ram { Ram::new(OAM_SIZE + OAM_SIZE / 8) }
+    fn get_default_oam() -> Memory { Memory::new(OAM_SIZE + OAM_SIZE / 8, true) }
 
     #[inline(always)]
     pub fn step(&mut self, bus: &mut impl PpuBus) -> ExecutionFinished {
@@ -889,7 +889,7 @@ impl Ppu {
     pub fn oam_read(&self, addr: u8, open_bus: &OpenBus) -> u8 {
         let row = addr / 8;
         let byte = addr % 8;
-        let mut res = self.oam.read((row as u16 * 9) + byte as u16, open_bus);
+        let mut res = self.oam.read((row as u32 * 9) + byte as u32, open_bus);
 
         if self.is_soam_clear_active {
             res = 0xFF;
@@ -902,7 +902,7 @@ impl Ppu {
     pub fn oam_snapshot(&self, addr: u8, open_bus: &OpenBus) -> u8 {
         let row = addr / 8;
         let byte = addr % 8;
-        let mut res = self.oam.snapshot((row as u16 * 9) + byte as u16, open_bus);
+        let mut res = self.oam.snapshot((row as u32 * 9) + byte as u32, open_bus);
 
         if self.is_soam_clear_active {
             res = 0xFF;
@@ -915,7 +915,7 @@ impl Ppu {
     pub fn oam_write(&mut self, addr: u8, data: u8) {
         let row = addr / 8;
         let byte = addr % 8;
-        self.oam.write((row as u16 * 9) + byte as u16, data)
+        self.oam.write((row as u32 * 9) + byte as u32, data)
     }
 
     #[inline]
@@ -924,7 +924,7 @@ impl Ppu {
         let row = addr & 0x1F;
         let byte = 8u8;
 
-        self.oam.read((row as u16 * 9) + byte as u16, open_bus)
+        self.oam.read((row as u32 * 9) + byte as u32, open_bus)
     }
 
     #[inline]
@@ -933,7 +933,7 @@ impl Ppu {
         let row = addr & 0x1F;
         let byte = 8u8;
 
-        self.oam.snapshot((row as u16 * 9) + byte as u16, open_bus)
+        self.oam.snapshot((row as u32 * 9) + byte as u32, open_bus)
     }
 
     #[inline]
@@ -943,9 +943,9 @@ impl Ppu {
         let byte = 8u8;
 
         if !self.soam_disable {
-            self.oam.write((row as u16 * 9) + byte as u16, data);
+            self.oam.write((row as u32 * 9) + byte as u32, data);
         } else {
-            self.oam.read((row as u16 * 9) + byte as u16, open_bus);
+            self.oam.read((row as u32 * 9) + byte as u32, open_bus);
         }
     }
 

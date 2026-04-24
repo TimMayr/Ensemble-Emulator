@@ -19,7 +19,7 @@ use static_assertions::assert_impl_all;
 use crate::emulation::board::Board;
 use crate::emulation::cpu::{Cpu, MicroOp};
 use crate::emulation::mapper::Mapper;
-use crate::emulation::mem::{MemoryDevice, OpenBus};
+use crate::emulation::mem::OpenBus;
 use crate::emulation::peripherals::Peripheral;
 use crate::emulation::ppu::Ppu;
 use crate::emulation::rom::RomFile;
@@ -92,6 +92,7 @@ pub struct CpuState {
     pub(crate) nmi_pending: bool,
     /// Previous NMI line state (for edge detection).
     pub(crate) prev_nmi: bool,
+    pub cycle: u128,
 }
 
 impl From<&Cpu> for CpuState {
@@ -123,6 +124,7 @@ impl From<&Cpu> for CpuState {
             nmi_detected: cpu.nmi_detected,
             nmi_pending: cpu.nmi_pending,
             prev_nmi: cpu.prev_nmi,
+            cycle: cpu.cycle,
         }
     }
 }
@@ -256,9 +258,7 @@ impl From<&Ppu> for PpuState {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
-pub enum PeripheralState {
-
-}
+pub enum PeripheralState {}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct BoardState {

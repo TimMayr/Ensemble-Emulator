@@ -5,60 +5,57 @@ use enum_dispatch::enum_dispatch;
 use nametable_mapping::NametableArrangement;
 use serde::{Deserialize, Serialize};
 
-use crate::emulation::mem::{MemoryDevice, OpenBus, Ram, Rom};
-use crate::emulation::ppu::{PALETTE_RAM_SIZE, VRAM_SIZE};
+use crate::emulation::mapper::mmc1::MMC1;
+use crate::emulation::mem::{Memory, OpenBus};
+use crate::emulation::ppu::VRAM_SIZE;
 use crate::emulation::rom::{RomFile, RomMapper};
 
+pub mod mmc1;
 pub mod nametable_mapping;
 
 #[enum_dispatch(MapperLike)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum Mapper {
     NoMapper,
+    MMC1,
     Nrom,
 }
 
 impl From<&RomFile> for Mapper {
     fn from(value: &RomFile) -> Self {
         match value.mapper {
-            RomMapper::NRom => {
-                let battery_backed = value.is_battery_backed || value.prg_memory.prg_nvram_size > 0;
-                let mut prg_ram_size = if battery_backed {
-                    value.prg_memory.prg_nvram_size
-                } else {
-                    value.prg_memory.prg_ram_size
-                };
-
-                if prg_ram_size == 0 {
-                    if value.prg_memory.prg_nvram_size > 0 {
-                        prg_ram_size = value.prg_memory.prg_ram_size;
-                    } else if value.prg_memory.prg_ram_size > 0 {
-                        prg_ram_size = value.prg_memory.prg_ram_size;
-                    }
-                }
-
-                Mapper::Nrom(Nrom {
-                    prg_ram_battery_backed: battery_backed,
-                    prg_ram_size: prg_ram_size as u16,
-                    prg_rom_size: value.prg_memory.prg_rom_size as u16,
-                    prg_rom: value.get_prg_rom(),
-                    chr_rom: value.get_chr_rom(),
-                    nametable_arrangement: value.get_nametable_memory(),
-                    prg_ram: if prg_ram_size > 0 {
-                        Some(Ram::new(prg_ram_size as usize))
-                    } else {
-                        None
-                    },
-                })
-            }
+            RomMapper::NRom => Mapper::Nrom(Nrom::from(value)),
+            RomMapper::MMC1 => Mapper::MMC1(MMC1::from(value)),
             RomMapper::Unknown(_) => Mapper::NoMapper(NoMapper {}),
         }
     }
 }
 
+impl Mapper {
+    fn get_likely_correct_ram_size(value: &RomFile) -> u32 {
+        let battery_backed = value.is_battery_backed || value.prg_memory.prg_nvram_size > 0;
+
+        let mut prg_ram_size = if battery_backed {
+            value.prg_memory.prg_nvram_size
+        } else {
+            value.prg_memory.prg_ram_size
+        };
+
+        if prg_ram_size == 0 {
+            if value.prg_memory.prg_nvram_size > 0 {
+                prg_ram_size = value.prg_memory.prg_ram_size;
+            } else if value.prg_memory.prg_ram_size > 0 {
+                prg_ram_size = value.prg_memory.prg_ram_size;
+            }
+        };
+
+        prg_ram_size
+    }
+}
+
 #[enum_dispatch]
-pub trait MapperLike: Debug + Eq + PartialEq + Hash + Clone {
-    fn write(&mut self, addr: u16, data: u8) -> CpuWriteResult;
+pub trait MapperLike: Debug + Eq + PartialEq + Hash + Clone + for<'a> From<&'a RomFile> {
+    fn write(&mut self, addr: u16, data: u8, cycle: u128) -> CpuWriteResult;
     fn init(&mut self, addr: u16, data: u8) -> CpuWriteResult;
     fn read(&mut self, addr: u16, open_bus: &OpenBus) -> CpuReadResult;
     fn read_debug(&self, addr: u16, open_bus: &OpenBus) -> CpuReadResult;
@@ -84,7 +81,6 @@ pub enum CpuWriteResult {
 pub enum PpuReadResult {
     Handled(u8),
     Nametable(u16),
-    Palette(u16),
     Registered,
 }
 
@@ -92,7 +88,6 @@ pub enum PpuReadResult {
 pub enum PpuWriteResult {
     Handled,
     Nametable(u16),
-    Palette(u16),
     Registered,
 }
 
@@ -100,7 +95,7 @@ pub enum PpuWriteResult {
 pub struct NoMapper {}
 
 impl MapperLike for NoMapper {
-    fn write(&mut self, addr: u16, _: u8) -> CpuWriteResult {
+    fn write(&mut self, addr: u16, _: u8, _: u128) -> CpuWriteResult {
         match addr {
             0x4020..=0xFFFF => CpuWriteResult::Handled,
             _ => CpuWriteResult::Registered,
@@ -138,8 +133,7 @@ impl MapperLike for NoMapper {
         match addr {
             0..=0x1FFF => PpuReadResult::Handled(open_bus.read()),
             0x2000..=0x3EFF => PpuReadResult::Nametable((addr - 0x2000) % (VRAM_SIZE as u16)),
-            0x3F00..=0x3FFF => PpuReadResult::Palette((addr - 0x3F00) % PALETTE_RAM_SIZE),
-            _ => PpuReadResult::Handled(open_bus.read()),
+            _ => PpuReadResult::Registered,
         }
     }
 
@@ -158,26 +152,30 @@ impl MapperLike for NoMapper {
     }
 }
 
+impl<'a> From<&'a RomFile> for NoMapper {
+    fn from(_: &'a RomFile) -> Self { NoMapper {} }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Nrom {
     pub prg_ram_size: u16,
     pub prg_ram_battery_backed: bool,
     pub prg_rom_size: u16,
-    pub prg_ram: Option<Ram>,
-    pub prg_rom: Rom,
-    pub chr_rom: Option<Rom>,
+    pub prg_ram: Option<Memory>,
+    pub prg_rom: Memory,
+    pub chr_rom: Option<Memory>,
     pub nametable_arrangement: NametableArrangement,
 }
 
 impl MapperLike for Nrom {
     #[inline]
-    fn write(&mut self, addr: u16, data: u8) -> CpuWriteResult {
+    fn write(&mut self, addr: u16, data: u8, _: u128) -> CpuWriteResult {
         match addr {
             0x4020..=0xFFFF => {
                 if addr >= 6000 && addr <= 0x7FFF {
                     if let Some(prg_ram) = &mut self.prg_ram {
                         let addr = (addr - 0x6000) % self.prg_ram_size;
-                        prg_ram.write(addr, data);
+                        prg_ram.write(addr as u32, data);
                     }
                 }
 
@@ -188,7 +186,7 @@ impl MapperLike for Nrom {
     }
 
     #[inline]
-    fn init(&mut self, addr: u16, data: u8) -> CpuWriteResult { self.write(addr, data) }
+    fn init(&mut self, addr: u16, data: u8) -> CpuWriteResult { self.write(addr, data, 0) }
 
     #[inline]
     fn read(&mut self, addr: u16, open_bus: &OpenBus) -> CpuReadResult {
@@ -201,14 +199,14 @@ impl MapperLike for Nrom {
                 0x6000..=0x7FFF => {
                     if let Some(prg_ram) = &self.prg_ram {
                         let addr = (addr - 0x6000) % self.prg_ram_size;
-                        prg_ram.read(addr, &open_bus)
+                        prg_ram.read(addr as u32, &open_bus)
                     } else {
                         open_bus.read()
                     }
                 }
                 0x8000..=0xFFFF => self
                     .prg_rom
-                    .read((addr - 0x8000) % self.prg_rom_size, &open_bus),
+                    .read(((addr - 0x8000) % self.prg_rom_size) as u32, &open_bus),
                 _ => open_bus.read(),
             };
 
@@ -228,15 +226,14 @@ impl MapperLike for Nrom {
         match addr {
             0..=0x1FFF => {
                 if let Some(rom) = &self.chr_rom {
-                    PpuReadResult::Handled(rom.read(addr, open_bus))
+                    PpuReadResult::Handled(rom.read(addr as u32, open_bus))
                 } else {
                     PpuReadResult::Handled(open_bus.read())
                 }
-            },
+            }
             0x2000..=0x3EFF => PpuReadResult::Nametable(
                 self.nametable_arrangement.resolve_address(addr - 0x2000) % VRAM_SIZE as u16,
             ),
-            0x3F00..=0x3FFF => PpuReadResult::Palette((addr - 0x3F00) % PALETTE_RAM_SIZE),
             _ => PpuReadResult::Registered,
         }
     }
@@ -246,20 +243,38 @@ impl MapperLike for Nrom {
         match addr {
             0..=0x1FFF => {
                 if let Some(rom) = &mut self.chr_rom {
-                    rom.write(addr, data)
+                    rom.write(addr as u32, data)
                 }
                 PpuWriteResult::Handled
             }
             0x2000..=0x3EFF => PpuWriteResult::Nametable(
                 self.nametable_arrangement.resolve_address(addr - 0x2000) % VRAM_SIZE as u16,
             ),
-            0x3F00..=0x3FFF => PpuWriteResult::Palette((addr - 0x3F00) % PALETTE_RAM_SIZE),
             _ => PpuWriteResult::Registered,
         }
     }
 
     #[inline]
-    fn ppu_init(&mut self, addr: u16, data: u8) -> PpuWriteResult {
-        self.ppu_write(addr, data)
+    fn ppu_init(&mut self, addr: u16, data: u8) -> PpuWriteResult { self.ppu_write(addr, data) }
+}
+
+impl From<&RomFile> for Nrom {
+    fn from(value: &RomFile) -> Self {
+        let prg_ram_size = Mapper::get_likely_correct_ram_size(value);
+        let battery_backed = value.is_battery_backed || value.prg_memory.prg_nvram_size > 0;
+
+        Nrom {
+            prg_ram_battery_backed: battery_backed,
+            prg_ram_size: prg_ram_size as u16,
+            prg_rom_size: value.prg_memory.prg_rom_size as u16,
+            prg_rom: value.get_prg_rom(),
+            chr_rom: value.get_chr_rom(),
+            nametable_arrangement: value.get_nametable_memory(),
+            prg_ram: if prg_ram_size > 0 {
+                Some(Memory::new(prg_ram_size as usize, true))
+            } else {
+                None
+            },
+        }
     }
 }

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::emulation::board::CpuBus;
 use crate::emulation::nes::ExecutionFinished;
 use crate::emulation::opcode;
-use crate::emulation::opcode::{get_opcode, OpCode, OPCODES_MAP, OPCODES_TABLE};
+use crate::emulation::opcode::{OPCODES_MAP, OPCODES_TABLE, OpCode, get_opcode};
 use crate::emulation::savestate::CpuState;
 use crate::util;
 
@@ -57,6 +57,7 @@ pub struct Cpu {
     pub dma_page: u8,
     /// Last memory access for watchpoint debugging (address, was_read, value)
     pub last_memory_access: Option<(u16, bool, u8)>,
+    pub cycle: u128,
 }
 
 impl Default for Cpu {
@@ -93,6 +94,7 @@ impl Default for Cpu {
             dma_triggered: false,
             dma_page: 0,
             last_memory_access: None,
+            cycle: 0,
         }
     }
 }
@@ -1131,6 +1133,8 @@ impl Cpu {
 
     #[inline(always)]
     pub fn step(&mut self, bus: &mut impl CpuBus) -> Result<ExecutionFinished, String> {
+        self.cycle += 1;
+
         if self.is_halted {
             return Ok(ExecutionFinished {
                 hlt_reached: true,
@@ -1858,6 +1862,7 @@ impl Cpu {
             dma_triggered: state.dma_triggered,
             dma_page: state.dma_page,
             last_memory_access: None,
+            cycle: state.cycle,
         };
 
         cpu

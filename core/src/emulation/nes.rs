@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use crate::emulation::board::{Board, CpuBus, CpuBusView, PpuBus, PpuBusView};
 use crate::emulation::cpu::MicroOp;
-use crate::emulation::mem::MemoryDevice;
 use crate::emulation::ppu::EmulatorFetchable;
 use crate::emulation::rom::{RomFile, RomMapper};
 use crate::emulation::savestate::{BoardState, SaveState, VERSION};
@@ -560,7 +559,8 @@ impl Nes {
 
     /// Writes a value to OAM (sprite memory) at the given address (for
     /// initialization/debugging).
-    pub fn oam_write(&mut self, addr: u16, value: u8) { self.board.ppu.oam.write(addr, value); }
+    pub fn oam_write(&mut self, addr: u16, value: u8) { self.board.ppu.oam.write(addr as u32, 
+                                                                                 value); }
 
     /// Returns a reference to the trace log, if tracing is enabled.
     pub fn trace_log(&self) -> Option<&TraceLog> { self.trace_log.as_ref() }
