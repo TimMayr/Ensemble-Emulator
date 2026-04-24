@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::emulation::ppu::NAMETABLE_SIZE;
+use crate::emulation::ppu::{NAMETABLE_SIZE, VRAM_SIZE};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum NametableArrangement {
@@ -14,6 +14,8 @@ pub enum NametableArrangement {
 impl NametableArrangement {
     #[inline]
     pub fn resolve_address(&self, address: u16) -> u16 {
+        let address = (address - 0x2000) % VRAM_SIZE as u16;
+
         let table = address / NAMETABLE_SIZE;
         let offset = address % NAMETABLE_SIZE;
 
@@ -24,12 +26,16 @@ impl NametableArrangement {
                 _ => {
                     dbg!();
                     panic!()
-                },
+                }
             },
             NametableArrangement::Horizontal => match table {
                 0 | 1 => offset,
                 2 | 3 => 0x400 + offset,
-                _ => unreachable!(),
+                _ => {
+                    println!("{}", address);
+                    dbg!();
+                    panic!()
+                }
             },
             NametableArrangement::SingleScreenLower => offset,
             NametableArrangement::SingleScreenUpper => 0x400 + offset,

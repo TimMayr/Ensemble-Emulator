@@ -110,7 +110,7 @@ impl MapperLike for NoMapper {
     }
 
     fn read(&mut self, addr: u16, open_bus: &OpenBus) -> CpuReadResult {
-        if (addr >= 0x4000 && addr <= 0x4014) || addr >= 0x4018 {
+        if (0x4000..=0x4014).contains(&addr) || addr >= 0x4018 {
             return CpuReadResult::Handled(open_bus.read());
         }
 
@@ -118,7 +118,7 @@ impl MapperLike for NoMapper {
     }
 
     fn read_debug(&self, addr: u16, open_bus: &OpenBus) -> CpuReadResult {
-        if (addr >= 0x4000 && addr <= 0x4014) || addr >= 0x4018 {
+        if (0x4000..=0x4014).contains(&addr) || addr >= 0x4018 {
             return CpuReadResult::Handled(open_bus.read());
         }
 
@@ -172,7 +172,7 @@ impl MapperLike for Nrom {
     fn write(&mut self, addr: u16, data: u8, _: u128) -> CpuWriteResult {
         match addr {
             0x4020..=0xFFFF => {
-                if addr >= 6000 && addr <= 0x7FFF {
+                if (6000..=0x7FFF).contains(&addr) {
                     if let Some(prg_ram) = &mut self.prg_ram {
                         let addr = (addr - 0x6000) % self.prg_ram_size;
                         prg_ram.write(addr as u32, data);
@@ -194,7 +194,7 @@ impl MapperLike for Nrom {
     }
 
     fn read_debug(&self, addr: u16, open_bus: &OpenBus) -> CpuReadResult {
-        if (addr >= 0x4000 && addr <= 0x4014) || addr >= 0x4018 {
+        if (0x4000..=0x4014).contains(&addr) || addr >= 0x4018 {
             let value = match addr {
                 0x6000..=0x7FFF => {
                     if let Some(prg_ram) = &self.prg_ram {
@@ -231,9 +231,9 @@ impl MapperLike for Nrom {
                     PpuReadResult::Handled(open_bus.read())
                 }
             }
-            0x2000..=0x3EFF => PpuReadResult::Nametable(
-                self.nametable_arrangement.resolve_address(addr - 0x2000) % VRAM_SIZE as u16,
-            ),
+            0x2000..=0x3EFF => {
+                PpuReadResult::Nametable(self.nametable_arrangement.resolve_address(addr))
+            }
             _ => PpuReadResult::Registered,
         }
     }
@@ -247,9 +247,9 @@ impl MapperLike for Nrom {
                 }
                 PpuWriteResult::Handled
             }
-            0x2000..=0x3EFF => PpuWriteResult::Nametable(
-                self.nametable_arrangement.resolve_address(addr - 0x2000) % VRAM_SIZE as u16,
-            ),
+            0x2000..=0x3EFF => {
+                PpuWriteResult::Nametable(self.nametable_arrangement.resolve_address(addr))
+            }
             _ => PpuWriteResult::Registered,
         }
     }
