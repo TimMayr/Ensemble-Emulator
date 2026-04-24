@@ -135,7 +135,8 @@ impl MapperLike for MMC1 {
                 PpuWriteResult::Handled
             }
             0x2000..=0x3EFF => PpuWriteResult::Nametable(
-                self.nametable_arrangement.resolve_address(addr - 0x2000) % VRAM_SIZE as u16,
+                self.nametable_arrangement
+                    .resolve_address((addr - 0x2000) % VRAM_SIZE as u16),
             ),
             _ => PpuWriteResult::Registered,
         }

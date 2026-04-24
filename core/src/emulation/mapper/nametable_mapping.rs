@@ -21,7 +21,10 @@ impl NametableArrangement {
             NametableArrangement::Vertical => match table {
                 0 | 2 => offset,
                 1 | 3 => 0x400 + offset,
-                _ => unreachable!(),
+                _ => {
+                    dbg!();
+                    panic!()
+                },
             },
             NametableArrangement::Horizontal => match table {
                 0 | 1 => offset,
