@@ -217,8 +217,9 @@ impl ChannelEmulator {
 
         match self.nes.step() {
             Ok(_) => {
-                // Swap the PPU work buffer with the back buffer (zero-copy).
-                self.nes.swap_pixel_buffer(&mut self.back_buffer);
+                // Copy (not swap) so the PPU's accumulated mid-frame render is
+                // preserved in the work buffer for subsequent debug steps.
+                self.back_buffer.copy_from_slice(self.nes.get_pixel_buffer());
                 if self.to_frontend.send(EmulatorMessage::FrameReady).is_err() {
                     return Err("Frontend disconnected".to_string());
                 }
@@ -237,8 +238,9 @@ impl ChannelEmulator {
 
         match self.nes.step_ppu_cycle() {
             Ok(_) => {
-                // Swap the PPU work buffer with the back buffer (zero-copy).
-                self.nes.swap_pixel_buffer(&mut self.back_buffer);
+                // Copy (not swap) so the PPU's accumulated mid-frame render is
+                // preserved in the work buffer for subsequent debug steps.
+                self.back_buffer.copy_from_slice(self.nes.get_pixel_buffer());
                 if self.to_frontend.send(EmulatorMessage::FrameReady).is_err() {
                     return Err("Frontend disconnected".to_string());
                 }
@@ -257,8 +259,9 @@ impl ChannelEmulator {
 
         match self.nes.step_cpu_cycle() {
             Ok(_) => {
-                // Swap the PPU work buffer with the back buffer (zero-copy).
-                self.nes.swap_pixel_buffer(&mut self.back_buffer);
+                // Copy (not swap) so the PPU's accumulated mid-frame render is
+                // preserved in the work buffer for subsequent debug steps.
+                self.back_buffer.copy_from_slice(self.nes.get_pixel_buffer());
                 if self.to_frontend.send(EmulatorMessage::FrameReady).is_err() {
                     return Err("Frontend disconnected".to_string());
                 }
@@ -277,8 +280,9 @@ impl ChannelEmulator {
 
         match self.nes.step_scanline() {
             Ok(_) => {
-                // Swap the PPU work buffer with the back buffer (zero-copy).
-                self.nes.swap_pixel_buffer(&mut self.back_buffer);
+                // Copy (not swap) so the PPU's accumulated mid-frame render is
+                // preserved in the work buffer for subsequent debug steps.
+                self.back_buffer.copy_from_slice(self.nes.get_pixel_buffer());
                 if self.to_frontend.send(EmulatorMessage::FrameReady).is_err() {
                     return Err("Frontend disconnected".to_string());
                 }
