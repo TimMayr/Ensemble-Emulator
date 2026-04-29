@@ -203,20 +203,33 @@ impl MMC1 {
     }
 
     fn copy_shift(&mut self, addr: u16) {
+        println!("Copy shift");
+
         match addr {
             0x8000..=0x9FFF => self.set_ctrl(),
             0xA000..=0xBFFF => {
+                println!("chr bank 0: {}", self.shift);
                 self.chr_bank_0 = self.shift;
             }
-            0xC000..=0xDFFF => self.chr_bank_1 = self.shift,
-            0xE000..=0xFFFF => self.prg_bank = self.shift,
+            0xC000..=0xDFFF => {
+                println!("chr bank 1: {}", self.shift);
+                self.chr_bank_1 = self.shift
+            },
+            0xE000..=0xFFFF =>
+                {
+                    println!("prg bank: {}", self.prg_bank);
+                    self.prg_bank = self.shift
+                },
             _ => {}
         }
     }
 
     fn set_ctrl(&mut self) {
+        println!("Setting ctrl");
+        
         let nametable = self.shift & 0b11;
-
+        println!("Nametable: {}", nametable);
+        
         match nametable {
             0 => self.nametable_arrangement = NametableArrangement::SingleScreenLower,
             1 => self.nametable_arrangement = NametableArrangement::SingleScreenUpper,
@@ -227,6 +240,9 @@ impl MMC1 {
 
         self.prg_rom_bank_mode = self.shift & 0b1100;
         self.chr_rom_bank_mode = self.shift & 0b10000;
+        
+        println!("prg rom mode: {}", self.prg_rom_bank_mode);
+        println!("chr rom mode: {}", self.chr_rom_bank_mode);
     }
 }
 
@@ -243,7 +259,7 @@ impl From<&RomFile> for MMC1 {
             prg_rom_size: value.prg_memory.prg_rom_size,
             prg_rom: value.get_prg_rom(),
             chr_rom: value.get_chr_rom(),
-            nametable_arrangement: value.get_nametable_memory(),
+            nametable_arrangement: value.get_nametable_arrangement(),
             prg_ram: if prg_ram_size > 0 {
                 Some(Memory::new(prg_ram_size as usize, true))
             } else {

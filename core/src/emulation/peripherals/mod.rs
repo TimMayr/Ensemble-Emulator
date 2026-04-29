@@ -1,24 +1,22 @@
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
-
 use crate::emulation::mem::OpenBus;
 use crate::emulation::rom::ExpansionDevice;
 
-#[enum_dispatch(PeripheralDevice)]
+#[enum_delegate::implement(PeripheralDevice)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum Peripheral {
-    StandardController,
+    StandardController(StandardController),
 }
 
 impl Default for Peripheral {
     fn default() -> Self { Peripheral::StandardController(StandardController::default()) }
 }
 
-#[enum_dispatch]
-pub trait PeripheralDevice: Debug + Eq + PartialEq + Hash + Clone + Serialize + Default {
+#[enum_delegate::register]
+pub trait PeripheralDevice {
     fn read(&mut self, open_bus: &OpenBus) -> u8;
     fn read_debug(&self, open_bus: &OpenBus) -> u8;
     fn handle_strobe_data(&mut self, data: u8);

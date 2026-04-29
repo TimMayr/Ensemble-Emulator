@@ -832,10 +832,10 @@ impl RomFile {
     /// Returns a [`Memory`] device configured for either horizontal or vertical
     /// nametable mirroring, as specified by the ROM header.
     #[doc(hidden)]
-    pub fn get_nametable_memory(&self) -> NametableArrangement {
+    pub fn get_nametable_arrangement(&self) -> NametableArrangement {
         match self.hardwired_nametable_layout {
-            true => NametableArrangement::Vertical,
-            false => NametableArrangement::Horizontal,
+            true => NametableArrangement::Horizontal,
+            false => NametableArrangement::Vertical,
         }
     }
 }

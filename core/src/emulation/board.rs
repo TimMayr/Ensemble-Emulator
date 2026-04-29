@@ -1,5 +1,3 @@
-#![allow(unused_attributes)]
-
 use std::convert::Into;
 use std::ops::RangeInclusive;
 
@@ -142,7 +140,7 @@ impl<'a> CpuBus for CpuBusView<'a> {
 impl<'a> PpuBus for PpuBusView<'a> {
     #[inline]
     fn read(&mut self, addr: u16) -> u8 {
-        let res = self.mapper.ppu_read(addr, self.cpu_open_bus);
+        let res = self.mapper.ppu_read(addr, self.ppu_open_bus);
 
         match res {
             PpuReadResult::Handled(data) => data,
@@ -160,7 +158,7 @@ impl<'a> PpuBus for PpuBusView<'a> {
 
     #[inline]
     fn read_debug(&self, addr: u16) -> u8 {
-        let res = self.mapper.ppu_read_debug(addr, self.cpu_open_bus);
+        let res = self.mapper.ppu_read_debug(addr, self.ppu_open_bus);
 
         match res {
             PpuReadResult::Handled(data) => data,
@@ -262,7 +260,6 @@ impl<'a> CpuBusView<'a> {
     fn read_ppu_reg(&mut self, addr: u16, _: u8) -> u8 {
         let mut bus = PpuBusView::from(
             self.mapper,
-            self.cpu_open_bus,
             self.ppu_open_bus,
             self.nametable_ram,
             self.palette_ram,
@@ -370,7 +367,6 @@ impl<'a> CpuBusView<'a> {
             0x7 => {
                 let mut bus = PpuBusView::from(
                     self.mapper,
-                    self.cpu_open_bus,
                     self.ppu_open_bus,
                     self.nametable_ram,
                     self.palette_ram,
@@ -399,7 +395,6 @@ impl<'a> CpuBusView<'a> {
 
 pub struct PpuBusView<'a> {
     mapper: &'a mut Mapper,
-    cpu_open_bus: &'a mut OpenBus,
     ppu_open_bus: &'a mut OpenBus,
     nametable_ram: &'a mut Memory,
     palette_ram: &'a mut PaletteRam,
@@ -408,14 +403,12 @@ pub struct PpuBusView<'a> {
 impl<'a> PpuBusView<'a> {
     pub fn from(
         mapper: &'a mut Mapper,
-        cpu_open_bus: &'a mut OpenBus,
         ppu_open_bus: &'a mut OpenBus,
         nametable_ram: &'a mut Memory,
         palette_ram: &'a mut PaletteRam,
     ) -> PpuBusView<'a> {
         PpuBusView {
             mapper,
-            cpu_open_bus,
             ppu_open_bus,
             nametable_ram,
             palette_ram,

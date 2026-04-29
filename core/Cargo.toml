@@ -8,20 +8,18 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
-exclude = [
-    "tests/**",
-    "src/tests/**"
-]
+exclude = ["tests/**",
+    "src/tests/**"]
 
 [lib]
 name = "monsoon_core"
 path = "src/lib.rs"
 
 [dependencies]
-serde = {version = "1.0", features = ["derive", "alloc", "rc"]}
+serde = { version = "1.0", features = ["derive", "alloc", "rc"] }
 serde_json = { version = "1.0" }
 postcard = { version = "1.1", features = ["use-std"] }
-sha2 = {version = "0.11.0"}
-num_enum = {version = "0.7.6"}
-enum_dispatch = "0.3.13"
+sha2 = { version = "0.11.0" }
+num_enum = { version = "0.7.6" }
+enum_delegate = "0.2.0"
 static_assertions = "1.1.0"

@@ -120,7 +120,6 @@ macro_rules! ppu_bus_view {
     ($self:expr) => {
         PpuBusView::from(
             &mut $self.board.mapper,
-            &mut $self.board.cpu_open_bus,
             &mut $self.board.ppu_open_bus,
             &mut $self.board.nametable_ram,
             &mut $self.board.palette_ram,

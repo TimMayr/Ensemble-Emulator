@@ -20,7 +20,7 @@ impl NametableArrangement {
         let offset = address % NAMETABLE_SIZE;
 
         match self {
-            NametableArrangement::Vertical => match table {
+            NametableArrangement::Horizontal => match table {
                 0 | 2 => offset,
                 1 | 3 => 0x400 + offset,
                 _ => {
@@ -28,7 +28,7 @@ impl NametableArrangement {
                     panic!()
                 }
             },
-            NametableArrangement::Horizontal => match table {
+            NametableArrangement::Vertical => match table {
                 0 | 1 => offset,
                 2 | 3 => 0x400 + offset,
                 _ => {

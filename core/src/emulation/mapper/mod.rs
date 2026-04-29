@@ -1,10 +1,8 @@
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use enum_dispatch::enum_dispatch;
 use nametable_mapping::NametableArrangement;
 use serde::{Deserialize, Serialize};
-
 use crate::emulation::mapper::mmc1::MMC1;
 use crate::emulation::mem::{Memory, OpenBus};
 use crate::emulation::ppu::VRAM_SIZE;
@@ -13,12 +11,12 @@ use crate::emulation::rom::{RomFile, RomMapper};
 pub mod mmc1;
 pub mod nametable_mapping;
 
-#[enum_dispatch(MapperLike)]
+#[enum_delegate::implement(MapperLike)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum Mapper {
-    NoMapper,
-    MMC1,
-    Nrom,
+    NoMapper(NoMapper),
+    MMC1(MMC1),
+    Nrom(Nrom),
 }
 
 impl From<&RomFile> for Mapper {
@@ -53,8 +51,8 @@ impl Mapper {
     }
 }
 
-#[enum_dispatch]
-pub trait MapperLike: Debug + Eq + PartialEq + Hash + Clone + for<'a> From<&'a RomFile> {
+#[enum_delegate::register]
+pub trait MapperLike {
     fn write(&mut self, addr: u16, data: u8, cycle: u128) -> CpuWriteResult;
     fn init(&mut self, addr: u16, data: u8) -> CpuWriteResult;
     fn read(&mut self, addr: u16, open_bus: &OpenBus) -> CpuReadResult;
@@ -259,17 +257,17 @@ impl MapperLike for Nrom {
 }
 
 impl From<&RomFile> for Nrom {
-    fn from(value: &RomFile) -> Self {
-        let prg_ram_size = Mapper::get_likely_correct_ram_size(value);
-        let battery_backed = value.is_battery_backed || value.prg_memory.prg_nvram_size > 0;
+    fn from(rom: &RomFile) -> Self {
+        let prg_ram_size = Mapper::get_likely_correct_ram_size(rom);
+        let battery_backed = rom.is_battery_backed || rom.prg_memory.prg_nvram_size > 0;
 
         Nrom {
             prg_ram_battery_backed: battery_backed,
             prg_ram_size: prg_ram_size as u16,
-            prg_rom_size: value.prg_memory.prg_rom_size as u16,
-            prg_rom: value.get_prg_rom(),
-            chr_rom: value.get_chr_rom(),
-            nametable_arrangement: value.get_nametable_memory(),
+            prg_rom_size: rom.prg_memory.prg_rom_size as u16,
+            prg_rom: rom.get_prg_rom(),
+            chr_rom: rom.get_chr_rom(),
+            nametable_arrangement: rom.get_nametable_arrangement(),
             prg_ram: if prg_ram_size > 0 {
                 Some(Memory::new(prg_ram_size as usize, true))
             } else {
