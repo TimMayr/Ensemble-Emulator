@@ -3,7 +3,9 @@ use std::sync::OnceLock;
 
 use crossbeam_channel::{Receiver, Sender};
 use monsoon_core::emulation::nes::Nes;
-use monsoon_core::emulation::ppu_util::{EmulatorFetchable, PaletteData};
+use monsoon_core::emulation::ppu_util::{
+    EmulatorFetchable, PaletteData, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
+};
 use monsoon_core::util::Hashable;
 
 use crate::messages::{ControllerEvent, EmulatorMessage, FrontendMessage, SaveType};
@@ -50,6 +52,12 @@ pub struct ChannelEmulator {
     from_frontend: Receiver<FrontendMessage>,
     input_1: u8,
     input_2: u8,
+    /// Triple-buffer *back* buffer: holds the most recently completed frame.
+    ///
+    /// On each frame boundary the emulator swaps this with the PPU's internal
+    /// *work* buffer (zero-copy). The frontend then swaps this buffer with its
+    /// own *front* buffer before rendering, also without copying.
+    pub back_buffer: Vec<u16>,
     /// Cached palette data for change detection
     last_palette_data: Option<PaletteData>,
     /// Cached hash of pattern table data for efficient change detection
@@ -96,6 +104,7 @@ impl ChannelEmulator {
             from_frontend: rx_from_frontend,
             input_1: 0,
             input_2: 0,
+            back_buffer: vec![0u16; TOTAL_OUTPUT_HEIGHT * TOTAL_OUTPUT_WIDTH],
             last_palette_data: None,
             last_pattern_table_hash: None,
         };
@@ -208,15 +217,9 @@ impl ChannelEmulator {
 
         match self.nes.step() {
             Ok(_) => {
-                // Frame completed, send it to frontend
-                let frame = self.nes.get_pixel_buffer();
-                let frame_data = (*frame).to_vec();
-                if self
-                    .to_frontend
-                    .send(EmulatorMessage::FrameReady(frame_data))
-                    .is_err()
-                {
-                    // Frontend disconnected
+                // Swap the PPU work buffer with the back buffer (zero-copy).
+                self.nes.swap_pixel_buffer(&mut self.back_buffer);
+                if self.to_frontend.send(EmulatorMessage::FrameReady).is_err() {
                     return Err("Frontend disconnected".to_string());
                 }
 
@@ -234,15 +237,9 @@ impl ChannelEmulator {
 
         match self.nes.step_ppu_cycle() {
             Ok(_) => {
-                // Frame completed, send it to frontend
-                let frame = self.nes.get_pixel_buffer();
-                let frame_data = (*frame).to_vec();
-                if self
-                    .to_frontend
-                    .send(EmulatorMessage::FrameReady(frame_data))
-                    .is_err()
-                {
-                    // Frontend disconnected
+                // Swap the PPU work buffer with the back buffer (zero-copy).
+                self.nes.swap_pixel_buffer(&mut self.back_buffer);
+                if self.to_frontend.send(EmulatorMessage::FrameReady).is_err() {
                     return Err("Frontend disconnected".to_string());
                 }
 
@@ -260,15 +257,9 @@ impl ChannelEmulator {
 
         match self.nes.step_cpu_cycle() {
             Ok(_) => {
-                // Frame completed, send it to frontend
-                let frame = self.nes.get_pixel_buffer();
-                let frame_data = (*frame).to_vec();
-                if self
-                    .to_frontend
-                    .send(EmulatorMessage::FrameReady(frame_data))
-                    .is_err()
-                {
-                    // Frontend disconnected
+                // Swap the PPU work buffer with the back buffer (zero-copy).
+                self.nes.swap_pixel_buffer(&mut self.back_buffer);
+                if self.to_frontend.send(EmulatorMessage::FrameReady).is_err() {
                     return Err("Frontend disconnected".to_string());
                 }
 
@@ -286,15 +277,9 @@ impl ChannelEmulator {
 
         match self.nes.step_scanline() {
             Ok(_) => {
-                // Frame completed, send it to frontend
-                let frame = self.nes.get_pixel_buffer();
-                let frame_data = (*frame).to_vec();
-                if self
-                    .to_frontend
-                    .send(EmulatorMessage::FrameReady(frame_data))
-                    .is_err()
-                {
-                    // Frontend disconnected
+                // Swap the PPU work buffer with the back buffer (zero-copy).
+                self.nes.swap_pixel_buffer(&mut self.back_buffer);
+                if self.to_frontend.send(EmulatorMessage::FrameReady).is_err() {
                     return Err("Frontend disconnected".to_string());
                 }
 
@@ -312,15 +297,9 @@ impl ChannelEmulator {
 
         match self.nes.step_frame() {
             Ok(_) => {
-                // Frame completed, send it to frontend
-                let frame = self.nes.get_pixel_buffer();
-                let frame_data = (*frame).to_vec();
-                if self
-                    .to_frontend
-                    .send(EmulatorMessage::FrameReady(frame_data))
-                    .is_err()
-                {
-                    // Frontend disconnected
+                // Swap the PPU work buffer with the back buffer (zero-copy).
+                self.nes.swap_pixel_buffer(&mut self.back_buffer);
+                if self.to_frontend.send(EmulatorMessage::FrameReady).is_err() {
                     return Err("Frontend disconnected".to_string());
                 }
 

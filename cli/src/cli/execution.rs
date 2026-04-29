@@ -685,7 +685,7 @@ impl ExecutionEngine {
 
             // Only collect frames if in buffered mode
             if self.collect_frames {
-                self.frames.push(self.emu.get_pixel_buffer());
+                self.frames.push(self.emu.get_pixel_buffer().to_vec());
             }
 
             self.frame_count += 1;

@@ -63,8 +63,9 @@ pub enum ControllerEvent {
 /// Messages sent from the emulator to the frontend
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum EmulatorMessage {
-    /// Raw frame data as u16 palette indices (frontend applies RGB palette)
-    FrameReady(Vec<u16>),
+    /// The emulator has finished rendering a frame; the frontend should swap
+    /// its back and front buffers and display the new front buffer.
+    FrameReady,
     /// Emulator has stopped/quit
     Stopped,
     DebugData(EmulatorFetchable),

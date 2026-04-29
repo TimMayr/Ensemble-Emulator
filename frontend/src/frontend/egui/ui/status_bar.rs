@@ -17,7 +17,7 @@ pub fn add_status_bar(
             ui.separator();
             if config.is_effectively_paused() {
                 ui.label("Emulator: Paused");
-            } else if emu_textures.current_frame.is_some() {
+            } else if emu_textures.has_received_frame {
                 ui.label("Emulator: Running");
             } else {
                 ui.label("Emulator: Initializing");

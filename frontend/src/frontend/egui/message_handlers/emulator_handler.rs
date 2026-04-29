@@ -35,8 +35,16 @@ impl EguiApp {
     /// Handle a single emulator message.
     pub(crate) fn handle_single_emulator_message(&mut self, msg: EmulatorMessage, ctx: &Context) {
         match msg {
-            EmulatorMessage::FrameReady(frame) => {
-                self.emu_textures.current_frame = Some(frame);
+            EmulatorMessage::FrameReady => {
+                // Swap the back buffer (in ChannelEmulator) with the front
+                // buffer (in EmuTextures). Both are separate struct fields so
+                // Rust allows simultaneous mutable borrows. This is the
+                // zero-copy "back ↔ front" step of the triple-buffer pipeline.
+                std::mem::swap(
+                    &mut self.channel_emu.back_buffer,
+                    &mut self.emu_textures.front_buffer,
+                );
+                self.emu_textures.has_received_frame = true;
                 self.fps_counter.update();
                 self.emu_textures
                     .update_emulator_texture(ctx, &mut self.config.view_config.renderer);

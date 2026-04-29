@@ -74,7 +74,8 @@ pub struct Nes {
 }
 
 impl Nes {
-    /// Returns the current pixel buffer as a vector of 16-bit palette indices.
+    /// Returns a reference to the current pixel buffer as a slice of 16-bit
+    /// palette indices.
     ///
     /// Each value encodes:
     /// - **Bits 0-5**: NES color index (0-63 from the system palette).
@@ -89,8 +90,34 @@ impl Nes {
     /// To convert these indices to RGB colors, use a
     /// [`ScreenRenderer`](crate::emulation::screen_renderer::ScreenRenderer)
     /// implementation.
+    ///
+    /// This method borrows the internal buffer without copying. Use
+    /// [`swap_pixel_buffer`](Nes::swap_pixel_buffer) to transfer ownership
+    /// of a completed frame without any allocation.
     #[inline]
-    pub fn get_pixel_buffer(&self) -> Vec<u16> { self.board.ppu.pixel_buffer.clone() }
+    pub fn get_pixel_buffer(&self) -> &[u16] { &self.board.ppu.pixel_buffer }
+
+    /// Swaps the internal PPU pixel buffer with `other` in place, with no
+    /// data copying.
+    ///
+    /// This is the zero-copy transfer primitive used by the triple-buffer
+    /// display pipeline:
+    ///
+    /// 1. The PPU renders into its internal *work* buffer.
+    /// 2. On frame completion the caller swaps the work buffer with the *back*
+    ///    buffer (`swap_pixel_buffer`), making the freshly rendered frame
+    ///    available while the PPU immediately starts filling the buffer it
+    ///    just received.
+    /// 3. Before displaying, the frontend swaps the back buffer with the
+    ///    *front* buffer so it always reads from a stable, fully-rendered
+    ///    frame.
+    ///
+    /// `other` must have the same length as the internal pixel buffer
+    /// (`TOTAL_OUTPUT_WIDTH × TOTAL_OUTPUT_HEIGHT`).
+    #[inline]
+    pub fn swap_pixel_buffer(&mut self, other: &mut Vec<u16>) {
+        std::mem::swap(&mut self.board.ppu.pixel_buffer, other);
+    }
 
     /// Powers on the emulator, initializing the CPU-PPU connection.
     ///

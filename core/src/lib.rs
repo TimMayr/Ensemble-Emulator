@@ -25,7 +25,7 @@
 //! nes.power();
 //! nes.step_frame().expect("emulation error");
 //!
-//! // Get the rendered frame as a buffer of palette indices
+//! // Get the rendered frame as a slice of palette indices (no copy)
 //! let pixels = nes.get_pixel_buffer();
 //! ```
 //!
@@ -53,7 +53,7 @@
 //!
 //! ## Pixel Buffer Format
 //!
-//! [`Nes::get_pixel_buffer`] returns a `Vec<u16>` of palette indices, **not**
+//! [`Nes::get_pixel_buffer`] returns a `&[u16]` of palette indices, **not**
 //! RGB values. Each entry encodes:
 //!
 //! - **Bits 0-5**: NES color index (0-63)

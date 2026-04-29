@@ -2,7 +2,7 @@ use egui::{ColorImage, Context, TextureHandle, TextureOptions};
 use monsoon_core::emulation::palette_util::{RgbColor, RgbPalette};
 use monsoon_core::emulation::ppu_util::{
     NametableData, PALETTE_COUNT, PaletteData, SoamData, SpriteData, TILE_COUNT, TILE_SIZE,
-    TileData,
+    TileData, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
 };
 use monsoon_core::emulation::screen_renderer::ScreenRenderer;
 use web_time::Instant;
@@ -10,8 +10,15 @@ use web_time::Instant;
 /// Texture storage and management for the emulator display
 #[derive(Eq, PartialEq, Clone)]
 pub struct EmuTextures {
-    /// Raw frame data as u16 palette indices (from emulator)
-    pub current_frame: Option<Vec<u16>>,
+    /// Triple-buffer *front* buffer: the most recent fully-rendered frame
+    /// ready for display.
+    ///
+    /// On each `FrameReady` message the frontend swaps this with the
+    /// `ChannelEmulator`'s *back* buffer (zero-copy) and then converts it to
+    /// an egui texture.
+    pub front_buffer: Vec<u16>,
+    /// Set to `true` once the first frame has been received from the emulator.
+    pub has_received_frame: bool,
     pub frame_texture: Option<TextureHandle>,
     pub last_debug_request: Instant,
     pub last_frame_request: Instant,
@@ -26,7 +33,8 @@ pub struct EmuTextures {
 impl Default for EmuTextures {
     fn default() -> Self {
         Self {
-            current_frame: Default::default(),
+            front_buffer: vec![0u16; TOTAL_OUTPUT_HEIGHT * TOTAL_OUTPUT_WIDTH],
+            has_received_frame: false,
             frame_texture: Default::default(),
             last_debug_request: Instant::now(),
             last_frame_request: Instant::now(),
@@ -68,12 +76,12 @@ impl EmuTextures {
         ctx: &Context,
         renderer: &mut Box<dyn ScreenRenderer>,
     ) {
-        if let Some(ref frame) = self.current_frame {
+        if self.has_received_frame {
             let img_width = renderer.get_width();
             let img_height = renderer.get_height();
 
             // Use the renderer's buffer_to_image method
-            let rgb_frame = renderer.buffer_to_image(frame.as_ref());
+            let rgb_frame = renderer.buffer_to_image(&self.front_buffer);
             let image = Self::rgb_to_color_image(rgb_frame, img_width, img_height);
 
             let texture = ctx.load_texture(
