@@ -14,8 +14,7 @@ impl Default for Peripheral {
 
 #[enum_delegate::register]
 pub trait PeripheralDevice {
-    fn set_refresh_func(&mut self, func: Box<dyn Fn() -> ControllerState>);
-    fn refresh(&mut self);
+    fn set_state(&mut self, state: ControllerState);
     fn read(&mut self) -> u8;
     fn read_debug(&self) -> u8;
     fn handle_strobe_data(&mut self, data: u8);
@@ -42,7 +41,7 @@ impl From<ExpansionDevice> for Peripheral {
 pub struct StandardController {
     pub shift: u8,
     pub strobe: bool,
-    pub refresh_func: Option<Box<dyn Fn() -> ControllerState>>,
+    state: ControllerState,
 }
 
 impl Clone for StandardController {
@@ -50,32 +49,13 @@ impl Clone for StandardController {
         Self {
             shift: self.shift,
             strobe: self.strobe,
-            refresh_func: None,
+            state: ControllerState::default(),
         }
     }
 }
 
 impl PeripheralDevice for StandardController {
-    fn set_refresh_func(&mut self, func: Box<dyn Fn() -> ControllerState>) {
-        self.refresh_func = Some(func);
-    }
-
-    fn refresh(&mut self) {
-        if let Some(func) = &self.refresh_func {
-            if let Some(input) = func().standard_controller {
-                self.shift = u8::from(input.a)
-                    | u8::from(input.b) << 1
-                    | u8::from(input.select) << 2
-                    | u8::from(input.start) << 3
-                    | u8::from(input.up) << 4
-                    | u8::from(input.down) << 5
-                    | u8::from(input.left) << 6
-                    | u8::from(input.right) << 7;
-            } else {
-                self.shift = 0;
-            }
-        }
-    }
+    fn set_state(&mut self, state: ControllerState) { self.state = state; }
 
     #[inline(always)]
     fn read(&mut self) -> u8 {
@@ -120,7 +100,22 @@ impl StandardController {
         StandardController {
             shift,
             strobe,
-            refresh_func: None,
+            state: ControllerState::default(),
+        }
+    }
+
+    fn refresh(&mut self) {
+        if let Some(input) = self.state.standard_controller {
+            self.shift = u8::from(input.a)
+                | u8::from(input.b) << 1
+                | u8::from(input.select) << 2
+                | u8::from(input.start) << 3
+                | u8::from(input.up) << 4
+                | u8::from(input.down) << 5
+                | u8::from(input.left) << 6
+                | u8::from(input.right) << 7;
+        } else {
+            self.shift = 0;
         }
     }
 }

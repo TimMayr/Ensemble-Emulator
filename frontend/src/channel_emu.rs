@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::OnceLock;
 
 use crossbeam_channel::{Receiver, Sender};
 use monsoon_core::emulation::nes::Nes;
@@ -62,8 +62,6 @@ pub struct ChannelEmulator {
     last_palette_data: Option<PaletteData>,
     /// Cached hash of pattern table data for efficient change detection
     last_pattern_table_hash: Option<u64>,
-    controller_input_1: Arc<Mutex<ControllerState>>,
-    controller_input_2: Arc<Mutex<ControllerState>>,
 }
 
 pub static FETCH_DEPS: OnceLock<HashMap<EmulatorFetchable, Vec<EmulatorFetchable>>> =
@@ -111,8 +109,6 @@ impl ChannelEmulator {
             ],
             last_palette_data: None,
             last_pattern_table_hash: None,
-            controller_input_1: Arc::new(Mutex::new(ControllerState::default())),
-            controller_input_2: Arc::new(Mutex::new(ControllerState::default())),
         };
 
         (emu, tx_to_emu, rx_to_frontend)
@@ -216,7 +212,6 @@ impl ChannelEmulator {
                 FrontendMessage::StepScanline => self.execute_scanline()?,
                 FrontendMessage::AttachPeripherals((peripheral1, peripheral2)) => {
                     self.nes.attach_ext_device((peripheral1, peripheral2));
-                    self.configure_controller_refresh();
                 }
                 FrontendMessage::UpdateRomDb(db) => self.nes.rom_db = db,
             }
@@ -351,37 +346,17 @@ impl ChannelEmulator {
         }
     }
 
-    fn configure_controller_refresh(&mut self) {
-        if let Some(port1) = self.nes.board.port1.as_mut() {
-            let input = self.controller_input_1.clone();
-            port1.set_refresh_func(Box::new(move || Self::get_controller_state(&input)));
-        };
-
-        if let Some(port2) = self.nes.board.port2.as_mut() {
-            let input = self.controller_input_2.clone();
-            port2.set_refresh_func(Box::new(move || Self::get_controller_state(&input)));
-        }
-    }
-
-    pub fn get_controller_state(input: &Arc<Mutex<ControllerState>>) -> ControllerState {
-        if let Ok(input) = input.lock() {
-            *input
-        } else {
-            ControllerState::default()
-        }
-    }
-
     pub fn set_controller_state(
         &mut self,
         port1_input: ControllerState,
         port2_input: ControllerState,
     ) {
-        if let Ok(mut port) = self.controller_input_1.lock() {
-            *port = port1_input;
+        if let Some(controller) = &mut self.nes.board.port1 {
+            controller.set_state(port1_input);
         }
 
-        if let Ok(mut port) = self.controller_input_2.lock() {
-            *port = port2_input;
+        if let Some(controller) = &mut self.nes.board.port2 {
+            controller.set_state(port2_input);
         }
     }
 
