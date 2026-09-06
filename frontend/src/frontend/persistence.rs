@@ -478,7 +478,7 @@ impl From<&UserConfig> for PersistentUserConfig {
             previous_savestate_save_dir: config.previous_savestate_save_dir.clone(),
             pattern_edit_color: config.pattern_edit_color,
             debug_active_palette: config.debug_active_palette,
-            use_rom_db: config.use_rom_db,
+            use_rom_db: *config.use_rom_db,
         }
     }
 }
@@ -496,7 +496,7 @@ impl From<&PersistentUserConfig> for UserConfig {
             previous_savestate_save_dir: config.previous_savestate_save_dir.clone(),
             pattern_edit_color: config.pattern_edit_color,
             debug_active_palette: config.debug_active_palette,
-            use_rom_db: config.use_rom_db,
+            use_rom_db: config.use_rom_db.into(),
         }
     }
 }

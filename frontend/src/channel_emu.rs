@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use crossbeam_channel::{Receiver, Sender};
 use monsoon_core::emulation::nes::Nes;
-use monsoon_core::emulation::peripherals::{Peripheral, PeripheralDevice, StandardControllerState};
+use monsoon_core::emulation::peripherals::{ControllerState, PeripheralDevice};
 use monsoon_core::emulation::ppu_util::{
     EmulatorFetchable, PaletteData, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
 };
@@ -62,8 +62,8 @@ pub struct ChannelEmulator {
     last_palette_data: Option<PaletteData>,
     /// Cached hash of pattern table data for efficient change detection
     last_pattern_table_hash: Option<u64>,
-    controller_input_1: Arc<Mutex<StandardControllerState>>,
-    controller_input_2: Arc<Mutex<StandardControllerState>>,
+    controller_input_1: Arc<Mutex<ControllerState>>,
+    controller_input_2: Arc<Mutex<ControllerState>>,
 }
 
 pub static FETCH_DEPS: OnceLock<HashMap<EmulatorFetchable, Vec<EmulatorFetchable>>> =
@@ -111,8 +111,8 @@ impl ChannelEmulator {
             ],
             last_palette_data: None,
             last_pattern_table_hash: None,
-            controller_input_1: Arc::new(Mutex::new(StandardControllerState::default())),
-            controller_input_2: Arc::new(Mutex::new(StandardControllerState::default())),
+            controller_input_1: Arc::new(Mutex::new(ControllerState::default())),
+            controller_input_2: Arc::new(Mutex::new(ControllerState::default())),
         };
 
         (emu, tx_to_emu, rx_to_frontend)
@@ -354,44 +354,34 @@ impl ChannelEmulator {
     fn configure_controller_refresh(&mut self) {
         if let Some(port1) = self.nes.board.port1.as_mut() {
             let input = self.controller_input_1.clone();
-            port1.set_refresh_func(Box::new(move |controller| {
-                if let Ok(input) = input.lock() {
-                    match controller {
-                        Peripheral::StandardController(c) => c.reload(*input).into(),
-                    }
-                } else {
-                    controller
-                }
-            }))
+            port1.set_refresh_func(Box::new(move || Self::get_controller_state(&input)));
         };
 
         if let Some(port2) = self.nes.board.port2.as_mut() {
             let input = self.controller_input_2.clone();
-            port2.set_refresh_func(Box::new(move |controller| {
-                if let Ok(input) = input.lock() {
-                    match controller {
-                        Peripheral::StandardController(c) => c.reload(*input).into(),
-                    }
-                } else {
-                    controller
-                }
-            }));
+            port2.set_refresh_func(Box::new(move || Self::get_controller_state(&input)));
         }
     }
 
-    pub fn set_standard_controller_state(
-        &mut self,
-        state: StandardControllerState,
-        is_slot_one: bool,
-    ) {
-        let slot = if is_slot_one {
-            &mut self.controller_input_1
+    pub fn get_controller_state(input: &Arc<Mutex<ControllerState>>) -> ControllerState {
+        if let Ok(input) = input.lock() {
+            *input
         } else {
-            &mut self.controller_input_2
-        };
+            ControllerState::default()
+        }
+    }
 
-        if let Ok(mut guard) = slot.lock() {
-            *guard = state;
+    pub fn set_controller_state(
+        &mut self,
+        port1_input: ControllerState,
+        port2_input: ControllerState,
+    ) {
+        if let Ok(mut port) = self.controller_input_1.lock() {
+            *port = port1_input;
+        }
+
+        if let Ok(mut port) = self.controller_input_2.lock() {
+            *port = port2_input;
         }
     }
 

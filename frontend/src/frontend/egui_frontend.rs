@@ -281,7 +281,7 @@ impl EguiApp {
 
         // First power off, load ROM, power on
         let _ = self.to_emulator.send(FrontendMessage::Power(false));
-        self.load_rom(rom, self.config.user_config.use_rom_db);
+        self.load_rom(rom, *self.config.user_config.use_rom_db);
         let _ = self.to_emulator.send(FrontendMessage::Power(true));
 
         // Then load the savestate
@@ -668,9 +668,9 @@ impl eframe::App for EguiApp {
         // Handle keyboard input
         handle_keyboard_input(ctx, &self.async_sender, &mut self.config);
         let controller_input = get_controller_input_state(ctx);
-        self.channel_emu.set_standard_controller_state(
-            controller_input.standard_controller_state(&self.config),
-            true,
+        self.channel_emu.set_controller_state(
+            controller_input.controller_state(&self.config, 0),
+            controller_input.controller_state(&self.config, 1),
         );
         self.config.sync_dialog_pause_reason();
 
@@ -821,7 +821,7 @@ fn common_setup(rom: Option<&PathBuf>) -> SetupResponse {
 
     let _ = to_emu.send(FrontendMessage::AttachPeripherals((
         Some(ExpansionDevice::StandardController),
-        Some(ExpansionDevice::StandardController),
+        None,
     )));
 
     // Get the storage path for egui persistence

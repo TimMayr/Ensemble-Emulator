@@ -132,7 +132,7 @@ impl EguiApp {
                         .previous_rom_load_dir
                         .clone_from(&rom.directory);
 
-                    self.load_rom(rom, self.config.user_config.use_rom_db);
+                    self.load_rom(rom, *self.config.user_config.use_rom_db);
                     let _ = self.to_emulator.send(FrontendMessage::Power(true));
                     self.config.console_config.is_powered = true;
                 }
@@ -166,7 +166,7 @@ impl EguiApp {
                     let _ = self.to_emulator.send(FrontendMessage::LoadRom((
                         rom.clone(),
                         name,
-                        self.config.user_config.use_rom_db,
+                        *self.config.user_config.use_rom_db,
                     )));
                 }
 

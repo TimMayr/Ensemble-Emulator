@@ -427,20 +427,12 @@ impl<'a> CpuBusView<'a> {
                 ReadResult::from(frame_interrupt | (self.cpu_open_bus.read() & 0b0010_0000))
                     .to_false()
             }
-            0x4016 => match self.controller1.take() {
-                Some(controller) => {
-                    let (val, controller) = controller.read();
-                    *self.controller1 = Some(controller);
-                    ReadResult::from(val).with_mask(!0b1110_0000)
-                }
+            0x4016 => match self.controller1 {
+                Some(controller) => ReadResult::from(controller.read()).with_mask(!0b1110_0000),
                 None => ReadResult::from(self.cpu_open_bus.read()).to_false(),
             },
-            0x4017 => match self.controller2.take() {
-                Some(controller) => {
-                    let (val, controller) = controller.read();
-                    *self.controller2 = Some(controller);
-                    ReadResult::from(val).with_mask(!0b1110_0000)
-                }
+            0x4017 => match self.controller2 {
+                Some(controller) => ReadResult::from(controller.read()).with_mask(!0b1110_0000),
                 None => ReadResult::from(self.cpu_open_bus.read()).to_false(),
             },
             _ => ReadResult::from(self.cpu_open_bus.read()).to_false(),
@@ -574,27 +566,11 @@ impl Board {
         controller2: &mut Option<Peripheral>,
         joystick_strobe_data: u8,
     ) {
-        if let Some(c1) = controller1.take() {
-            match &c1 {
-                Peripheral::StandardController(c) => {
-                    println!("{}", c.refresh_func.is_some());
-                }
-            }
-
-            let c1 = c1.handle_strobe_data(joystick_strobe_data);
-            *controller1 = Some(c1);
-
-            if let Some(c1) = controller1 {
-                match c1 {
-                    Peripheral::StandardController(c) => {
-                        println!("{}", c.refresh_func.is_some());
-                    }
-                }
-            }
+        if let Some(c1) = controller1 {
+            c1.handle_strobe_data(joystick_strobe_data);
         }
-        if let Some(c2) = controller2.take() {
-            let c2 = c2.handle_strobe_data(joystick_strobe_data);
-            *controller2 = Some(c2);
+        if let Some(c2) = controller2 {
+            c2.handle_strobe_data(joystick_strobe_data);
         }
     }
 

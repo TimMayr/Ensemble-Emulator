@@ -27,7 +27,6 @@ codegen-units = 1
 inherits = "release"
 rustflags = ["-C", "target-cpu=native"]
 
-[profile.dev-performant]
-inherits = "dev"
+[profile.dev]
 opt-level = 3
 split-debuginfo = "unpacked"  # Ensures symbols are separate

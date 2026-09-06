@@ -14,11 +14,11 @@ impl Default for Peripheral {
 
 #[enum_delegate::register]
 pub trait PeripheralDevice {
-    fn set_refresh_func(&mut self, func: Box<dyn Fn(Peripheral) -> Peripheral>);
-    fn refresh(self) -> Self;
-    fn read(self) -> (u8, Peripheral);
+    fn set_refresh_func(&mut self, func: Box<dyn Fn() -> ControllerState>);
+    fn refresh(&mut self);
+    fn read(&mut self) -> u8;
     fn read_debug(&self) -> u8;
-    fn handle_strobe_data(self, data: u8) -> Self;
+    fn handle_strobe_data(&mut self, data: u8);
 }
 
 impl From<ExpansionDevice> for Peripheral {
@@ -42,7 +42,7 @@ impl From<ExpansionDevice> for Peripheral {
 pub struct StandardController {
     pub shift: u8,
     pub strobe: bool,
-    pub refresh_func: Option<Box<dyn Fn(Peripheral) -> Peripheral>>,
+    pub refresh_func: Option<Box<dyn Fn() -> ControllerState>>,
 }
 
 impl Clone for StandardController {
@@ -56,37 +56,34 @@ impl Clone for StandardController {
 }
 
 impl PeripheralDevice for StandardController {
-    fn set_refresh_func(&mut self, func: Box<dyn Fn(Peripheral) -> Peripheral>) {
+    fn set_refresh_func(&mut self, func: Box<dyn Fn() -> ControllerState>) {
         self.refresh_func = Some(func);
     }
 
-    fn refresh(mut self) -> Self {
-        let refresh_func = self.refresh_func.take();
-
-        if let Some(refresh_func) = refresh_func {
-            let mut r = match refresh_func(Peripheral::StandardController(self)) {
-                Peripheral::StandardController(c) => c,
-                #[allow(unreachable_patterns)]
-                _ => {
-                    unreachable!()
-                }
-            };
-
-            r.set_refresh_func(refresh_func);
-            r
-        } else {
-            self.refresh_func = refresh_func;
-            self
+    fn refresh(&mut self) {
+        if let Some(func) = &self.refresh_func {
+            if let Some(input) = func().standard_controller {
+                self.shift = u8::from(input.a)
+                    | u8::from(input.b) << 1
+                    | u8::from(input.select) << 2
+                    | u8::from(input.start) << 3
+                    | u8::from(input.up) << 4
+                    | u8::from(input.down) << 5
+                    | u8::from(input.left) << 6
+                    | u8::from(input.right) << 7;
+            } else {
+                self.shift = 0;
+            }
         }
     }
 
     #[inline(always)]
-    fn read(mut self) -> (u8, Peripheral) {
+    fn read(&mut self) -> u8 {
         if self.strobe {
-            self = self.refresh();
+            self.refresh();
         }
 
-        (self.poll(), Peripheral::StandardController(self))
+        self.poll()
     }
 
     #[inline(always)]
@@ -94,20 +91,19 @@ impl PeripheralDevice for StandardController {
         let mut cloned = (*self).clone();
 
         if cloned.strobe {
-            cloned = cloned.refresh();
+            cloned.refresh();
         }
 
-        cloned.read().0
+        cloned.read()
     }
 
     #[inline]
-    fn handle_strobe_data(mut self, data: u8) -> Self {
+    fn handle_strobe_data(&mut self, data: u8) {
         self.strobe = (data & 1) == 1;
-        if self.strobe {
-            self = self.refresh();
-        }
 
-        self
+        if self.strobe {
+            self.refresh();
+        }
     }
 }
 
@@ -127,19 +123,6 @@ impl StandardController {
             refresh_func: None,
         }
     }
-
-    pub fn reload(mut self, input: StandardControllerState) -> Self {
-        self.shift = u8::from(input.a)
-            | u8::from(input.b) << 1
-            | u8::from(input.select) << 2
-            | u8::from(input.start) << 3
-            | u8::from(input.up) << 4
-            | u8::from(input.down) << 5
-            | u8::from(input.left) << 6
-            | u8::from(input.right) << 7;
-
-        self
-    }
 }
 
 #[allow(clippy::struct_excessive_bools)]
@@ -153,4 +136,16 @@ pub struct StandardControllerState {
     pub down: bool,
     pub left: bool,
     pub right: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash)]
+pub struct ControllerState {
+    standard_controller: Option<StandardControllerState>,
+}
+
+impl ControllerState {
+    pub fn with_standard_controller_state(mut self, state: StandardControllerState) -> Self {
+        self.standard_controller = Some(state);
+        self
+    }
 }

@@ -121,12 +121,16 @@ pub fn render_keybindings(ui: &mut egui::Ui, config: &mut AppConfig) -> bool {
     let shared_label_column_width = get_shared_label_column_width(ui);
 
     egui::ScrollArea::vertical().show(ui, |ui| {
-        changed |= render_standard_controller_bindings(
-            ui,
-            &mut config.keybindings.standard_controller,
-            shared_label_column_width,
-        );
-        ui.separator();
+        for (i, bindings) in config
+            .keybindings
+            .standard_controller
+            .iter_mut()
+            .enumerate()
+        {
+            changed |=
+                render_standard_controller_bindings(ui, bindings, shared_label_column_width, i);
+            ui.separator();
+        }
 
         changed |= render_action_binding_group(
             ui,
@@ -167,26 +171,30 @@ fn render_standard_controller_bindings(
     ui: &mut egui::Ui,
     bindings: &mut StandardControllerBindings,
     label_column_width: f32,
+    ports: usize,
 ) -> bool {
     let mut changed = false;
 
-    ui.collapsing("Standard Controller Bindings", |ui| {
-        egui::Grid::new("standard_controller_keybinds")
-            .num_columns(2)
-            .spacing([40.0, 4.0])
-            .striped(true)
-            .show(ui, |ui| {
-                for action in STANDARD_CONTROLLER_ACTIONS {
-                    let binding = standard_controller_binding_mut(bindings, action);
-                    ui.add_sized(
-                        [label_column_width, ui.spacing().interact_size.y],
-                        egui::Label::new(action.get_display_name()),
-                    );
-                    changed |= ui.add(Hotkey::with_id(binding, action)).changed();
-                    ui.end_row();
-                }
-            });
-    });
+    ui.collapsing(
+        format!("Standard Controller Bindings (Port {})", ports),
+        |ui| {
+            egui::Grid::new(format!("standard_controller_keybinds_{}", ports))
+                .num_columns(2)
+                .spacing([40.0, 4.0])
+                .striped(true)
+                .show(ui, |ui| {
+                    for action in STANDARD_CONTROLLER_ACTIONS {
+                        let binding = standard_controller_binding_mut(bindings, action);
+                        ui.add_sized(
+                            [label_column_width, ui.spacing().interact_size.y],
+                            egui::Label::new(action.get_display_name()),
+                        );
+                        changed |= ui.add(Hotkey::with_id(binding, action)).changed();
+                        ui.end_row();
+                    }
+                });
+        },
+    );
 
     changed
 }

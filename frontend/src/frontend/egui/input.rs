@@ -1,6 +1,6 @@
 use crossbeam_channel::Sender;
 use egui::{Context, FocusDirection};
-use monsoon_core::emulation::peripherals::StandardControllerState;
+use monsoon_core::emulation::peripherals::ControllerState;
 
 use crate::frontend::egui::config::{AppConfig, KeybindingsConfig};
 use crate::frontend::egui::keybindings::{
@@ -175,10 +175,14 @@ pub fn get_controller_input_state(ctx: &Context) -> ControllerInputState {
 
 impl ControllerInputState {
     #[must_use]
-    pub fn standard_controller_state(&self, config: &AppConfig) -> StandardControllerState {
-        config
-            .keybindings
-            .standard_controller
-            .to_state(&self.input_state)
+    pub fn controller_state(&self, config: &AppConfig, port: usize) -> ControllerState {
+        let mut input = ControllerState::default();
+
+        let standard_bindings = config.keybindings.standard_controller.get(port);
+        if let Some(bindings) = standard_bindings {
+            input = input.with_standard_controller_state(bindings.to_state(&self.input_state));
+        }
+
+        input
     }
 }

@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Debug;
+use std::ops::{Deref, DerefMut};
 
 use egui::{Key, Modifiers};
 use monsoon_core::emulation::palette_util::RgbPalette;
@@ -161,7 +162,38 @@ pub struct UserConfig {
     pub previous_palette_load_dir: Option<StorageKey>,
     pub debug_active_palette: usize,
     pub pattern_edit_color: u8,
-    pub use_rom_db: bool,
+    pub use_rom_db: DefaultTrueBool,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct DefaultTrueBool {
+    value: bool,
+}
+
+impl Default for DefaultTrueBool {
+    fn default() -> Self {
+        Self {
+            value: true,
+        }
+    }
+}
+
+impl Deref for DefaultTrueBool {
+    type Target = bool;
+
+    fn deref(&self) -> &Self::Target { &self.value }
+}
+
+impl DerefMut for DefaultTrueBool {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.value }
+}
+
+impl From<bool> for DefaultTrueBool {
+    fn from(value: bool) -> Self {
+        Self {
+            value,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -256,7 +288,7 @@ impl Default for SpeedConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct KeybindingsConfig {
     #[serde(default)]
-    pub standard_controller: StandardControllerBindings,
+    pub standard_controller: Vec<StandardControllerBindings>,
     #[serde(default)]
     pub debug: BTreeMap<OnKeyAction, Binding>,
     #[serde(default)]
@@ -447,7 +479,7 @@ impl Default for KeybindingsConfig {
         ]);
 
         KeybindingsConfig {
-            standard_controller: StandardControllerBindings::default(),
+            standard_controller: vec![StandardControllerBindings::default()],
             debug: debug_bindings,
             ui: ui_bindings,
             console: console_bindings,
