@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use crossbeam_channel::{Receiver, Sender};
 use monsoon_core::emulation::nes::Nes;
-use monsoon_core::emulation::peripherals::{PeripheralDevice, StandardControllerState};
+use monsoon_core::emulation::peripherals::{Peripheral, PeripheralDevice, StandardControllerState};
 use monsoon_core::emulation::ppu_util::{
     EmulatorFetchable, PaletteData, TOTAL_OUTPUT_HEIGHT, TOTAL_OUTPUT_WIDTH,
 };
@@ -353,29 +353,41 @@ impl ChannelEmulator {
 
     fn configure_controller_refresh(&mut self) {
         if let Some(port1) = self.nes.board.port1.as_mut() {
-            let state = Arc::clone(&self.controller_input_1);
-            port1.set_refresh_func(Box::new(move || {
-                state
-                    .lock()
-                    .map_or(StandardControllerState::default(), |s| *s)
-            }));
-        }
+            let input = self.controller_input_1.clone();
+            port1.set_refresh_func(Box::new(move |controller| {
+                if let Ok(input) = input.lock() {
+                    match controller {
+                        Peripheral::StandardController(c) => c.reload(*input).into(),
+                    }
+                } else {
+                    controller
+                }
+            }))
+        };
 
         if let Some(port2) = self.nes.board.port2.as_mut() {
-            let state = Arc::clone(&self.controller_input_2);
-            port2.set_refresh_func(Box::new(move || {
-                state
-                    .lock()
-                    .map_or(StandardControllerState::default(), |s| *s)
+            let input = self.controller_input_2.clone();
+            port2.set_refresh_func(Box::new(move |controller| {
+                if let Ok(input) = input.lock() {
+                    match controller {
+                        Peripheral::StandardController(c) => c.reload(*input).into(),
+                    }
+                } else {
+                    controller
+                }
             }));
         }
     }
 
-    pub fn set_standard_controller_state(&self, state: StandardControllerState, is_slot_one: bool) {
+    pub fn set_standard_controller_state(
+        &mut self,
+        state: StandardControllerState,
+        is_slot_one: bool,
+    ) {
         let slot = if is_slot_one {
-            &self.controller_input_1
+            &mut self.controller_input_1
         } else {
-            &self.controller_input_2
+            &mut self.controller_input_2
         };
 
         if let Ok(mut guard) = slot.lock() {

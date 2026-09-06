@@ -1,9 +1,9 @@
 use std::fmt::Write;
 
 use crate::emulation::board::CpuBus;
-use crate::emulation::cpu::{Cpu, OpType, Source, UNUSED_BIT};
+use crate::emulation::cpu::{Cpu, Source, UNUSED_BIT};
 use crate::emulation::opcode;
-use crate::emulation::opcode::OpCode;
+use crate::emulation::opcode::{OpCode, OpType};
 use crate::util::add_to_low_byte;
 
 #[derive(Clone, Debug)]

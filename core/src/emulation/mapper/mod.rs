@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 use std::hash::Hash;
+
 use nametable_mapping::NametableArrangement;
 use serde::{Deserialize, Serialize};
 

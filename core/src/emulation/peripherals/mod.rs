@@ -14,13 +14,11 @@ impl Default for Peripheral {
 
 #[enum_delegate::register]
 pub trait PeripheralDevice {
-    type InputType: Default;
-    type RefreshVal: Default;
-    fn set_refresh_func(&mut self, func: Box<dyn Fn() -> Self::InputType + Send + Sync + 'static>);
-    fn refresh(&self) -> Self::RefreshVal;
-    fn read(&mut self) -> u8;
+    fn set_refresh_func(&mut self, func: Box<dyn Fn(Peripheral) -> Peripheral>);
+    fn refresh(self) -> Self;
+    fn read(self) -> (u8, Peripheral);
     fn read_debug(&self) -> u8;
-    fn handle_strobe_data(&mut self, data: u8);
+    fn handle_strobe_data(self, data: u8) -> Self;
 }
 
 impl From<ExpansionDevice> for Peripheral {
@@ -44,56 +42,72 @@ impl From<ExpansionDevice> for Peripheral {
 pub struct StandardController {
     pub shift: u8,
     pub strobe: bool,
-    refresh_func: Option<Box<dyn Fn() -> <Self as PeripheralDevice>::InputType + Send + Sync>>,
+    pub refresh_func: Option<Box<dyn Fn(Peripheral) -> Peripheral>>,
+}
+
+impl Clone for StandardController {
+    fn clone(&self) -> Self {
+        Self {
+            shift: self.shift,
+            strobe: self.strobe,
+            refresh_func: None,
+        }
+    }
 }
 
 impl PeripheralDevice for StandardController {
-    type InputType = StandardControllerState;
-    type RefreshVal = u8;
-
-    fn set_refresh_func(&mut self, func: Box<dyn Fn() -> Self::InputType + Send + Sync>) {
+    fn set_refresh_func(&mut self, func: Box<dyn Fn(Peripheral) -> Peripheral>) {
         self.refresh_func = Some(func);
     }
 
-    fn refresh(&self) -> Self::RefreshVal {
-        let input = self.refresh_func.as_ref().map(|f| f()).unwrap_or_default();
+    fn refresh(mut self) -> Self {
+        let refresh_func = self.refresh_func.take();
 
-        u8::from(input.a)
-            | u8::from(input.b) << 1
-            | u8::from(input.select) << 2
-            | u8::from(input.start) << 3
-            | u8::from(input.up) << 4
-            | u8::from(input.down) << 5
-            | u8::from(input.left) << 6
-            | u8::from(input.right) << 7
+        if let Some(refresh_func) = refresh_func {
+            let mut r = match refresh_func(Peripheral::StandardController(self)) {
+                Peripheral::StandardController(c) => c,
+                #[allow(unreachable_patterns)]
+                _ => {
+                    unreachable!()
+                }
+            };
+
+            r.set_refresh_func(refresh_func);
+            r
+        } else {
+            self.refresh_func = refresh_func;
+            self
+        }
     }
 
     #[inline(always)]
-    fn read(&mut self) -> u8 {
+    fn read(mut self) -> (u8, Peripheral) {
         if self.strobe {
-            self.shift = self.refresh();
+            self = self.refresh();
         }
 
-        self.poll()
+        (self.poll(), Peripheral::StandardController(self))
     }
 
     #[inline(always)]
     fn read_debug(&self) -> u8 {
-        let mut shift = self.shift;
+        let mut cloned = (*self).clone();
 
-        if self.strobe {
-            shift = self.refresh();
+        if cloned.strobe {
+            cloned = cloned.refresh();
         }
 
-        StandardController::poll_with_shift(shift)
+        cloned.read().0
     }
 
     #[inline]
-    fn handle_strobe_data(&mut self, data: u8) {
+    fn handle_strobe_data(mut self, data: u8) -> Self {
         self.strobe = (data & 1) == 1;
         if self.strobe {
-            self.shift = self.refresh();
+            self = self.refresh();
         }
+
+        self
     }
 }
 
@@ -105,9 +119,6 @@ impl StandardController {
         res
     }
 
-    #[inline]
-    fn poll_with_shift(shift: u8) -> u8 { shift & 1 }
-
     #[must_use]
     pub fn new(shift: u8, strobe: bool) -> Self {
         StandardController {
@@ -115,6 +126,19 @@ impl StandardController {
             strobe,
             refresh_func: None,
         }
+    }
+
+    pub fn reload(mut self, input: StandardControllerState) -> Self {
+        self.shift = u8::from(input.a)
+            | u8::from(input.b) << 1
+            | u8::from(input.select) << 2
+            | u8::from(input.start) << 3
+            | u8::from(input.up) << 4
+            | u8::from(input.down) << 5
+            | u8::from(input.left) << 6
+            | u8::from(input.right) << 7;
+
+        self
     }
 }
 

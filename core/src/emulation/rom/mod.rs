@@ -1355,6 +1355,10 @@ impl RomFile {
         use_db: bool,
         nes: Option<&Nes>,
     ) -> Result<RomFile, ParseError> {
+        if data.len() < 16 {
+            return Err(ParseError::InvalidHeader);
+        }
+
         let mut hasher = Sha256::new();
         hasher.update(&data);
         let full_hash: [u8; 32] = hasher.finalize().into();

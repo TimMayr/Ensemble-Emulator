@@ -6,7 +6,7 @@ use serde_big_array::BigArray;
 use crate::emulation::board::CpuBus;
 use crate::emulation::nes::ExecutionResult;
 use crate::emulation::opcode;
-use crate::emulation::opcode::{OPCODES_TABLE, OpCode, get_opcode};
+use crate::emulation::opcode::{OPCODES_TABLE, OpCode, OpType, get_opcode};
 use crate::util;
 
 pub const INTERNAL_RAM_SIZE: u16 = 0x800;
@@ -1801,12 +1801,12 @@ impl Cpu {
             AddressSource::AddressLatch => Some(self.get_addr_latch()),
             AddressSource::Address(u16) => Some(u16),
             #[allow(clippy::cast_possible_truncation)]
-            AddressSource::LO => Some(u16::from(self.get_addr_latch() as u8)),
-            AddressSource::Temp => Some(u16::from(self.data_bus)),
-            AddressSource::None => None,
+            AddressSource::LO => Some(u16::from(self.lo)),
             AddressSource::HI => Some(u16::from(self.hi)),
+            AddressSource::Temp => Some(u16::from(self.data_bus)),
             AddressSource::PC => Some(self.program_counter),
             AddressSource::IrqVec => Some(self.irq_state.locked_irq_vec),
+            AddressSource::None => None,
         }
     }
 
@@ -2025,9 +2025,9 @@ pub enum AddressSource {
     AddressLatch,
     Address(u16),
     LO,
+    HI,
     Temp,
     None,
-    HI,
     PC,
     IrqVec,
 }
@@ -2104,39 +2104,6 @@ pub enum Condition {
     NegativeClear,
     OverflowSet,
     OverflowClear,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, Hash)]
-pub enum OpType {
-    ImmediateAddressing(Target, MicroOpCallback),
-    AccumulatorOrImplied(MicroOpCallback),
-    JmpIndirect(MicroOpCallback),
-    Relative(MicroOpCallback),
-    BRK(MicroOpCallback),
-    RTI(MicroOpCallback),
-    RTS(MicroOpCallback),
-    PH(Source, MicroOpCallback),
-    PL(Target, MicroOpCallback),
-    JSR(MicroOpCallback),
-    JmpAbsolute(MicroOpCallback),
-    AbsoluteRead(Target, MicroOpCallback),
-    AbsoluteRMW(Target, MicroOpCallback),
-    AbsoluteWrite(Source, MicroOpCallback),
-    AbsoluteIndexRead(Source, Target, MicroOpCallback),
-    AbsoluteIndexRMW(Source, MicroOpCallback),
-    AbsoluteIndexWrite(Source, Source, MicroOpCallback),
-    ZeroPageRead(Target, MicroOpCallback),
-    ZeroPageRMW(Target, MicroOpCallback),
-    ZeroPageWrite(Source, MicroOpCallback),
-    ZeroPageIndexRead(Source, Target, MicroOpCallback),
-    ZeroPageIndexRMW(Source, MicroOpCallback),
-    ZeroPageIndexWrite(Source, Source, MicroOpCallback),
-    IndirectIndexedRead(Target, MicroOpCallback),
-    IndirectIndexedRMW(MicroOpCallback),
-    IndirectIndexedWrite(Source, MicroOpCallback),
-    IndexedIndirectRead(Target, MicroOpCallback),
-    IndexedIndirectRMW(MicroOpCallback),
-    IndexedIndirectWrite(Source, MicroOpCallback),
 }
 
 #[cfg(test)]

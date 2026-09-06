@@ -1,15 +1,9 @@
 use std::sync::OnceLock;
 
-use crate::emulation::cpu::OpType::{
-    AbsoluteIndexRMW, AbsoluteIndexRead, AbsoluteIndexWrite, AbsoluteRMW, AbsoluteRead,
-    AbsoluteWrite, AccumulatorOrImplied, BRK, ImmediateAddressing, IndexedIndirectRMW,
-    IndexedIndirectRead, IndexedIndirectWrite, IndirectIndexedRMW, IndirectIndexedRead,
-    IndirectIndexedWrite, JSR, JmpAbsolute, JmpIndirect, PH, PL, RTI, RTS, Relative,
-    ZeroPageIndexRMW, ZeroPageIndexRead, ZeroPageIndexWrite, ZeroPageRMW, ZeroPageRead,
-    ZeroPageWrite,
-};
-use crate::emulation::cpu::{Condition, MicroOpCallback, OpType, Source, Target};
+use serde::{Deserialize, Serialize};
 
+use crate::emulation::cpu::{Condition, MicroOpCallback, Source, Target};
+use crate::emulation::opcode::OpType::*;
 /// Direct lookup table for opcodes - O(1) array access vs `HashMap`
 pub static OPCODES_TABLE: OnceLock<[OpCode; 256]> = OnceLock::new();
 
@@ -1161,4 +1155,37 @@ pub fn get_bytes_for_opcode(op: OpCode) -> u8 {
         | AbsoluteIndexWrite(..)
         | JmpIndirect(_) => 2,
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, Hash)]
+pub enum OpType {
+    ImmediateAddressing(Target, MicroOpCallback),
+    AccumulatorOrImplied(MicroOpCallback),
+    JmpIndirect(MicroOpCallback),
+    Relative(MicroOpCallback),
+    BRK(MicroOpCallback),
+    RTI(MicroOpCallback),
+    RTS(MicroOpCallback),
+    PH(Source, MicroOpCallback),
+    PL(Target, MicroOpCallback),
+    JSR(MicroOpCallback),
+    JmpAbsolute(MicroOpCallback),
+    AbsoluteRead(Target, MicroOpCallback),
+    AbsoluteRMW(Target, MicroOpCallback),
+    AbsoluteWrite(Source, MicroOpCallback),
+    AbsoluteIndexRead(Source, Target, MicroOpCallback),
+    AbsoluteIndexRMW(Source, MicroOpCallback),
+    AbsoluteIndexWrite(Source, Source, MicroOpCallback),
+    ZeroPageRead(Target, MicroOpCallback),
+    ZeroPageRMW(Target, MicroOpCallback),
+    ZeroPageWrite(Source, MicroOpCallback),
+    ZeroPageIndexRead(Source, Target, MicroOpCallback),
+    ZeroPageIndexRMW(Source, MicroOpCallback),
+    ZeroPageIndexWrite(Source, Source, MicroOpCallback),
+    IndirectIndexedRead(Target, MicroOpCallback),
+    IndirectIndexedRMW(MicroOpCallback),
+    IndirectIndexedWrite(Source, MicroOpCallback),
+    IndexedIndirectRead(Target, MicroOpCallback),
+    IndexedIndirectRMW(MicroOpCallback),
+    IndexedIndirectWrite(Source, MicroOpCallback),
 }
