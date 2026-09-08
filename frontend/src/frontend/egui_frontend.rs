@@ -983,9 +983,7 @@ fn run_internal_wasm(res: SetupResponse) -> Result<(), Box<dyn std::error::Error
         // Configure eframe options
         // Disable vsync to allow uncapped frame rates - emulator handles its
         // own timing
-        let options = eframe::WebOptions {
-            ..Default::default()
-        };
+        let options = eframe::WebOptions::default();
 
         eframe::WebRunner::new()
             .start(canvas, options, get_app_config(res, loaded_config))
